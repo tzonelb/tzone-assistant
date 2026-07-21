@@ -1,0 +1,127 @@
+﻿# ============================================================
+# T-ZONE — Secrets
+# ============================================================
+
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ============================================================
+# Python
+# ============================================================
+
+.venv/
+venv/
+env/
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ============================================================
+# Node / Vite
+# ============================================================
+
+node_modules/
+frontend/node_modules/
+
+dist/
+frontend/dist/
+
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================================
+# Runtime databases
+# ============================================================
+
+database/*.db
+database/*.db-wal
+database/*.db-shm
+database/*.sqlite
+database/*.sqlite3
+
+*.db
+*.db-wal
+*.db-shm
+
+# ============================================================
+# Customer conversations and runtime data
+# ============================================================
+
+data/conversations/
+data/runtime/
+data/uploads/private/
+
+# ============================================================
+# Logs
+# ============================================================
+
+logs/
+*.log
+
+# ============================================================
+# Generated patches and backups
+# ============================================================
+
+patches/
+backups/
+*_BACKUP*/
+*.bundle
+
+# ============================================================
+# Temporary files
+# ============================================================
+
+tmp/
+temp/
+*.tmp
+*.bak
+
+# ============================================================
+# Editors and operating system
+# ============================================================
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Local patch, debug and migration artifacts
+# ============================================================
+
+.patch_*_backup.json
+
+PATCH_*_BACKUP_INFO.txt
+PATCH_BACKUP_INFO_*.txt
+
+TZONE_PATCH_*/
+TZONE_PATCH_*.zip
+
+backup_before_patch_*/
+backup_patch_*/
+
+PATCH9_DEBUG*/
+PATCH9_FRONTEND_DEBUG*/
+current_reconstructed/
+
+collect_patch9_debug.py
+gather_project.py
+
+*_DEBUG.zip

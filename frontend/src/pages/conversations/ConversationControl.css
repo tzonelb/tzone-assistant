@@ -1,0 +1,229 @@
+
+.conversation-control-form,
+.conversation-note-form,
+.export-form {
+  display: grid;
+  gap: 11px;
+}
+
+.conversation-control-form label,
+.export-form label {
+  display: grid;
+  gap: 5px;
+}
+
+.conversation-control-form label > span,
+.export-form label > span,
+.tags-editor > span {
+  color: var(--tz-text-muted);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.conversation-control-form select,
+.conversation-control-form input,
+.conversation-note-form textarea,
+.export-form select,
+.tags-editor input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--tz-border);
+  border-radius: 9px;
+  outline: none;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+  font: inherit;
+  font-size: 11px;
+}
+
+.conversation-control-form select:focus,
+.conversation-control-form input:focus,
+.conversation-note-form textarea:focus,
+.export-form select:focus,
+.tags-editor input:focus {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 3px rgb(22 137 232 / 9%);
+}
+
+.inline-field-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px;
+}
+
+.tags-editor {
+  display: grid;
+  gap: 7px;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tags-list button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--tz-primary);
+  background: var(--tz-primary-soft);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workspace-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.conversation-note-form textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.conversation-note-list,
+.conversation-timeline {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  margin-top: 11px;
+  overflow-y: auto;
+}
+
+.conversation-note-list article,
+.conversation-timeline article {
+  padding: 9px;
+  border: 1px solid var(--tz-border);
+  border-radius: 9px;
+  background: var(--tz-surface-secondary);
+}
+
+.conversation-note-list p,
+.conversation-timeline p {
+  margin: 0 0 5px;
+  color: var(--tz-text-secondary);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.conversation-note-list span,
+.conversation-timeline span {
+  display: block;
+  color: var(--tz-text-muted);
+  font-size: 8px;
+}
+
+.conversation-note-list time,
+.conversation-timeline time {
+  display: block;
+  margin-top: 4px;
+  color: var(--tz-text-muted);
+  font-size: 7px;
+}
+
+.conversation-timeline article {
+  position: relative;
+  padding-left: 21px;
+}
+
+.conversation-timeline article::before {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tz-primary);
+  content: "";
+}
+
+.conversation-timeline strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+
+.export-form small,
+.conversation-muted {
+  color: var(--tz-text-muted);
+  font-size: 9px;
+}
+
+@media (max-width: 680px) {
+  .inline-field-action,
+  .workspace-actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+/* Final locked tag manager */
+.tag-manager-row {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.8fr) minmax(0, 1.35fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.tag-manager-row select,
+.tag-manager-row input {
+  min-width: 0;
+}
+
+.tags-list button.is-selected {
+  color: #fff;
+  background: var(--tz-primary);
+}
+
+.tag-delete-button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--tz-danger);
+  border-radius: 9px;
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tag-delete-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .tag-manager-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.conversation-ownership-notice {
+  padding: 9px 16px;
+  border-top: 1px solid var(--tz-border);
+  color: var(--tz-text-secondary);
+  background: var(--tz-info-soft);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.conversation-ownership-notice.is-locked {
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+}
+
+.conversation-composer textarea[readonly] {
+  cursor: pointer;
+}
+
+.conversation-composer textarea[readonly][aria-readonly="true"] {
+  color: var(--tz-text-secondary);
+}

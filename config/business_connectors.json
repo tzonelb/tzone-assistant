@@ -1,0 +1,18 @@
+{
+  "products": {
+    "enabled": false,
+    "provider": "none",
+    "mode": "read_only"
+  },
+  "accounting": {
+    "enabled": false,
+    "provider": "none",
+    "mode": "read_only",
+    "require_identity_verification": true
+  },
+  "orders": {
+    "enabled": false,
+    "provider": "none",
+    "mode": "read_only"
+  }
+}

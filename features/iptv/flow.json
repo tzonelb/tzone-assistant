@@ -1,0 +1,368 @@
+{
+  "states": {
+    "telegram_iptv_start": {
+      "text": {
+        "en": "📺 T-ZONE IPTV\n\nPlease choose your language:",
+        "ar": "📺 T-ZONE IPTV\n\nاختر لغتك:"
+      },
+      "buttons": [
+        {"en": "🇬🇧 English", "ar": "🇬🇧 English", "next": "iptv_menu", "set": {"language": "en"}},
+        {"en": "🇸🇦 العربية", "ar": "🇸🇦 العربية", "next": "iptv_menu", "set": {"language": "ar"}}
+      ]
+    },
+
+    "iptv_menu": {
+      "text": {
+        "en": "📺 IPTV Services\n\nPlease choose what you need:",
+        "ar": "📺 خدمات IPTV\n\nاختر الخدمة المطلوبة:"
+      },
+      "buttons": [
+        {"en": "📅 Check Subscription Expiry", "ar": "📅 معرفة موعد انتهاء الحساب", "next": "iptv_ask_username_expiry"},
+        {"en": "🔄 Renew Subscription", "ar": "🔄 تجديد الحساب", "next": "iptv_ask_username_renew"},
+        {"en": "📥 Installation Guide", "ar": "📥 كيفية التنزيل والتثبيت", "next": "iptv_install_device"},
+        {"en": "🛒 Buy New Subscription", "ar": "🛒 شراء حساب جديد", "next": "iptv_buy"},
+        {"en": "🛠️ Technical Support", "ar": "🛠️ الدعم الفني", "next": "iptv_device"},
+        {"en": "❓ FAQ", "ar": "❓ الأسئلة الشائعة", "next": "iptv_faq"}
+      ]
+    },
+
+    "iptv_ask_username_expiry": {
+      "text": {
+        "en": "👤 Please send your IPTV username to check the expiry date:",
+        "ar": "👤 الرجاء إرسال اسم مستخدم IPTV لمعرفة موعد انتهاء الحساب:"
+      },
+      "input": {"key": "iptv_username", "next": "iptv_expiry_pending"},
+      "buttons": []
+    },
+
+    "iptv_expiry_pending": {
+      "text": {
+        "en": "✅ Request received.\n\n👤 IPTV Username: {{iptv_username}}\n\nOur team will check your expiry date and reply shortly.",
+        "ar": "✅ تم استلام الطلب.\n\n👤 IPTV Username: {{iptv_username}}\n\nسيقوم فريقنا بفحص موعد انتهاء الحساب والرد عليك قريباً."
+      },
+      "buttons": [
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_ask_username_renew": {
+      "text": {
+        "en": "👤 Please send your IPTV username to renew your subscription:",
+        "ar": "👤 الرجاء إرسال اسم مستخدم IPTV لتجديد الحساب:"
+      },
+      "input": {"key": "iptv_username", "next": "iptv_renew_pending"},
+      "buttons": []
+    },
+
+    "iptv_renew_pending": {
+      "text": {
+        "en": "✅ Renewal request received.\n\n👤 IPTV Username: {{iptv_username}}\n\nOur team will contact you with renewal options.",
+        "ar": "✅ تم استلام طلب التجديد.\n\n👤 IPTV Username: {{iptv_username}}\n\nسيقوم فريقنا بالتواصل معك لخيارات التجديد."
+      },
+      "buttons": [
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_buy": {
+      "text": {
+        "en": "🛒 New IPTV Subscription\n\nPlease choose a package:",
+        "ar": "🛒 شراء اشتراك IPTV جديد\n\nاختر الباقة:"
+      },
+      "buttons": [
+        {"en": "3 Months", "ar": "3 أشهر", "next": "iptv_buy_pending", "set": {"problem": "buy_3_months"}},
+        {"en": "6 Months", "ar": "6 أشهر", "next": "iptv_buy_pending", "set": {"problem": "buy_6_months"}},
+        {"en": "12 Months", "ar": "12 شهر", "next": "iptv_buy_pending", "set": {"problem": "buy_12_months"}}
+      ]
+    },
+
+    "iptv_buy_pending": {
+      "text": {
+        "en": "✅ Purchase request received.\n\nOur sales team will contact you shortly.",
+        "ar": "✅ تم استلام طلب الشراء.\n\nسيقوم فريق المبيعات بالتواصل معك قريباً."
+      },
+      "buttons": [
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_install_device": {
+      "text": {
+        "en": "📥 Installation Guide\n\nChoose your device type:",
+        "ar": "📥 دليل التنزيل والتثبيت\n\nاختر نوع الجهاز:"
+      },
+      "buttons": [
+        {"en": "📺 TV", "ar": "📺 TV", "next": "iptv_install_tv_os", "set": {"device": "tv"}},
+        {"en": "📦 TV Box", "ar": "📦 TV Box", "next": "iptv_install_tvbox_os", "set": {"device": "tv_box"}},
+        {"en": "📱 Phone / Tablet", "ar": "📱 هاتف / تابلت", "next": "iptv_install_phone_os", "set": {"device": "phone_tablet"}},
+        {"en": "💻 Laptop", "ar": "💻 لابتوب", "next": "iptv_install_laptop_os", "set": {"device": "laptop"}}
+      ]
+    },
+
+    "iptv_install_tv_os": {
+      "text": {
+        "en": "Select your TV operating system:",
+        "ar": "اختر نظام تشغيل التلفزيون:"
+      },
+      "buttons": [
+        {"en": "📺 Samsung (Tizen)", "ar": "📺 Samsung (Tizen)", "next": "iptv_install_smarters", "set": {"os": "tizen", "app": "iptv_smarters"}},
+        {"en": "📺 webOS", "ar": "📺 webOS", "next": "iptv_install_smarters", "set": {"os": "webos", "app": "iptv_smarters"}},
+        {"en": "📺 VIDAA", "ar": "📺 VIDAA", "next": "iptv_install_smarters", "set": {"os": "vidaa", "app": "iptv_smarters"}},
+        {"en": "🤖 Android TV", "ar": "🤖 Android TV", "next": "iptv_install_hydra_browser", "set": {"os": "android_tv", "app": "hydra_prime"}},
+        {"en": "📺 Google TV", "ar": "📺 Google TV", "next": "iptv_install_hydra_store", "set": {"os": "google_tv", "app": "hydra_prime"}}
+      ]
+    },
+
+    "iptv_install_tvbox_os": {
+      "text": {
+        "en": "Select your TV Box type:",
+        "ar": "اختر نوع TV Box:"
+      },
+      "buttons": [
+        {"en": "🤖 Android TV Box", "ar": "🤖 Android TV Box", "next": "iptv_install_hydra_browser", "set": {"os": "android_box", "app": "hydra_prime"}},
+        {"en": "📺 MAG / STB", "ar": "📺 MAG / STB", "next": "iptv_install_mag", "set": {"os": "mag_stb", "app": "stb"}},
+        {"en": "🍏 Apple TV", "ar": "🍏 Apple TV", "next": "iptv_install_hydra_store", "set": {"os": "apple_tv", "app": "hydra_prime"}}
+      ]
+    },
+
+    "iptv_install_phone_os": {
+      "text": {
+        "en": "Select your phone/tablet system:",
+        "ar": "اختر نظام الهاتف / التابلت:"
+      },
+      "buttons": [
+        {"en": "🤖 Android", "ar": "🤖 Android", "next": "iptv_install_hydra_store", "set": {"os": "android", "app": "hydra_prime"}},
+        {"en": "🍎 iOS / iPadOS", "ar": "🍎 iOS / iPadOS", "next": "iptv_install_hydra_store", "set": {"os": "ios", "app": "hydra_prime"}}
+      ]
+    },
+
+    "iptv_install_laptop_os": {
+      "text": {
+        "en": "Select your laptop system:",
+        "ar": "اختر نظام اللابتوب:"
+      },
+      "buttons": [
+        {"en": "🪟 Windows", "ar": "🪟 Windows", "next": "iptv_install_hydra_browser", "set": {"os": "windows", "app": "hydra_prime"}},
+        {"en": "🍏 macOS", "ar": "🍏 macOS", "next": "iptv_install_hydra_browser", "set": {"os": "mac", "app": "hydra_prime"}}
+      ]
+    },
+
+    "iptv_install_smarters": {
+      "text": {
+        "en": "📥 Recommended App: IPTV Smarters Pro\n\nPlease download IPTV Smarters Pro from your TV app store.\n\nAfter installation, open the app and enter the subscription details provided by T-ZONE.",
+        "ar": "📥 التطبيق المناسب: IPTV Smarters Pro\n\nيرجى تحميل IPTV Smarters Pro من متجر التطبيقات داخل التلفزيون.\n\nبعد التثبيت، افتح التطبيق وأدخل بيانات الاشتراك التي حصلت عليها من T-ZONE."
+      },
+      "buttons": [
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "installation"}},
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_install_hydra_browser": {
+      "text": {
+        "en": "📥 Recommended App: Hydra Prime / Hydra Ultra\n\nOpen the browser on your device and go to:\n\nhyapps.net\n\nDownload Hydra Prime or Hydra Ultra, then enter your IPTV subscription details.",
+        "ar": "📥 التطبيق المناسب: Hydra Prime / Hydra Ultra\n\nافتح المتصفح على جهازك وادخل إلى:\n\nhyapps.net\n\nحمّل Hydra Prime أو Hydra Ultra، ثم أدخل بيانات اشتراك IPTV."
+      },
+      "buttons": [
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "installation"}},
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_install_hydra_store": {
+      "text": {
+        "en": "📥 Recommended App: Hydra Prime\n\nDownload Hydra Prime from Play Store or App Store.\n\nAfter installation, open the app and enter your IPTV subscription details.",
+        "ar": "📥 التطبيق المناسب: Hydra Prime\n\nحمّل Hydra Prime من Play Store أو App Store.\n\nبعد التثبيت، افتح التطبيق وأدخل بيانات اشتراك IPTV."
+      },
+      "buttons": [
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "installation"}},
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_install_mag": {
+      "text": {
+        "en": "📥 MAG / STB Setup\n\nPlease contact T-ZONE support to activate MAG/STB because it requires portal configuration.",
+        "ar": "📥 إعداد MAG / STB\n\nيرجى التواصل مع دعم T-ZONE لتفعيل MAG/STB لأنه يحتاج إعداد Portal."
+      },
+      "buttons": [
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "installation_mag"}},
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_device": {
+      "text": {
+        "en": "Choose your device type:",
+        "ar": "اختر نوع الجهاز:"
+      },
+      "buttons": [
+        {"en": "📺 TV", "ar": "📺 TV", "next": "iptv_tv_os", "set": {"device": "tv"}},
+        {"en": "📦 TV Box", "ar": "📦 TV Box", "next": "iptv_tvbox_os", "set": {"device": "tv_box"}},
+        {"en": "📱 Phone / Tablet", "ar": "📱 هاتف / تابلت", "next": "iptv_phone_os", "set": {"device": "phone_tablet"}},
+        {"en": "💻 Laptop", "ar": "💻 لابتوب", "next": "iptv_laptop_os", "set": {"device": "laptop"}}
+      ]
+    },
+
+    "iptv_tv_os": {
+      "text": {"en": "Select TV operating system:", "ar": "اختر نظام تشغيل التلفزيون:"},
+      "buttons": [
+        {"en": "📺 Samsung (Tizen)", "ar": "📺 Samsung (Tizen)", "next": "iptv_smart_tv_app", "set": {"os": "tizen"}},
+        {"en": "📺 webOS", "ar": "📺 webOS", "next": "iptv_smart_tv_app", "set": {"os": "webos"}},
+        {"en": "📺 VIDAA", "ar": "📺 VIDAA", "next": "iptv_smart_tv_app", "set": {"os": "vidaa"}},
+        {"en": "🤖 Android TV", "ar": "🤖 Android TV", "next": "iptv_hydra_app", "set": {"os": "android_tv"}},
+        {"en": "📺 Google TV", "ar": "📺 Google TV", "next": "iptv_store_app", "set": {"os": "google_tv"}}
+      ]
+    },
+
+    "iptv_tvbox_os": {
+      "text": {"en": "Select TV Box type:", "ar": "اختر نوع TV Box:"},
+      "buttons": [
+        {"en": "🤖 Android TV Box", "ar": "🤖 Android TV Box", "next": "iptv_hydra_app", "set": {"os": "android_box"}},
+        {"en": "📺 MAG / STB", "ar": "📺 MAG / STB", "next": "iptv_problem", "set": {"os": "mag_stb", "app": "stb"}},
+        {"en": "🍏 Apple TV", "ar": "🍏 Apple TV", "next": "iptv_store_app", "set": {"os": "apple_tv"}}
+      ]
+    },
+
+    "iptv_phone_os": {
+      "text": {"en": "Select phone/tablet system:", "ar": "اختر نظام الهاتف / التابلت:"},
+      "buttons": [
+        {"en": "🤖 Android", "ar": "🤖 Android", "next": "iptv_store_app", "set": {"os": "android"}},
+        {"en": "🍎 iOS / iPadOS", "ar": "🍎 iOS / iPadOS", "next": "iptv_store_app", "set": {"os": "ios"}}
+      ]
+    },
+
+    "iptv_laptop_os": {
+      "text": {"en": "Select laptop system:", "ar": "اختر نظام اللابتوب:"},
+      "buttons": [
+        {"en": "🪟 Windows", "ar": "🪟 Windows", "next": "iptv_browser_app", "set": {"os": "windows"}},
+        {"en": "🍏 macOS", "ar": "🍏 macOS", "next": "iptv_browser_app", "set": {"os": "mac"}}
+      ]
+    },
+
+    "iptv_smart_tv_app": {
+      "text": {"en": "Choose the app you use:", "ar": "اختر التطبيق الذي تستخدمه:"},
+      "buttons": [
+        {"en": "📺 IPTV Smarters Pro", "ar": "📺 IPTV Smarters Pro", "next": "iptv_problem", "set": {"app": "iptv_smarters"}},
+        {"en": "📦 Other", "ar": "📦 تطبيق آخر", "next": "iptv_problem", "set": {"app": "other"}}
+      ]
+    },
+
+    "iptv_hydra_app": {
+      "text": {
+        "en": "Choose the app you use:\n\nDownload Hydra apps from: hyapps.net",
+        "ar": "اختر التطبيق الذي تستخدمه:\n\nتحميل تطبيقات Hydra من: hyapps.net"
+      },
+      "buttons": [
+        {"en": "🚀 Hydra Prime", "ar": "🚀 Hydra Prime", "next": "iptv_problem", "set": {"app": "hydra_prime"}},
+        {"en": "⭐ Hydra Ultra", "ar": "⭐ Hydra Ultra", "next": "iptv_problem", "set": {"app": "hydra_ultra"}},
+        {"en": "📦 Other", "ar": "📦 تطبيق آخر", "next": "iptv_problem", "set": {"app": "other"}}
+      ]
+    },
+
+    "iptv_store_app": {
+      "text": {
+        "en": "Choose the app you use:\n\nHydra Prime is downloaded from Play Store / App Store.",
+        "ar": "اختر التطبيق الذي تستخدمه:\n\nHydra Prime يتم تحميله من Play Store / App Store."
+      },
+      "buttons": [
+        {"en": "🚀 Hydra Prime", "ar": "🚀 Hydra Prime", "next": "iptv_problem", "set": {"app": "hydra_prime"}},
+        {"en": "📦 Other", "ar": "📦 تطبيق آخر", "next": "iptv_problem", "set": {"app": "other"}}
+      ]
+    },
+
+    "iptv_browser_app": {
+      "text": {
+        "en": "Choose the app you use:\n\nDownload from: hyapps.net",
+        "ar": "اختر التطبيق الذي تستخدمه:\n\nالتحميل من: hyapps.net"
+      },
+      "buttons": [
+        {"en": "🚀 Hydra Prime", "ar": "🚀 Hydra Prime", "next": "iptv_problem", "set": {"app": "hydra_prime"}},
+        {"en": "⭐ Hydra Ultra", "ar": "⭐ Hydra Ultra", "next": "iptv_problem", "set": {"app": "hydra_ultra"}},
+        {"en": "📦 Other", "ar": "📦 تطبيق آخر", "next": "iptv_problem", "set": {"app": "other"}}
+      ]
+    },
+
+    "iptv_problem": {
+      "text": {"en": "What problem are you facing?", "ar": "ما هي المشكلة التي تواجهها؟"},
+      "buttons": [
+        {"en": "🔐 Login problem", "ar": "🔐 مشكلة تسجيل الدخول", "next": "iptv_solution_login", "set": {"problem": "login"}},
+        {"en": "📡 Channels not working", "ar": "📡 القنوات لا تعمل", "next": "iptv_solution_channels", "set": {"problem": "channels"}},
+        {"en": "🔁 Buffering / Freezing", "ar": "🔁 تقطيع / تعليق", "next": "iptv_solution_buffering", "set": {"problem": "buffering"}},
+        {"en": "🎬 Movies / Series not working", "ar": "🎬 الأفلام / المسلسلات لا تعمل", "next": "iptv_solution_vod", "set": {"problem": "vod"}},
+        {"en": "🔊 No sound", "ar": "🔊 لا يوجد صوت", "next": "iptv_solution_sound", "set": {"problem": "sound"}},
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "agent"}}
+      ]
+    },
+
+    "iptv_ask_username": {
+      "text": {
+        "en": "👤 Please send your IPTV username so our team can check your subscription:",
+        "ar": "👤 الرجاء إرسال اسم المستخدم الخاص باشتراك IPTV حتى يتمكن فريقنا من فحص الاشتراك:"
+      },
+      "input": {"key": "iptv_username", "next": "iptv_ticket_created"},
+      "buttons": []
+    },
+
+    "iptv_ticket_created": {
+      "text": {
+        "en": "✅ Support request received.\n\n👤 IPTV Username: {{iptv_username}}\n📺 Device: {{device}}\n⚙️ OS: {{os}}\n📱 App: {{app}}\n❓ Problem: {{problem}}\n\nOur team will contact you soon.",
+        "ar": "✅ تم استلام طلب الدعم.\n\n👤 IPTV Username: {{iptv_username}}\n📺 الجهاز: {{device}}\n⚙️ النظام: {{os}}\n📱 التطبيق: {{app}}\n❓ المشكلة: {{problem}}\n\nسيقوم فريقنا بالتواصل معك قريباً."
+      },
+      "buttons": [
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    },
+
+    "iptv_solution_login": {
+      "text": {"en": "🔐 Login Solution\n\nCheck username/password and restart the app.", "ar": "🔐 حل مشكلة تسجيل الدخول\n\nتأكد من اسم المستخدم وكلمة المرور ثم أعد تشغيل التطبيق."},
+      "buttons": [
+        {"en": "✅ Solved", "ar": "✅ تم حل المشكلة", "next": "iptv_menu"},
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "login"}}
+      ]
+    },
+
+    "iptv_solution_channels": {
+      "text": {"en": "📡 Channels Solution\n\nRefresh channel list and restart the app.", "ar": "📡 حل مشكلة القنوات\n\nحدّث قائمة القنوات ثم أعد تشغيل التطبيق."},
+      "buttons": [
+        {"en": "✅ Solved", "ar": "✅ تم حل المشكلة", "next": "iptv_menu"},
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "channels"}}
+      ]
+    },
+
+    "iptv_solution_buffering": {
+      "text": {"en": "🔁 Buffering Solution\n\nCheck internet speed and restart your router.", "ar": "🔁 حل التقطيع\n\nتأكد من سرعة الإنترنت وأعد تشغيل الراوتر."},
+      "buttons": [
+        {"en": "✅ Solved", "ar": "✅ تم حل المشكلة", "next": "iptv_menu"},
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "buffering"}}
+      ]
+    },
+
+    "iptv_solution_vod": {
+      "text": {"en": "🎬 VOD Solution\n\nClose and reopen the app, then refresh movies/series.", "ar": "🎬 حل مشكلة الأفلام والمسلسلات\n\nأغلق التطبيق وافتحه مجدداً ثم حدّث القائمة."},
+      "buttons": [
+        {"en": "✅ Solved", "ar": "✅ تم حل المشكلة", "next": "iptv_menu"},
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "vod"}}
+      ]
+    },
+
+    "iptv_solution_sound": {
+      "text": {"en": "🔊 Sound Solution\n\nCheck device volume and app audio settings.", "ar": "🔊 حل مشكلة الصوت\n\nتأكد من صوت الجهاز وإعدادات الصوت داخل التطبيق."},
+      "buttons": [
+        {"en": "✅ Solved", "ar": "✅ تم حل المشكلة", "next": "iptv_menu"},
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "sound"}}
+      ]
+    },
+
+    "iptv_faq": {
+      "text": {
+        "en": "❓ FAQ\n\n• Can I use the account on more than one device?\n• Can I change device?\n• What internet speed is recommended?\n\nFor more help, contact support.",
+        "ar": "❓ الأسئلة الشائعة\n\n• هل يمكن استخدام الحساب على أكثر من جهاز؟\n• هل يمكن تغيير الجهاز؟\n• ما سرعة الإنترنت المطلوبة؟\n\nللمزيد من المساعدة، تواصل مع الدعم."
+      },
+      "buttons": [
+        {"en": "👨‍💼 Contact Technical Support", "ar": "👨‍💼 التواصل مع الدعم الفني", "next": "iptv_ask_username", "set": {"problem": "faq"}},
+        {"en": "🏠 IPTV Menu", "ar": "🏠 قائمة IPTV", "next": "iptv_menu"}
+      ]
+    }
+  }
+}

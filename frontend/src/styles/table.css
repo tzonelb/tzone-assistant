@@ -1,0 +1,274 @@
+.tz-table-wrapper {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-lg);
+  background: var(--tz-surface);
+}
+
+.tz-table-desktop {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tz-table {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+}
+
+.tz-table th {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--tz-border);
+  color: var(--tz-text-secondary);
+  background: var(--tz-surface-secondary);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.tz-table td {
+  padding: 15px 16px;
+  border-bottom: 1px solid var(--tz-border);
+  color: var(--tz-text-primary);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.tz-table tbody tr {
+  transition: background var(--tz-transition-fast);
+}
+
+.tz-table tbody tr:hover {
+  background: var(--tz-surface-secondary);
+}
+
+.tz-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tz-table-sort-button,
+.tz-table-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.tz-table-sort-button {
+  cursor: pointer;
+}
+
+.tz-table-sort-button:disabled,
+.tz-table-heading:disabled {
+  cursor: default;
+}
+
+.tz-table-sort-button svg {
+  font-size: 15px;
+}
+
+.tz-table-footer {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--tz-border);
+  color: var(--tz-text-secondary);
+  background: var(--tz-surface-secondary);
+  font-size: 12px;
+}
+
+.tz-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tz-pagination button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+}
+
+.tz-pagination button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.tz-table-mobile {
+  display: none;
+}
+
+.tz-mobile-record {
+  padding: 16px;
+  border-bottom: 1px solid var(--tz-border);
+}
+
+.tz-mobile-record:last-child {
+  border-bottom: 0;
+}
+
+.tz-mobile-record-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.tz-mobile-record-field {
+  display: grid;
+  gap: 3px;
+}
+
+.tz-mobile-record-field > span {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.tz-mobile-record-field > strong {
+  color: var(--tz-text-primary);
+  font-size: 14px;
+}
+
+.conversations-toolbar {
+  display: grid;
+  grid-template-columns:
+    minmax(250px, 1fr)
+    repeat(3, minmax(145px, 190px))
+    auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.tz-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  outline: none;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+}
+
+.tz-select:focus {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 4px rgb(22 137 232 / 9%);
+}
+
+.conversation-customer-cell {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.conversation-customer-avatar {
+  width: 39px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 13px;
+  color: var(--tz-primary);
+  background: var(--tz-primary-soft);
+  font-weight: 900;
+}
+
+.conversation-customer-cell > div:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.conversation-customer-cell span {
+  color: var(--tz-text-secondary);
+  font-size: 11px;
+}
+
+.conversation-message-preview {
+  max-width: 310px;
+  overflow: hidden;
+  color: var(--tz-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-channel {
+  text-transform: capitalize;
+}
+
+.conversation-mobile-card {
+  display: grid;
+  gap: 14px;
+}
+
+.conversation-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.conversation-mobile-message {
+  margin: 0;
+  color: var(--tz-text-secondary);
+  line-height: 1.5;
+}
+
+.conversation-mobile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1150px) {
+  .conversations-toolbar {
+    grid-template-columns:
+      minmax(240px, 1fr)
+      repeat(2, minmax(150px, 1fr));
+  }
+
+  .conversations-toolbar > :last-child {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 750px) {
+  .tz-table-desktop {
+    display: none;
+  }
+
+  .tz-table-mobile {
+    display: block;
+  }
+
+  .tz-table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .conversations-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .conversations-toolbar > :last-child {
+    grid-column: auto;
+  }
+}

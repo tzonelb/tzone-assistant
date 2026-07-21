@@ -1,0 +1,52 @@
+{
+  "company": {
+    "name": "T-ZONE",
+    "country": "Lebanon",
+    "currency": "USD"
+  },
+
+  "channels": {
+    "telegram": {
+      "role": "iptv_support"
+    },
+    "messenger": {
+      "role": "general_business"
+    },
+    "instagram": {
+      "role": "general_business"
+    },
+    "whatsapp": {
+      "role": "general_business"
+    },
+    "website_chat": {
+      "role": "general_business"
+    }
+  },
+
+  "business_modules": [
+    "sales",
+    "maintenance",
+    "iptv",
+    "accounting",
+    "telecom",
+    "information"
+  ],
+
+  "languages": [
+    "ar",
+    "en"
+  ],
+
+  "sales": {
+    "invent_products": false,
+    "invent_prices": false,
+    "invent_stock": false,
+    "recommend_without_inventory": false
+  },
+
+  "ai": {
+    "style": "friendly",
+    "max_reply_length": "short",
+    "allow_emojis": true
+  }
+}

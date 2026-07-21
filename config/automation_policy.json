@@ -1,0 +1,46 @@
+{
+  "default": {
+    "bot_enabled": true,
+    "ai_enabled": true,
+    "ai_mode": "auto_reply",
+    "voice_ai_enabled": false,
+    "image_ai_enabled": false
+  },
+  "channels": {
+    "messenger": {
+      "bot_enabled": true,
+      "ai_enabled": true,
+      "ai_mode": "auto_reply",
+      "voice_ai_enabled": false,
+      "image_ai_enabled": false
+    },
+    "instagram": {
+      "bot_enabled": true,
+      "ai_enabled": true,
+      "ai_mode": "auto_reply",
+      "voice_ai_enabled": false,
+      "image_ai_enabled": false
+    },
+    "whatsapp": {
+      "bot_enabled": true,
+      "ai_enabled": false,
+      "ai_mode": "meta_agent_only",
+      "voice_ai_enabled": false,
+      "image_ai_enabled": false
+    },
+    "telegram": {
+      "bot_enabled": true,
+      "ai_enabled": false,
+      "ai_mode": "flow_only",
+      "voice_ai_enabled": false,
+      "image_ai_enabled": false
+    },
+    "website_chat": {
+      "bot_enabled": true,
+      "ai_enabled": true,
+      "ai_mode": "auto_reply",
+      "voice_ai_enabled": false,
+      "image_ai_enabled": false
+    }
+  }
+}

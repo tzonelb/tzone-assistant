@@ -1,0 +1,67 @@
+{
+  "items": [
+    {
+      "id": "business_overview",
+      "department": "information",
+      "question_ar": "شو الخدمات الموجودة عندكم؟",
+      "answer_ar": "عنا هواتف، لابتوبات، إكسسوارات، IPTV، خدمات خطوط، وصيانة تقنية. خبرنا شو بدك تحديداً لنساعدك بسرعة.",
+      "question_en": "What services do you offer?",
+      "answer_en": "We offer phones, laptops, accessories, IPTV, telecom services, and tech support. Tell us what you need and we’ll help you quickly.",
+      "instructions": "Use this when the customer asks generally about services."
+    },
+    {
+      "id": "laptops_general",
+      "department": "sales",
+      "question_ar": "عندكم لابتوبات؟",
+      "answer_ar": "عنا لابتوبات حسب التوفر. لنأكدلك السعر والموديل المناسب، ابعتلنا الميزانية أو المواصفات المطلوبة.",
+      "question_en": "Do you have laptops?",
+      "answer_en": "We have laptops depending on availability. To confirm the right model and price, please send your budget or required specs.",
+      "instructions": "Do not confirm exact stock or price unless products connector has data."
+    },
+    {
+      "id": "phones_general",
+      "department": "sales",
+      "question_ar": "عندكم تلفونات؟",
+      "answer_ar": "عنا تلفونات حسب التوفر. لنأكدلك السعر والموديل المناسب، ابعتلنا النوع أو الميزانية المطلوبة.",
+      "question_en": "Do you have phones?",
+      "answer_en": "We have phones depending on availability. To confirm the right model and price, please send the model or your budget.",
+      "instructions": "Do not invent models, prices, or stock."
+    },
+    {
+      "id": "gaming_laptop_budget",
+      "department": "sales",
+      "question_ar": "بدي لابتوب ألعاب بميزانية محددة",
+      "answer_ar": "لابتوبات الألعاب بدها مواصفات قوية، وما فينا نأكد توفر أو سعر قبل مراجعة المخزون. ابعتلنا الميزانية والألعاب المطلوبة والفريق بيأكدلك الأنسب.",
+      "question_en": "I want a gaming laptop with a specific budget",
+      "answer_en": "Gaming laptops need strong specs, and we cannot confirm availability or price before checking stock. Send your budget and games, and the team will confirm the best option.",
+      "instructions": "Never say a gaming laptop exists within a budget unless products connector confirms it."
+    },
+    {
+      "id": "account_balance",
+      "department": "accounting",
+      "question_ar": "شو عليي؟ أو شو حسابي؟",
+      "answer_ar": "فينا نساعدك بموضوع الحساب، بس لازم نتأكد من هويتك أولاً. ابعت رقم الهاتف أو الاسم المسجل ليتابع الفريق معك.",
+      "question_en": "What do I owe? What is my balance?",
+      "answer_en": "We can help with your account balance, but we need to verify your identity first. Please send the registered phone number or name.",
+      "instructions": "If accounting connector is connected, verify identity before exposing balances."
+    },
+    {
+      "id": "iptv_support",
+      "department": "iptv",
+      "question_ar": "عندي مشكلة IPTV",
+      "answer_ar": "أكيد، لنساعدك بمشكلة IPTV ابعتلنا نوع التطبيق والجهاز والمشكلة التي تظهر معك.",
+      "question_en": "I have an IPTV issue",
+      "answer_en": "Sure, to help with IPTV, please send the app name, device type, and the issue you are facing.",
+      "instructions": "Use this for IPTV support unless Telegram flow is active."
+    },
+    {
+      "id": "maintenance_general",
+      "department": "maintenance",
+      "question_ar": "بدي صيانة أو تصليح",
+      "answer_ar": "أكيد، ابعتلنا نوع الجهاز والمشكلة التي تظهر معك لنقدر نساعدك ونحدد الخطوة المناسبة.",
+      "question_en": "I need repair or maintenance",
+      "answer_en": "Sure, send the device type and the issue you are facing so we can help and suggest the next step.",
+      "instructions": "Do not estimate repair cost without inspection or configured pricing."
+    }
+  ]
+}

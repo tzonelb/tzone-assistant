@@ -1,0 +1,62 @@
+{
+  "faqs": [
+    {
+      "id": "multi_device",
+      "question_en": "Can I use the account on more than one device?",
+      "question_ar": "هل يمكن استخدام الحساب على أكثر من جهاز؟",
+      "answer_en": "It depends on your subscription type. Please contact support to check if your account supports multiple devices.",
+      "answer_ar": "يعتمد ذلك على نوع الاشتراك. يرجى التواصل مع الدعم لمعرفة إذا كان حسابك يدعم أكثر من جهاز."
+    },
+    {
+      "id": "change_device",
+      "question_en": "Can I change my device?",
+      "question_ar": "هل يمكن تغيير الجهاز؟",
+      "answer_en": "Yes, in most cases you can change the device. Contact support with your IPTV username.",
+      "answer_ar": "نعم، غالبًا يمكن تغيير الجهاز. تواصل مع الدعم وأرسل اسم مستخدم IPTV."
+    },
+    {
+      "id": "internet_speed",
+      "question_en": "What internet speed is recommended?",
+      "question_ar": "ما سرعة الإنترنت المطلوبة؟",
+      "answer_en": "We recommend at least 10 Mbps for stable viewing, and higher speed for 4K channels.",
+      "answer_ar": "ننصح بسرعة لا تقل عن 10Mbps للمشاهدة المستقرة، وسرعة أعلى لقنوات 4K."
+    }
+  ],
+  "solutions": [
+    {
+      "id": "login",
+      "title_en": "🔐 Login Solution",
+      "title_ar": "🔐 حل مشكلة تسجيل الدخول",
+      "answer_en": "Check your IPTV username and password, then restart the app. If the issue continues, contact support.",
+      "answer_ar": "تأكد من اسم المستخدم وكلمة المرور، ثم أعد تشغيل التطبيق. إذا استمرت المشكلة، تواصل مع الدعم."
+    },
+    {
+      "id": "channels",
+      "title_en": "📡 Channels Solution",
+      "title_ar": "📡 حل مشكلة القنوات",
+      "answer_en": "Refresh the channel list, close the app, then open it again.",
+      "answer_ar": "حدّث قائمة القنوات، أغلق التطبيق، ثم افتحه من جديد."
+    },
+    {
+      "id": "buffering",
+      "title_en": "🔁 Buffering / Freezing Solution",
+      "title_ar": "🔁 حل مشكلة التقطيع / التعليق",
+      "answer_en": "Check your internet speed, restart your router, then reopen the app.",
+      "answer_ar": "تأكد من سرعة الإنترنت، أعد تشغيل الراوتر، ثم افتح التطبيق من جديد."
+    },
+    {
+      "id": "vod",
+      "title_en": "🎬 Movies / Series Solution",
+      "title_ar": "🎬 حل مشكلة الأفلام / المسلسلات",
+      "answer_en": "Close and reopen the app, then refresh the movies and series section.",
+      "answer_ar": "أغلق التطبيق وافتحه من جديد، ثم حدّث قسم الأفلام والمسلسلات."
+    },
+    {
+      "id": "sound",
+      "title_en": "🔊 Sound Solution",
+      "title_ar": "🔊 حل مشكلة الصوت",
+      "answer_en": "Check the device volume, TV audio output, and app audio settings.",
+      "answer_ar": "تأكد من صوت الجهاز، مخرج صوت التلفزيون، وإعدادات الصوت داخل التطبيق."
+    }
+  ]
+}

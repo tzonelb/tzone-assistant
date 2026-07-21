@@ -1,0 +1,48 @@
+{
+  "states": {
+    "language": {
+      "text": {
+        "en": "👋 Welcome to T-ZONE Assistant\n\n🌍 Please choose your language\n\nاختر لغتك",
+        "ar": "👋 Welcome to T-ZONE Assistant\n\n🌍 Please choose your language\n\nاختر لغتك"
+      },
+      "buttons": [
+        {"en": "🇬🇧 English", "ar": "🇬🇧 English", "next": "main_menu", "set": {"language": "en"}},
+        {"en": "🇸🇦 العربية", "ar": "🇸🇦 العربية", "next": "main_menu", "set": {"language": "ar"}}
+      ]
+    },
+
+    "main_menu": {
+      "text": {
+        "en": "🏠 Main Menu\n\nHow can we help you today?",
+        "ar": "🏠 القائمة الرئيسية\n\nكيف يمكننا مساعدتك اليوم؟"
+      },
+      "buttons": [
+        {"en": "📺 IPTV", "ar": "📺 IPTV", "next": "iptv_menu"},
+        {"en": "🛍️ Sales", "ar": "🛍️ المبيعات", "next": "coming_soon"},
+        {"en": "📞 Telecom Services", "ar": "📞 خدمات الاتصالات", "next": "coming_soon"},
+        {"en": "💻 Digital Services", "ar": "💻 الخدمات الرقمية", "next": "coming_soon"},
+        {"en": "🔧 Maintenance", "ar": "🔧 الصيانة", "next": "coming_soon"},
+        {"en": "💳 Billing & Accounting", "ar": "💳 الفواتير والمحاسبة", "next": "coming_soon"},
+        {"en": "📢 Offers", "ar": "📢 العروض", "next": "coming_soon"},
+        {"en": "ℹ️ About T-ZONE", "ar": "ℹ️ معلومات T-ZONE", "next": "coming_soon"},
+        {"en": "👨‍💼 Talk to an Agent", "ar": "👨‍💼 التحدث مع موظف", "next": "agent"}
+      ]
+    },
+
+    "coming_soon": {
+      "text": {
+        "en": "This section will be available soon.",
+        "ar": "هذا القسم سيكون متاحًا قريبًا."
+      },
+      "buttons": []
+    },
+
+    "agent": {
+      "text": {
+        "en": "👨‍💼 Please send your issue details. Our team will assist you.",
+        "ar": "👨‍💼 يرجى إرسال تفاصيل المشكلة، وسيقوم فريقنا بمساعدتك."
+      },
+      "buttons": []
+    }
+  }
+}

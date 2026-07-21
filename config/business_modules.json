@@ -1,0 +1,44 @@
+{
+  "modules": [
+    {
+      "id": "sales",
+      "enabled": true,
+      "name_ar": "مبيعات",
+      "name_en": "Sales",
+      "button_ar": "المنتجات",
+      "button_en": "Products"
+    },
+    {
+      "id": "accounting",
+      "enabled": true,
+      "name_ar": "محاسبة",
+      "name_en": "Accounting",
+      "button_ar": "حسابي",
+      "button_en": "My account"
+    },
+    {
+      "id": "maintenance",
+      "enabled": true,
+      "name_ar": "صيانة",
+      "name_en": "Maintenance",
+      "button_ar": "صيانة",
+      "button_en": "Maintenance"
+    },
+    {
+      "id": "iptv",
+      "enabled": true,
+      "name_ar": "IPTV",
+      "name_en": "IPTV",
+      "button_ar": "IPTV",
+      "button_en": "IPTV"
+    },
+    {
+      "id": "information",
+      "enabled": true,
+      "name_ar": "معلومات",
+      "name_en": "Information",
+      "button_ar": "العنوان",
+      "button_en": "Location"
+    }
+  ]
+}
