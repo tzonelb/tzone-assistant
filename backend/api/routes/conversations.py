@@ -1097,6 +1097,7 @@ def read_control(
         "can_take_over": bool(
             assigned_user_id is None
             or is_owner
+            or is_admin
         ),
     }
 
