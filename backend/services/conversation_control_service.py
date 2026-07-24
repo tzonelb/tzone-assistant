@@ -1111,8 +1111,19 @@ class ConversationControlService:
         actor_user_id: int,
         force: bool = False,
     ) -> dict[str, Any]:
-        """Release a human conversation back to the shared employee queue."""
+        """Release a human conversation back to the shared employee queue.
+
+        This does not hand the conversation back to AI immediately — it
+        starts the same takeover-expiry timer used elsewhere (see
+        expire_overdue_takeovers, which already runs every 10s in the
+        background). If no employee takes the conversation within that
+        window, it returns to AI automatically. If an employee takes it
+        over first, take-over resets this timer as usual.
+        """
         state = self.get_state(company_id, channel, external_user_id)
+        release_expiry = (
+            utc_now() + timedelta(minutes=_takeover_timeout_minutes(company_id))
+        ).isoformat()
         with db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             if force:
@@ -1125,14 +1136,14 @@ class ConversationControlService:
                         status = 'waiting_agent',
                         workflow_state = 'waiting_agent',
                         needs_human = 1,
-                        takeover_expires_at = NULL,
+                        takeover_expires_at = ?,
                         updated_at = ?
                     WHERE id = ?
                       AND company_id = ?
                       AND handled_by_ai = 0
                       AND ai_enabled = 0
                     """,
-                    (utc_now_iso(), state["id"], company_id),
+                    (release_expiry, utc_now_iso(), state["id"], company_id),
                 )
             else:
                 cursor = conn.execute(
@@ -1144,7 +1155,7 @@ class ConversationControlService:
                         status = 'waiting_agent',
                         workflow_state = 'waiting_agent',
                         needs_human = 1,
-                        takeover_expires_at = NULL,
+                        takeover_expires_at = ?,
                         updated_at = ?
                     WHERE id = ?
                       AND company_id = ?
@@ -1152,7 +1163,7 @@ class ConversationControlService:
                       AND ai_enabled = 0
                       AND assigned_user_id = ?
                     """,
-                    (utc_now_iso(), state["id"], company_id, actor_user_id),
+                    (release_expiry, utc_now_iso(), state["id"], company_id, actor_user_id),
                 )
             if cursor.rowcount != 1:
                 current = conn.execute(

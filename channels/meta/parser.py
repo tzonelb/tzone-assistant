@@ -23,6 +23,7 @@ def parse_from_messaging(payload: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     event = messaging_events[0]
+    channel = detect_meta_channel(payload)
 
     sender_id = event.get("sender", {}).get("id")
     recipient_id = event.get("recipient", {}).get("id")
@@ -36,7 +37,7 @@ def parse_from_messaging(payload: dict[str, Any]) -> dict[str, Any] | None:
         return {
             "ignored": True,
             "reason": "echo_message",
-            "channel": "messenger",
+            "channel": channel,
             "user_id": sender_id,
         }
 
@@ -46,13 +47,13 @@ def parse_from_messaging(payload: dict[str, Any]) -> dict[str, Any] | None:
         return {
             "ignored": True,
             "reason": "non_text_message",
-            "channel": "messenger",
+            "channel": channel,
             "user_id": sender_id,
         }
 
     return {
         "ignored": False,
-        "channel": "messenger",
+        "channel": channel,
         "user_id": sender_id,
         "recipient_id": recipient_id,
         "text": text.strip(),
@@ -72,12 +73,13 @@ def parse_from_changes(payload: dict[str, Any]) -> dict[str, Any] | None:
     change = changes[0]
     field = change.get("field")
     value = change.get("value", {})
+    channel = detect_meta_channel(payload)
 
     if field not in ["messages", "messaging_postbacks"]:
         return {
             "ignored": True,
             "reason": f"unsupported_field_{field}",
-            "channel": "messenger",
+            "channel": channel,
             "user_id": "unknown",
         }
 
@@ -95,13 +97,13 @@ def parse_from_changes(payload: dict[str, Any]) -> dict[str, Any] | None:
         return {
             "ignored": True,
             "reason": "non_text_change",
-            "channel": "messenger",
+            "channel": channel,
             "user_id": sender_id,
         }
 
     return {
         "ignored": False,
-        "channel": "messenger",
+        "channel": channel,
         "user_id": sender_id,
         "recipient_id": recipient_id,
         "text": text.strip(),
