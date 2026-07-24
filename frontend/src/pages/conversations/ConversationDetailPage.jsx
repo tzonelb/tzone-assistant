@@ -18,6 +18,7 @@ import {
   DownloadOutlined,
   ExpandLessOutlined,
   ExpandMoreOutlined,
+  HistoryOutlined,
   LaunchOutlined,
   NoteAddOutlined,
   PauseCircleOutlineOutlined,
@@ -233,6 +234,8 @@ export default function ConversationDetailPage({
   const [detailsOpen, setDetailsOpen] = useState(true);
   const [controlPanelOpen, setControlPanelOpen] = useState(true);
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
+  const [events, setEvents] = useState([]);
+  const [timelinePanelOpen, setTimelinePanelOpen] = useState(false);
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [, setClockTick] = useState(0);
 
@@ -281,6 +284,11 @@ export default function ConversationDetailPage({
             ? controlResult.notes
             : [],
         );
+        setEvents(
+          Array.isArray(controlResult?.events)
+            ? controlResult.events
+            : [],
+        );
         setEmployees(
           Array.isArray(controlResult?.employees)
             ? controlResult.employees
@@ -317,6 +325,7 @@ export default function ConversationDetailPage({
     setMessages([]);
     setControl(null);
     setNotes([]);
+    setEvents([]);
     setDraft("");
     setActionError("");
     setActionSuccess("");
@@ -1260,6 +1269,26 @@ export default function ConversationDetailPage({
             ) : null}
 
             <CollapsiblePanel
+              title="Timeline"
+              subtitle="Full history of this conversation"
+              icon={<HistoryOutlined />}
+              open={timelinePanelOpen}
+              onToggle={() => setTimelinePanelOpen((current) => !current)}
+            >
+              <div className="conversation-note-list">
+                {events.length ? events.map((event) => (
+                  <article key={event.id}>
+                    <p>{humanize(event.event_type)}</p>
+                    <span>By {event.actor_name || "System"}</span>
+                    <time>{formatDateTime(event.created_at)}</time>
+                  </article>
+                )) : (
+                  <span className="conversation-muted">No timeline events yet.</span>
+                )}
+              </div>
+            </CollapsiblePanel>
+
+            <CollapsiblePanel
               title="Internal notes"
               subtitle="Visible only to employees"
               icon={<NoteAddOutlined />}
@@ -1313,6 +1342,8 @@ export default function ConversationDetailPage({
                   <select value={exportFormat} onChange={(event) => setExportFormat(event.target.value)}>
                     <option value="json">JSON</option>
                     <option value="csv">CSV</option>
+                    <option value="txt">Text</option>
+                    <option value="pdf">PDF</option>
                   </select>
                 </label>
 

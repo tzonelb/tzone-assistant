@@ -744,6 +744,7 @@ def list_conversations(
             row.get("department"),
             row.get("channel"),
             row.get("assigned_user_name"),
+            " ".join(str(tag) for tag in row.get("tags") or []),
             row.get("_search_text"),
         )
 

@@ -39,7 +39,7 @@ export default function NotificationsPage() {
     <section className="notifications-page notifications-page-compact">
       <div className="notification-topline">
         <div className="notification-filter-tabs">
-          {[["all", "All", summary.total], ["unread", "Unread", summary.unread], ["read", "Read", summary.read]].map(([value, label, count]) => (
+          {[["all", "All", summary.total], ["unread", "Unread", summary.unread]].map(([value, label, count]) => (
             <button type="button" key={value} className={statusFilter === value ? "is-active" : ""} onClick={() => setStatusFilter(value)}>{label}<b>{count}</b></button>
           ))}
         </div>

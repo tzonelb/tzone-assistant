@@ -274,17 +274,19 @@ class NotificationService:
         company_id: int,
         user_id: int,
     ) -> int:
-        with db.connect() as conn:
-            ids = self._visible_ids(conn, notification_ids, company_id, user_id)
-            if not ids:
-                return 0
-            placeholders = ",".join("?" for _ in ids)
-            cursor = conn.execute(
-                f"DELETE FROM notifications WHERE id IN ({placeholders})",
-                tuple(ids),
-            )
-            conn.commit()
-            return int(cursor.rowcount)
+        """Clear the bell's visible unread list without deleting history.
+
+        This used to hard-delete the rows, which also erased them from
+        the Notification Center (same underlying table) — "Clear shown"
+        is meant to clear the bell dropdown only, so this now marks them
+        read instead of deleting them.
+        """
+        return self.set_read_state(
+            notification_ids=notification_ids,
+            company_id=company_id,
+            user_id=user_id,
+            is_read=True,
+        )
 
 
 notification_service = NotificationService()

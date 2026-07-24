@@ -951,6 +951,17 @@ class ConversationControlService:
             external_user_id=external_user_id,
         )
         if state.get("assigned_user_id") != actor_user_id:
+            with db.connect() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                self.insert_event(
+                    conn=conn,
+                    conversation_id=int(state["id"]),
+                    company_id=company_id,
+                    actor_user_id=actor_user_id,
+                    event_type="conversation_viewed",
+                    data={"was_owner": False},
+                )
+                conn.commit()
             return state
 
         with db.connect() as conn:
@@ -2070,6 +2081,7 @@ class ConversationControlService:
             "human_takeover",
             "conversation_released",
             "conversation_read",
+            "conversation_viewed",
             "conversation_marked_read",
             "conversation_marked_unread",
             "returned_to_ai",

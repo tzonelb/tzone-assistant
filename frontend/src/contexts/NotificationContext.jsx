@@ -18,6 +18,28 @@ import {
 } from "../api/client";
 import { useAuth } from "./AuthContext";
 
+function playNotificationSound() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.value = 880;
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.25);
+    oscillator.onended = () => ctx.close();
+  } catch {
+    // Sound is a nice-to-have; never let it break notification loading.
+  }
+}
+
 const NotificationContext = createContext(null);
 const POLL_INTERVAL_MS = 15000;
 
@@ -72,6 +94,8 @@ export function NotificationProvider({ children }) {
   const [error, setError] = useState("");
   const inFlightRef = useRef(false);
 
+  const seenIdsRef = useRef(null);
+
   const refresh = useCallback(async ({ silent = false, filters = {} } = {}) => {
     if (!authenticated || inFlightRef.current) return;
     inFlightRef.current = true;
@@ -82,6 +106,18 @@ export function NotificationProvider({ children }) {
         getNotificationSummaryRequest(),
       ]);
       const normalizedItems = Array.isArray(nextItems) ? nextItems : [];
+
+      const currentUnreadIds = new Set(
+        normalizedItems.filter((item) => !item?.is_read).map(notificationIdentity),
+      );
+      if (seenIdsRef.current !== null) {
+        const hasNewUnread = [...currentUnreadIds].some(
+          (id) => !seenIdsRef.current.has(id),
+        );
+        if (hasNewUnread) playNotificationSound();
+      }
+      seenIdsRef.current = currentUnreadIds;
+
       setItems(normalizedItems);
       setSummary(normalizeSummary(summaryPayload, normalizedItems));
       setError("");
@@ -99,6 +135,7 @@ export function NotificationProvider({ children }) {
     if (!authenticated) {
       setItems([]);
       setSummary({ unread: 0, total: 0, read: 0 });
+      seenIdsRef.current = null;
       return undefined;
     }
 
