@@ -57,7 +57,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 class CompanySettingsService:
     def __init__(self) -> None:
-        self.ensure_schema()
+        # Schema setup happens explicitly via main.py's lifespan (after
+        # database.database.db.create_tables()), not here — see the
+        # matching note in ConversationControlService.__init__.
+        pass
 
     def ensure_schema(self) -> None:
         with db.connect() as conn:

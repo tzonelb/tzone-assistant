@@ -17,6 +17,7 @@ from backend.api.routes import (
     knowledge,
     manual_messages,
     notifications,
+    platform_admin,
     roles,
     test_whatsapp,
     tickets,
@@ -54,6 +55,21 @@ async def takeover_timeout_worker() -> None:
         await asyncio.sleep(10)
 
 
+async def run_telegram_bot(telegram_app) -> None:
+    await telegram_app.initialize()
+    await telegram_app.start()
+    await telegram_app.updater.start_polling()
+    try:
+        # Keep this task alive until it's cancelled at shutdown; the
+        # actual polling loop runs inside telegram_app.updater, this just
+        # holds the asyncio task open so lifespan() can cancel it cleanly.
+        await asyncio.Event().wait()
+    finally:
+        await telegram_app.updater.stop()
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.create_tables()
@@ -68,6 +84,19 @@ async def lifespan(app: FastAPI):
         takeover_timeout_worker()
     )
 
+    telegram_task = None
+    try:
+        from channels.telegram.bot import build_telegram_application
+        telegram_application = build_telegram_application()
+        telegram_task = asyncio.create_task(
+            run_telegram_bot(telegram_application)
+        )
+    except Exception as exc:
+        print(
+            "TELEGRAM BOT DISABLED (this does not affect other channels):",
+            exc,
+        )
+
     try:
         yield
     finally:
@@ -77,6 +106,11 @@ async def lifespan(app: FastAPI):
             asyncio.CancelledError
         ):
             await timeout_task
+
+        if telegram_task is not None:
+            telegram_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await telegram_task
 
 
 app = FastAPI(
@@ -123,6 +157,7 @@ app.include_router(developer_center.router)
 app.include_router(notifications.router)
 app.include_router(manual_messages.router)
 app.include_router(roles.router)
+app.include_router(platform_admin.router)
 
 app.include_router(
     whatsapp_webhook.router

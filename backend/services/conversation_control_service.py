@@ -93,7 +93,13 @@ def parse_datetime(
 
 class ConversationControlService:
     def __init__(self) -> None:
-        self.ensure_schema()
+        # Schema setup happens explicitly via main.py's lifespan (after
+        # database.database.db.create_tables()), not here. Calling
+        # ensure_schema() eagerly at import time raced ahead of that
+        # order — this singleton gets constructed the moment any module
+        # imports it, which can happen before db.create_tables() runs,
+        # silently creating tables with a stale/incomplete schema.
+        pass
 
     @staticmethod
     def _table_columns(
@@ -313,58 +319,15 @@ class ConversationControlService:
                 """
             )
 
-            if not self._table_exists(
-                conn,
-                "channel_accounts",
-            ):
-                conn.execute(
-                    """
-                    CREATE TABLE channel_accounts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id INTEGER NOT NULL,
-                        branch_id INTEGER,
-                        channel_type TEXT NOT NULL,
-                        display_name TEXT NOT NULL,
-                        external_account_id TEXT,
-                        phone_number TEXT,
-                        status TEXT NOT NULL
-                            DEFAULT 'active',
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        FOREIGN KEY(company_id)
-                            REFERENCES companies(id)
-                            ON DELETE CASCADE,
-                        FOREIGN KEY(branch_id)
-                            REFERENCES branches(id)
-                            ON DELETE SET NULL
-                    )
-                    """
-                )
-            else:
-                self._add_missing_columns(
-                    conn,
-                    "channel_accounts",
-                    {
-                        "company_id":
-                            "INTEGER",
-                        "branch_id":
-                            "INTEGER",
-                        "channel_type":
-                            "TEXT",
-                        "display_name":
-                            "TEXT",
-                        "external_account_id":
-                            "TEXT",
-                        "phone_number":
-                            "TEXT",
-                        "status":
-                            "TEXT DEFAULT 'active'",
-                        "created_at":
-                            "TEXT",
-                        "updated_at":
-                            "TEXT",
-                    },
-                )
+            # channel_accounts is owned by database/database.py's
+            # create_tables() (the real schema: channel, name, access
+            # tokens, ai_enabled/flow_enabled/etc — actively used
+            # elsewhere). A second, incompatible definition used to live
+            # here (channel_type/display_name, not read anywhere else)
+            # that would win the race if this service's singleton got
+            # imported before db.create_tables() ran, silently leaving
+            # the wrong schema in place. Removed rather than reconciled
+            # to avoid two sources of truth for the same table.
 
             conn.execute(
                 """
@@ -407,32 +370,6 @@ class ConversationControlService:
                 )
                 """
             )
-
-            channel_account_columns = (
-                self._table_columns(
-                    conn,
-                    "channel_accounts",
-                )
-            )
-
-            if {
-                "company_id",
-                "status",
-                "channel_type",
-            }.issubset(
-                channel_account_columns
-            ):
-                conn.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS
-                    idx_channel_accounts_company
-                    ON channel_accounts (
-                        company_id,
-                        status,
-                        channel_type
-                    )
-                    """
-                )
 
             conn.commit()
 

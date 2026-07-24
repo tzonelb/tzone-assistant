@@ -11,6 +11,7 @@ from backend.services.conversation_control_service import conversation_control_s
 from backend.services.diagnostics_service import diagnostics_service
 from channels.meta.logger import log_meta_event
 from channels.meta.sender import send_meta_buttons
+from channels.telegram.sender import send_telegram_buttons
 from core.conversation_store import save_conversation_message
 from database.database import db
 from gateway.message_gateway import message_gateway
@@ -170,12 +171,20 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
             return
 
         buttons = getattr(response, "buttons", None)
-        send_result = send_meta_buttons(
-            recipient_id=user_id,
-            text=response.text,
-            buttons=buttons,
-            channel=channel,
-        )
+        if channel == "telegram":
+            send_result = send_telegram_buttons(
+                recipient_id=user_id,
+                text=response.text,
+                buttons=buttons,
+                channel=channel,
+            )
+        else:
+            send_result = send_meta_buttons(
+                recipient_id=user_id,
+                text=response.text,
+                buttons=buttons,
+                channel=channel,
+            )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
 
         diagnostics_service.record(

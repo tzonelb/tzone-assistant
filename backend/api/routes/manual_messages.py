@@ -17,6 +17,7 @@ from backend.services.conversation_control_service import (
     conversation_control_service,
 )
 from channels.meta.sender import send_meta_text
+from channels.telegram.sender import send_telegram_text
 from core.conversation_store import (
     save_conversation_message,
 )
@@ -32,6 +33,8 @@ SUPPORTED_META_CHANNELS = {
     "messenger",
     "instagram",
 }
+
+SUPPORTED_CHANNELS = SUPPORTED_META_CHANNELS | {"telegram"}
 
 
 class ManualReplyRequest(BaseModel):
@@ -58,7 +61,7 @@ def _validate_channel(
 
     if (
         normalized_channel
-        not in SUPPORTED_META_CHANNELS
+        not in SUPPORTED_CHANNELS
     ):
         raise HTTPException(
             status_code=(
@@ -66,8 +69,8 @@ def _validate_channel(
             ),
             detail=(
                 "Manual sending currently "
-                "supports only Messenger "
-                "and Instagram."
+                "supports only Messenger, "
+                "Instagram, and Telegram."
             ),
         )
 
@@ -251,11 +254,17 @@ def send_manual_conversation_reply(
             ),
         )
 
-    send_result = send_meta_text(
-        recipient_id=normalized_user_id,
-        text=message_text,
-        channel=normalized_channel,
-    )
+    if normalized_channel == "telegram":
+        send_result = send_telegram_text(
+            recipient_id=normalized_user_id,
+            text=message_text,
+        )
+    else:
+        send_result = send_meta_text(
+            recipient_id=normalized_user_id,
+            text=message_text,
+            channel=normalized_channel,
+        )
 
     if not send_result.get("ok"):
         raise HTTPException(
@@ -274,6 +283,23 @@ def send_manual_conversation_reply(
         or "Employee"
     )
 
+    if normalized_channel == "telegram":
+        provider_name = "telegram"
+        response_payload = send_result.get("response", {})
+        provider_message_id = (
+            response_payload.get("result", {}).get("message_id")
+            if isinstance(response_payload, dict)
+            else None
+        )
+    else:
+        provider_name = "meta"
+        response_payload = send_result.get("response", {})
+        provider_message_id = (
+            response_payload.get("message_id")
+            if isinstance(response_payload, dict)
+            else None
+        )
+
     saved_message = (
         save_conversation_message(
             channel=normalized_channel,
@@ -289,19 +315,8 @@ def send_manual_conversation_reply(
                 "employee_name": (
                     employee_name
                 ),
-                "provider": "meta",
-                "provider_message_id": (
-                    send_result
-                    .get("response", {})
-                    .get("message_id")
-                    if isinstance(
-                        send_result.get(
-                            "response"
-                        ),
-                        dict,
-                    )
-                    else None
-                ),
+                "provider": provider_name,
+                "provider_message_id": provider_message_id,
             },
         )
     )
