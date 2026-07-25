@@ -1,3 +1,4 @@
+from backend.services.channel_account_service import channel_account_service
 from backend.services.company_settings_service import company_settings_service
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.customer_service import customer_service
@@ -30,7 +31,18 @@ def process_meta_payload(payload: dict):
     user_id = parsed["user_id"]
     text = parsed["text"]
     official_profile = resolve_meta_profile(user_id=user_id, channel=channel)
-    company_id = conversation_control_service.resolve_default_company_id()
+
+    # Multi-tenant resolution: which company's connected page/IG account
+    # received this? Falls back to the platform default company if no
+    # company has connected one yet (keeps the old single-tenant .env
+    # setup working unchanged).
+    account_match = channel_account_service.resolve_meta_account(
+        recipient_id=parsed.get("recipient_id"), channel=channel,
+    )
+    company_id = (
+        account_match["company_id"] if account_match
+        else conversation_control_service.resolve_default_company_id()
+    )
 
     customer = customer_service.upsert_from_channel(
         company_id=company_id,

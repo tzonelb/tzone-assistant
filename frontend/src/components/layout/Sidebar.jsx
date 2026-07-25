@@ -7,6 +7,7 @@ import {
   DashboardOutlined,
   EventNoteOutlined,
   GroupOutlined,
+  HubOutlined,
   Inventory2Outlined,
   NotificationsOutlined,
   QueryStatsOutlined,
@@ -35,6 +36,7 @@ const navigationItems = [
   ["/team-chat", "Team Chat", EventNoteOutlined],
   ["/settings", "Settings", SettingsOutlined],
   ["/company-settings", "Company Settings", TuneOutlined],
+  ["/channels", "Channels", HubOutlined],
   ["/roles", "Roles & Permissions", AdminPanelSettingsOutlined],
 ];
 

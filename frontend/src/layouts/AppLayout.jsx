@@ -43,6 +43,7 @@ const pageTitles = {
   "/team-chat": "Team Chat",
   "/settings": "Settings",
   "/company-settings": "Company Settings",
+  "/channels": "Channels",
   "/roles": "Roles & Permissions",
   "/platform-admin": "Platform Admin",
 };

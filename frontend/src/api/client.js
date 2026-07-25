@@ -148,6 +148,35 @@ export async function loginRequest(company, email, password) {
   });
 }
 
+export async function listMyChannelsRequest() {
+  return apiRequest("/api/channels");
+}
+
+export async function connectTelegramRequest(botToken, name) {
+  return apiRequest("/api/channels/telegram/connect", {
+    method: "POST",
+    body: { bot_token: botToken, name: name || null },
+  });
+}
+
+export async function connectWhatsAppRequest(phoneNumberId, accessToken, name) {
+  return apiRequest("/api/channels/whatsapp/connect", {
+    method: "POST",
+    body: { phone_number_id: phoneNumberId, access_token: accessToken, name: name || null },
+  });
+}
+
+export async function connectInstagramRequest(pageId, accessToken, name) {
+  return apiRequest("/api/channels/instagram/connect", {
+    method: "POST",
+    body: { page_id: pageId, access_token: accessToken, name: name || null },
+  });
+}
+
+export async function disconnectChannelRequest(accountId) {
+  return apiRequest(`/api/channels/${accountId}`, { method: "DELETE" });
+}
+
 export async function getAccessOverviewRequest() {
   return apiRequest("/api/admin/access/overview");
 }

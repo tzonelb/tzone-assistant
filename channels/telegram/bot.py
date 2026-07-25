@@ -27,74 +27,83 @@ CONTACT_REQUEST_KEYBOARD = ReplyKeyboardMarkup(
 )
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    process_telegram_message(
-        user_id=str(update.effective_user.id),
-        text="start",
-        customer_name=update.effective_user.full_name,
-        username=update.effective_user.username,
-    )
-    # Ask for the customer's phone once, right at the start of support.
-    # Telegram never exposes a phone number unless the user explicitly
-    # shares it via this contact button — there is no other way to get it.
-    await update.message.reply_text(
-        "You can share your phone number to help us assist you faster (optional).",
-        reply_markup=CONTACT_REQUEST_KEYBOARD,
-    )
-    # No AI reply sent here directly — the same batched pipeline
-    # Messenger uses (schedule_smart_reply) answers a few seconds later.
+def make_start_handler(company_id: int):
+    async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        process_telegram_message(
+            user_id=str(update.effective_user.id),
+            text="start",
+            customer_name=update.effective_user.full_name,
+            username=update.effective_user.username,
+            company_id=company_id,
+        )
+        await update.message.reply_text(
+            "You can share your phone number to help us assist you faster (optional).",
+            reply_markup=CONTACT_REQUEST_KEYBOARD,
+        )
+    return start
 
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text if update.message and update.message.text else ""
-    if not user_message:
-        return
+def make_message_handler(company_id: int):
+    async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_message = update.message.text if update.message and update.message.text else ""
+        if not user_message:
+            return
+        process_telegram_message(
+            user_id=str(update.effective_user.id),
+            text=user_message,
+            customer_name=update.effective_user.full_name,
+            username=update.effective_user.username,
+            company_id=company_id,
+        )
+    return handle_message
 
-    process_telegram_message(
-        user_id=str(update.effective_user.id),
-        text=user_message,
-        customer_name=update.effective_user.full_name,
-        username=update.effective_user.username,
-    )
 
-
-async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    contact = update.message.contact if update.message else None
-    if not contact or not contact.phone_number:
-        return
-
-    # Only accept a contact the user shared for themselves, not a
-    # forwarded contact card for someone else.
-    if contact.user_id and contact.user_id != update.effective_user.id:
-        return
-
-    process_telegram_message(
-        user_id=str(update.effective_user.id),
-        text="[shared phone number]",
-        customer_name=update.effective_user.full_name,
-        username=update.effective_user.username,
-        phone=contact.phone_number,
-    )
-    await update.message.reply_text(
-        "Thanks — we've saved your number.",
-    )
+def make_contact_handler(company_id: int):
+    async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        contact = update.message.contact if update.message else None
+        if not contact or not contact.phone_number:
+            return
+        if contact.user_id and contact.user_id != update.effective_user.id:
+            return
+        process_telegram_message(
+            user_id=str(update.effective_user.id),
+            text="[shared phone number]",
+            customer_name=update.effective_user.full_name,
+            username=update.effective_user.username,
+            phone=contact.phone_number,
+            company_id=company_id,
+        )
+        await update.message.reply_text("Thanks — we've saved your number.")
+    return handle_contact
 
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     logger.exception("Telegram error", exc_info=context.error)
 
 
-def build_telegram_application() -> Application:
-    if not config.TELEGRAM_BOT_TOKEN:
+def build_telegram_application(bot_token: str | None = None, company_id: int | None = None) -> Application:
+    """Build one bot Application bound to a specific company's token.
+
+    bot_token/company_id default to the legacy single-tenant .env config
+    (TELEGRAM_BOT_TOKEN + DEFAULT_COMPANY_ID) for backward compatibility
+    with local/manual runs — the real multi-tenant path (one bot per
+    connected company) always passes both explicitly. See
+    channels/telegram/manager.py for that.
+    """
+    token = bot_token or config.TELEGRAM_BOT_TOKEN
+    resolved_company_id = company_id if company_id is not None else config.DEFAULT_COMPANY_ID
+
+    if not token:
         raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN is missing. Please add it to your .env file."
+            "No Telegram bot token available. Please add TELEGRAM_BOT_TOKEN to your .env file, "
+            "or connect a Telegram bot from a company's Channels page."
         )
 
-    app = Application.builder().token(config.TELEGRAM_BOT_TOKEN).build()
+    app = Application.builder().token(token).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.CONTACT, handle_contact))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CommandHandler("start", make_start_handler(resolved_company_id)))
+    app.add_handler(MessageHandler(filters.CONTACT, make_contact_handler(resolved_company_id)))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, make_message_handler(resolved_company_id)))
     app.add_error_handler(error_handler)
 
     return app
@@ -102,8 +111,7 @@ def build_telegram_application() -> Application:
 
 def run_telegram():
     """Standalone entry point (python -m channels.telegram.bot) — kept
-    for manual/local testing. The app's normal startup runs the bot
-    inside the same asyncio loop instead; see main.py's telegram_bot_worker."""
+    for manual/local testing with a single .env-configured bot."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"

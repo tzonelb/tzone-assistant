@@ -184,6 +184,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
                 text=response.text,
                 buttons=buttons,
                 channel=channel,
+                company_id=company_id,
             )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
 
