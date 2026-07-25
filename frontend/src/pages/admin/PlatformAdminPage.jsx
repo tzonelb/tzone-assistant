@@ -43,7 +43,10 @@ export default function PlatformAdminPage() {
   const [saving, setSaving] = useState(false);
 
   const [companyModalOpen, setCompanyModalOpen] = useState(false);
-  const [newCompany, setNewCompany] = useState({ name: "", slug: "", country: "", currency: "USD", plan_id: "", trial_days: 14 });
+  const [newCompany, setNewCompany] = useState({
+    name: "", slug: "", country: "", currency: "USD", plan_id: "", trial_days: 14,
+    main_admin_email: "", contact_phone: "", license_code: "",
+  });
   const [planTarget, setPlanTarget] = useState(null);
 
   const [planModal, setPlanModal] = useState(null); // { mode: "create" | "edit", form, planId }
@@ -78,7 +81,10 @@ export default function PlatformAdminPage() {
         plan_id: newCompany.plan_id ? Number(newCompany.plan_id) : null,
         trial_days: Number(newCompany.trial_days) || 14,
       });
-      setNewCompany({ name: "", slug: "", country: "", currency: "USD", plan_id: "", trial_days: 14 });
+      setNewCompany({
+        name: "", slug: "", country: "", currency: "USD", plan_id: "", trial_days: 14,
+        main_admin_email: "", contact_phone: "", license_code: "",
+      });
       setCompanyModalOpen(false);
       await load();
     } catch (x) {
@@ -201,6 +207,7 @@ export default function PlatformAdminPage() {
                 <thead>
                   <tr style={styles.tableHeadRow}>
                     <th style={styles.th}>Company</th>
+                    <th style={styles.th}>License</th>
                     <th style={styles.th}>Plan</th>
                     <th style={styles.th}>Subscription</th>
                     <th style={styles.th}>Users</th>
@@ -215,6 +222,11 @@ export default function PlatformAdminPage() {
                       <td style={styles.td}>
                         <strong>{company.name}</strong>
                         <div style={styles.muted}>{company.slug}</div>
+                      </td>
+                      <td style={styles.td}>
+                        <div>{company.license_code || "—"}</div>
+                        <div style={styles.muted}>{company.main_admin_email || "no admin email set"}</div>
+                        <div style={styles.muted}>{company.purchased_at ? `since ${company.purchased_at.slice(0, 10)}` : ""}</div>
                       </td>
                       <td style={styles.td}>{company.plan_name || "No plan"}</td>
                       <td style={styles.td}>
@@ -251,7 +263,7 @@ export default function PlatformAdminPage() {
                     </tr>
                   ))}
                   {!companies.length ? (
-                    <tr><td style={styles.td} colSpan={7}>No companies yet — add the first one.</td></tr>
+                    <tr><td style={styles.td} colSpan={8}>No companies yet — add the first one.</td></tr>
                   ) : null}
                 </tbody>
               </table>
@@ -340,6 +352,18 @@ export default function PlatformAdminPage() {
             <label style={styles.label}>
               Country
               <input style={styles.input} value={newCompany.country} onChange={(e) => setNewCompany({ ...newCompany, country: e.target.value })} />
+            </label>
+            <label style={styles.label}>
+              Main admin email
+              <input style={styles.input} type="email" value={newCompany.main_admin_email} onChange={(e) => setNewCompany({ ...newCompany, main_admin_email: e.target.value })} placeholder="admin@company.com" />
+            </label>
+            <label style={styles.label}>
+              Contact phone
+              <input style={styles.input} value={newCompany.contact_phone} onChange={(e) => setNewCompany({ ...newCompany, contact_phone: e.target.value })} />
+            </label>
+            <label style={styles.label}>
+              License code (leave blank to auto-generate)
+              <input style={styles.input} value={newCompany.license_code} onChange={(e) => setNewCompany({ ...newCompany, license_code: e.target.value })} placeholder="TZ-XXXX-XXXX-XXXX" />
             </label>
             <label style={styles.label}>
               Plan

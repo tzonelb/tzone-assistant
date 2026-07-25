@@ -9,7 +9,6 @@ import CommentsPage from "./pages/comments/CommentsPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
-import ChannelsPage from "./pages/company/ChannelsPage";
 import ModulePage from "./pages/modules/ModulePage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -36,7 +35,6 @@ export default function App() {
         <Route path="/team-chat" element={<ModulePage title="Team Chat" description="Internal messages, follow-ups, mentions, shared files and instructions without private WhatsApp groups." />} />
         <Route path="/settings" element={<UISettingsPage />} />
         <Route path="/company-settings/*" element={<CompanySettingsPage />} />
-        <Route path="/channels" element={<ChannelsPage />} />
         <Route path="/roles" element={<RolesPermissionsPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

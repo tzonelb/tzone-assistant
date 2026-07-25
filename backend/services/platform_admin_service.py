@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -9,6 +10,12 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _generate_license_code() -> str:
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no ambiguous chars (0/O, 1/I)
+    groups = ["".join(secrets.choice(chars) for _ in range(4)) for _ in range(3)]
+    return f"TZ-{'-'.join(groups)}"
+
+
 class PlatformAdminService:
     """Super-admin-only operations across every company on the platform.
 
@@ -18,6 +25,24 @@ class PlatformAdminService:
     service does not check that itself; it assumes the caller already did.
     """
 
+    def ensure_schema(self) -> None:
+        """Adds the license/admin-contact columns this feature needs.
+        Additive only — never touches existing columns or data."""
+        with db.connect() as conn:
+            existing_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(companies)").fetchall()
+            }
+            new_columns = {
+                "main_admin_email": "TEXT",
+                "contact_phone": "TEXT",
+                "license_code": "TEXT",
+                "purchased_at": "TEXT",
+            }
+            for column, column_type in new_columns.items():
+                if column not in existing_columns:
+                    conn.execute(f"ALTER TABLE companies ADD COLUMN {column} {column_type}")
+            conn.commit()
+
     # ---- Companies -------------------------------------------------
 
     def list_companies(self, *, status: str | None = None) -> list[dict[str, Any]]:
@@ -25,10 +50,12 @@ class PlatformAdminService:
             SELECT
                 c.id, c.name, c.slug, c.country, c.currency, c.status,
                 c.created_at,
+                c.main_admin_email, c.contact_phone, c.license_code, c.purchased_at,
                 s.id AS subscription_id, s.status AS subscription_status,
                 s.expires_at, s.auto_renew,
                 p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
                 p.price_monthly, p.currency AS plan_currency,
+                p.max_users, p.max_channel_accounts,
                 (SELECT COUNT(*) FROM company_users cu
                     WHERE cu.company_id = c.id AND cu.status = 'active') AS active_users,
                 (SELECT COUNT(*) FROM channel_accounts ca
@@ -106,8 +133,12 @@ class PlatformAdminService:
         currency: str = "USD",
         plan_id: int | None = None,
         trial_days: int = 14,
+        main_admin_email: str | None = None,
+        contact_phone: str | None = None,
+        license_code: str | None = None,
     ) -> dict[str, Any]:
         now = utc_now_iso()
+        resolved_license_code = license_code or _generate_license_code()
         with db.connect() as conn:
             existing = conn.execute(
                 "SELECT id FROM companies WHERE workspace_id = ? AND slug = ?",
@@ -116,12 +147,26 @@ class PlatformAdminService:
             if existing:
                 raise ValueError(f"A company with slug '{slug}' already exists")
 
+            existing_license = conn.execute(
+                "SELECT id FROM companies WHERE license_code = ?", (resolved_license_code,),
+            ).fetchone()
+            if existing_license:
+                raise ValueError(f"License code '{resolved_license_code}' is already in use")
+
             cursor = conn.execute(
                 """
-                INSERT INTO companies (workspace_id, name, slug, country, currency, status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+                INSERT INTO companies (
+                    workspace_id, name, slug, country, currency, status,
+                    main_admin_email, contact_phone, license_code, purchased_at,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
                 """,
-                (config.DEFAULT_WORKSPACE_ID, name, slug, country, currency, now, now),
+                (
+                    config.DEFAULT_WORKSPACE_ID, name, slug, country, currency,
+                    main_admin_email, contact_phone, resolved_license_code, now,
+                    now, now,
+                ),
             )
             company_id = int(cursor.lastrowid)
 

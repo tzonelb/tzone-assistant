@@ -25,6 +25,9 @@ class CreateCompanyRequest(BaseModel):
     currency: str = "USD"
     plan_id: int | None = None
     trial_days: int = 14
+    main_admin_email: str | None = None
+    contact_phone: str | None = None
+    license_code: str | None = None
 
 
 class SetCompanyStatusRequest(BaseModel):
@@ -174,3 +177,52 @@ def platform_usage(
 ):
     _require_super_admin(current_user)
     return platform_admin_service.platform_usage_summary()
+
+
+@router.get("/my-subscription")
+def my_subscription(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """Company-scoped, read-only: any logged-in company user can see
+    their OWN company's real plan/limits — no super-admin required, and
+    nothing here can be edited (that stays exclusively in Platform Admin).
+    Used by Company Settings > Subscription instead of a fake placeholder."""
+    from backend.services.auth_service import auth_service
+    company_id = auth_service.resolve_company_id(current_user)
+    limits = platform_admin_service.get_active_subscription_limits(company_id=company_id)
+    if limits is None:
+        return {"has_subscription": False}
+
+    with __import__("database.database", fromlist=["db"]).db.connect() as conn:
+        active_users = conn.execute(
+            "SELECT COUNT(*) AS total FROM company_users WHERE company_id = ? AND status = 'active'",
+            (company_id,),
+        ).fetchone()["total"]
+        active_channels = conn.execute(
+            "SELECT COUNT(*) AS total FROM channel_accounts WHERE company_id = ? AND status = 'active'",
+            (company_id,),
+        ).fetchone()["total"]
+        subscription_row = conn.execute(
+            "SELECT status, expires_at FROM subscriptions WHERE company_id = ? "
+            "AND status IN ('active', 'trialing') ORDER BY created_at DESC LIMIT 1",
+            (company_id,),
+        ).fetchone()
+
+    return {
+        "has_subscription": True,
+        "plan_name": limits["name"],
+        "plan_code": limits["code"],
+        "price_monthly": limits["price_monthly"],
+        "subscription_status": subscription_row["status"] if subscription_row else None,
+        "expires_at": subscription_row["expires_at"] if subscription_row else None,
+        "users": {"used": active_users, "max": limits["max_users"]},
+        "channels": {"used": active_channels, "max": limits["max_channel_accounts"]},
+        "max_ai_messages": limits["max_ai_messages"],
+        "max_knowledge_items": limits["max_knowledge_items"],
+        "features": {
+            "voice_ai": bool(limits["voice_ai_enabled"]),
+            "image_ai": bool(limits["image_ai_enabled"]),
+            "accounting_connector": bool(limits["accounting_connector_enabled"]),
+            "product_connector": bool(limits["product_connector_enabled"]),
+        },
+    }

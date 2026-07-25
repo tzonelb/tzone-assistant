@@ -29,6 +29,9 @@ def client_and_db():
     db.create_tables()
     auth_service.create_tables()
 
+    from backend.services.platform_admin_service import platform_admin_service
+    platform_admin_service.ensure_schema()
+
     with db.connect() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
@@ -91,6 +94,41 @@ def test_super_admin_can_create_and_list_company(client_and_db):
     assert list_resp.status_code == 200
     names = [c["name"] for c in list_resp.json()["companies"]]
     assert "Acme Support" in names
+
+
+def test_company_gets_an_auto_generated_license_code(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    resp = client.post("/api/platform/companies", json={"name": "License Co", "slug": "license-co"})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["license_code"]
+    assert body["license_code"].startswith("TZ-")
+
+
+def test_company_stores_admin_email_and_purchase_metadata(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    resp = client.post(
+        "/api/platform/companies",
+        json={
+            "name": "Contact Co", "slug": "contact-co",
+            "main_admin_email": "admin@contactco.com", "contact_phone": "+96170000000",
+            "license_code": "TZ-CUST-0001",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["main_admin_email"] == "admin@contactco.com"
+    assert body["contact_phone"] == "+96170000000"
+    assert body["license_code"] == "TZ-CUST-0001"
+    assert body["purchased_at"]
+
+
+def test_duplicate_license_code_is_rejected(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    client.post("/api/platform/companies", json={"name": "A", "slug": "a-co", "license_code": "TZ-DUP-0001"})
+    resp = client.post("/api/platform/companies", json={"name": "B", "slug": "b-co", "license_code": "TZ-DUP-0001"})
+    assert resp.status_code == 400
+    assert "License code" in resp.json()["detail"]
 
 
 def test_duplicate_slug_is_rejected(client_and_db):
@@ -158,6 +196,39 @@ def test_usage_summary_accessible_to_super_admin(client_and_db):
     resp = client.get("/api/platform/usage")
     assert resp.status_code == 200
     assert "companies_by_status" in resp.json()
+
+
+def test_company_user_can_see_own_subscription_readonly(client_and_db):
+    """A regular (non-super-admin) company member can see their own
+    company's real plan/limits — this replaces a fake placeholder tab."""
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    admin_client.post("/api/platform/companies", json={"name": "View Co", "slug": "view-co", "plan_id": 1})
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (2, 'member@view-co.test', 'Member', 'active', 0)"
+        )
+        conn.execute(
+            "SELECT id FROM companies WHERE slug = 'view-co'"
+        )
+        company_row = conn.execute("SELECT id FROM companies WHERE slug = 'view-co'").fetchone()
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 2, 'active')",
+            (company_row["id"],),
+        )
+        conn.commit()
+
+    member_client = client_and_db(2, is_super_admin=False)
+    resp = member_client.get("/api/platform/my-subscription")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["has_subscription"] is True
+    assert body["plan_name"] == "Starter"
+    assert "used" in body["users"]
+    assert "max" in body["users"]
 
 
 def test_super_admin_can_create_a_plan(client_and_db):

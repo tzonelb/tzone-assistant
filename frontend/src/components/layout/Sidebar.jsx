@@ -36,7 +36,6 @@ const navigationItems = [
   ["/team-chat", "Team Chat", EventNoteOutlined],
   ["/settings", "Settings", SettingsOutlined],
   ["/company-settings", "Company Settings", TuneOutlined],
-  ["/channels", "Channels", HubOutlined],
   ["/roles", "Roles & Permissions", AdminPanelSettingsOutlined],
 ];
 

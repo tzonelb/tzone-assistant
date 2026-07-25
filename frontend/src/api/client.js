@@ -148,33 +148,55 @@ export async function loginRequest(company, email, password) {
   });
 }
 
+export async function sendVerificationCodeRequest(purpose) {
+  return apiRequest("/api/security/send-code", { method: "POST", body: { purpose } });
+}
+
+export async function verifyCodeRequest(purpose, code) {
+  return apiRequest("/api/security/verify-code", { method: "POST", body: { purpose, code } });
+}
+
+export async function getSessionChangesRequest(purpose, token) {
+  return apiRequest(`/api/security/changes?purpose=${encodeURIComponent(purpose)}&token=${encodeURIComponent(token)}`);
+}
+
+export async function getMySubscriptionRequest() {
+  return apiRequest("/api/platform/my-subscription");
+}
+
 export async function listMyChannelsRequest() {
   return apiRequest("/api/channels");
 }
 
-export async function connectTelegramRequest(botToken, name) {
+export async function connectTelegramRequest(botToken, name, elevatedToken) {
   return apiRequest("/api/channels/telegram/connect", {
     method: "POST",
     body: { bot_token: botToken, name: name || null },
+    headers: { "X-Elevated-Token": elevatedToken },
   });
 }
 
-export async function connectWhatsAppRequest(phoneNumberId, accessToken, name) {
+export async function connectWhatsAppRequest(phoneNumberId, accessToken, name, elevatedToken) {
   return apiRequest("/api/channels/whatsapp/connect", {
     method: "POST",
     body: { phone_number_id: phoneNumberId, access_token: accessToken, name: name || null },
+    headers: { "X-Elevated-Token": elevatedToken },
   });
 }
 
-export async function connectInstagramRequest(pageId, accessToken, name) {
+export async function connectInstagramRequest(pageId, accessToken, name, elevatedToken) {
   return apiRequest("/api/channels/instagram/connect", {
     method: "POST",
     body: { page_id: pageId, access_token: accessToken, name: name || null },
+    headers: { "X-Elevated-Token": elevatedToken },
   });
 }
 
-export async function disconnectChannelRequest(accountId) {
-  return apiRequest(`/api/channels/${accountId}`, { method: "DELETE" });
+export async function disconnectChannelRequest(accountId, elevatedToken) {
+  return apiRequest(`/api/channels/${accountId}`, {
+    method: "DELETE",
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
 }
 
 export async function getAccessOverviewRequest() {
