@@ -7,6 +7,7 @@ from backend.api.schemas.roles import (
     UserCreateRequest,
 )
 from backend.services.auth_service import auth_service, get_current_user
+from backend.services.platform_admin_service import platform_admin_service
 from database.database import db
 
 
@@ -163,6 +164,21 @@ def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = D
 def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
+
+    limits = platform_admin_service.get_active_subscription_limits(company_id=company_id)
+    if limits is not None:
+        with db.connect() as conn:
+            active_users = conn.execute(
+                "SELECT COUNT(*) AS total FROM company_users WHERE company_id = ? AND status = 'active'",
+                (company_id,),
+            ).fetchone()["total"]
+        if active_users >= limits["max_users"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"This company's plan ({limits['name']}) allows up to "
+                       f"{limits['max_users']} users. Contact your platform administrator to upgrade.",
+            )
+
     with db.connect() as conn:
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:

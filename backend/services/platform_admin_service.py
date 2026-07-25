@@ -178,8 +178,6 @@ class PlatformAdminService:
 
         return self.get_company_detail(company_id=company_id)
 
-    # ---- Plans -------------------------------------------------------
-
     def list_plans(self, *, active_only: bool = True) -> list[dict[str, Any]]:
         query = "SELECT * FROM plans"
         params: list[Any] = []
@@ -190,6 +188,108 @@ class PlatformAdminService:
         with db.connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [dict(row) for row in rows]
+
+    def create_plan(
+        self,
+        *,
+        name: str,
+        code: str,
+        price_monthly: float = 0,
+        currency: str = "USD",
+        max_users: int = 1,
+        max_channel_accounts: int = 1,
+        max_ai_messages: int = 500,
+        max_knowledge_items: int = 100,
+        voice_ai_enabled: bool = False,
+        image_ai_enabled: bool = False,
+        accounting_connector_enabled: bool = False,
+        product_connector_enabled: bool = False,
+    ) -> dict[str, Any]:
+        with db.connect() as conn:
+            existing = conn.execute("SELECT id FROM plans WHERE code = ?", (code,)).fetchone()
+            if existing:
+                raise ValueError(f"A plan with code '{code}' already exists")
+
+            cursor = conn.execute(
+                """
+                INSERT INTO plans (
+                    name, code, price_monthly, currency,
+                    max_users, max_channel_accounts, max_ai_messages, max_knowledge_items,
+                    voice_ai_enabled, image_ai_enabled, accounting_connector_enabled, product_connector_enabled,
+                    status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+                """,
+                (
+                    name, code, price_monthly, currency,
+                    max_users, max_channel_accounts, max_ai_messages, max_knowledge_items,
+                    int(voice_ai_enabled), int(image_ai_enabled),
+                    int(accounting_connector_enabled), int(product_connector_enabled),
+                ),
+            )
+            plan_id = int(cursor.lastrowid)
+            conn.commit()
+
+        return self.get_plan(plan_id=plan_id)
+
+    def get_plan(self, *, plan_id: int) -> dict[str, Any]:
+        with db.connect() as conn:
+            row = conn.execute("SELECT * FROM plans WHERE id = ?", (plan_id,)).fetchone()
+        if not row:
+            raise KeyError("Plan not found")
+        return dict(row)
+
+    _PLAN_UPDATABLE_FIELDS = {
+        "name", "price_monthly", "currency",
+        "max_users", "max_channel_accounts", "max_ai_messages", "max_knowledge_items",
+        "voice_ai_enabled", "image_ai_enabled",
+        "accounting_connector_enabled", "product_connector_enabled",
+        "status",
+    }
+    _PLAN_BOOL_FIELDS = {
+        "voice_ai_enabled", "image_ai_enabled",
+        "accounting_connector_enabled", "product_connector_enabled",
+    }
+
+    def update_plan(self, *, plan_id: int, values: dict[str, Any]) -> dict[str, Any]:
+        updates = {k: v for k, v in values.items() if k in self._PLAN_UPDATABLE_FIELDS}
+        if not updates:
+            return self.get_plan(plan_id=plan_id)
+
+        set_clauses = []
+        params: list[Any] = []
+        for field, value in updates.items():
+            set_clauses.append(f"{field} = ?")
+            params.append(int(value) if field in self._PLAN_BOOL_FIELDS else value)
+        params.append(plan_id)
+
+        with db.connect() as conn:
+            existing = conn.execute("SELECT id FROM plans WHERE id = ?", (plan_id,)).fetchone()
+            if not existing:
+                raise KeyError("Plan not found")
+            conn.execute(f"UPDATE plans SET {', '.join(set_clauses)} WHERE id = ?", params)
+            conn.commit()
+
+        return self.get_plan(plan_id=plan_id)
+
+    def get_active_subscription_limits(self, *, company_id: int) -> dict[str, Any] | None:
+        """Returns the plan limits/features for a company's current active
+        (or trialing) subscription, or None if it has none. Used to
+        enforce max_users / max_channel_accounts / feature flags
+        elsewhere in the app."""
+        with db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT p.*
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.company_id = ?
+                  AND s.status IN ('active', 'trialing')
+                ORDER BY s.created_at DESC
+                LIMIT 1
+                """,
+                (company_id,),
+            ).fetchone()
+        return dict(row) if row else None
 
     # ---- Subscriptions -------------------------------------------------
 

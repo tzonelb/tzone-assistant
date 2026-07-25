@@ -15,8 +15,9 @@ import {
   TaskAltOutlined,
   TuneOutlined,
 } from "@mui/icons-material";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { getCurrentUserRequest } from "../../api/client";
 import tzoneLogo from "../../assets/tzone-logo.png";
 
 const navigationItems = [
@@ -39,7 +40,25 @@ const navigationItems = [
 
 export default function Sidebar({ open, collapsed, companyName, onClose, onToggleCollapsed }) {
   const [hovered, setHovered] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const expanded = !collapsed || hovered;
+
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentUserRequest()
+      .then((response) => {
+        if (!cancelled) setIsSuperAdmin(Boolean(response?.user?.is_super_admin));
+      })
+      .catch(() => {
+        // Not fatal — the API already enforces this server-side either way.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const items = isSuperAdmin
+    ? [...navigationItems, ["/platform-admin", "Platform Admin", AdminPanelSettingsOutlined]]
+    : navigationItems;
+
   return (
     <>
       {open ? <button type="button" className="sidebar-overlay" aria-label="Close navigation" onClick={onClose} /> : null}
@@ -53,7 +72,7 @@ export default function Sidebar({ open, collapsed, companyName, onClose, onToggl
           <div className="sidebar-brand-copy"><strong>T-ZONE</strong><span>{companyName || "Platform"}</span></div>
         </div>
         <nav className="sidebar-navigation">
-          {navigationItems.map(([path, label, Icon]) => (
+          {items.map(([path, label, Icon]) => (
             <NavLink key={path} to={path} title={collapsed ? label : undefined} className={({ isActive }) => `sidebar-link ${isActive ? "sidebar-link-active" : ""}`} onClick={onClose}>
               <Icon fontSize="small" /><span>{label}</span>
             </NavLink>

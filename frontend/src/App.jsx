@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
 import RolesPermissionsPage from "./pages/admin/RolesPermissionsPage";
+import PlatformAdminPage from "./pages/admin/PlatformAdminPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
 import ConversationsPage from "./pages/conversations/ConversationsPage";
 import CommentsPage from "./pages/comments/CommentsPage";
@@ -17,6 +18,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ConversationDetailPage standalone /></ProtectedRoute>} />
+      <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdminPage /></ProtectedRoute>} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />

@@ -152,6 +152,48 @@ export async function getAccessOverviewRequest() {
   return apiRequest("/api/admin/access/overview");
 }
 
+export async function listPlatformCompaniesRequest() {
+  return apiRequest("/api/platform/companies");
+}
+
+export async function getPlatformCompanyRequest(companyId) {
+  return apiRequest(`/api/platform/companies/${companyId}`);
+}
+
+export async function createPlatformCompanyRequest(payload) {
+  return apiRequest("/api/platform/companies", { method: "POST", body: payload });
+}
+
+export async function setPlatformCompanyStatusRequest(companyId, status) {
+  return apiRequest(`/api/platform/companies/${companyId}/status`, {
+    method: "PATCH",
+    body: { status },
+  });
+}
+
+export async function listPlatformPlansRequest(activeOnly = true) {
+  return apiRequest(`/api/platform/plans?active_only=${activeOnly}`);
+}
+
+export async function createPlatformPlanRequest(payload) {
+  return apiRequest("/api/platform/plans", { method: "POST", body: payload });
+}
+
+export async function updatePlatformPlanRequest(planId, payload) {
+  return apiRequest(`/api/platform/plans/${planId}`, { method: "PATCH", body: payload });
+}
+
+export async function changePlatformCompanyPlanRequest(companyId, planId, durationDays) {
+  return apiRequest(`/api/platform/companies/${companyId}/plan`, {
+    method: "POST",
+    body: { plan_id: planId, duration_days: durationDays },
+  });
+}
+
+export async function getPlatformUsageRequest() {
+  return apiRequest("/api/platform/usage");
+}
+
 export async function createAccessRoleRequest(payload) {
   return apiRequest("/api/admin/access/roles", { method: "POST", body: payload });
 }

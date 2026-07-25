@@ -158,3 +158,89 @@ def test_usage_summary_accessible_to_super_admin(client_and_db):
     resp = client.get("/api/platform/usage")
     assert resp.status_code == 200
     assert "companies_by_status" in resp.json()
+
+
+def test_super_admin_can_create_a_plan(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    resp = client.post(
+        "/api/platform/plans",
+        json={
+            "name": "Custom Enterprise", "code": "custom-enterprise-test", "price_monthly": 299,
+            "max_users": 50, "max_channel_accounts": 10,
+            "voice_ai_enabled": True, "accounting_connector_enabled": True,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    plan = resp.json()
+    assert plan["max_users"] == 50
+    assert plan["voice_ai_enabled"] == 1
+
+
+def test_duplicate_plan_code_is_rejected(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    client.post("/api/platform/plans", json={"name": "A", "code": "dup-code"})
+    resp = client.post("/api/platform/plans", json={"name": "B", "code": "dup-code"})
+    assert resp.status_code == 400
+
+
+def test_super_admin_can_toggle_a_plan_feature(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    create_resp = client.post("/api/platform/plans", json={"name": "Toggle Plan", "code": "toggle-plan"})
+    plan_id = create_resp.json()["id"]
+    assert create_resp.json()["voice_ai_enabled"] == 0
+
+    update_resp = client.patch(f"/api/platform/plans/{plan_id}", json={"voice_ai_enabled": True, "max_users": 25})
+    assert update_resp.status_code == 200
+    body = update_resp.json()
+    assert body["voice_ai_enabled"] == 1
+    assert body["max_users"] == 25
+
+
+def test_non_super_admin_cannot_create_or_edit_plans(client_and_db):
+    client = client_and_db(2, is_super_admin=False)
+    resp = client.post("/api/platform/plans", json={"name": "X", "code": "x-plan"})
+    assert resp.status_code == 403
+
+
+def test_company_cannot_add_users_beyond_plan_limit(client_and_db):
+    from backend.services.auth_service import auth_service
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+
+    plan_resp = admin_client.post(
+        "/api/platform/plans", json={"name": "Tiny", "code": "tiny-plan", "max_users": 1},
+    )
+    plan_id = plan_resp.json()["id"]
+
+    company_resp = admin_client.post(
+        "/api/platform/companies",
+        json={"name": "Small Co", "slug": "small-co", "plan_id": plan_id},
+    )
+    company_id = company_resp.json()["id"]
+
+    # Set up a role and an owner membership (role_id required for create_user's validation).
+    with db.connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO roles (company_id, name, code) VALUES (?, 'Owner', 'owner')",
+            (company_id,),
+        )
+        role_id = cursor.lastrowid
+        conn.commit()
+
+    owner_id = auth_service.create_user(
+        email="owner@small-co.test", password="password123", full_name="Owner",
+    )
+    auth_service.assign_user_to_company(owner_id, company_id, role_code="owner")
+
+    company_admin_client = client_and_db(owner_id, is_super_admin=False)
+
+    resp = company_admin_client.post(
+        "/api/admin/access/users",
+        json={
+            "email": "second@small-co.test", "password": "password123",
+            "full_name": "Second User", "role_id": role_id,
+        },
+    )
+    assert resp.status_code == 400
+    assert "Tiny" in resp.json()["detail"]

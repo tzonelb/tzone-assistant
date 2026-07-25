@@ -36,6 +36,36 @@ class ChangePlanRequest(BaseModel):
     duration_days: int = 30
 
 
+class CreatePlanRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    code: str = Field(min_length=1, max_length=50)
+    price_monthly: float = 0
+    currency: str = "USD"
+    max_users: int = Field(ge=0, default=1)
+    max_channel_accounts: int = Field(ge=0, default=1)
+    max_ai_messages: int = Field(ge=0, default=500)
+    max_knowledge_items: int = Field(ge=0, default=100)
+    voice_ai_enabled: bool = False
+    image_ai_enabled: bool = False
+    accounting_connector_enabled: bool = False
+    product_connector_enabled: bool = False
+
+
+class UpdatePlanRequest(BaseModel):
+    name: str | None = None
+    price_monthly: float | None = None
+    currency: str | None = None
+    max_users: int | None = Field(ge=0, default=None)
+    max_channel_accounts: int | None = Field(ge=0, default=None)
+    max_ai_messages: int | None = Field(ge=0, default=None)
+    max_knowledge_items: int | None = Field(ge=0, default=None)
+    voice_ai_enabled: bool | None = None
+    image_ai_enabled: bool | None = None
+    accounting_connector_enabled: bool | None = None
+    product_connector_enabled: bool | None = None
+    status: str | None = Field(default=None, pattern="^(active|retired)$")
+
+
 @router.get("/companies")
 def list_companies(
     status: str | None = None,
@@ -93,6 +123,32 @@ def list_plans(
 ):
     _require_super_admin(current_user)
     return {"plans": platform_admin_service.list_plans(active_only=active_only)}
+
+
+@router.post("/plans")
+def create_plan(
+    payload: CreatePlanRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    try:
+        return platform_admin_service.create_plan(**payload.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch("/plans/{plan_id}")
+def update_plan(
+    plan_id: int,
+    payload: UpdatePlanRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    values = {k: v for k, v in payload.model_dump().items() if v is not None}
+    try:
+        return platform_admin_service.update_plan(plan_id=plan_id, values=values)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Plan not found")
 
 
 @router.post("/companies/{company_id}/plan")

@@ -44,6 +44,7 @@ const pageTitles = {
   "/settings": "Settings",
   "/company-settings": "Company Settings",
   "/roles": "Roles & Permissions",
+  "/platform-admin": "Platform Admin",
 };
 
 
