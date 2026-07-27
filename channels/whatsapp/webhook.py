@@ -2,9 +2,8 @@ from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from config.settings import config
-from gateway.message_gateway import message_gateway
-from channels.whatsapp.sender import send_whatsapp_text
-from channels.whatsapp.session import whatsapp_options
+from channels.whatsapp.processor import process_whatsapp_message
+from backend.services.channel_account_service import channel_account_service
 
 router = APIRouter(prefix="/webhook/whatsapp", tags=["WhatsApp"])
 
@@ -38,14 +37,24 @@ async def receive_message(request: Request):
         metadata = value.get("metadata", {})
         incoming_phone_number_id = str(metadata.get("phone_number_id", ""))
 
-        # Ignore Meta sample payloads, because they use fake phone_number_id like 123456123
-        if incoming_phone_number_id != str(config.WHATSAPP_PHONE_NUMBER_ID):
-            print("IGNORED SAMPLE OR WRONG PHONE NUMBER ID:", incoming_phone_number_id)
+        # Multi-tenant: does this phone_number_id belong to a company
+        # that connected its own WhatsApp? If not, fall back to the
+        # legacy single .env-configured number, and ignore anything
+        # that matches neither (e.g. Meta's sample payloads with fake
+        # ids like 123456123).
+        account_match = channel_account_service.resolve_meta_account(
+            recipient_id=incoming_phone_number_id, channel="whatsapp",
+        )
+        is_legacy_number = (
+            incoming_phone_number_id == str(config.WHATSAPP_PHONE_NUMBER_ID)
+            and incoming_phone_number_id != ""
+        )
+        if not account_match and not is_legacy_number:
+            print("IGNORED SAMPLE OR UNKNOWN PHONE NUMBER ID:", incoming_phone_number_id)
             return {
                 "status": "ignored",
-                "reason": "wrong_phone_number_id",
+                "reason": "unknown_phone_number_id",
                 "incoming_phone_number_id": incoming_phone_number_id,
-                "expected_phone_number_id": config.WHATSAPP_PHONE_NUMBER_ID,
             }
 
         messages = value.get("messages", [])
@@ -63,29 +72,22 @@ async def receive_message(request: Request):
         if not user_id or not text:
             return {"status": "unsupported"}
 
-        resolved_text = whatsapp_options.resolve_message(user_id, text)
+        contacts = value.get("contacts", [])
+        customer_name = contacts[0].get("profile", {}).get("name") if contacts else None
 
-        response = message_gateway.handle_text(
-            channel="whatsapp",
+        result = process_whatsapp_message(
             user_id=user_id,
-            message=resolved_text,
+            text=text,
+            recipient_phone_number_id=incoming_phone_number_id,
+            customer_name=customer_name,
         )
-
-        whatsapp_options.save_options(user_id, response.buttons)
-
-        send_result = send_whatsapp_text(
-            to=user_id,
-            text=response.text,
-            buttons=response.buttons,
-        )
-
-        print("SEND RESULT:", send_result)
 
         return {
             "status": "received",
             "from": user_id,
             "text": text,
-            "sent": send_result,
+            "company_id": result["company_id"],
+            "queued": result["queue_result"].get("queued"),
         }
 
     except Exception as e:

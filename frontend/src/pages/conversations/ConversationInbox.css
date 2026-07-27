@@ -770,7 +770,7 @@
 }
 .conversation-composer-single-row {
   display: grid !important;
-  grid-template-columns: 36px 36px 36px minmax(0, 1fr) 40px !important;
+  grid-template-columns: minmax(0, 1fr) 38px 44px !important;
   align-items: end !important;
   gap: 7px !important;
 }
@@ -850,7 +850,7 @@
 .conversation-chat-column { display:flex; flex-direction:column; overflow:hidden; }
 .conversation-messages { flex:1 1 auto; min-height:0; }
 .conversation-composer { flex:0 0 auto; padding:8px 10px; }
-.conversation-composer-single-row { display:grid!important; grid-template-columns:38px 38px 38px minmax(0,1fr) 42px!important; align-items:end; gap:6px; }
+.conversation-composer-single-row { display:grid!important; grid-template-columns:minmax(0,1fr) 38px 44px!important; align-items:end; gap:6px; }
 .conversation-composer-single-row textarea { min-height:42px!important; max-height:110px!important; resize:none; padding:10px 12px!important; }
 .composer-tool-button { width:38px!important; height:38px!important; border-radius:50%!important; }
 .composer-send-circle { width:42px!important; height:42px!important; border-radius:50%!important; }
@@ -867,7 +867,7 @@
 
 
 /* Locked conversation workspace fixes */
-.unified-inbox-page{height:calc(100dvh - var(--tz-topbar-height));min-height:0;padding:8px 14px 12px;overflow:hidden}.unified-inbox-shell{height:100%;min-height:0}.global-channel-tabs{flex:0 0 auto}.unified-inbox-grid{min-height:0}.detail-accordion-header{position:relative;z-index:1;pointer-events:auto}.detail-accordion-body{display:block;position:relative;z-index:2;pointer-events:auto}.conversation-slide-actions button.action-star.is-active{color:#b77900;background:#fff4cc;border-color:#f2c94c}.conversation-slide-actions button.action-done.is-active{color:#087f5b;background:#dff8ec;border-color:#20b486}.conversation-slide-actions button.action-archive.is-active{color:#0b6fce;background:#e5f2ff;border-color:#3aa0f3}.control-action-star.is-active{color:#9a6700!important;background:#fff3bf!important;border-color:#f2c94c!important}.control-action-done.is-active{color:#fff!important;background:#12966f!important;border-color:#12966f!important}.control-action-archive.is-active{color:#fff!important;background:#1689e8!important;border-color:#1689e8!important}.conversation-composer-approved{padding:10px 12px}.conversation-composer-single-row{grid-template-columns:auto auto auto minmax(0,1fr) 44px}.conversation-composer-single-row textarea{width:100%;min-height:44px;max-height:100px}.composer-send-circle{width:44px;height:44px}.conversation-details-column{overflow-y:auto;overflow-x:hidden}.detail-card{overflow:visible}.detail-accordion-body{overflow:visible}.customer-profile-card{flex:0 0 auto}
+.unified-inbox-page{height:calc(100dvh - var(--tz-topbar-height));min-height:0;padding:8px 14px 12px;overflow:hidden}.unified-inbox-shell{height:100%;min-height:0}.global-channel-tabs{flex:0 0 auto}.unified-inbox-grid{min-height:0}.detail-accordion-header{position:relative;z-index:1;pointer-events:auto}.detail-accordion-body{display:block;position:relative;z-index:2;pointer-events:auto}.conversation-slide-actions button.action-star.is-active{color:#b77900;background:#fff4cc;border-color:#f2c94c}.conversation-slide-actions button.action-done.is-active{color:#087f5b;background:#dff8ec;border-color:#20b486}.conversation-slide-actions button.action-archive.is-active{color:#0b6fce;background:#e5f2ff;border-color:#3aa0f3}.control-action-star.is-active{color:#9a6700!important;background:#fff3bf!important;border-color:#f2c94c!important}.control-action-done.is-active{color:#fff!important;background:#12966f!important;border-color:#12966f!important}.control-action-archive.is-active{color:#fff!important;background:#1689e8!important;border-color:#1689e8!important}.conversation-composer-approved{padding:10px 12px}.conversation-composer-single-row{grid-template-columns:minmax(0,1fr) 38px 44px}.conversation-composer-single-row textarea{width:100%;min-height:44px;max-height:100px}.composer-send-circle{width:44px;height:44px}.conversation-details-column{overflow-y:auto;overflow-x:hidden}.detail-card{overflow:visible}.detail-accordion-body{overflow:visible}.customer-profile-card{flex:0 0 auto}
 
 /* FINAL SMALL UI FIX — keeps the locked layout unchanged */
 .conversation-detail-topbar {

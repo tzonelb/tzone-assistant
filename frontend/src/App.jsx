@@ -19,6 +19,8 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ConversationDetailPage standalone /></ProtectedRoute>} />
       <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdminPage /></ProtectedRoute>} />
+      <Route path="/company-settings/*" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute><UISettingsPage /></ProtectedRoute>} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
@@ -33,8 +35,6 @@ export default function App() {
         <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
         <Route path="/analytics" element={<ModulePage title="Analytics" description="Channel, employee, AI, customer and business performance." />} />
         <Route path="/team-chat" element={<ModulePage title="Team Chat" description="Internal messages, follow-ups, mentions, shared files and instructions without private WhatsApp groups." />} />
-        <Route path="/settings" element={<UISettingsPage />} />
-        <Route path="/company-settings/*" element={<CompanySettingsPage />} />
         <Route path="/roles" element={<RolesPermissionsPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

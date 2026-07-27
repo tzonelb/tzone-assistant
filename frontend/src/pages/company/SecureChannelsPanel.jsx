@@ -8,6 +8,7 @@ import {
   connectWhatsAppRequest,
   connectInstagramRequest,
   disconnectChannelRequest,
+  startFacebookOAuthRequest,
 } from "../../api/client";
 
 const PURPOSE = "channels_access";
@@ -22,6 +23,7 @@ export default function SecureChannelsPanel() {
   const [summary, setSummary] = useState([]);
 
   const [channels, setChannels] = useState([]);
+  const [oauthMessage, setOauthMessage] = useState(null);
   const [telegramToken, setTelegramToken] = useState("");
   const [waPhoneId, setWaPhoneId] = useState("");
   const [waToken, setWaToken] = useState("");
@@ -37,7 +39,20 @@ export default function SecureChannelsPanel() {
     }
   }
 
-  useEffect(() => { loadChannels(); }, []);
+  useEffect(() => {
+    loadChannels();
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("fb_connected");
+    const fbError = params.get("fb_error");
+    if (connected) {
+      setOauthMessage({ type: "success", text: `Connected ${connected} channel(s) via Facebook.` });
+    } else if (fbError) {
+      setOauthMessage({ type: "error", text: `Facebook connection failed: ${fbError}` });
+    }
+    if (connected || fbError) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   async function handleSendCode() {
     setBusy(true);
@@ -104,6 +119,11 @@ export default function SecureChannelsPanel() {
   if (stage === "locked" || stage === "code_sent") {
     return (
       <div className="company-setting-fields">
+        {oauthMessage ? (
+          <p style={{ color: oauthMessage.type === "success" ? "#1e7e34" : "#c0392b", fontWeight: 600 }}>
+            {oauthMessage.text}
+          </p>
+        ) : null}
         <article className="company-setting-field">
           <div>
             <strong>Verification required</strong>
@@ -177,6 +197,31 @@ export default function SecureChannelsPanel() {
   return (
     <div className="company-setting-fields">
       {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
+
+      <article className="company-setting-field">
+        <div>
+          <strong>Connect with Facebook</strong>
+          <span>One click — automatically finds your Page(s) and connects Messenger and Instagram together, no manual token copying.</span>
+        </div>
+      </article>
+      <button
+        type="button"
+        style={{ marginBottom: 24, padding: "10px 18px", background: "#1877f2", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setError("");
+          try {
+            const result = await startFacebookOAuthRequest();
+            window.location.href = result.authorize_url;
+          } catch (e) {
+            setError(e.message);
+            setBusy(false);
+          }
+        }}
+      >
+        Connect with Facebook
+      </button>
 
       <article className="company-setting-field">
         <div><strong>Connect Telegram</strong><span>Paste your bot token from @BotFather.</span></div>

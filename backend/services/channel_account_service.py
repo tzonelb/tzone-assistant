@@ -186,6 +186,51 @@ class ChannelAccountService:
 
         return self.get_account(account_id=channel_account_id)
 
+    def connect_messenger(self, *, company_id: int, page_id: str, access_token: str, name: str | None = None) -> dict[str, Any]:
+        page_id = (page_id or "").strip()
+        access_token = (access_token or "").strip()
+        if not page_id or not access_token:
+            raise ChannelAccountError("Page ID and access token are both required.")
+
+        try:
+            response = requests.get(
+                f"https://graph.facebook.com/v19.0/{page_id}",
+                params={"fields": "id,name", "access_token": access_token},
+                timeout=10,
+            )
+            data = response.json()
+        except requests.RequestException as exc:
+            raise ChannelAccountError(f"Could not reach Messenger/Meta to verify this: {exc}")
+
+        if "error" in data:
+            raise ChannelAccountError(f"Meta rejected this: {data['error'].get('message', 'unknown error')}")
+
+        self._assert_within_channel_limit(company_id=company_id)
+
+        with db.connect() as conn:
+            existing = conn.execute(
+                "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'messenger' AND page_id = ?",
+                (company_id, page_id),
+            ).fetchone()
+            if existing:
+                raise ChannelAccountError("This Facebook Page is already connected to this company.")
+
+            now = utc_now_iso()
+            display_name = name or data.get("name") or "Messenger"
+            cursor = conn.execute(
+                """
+                INSERT INTO channel_accounts (
+                    company_id, channel, name, page_id,
+                    access_token_encrypted, status, ai_enabled, created_at, updated_at
+                ) VALUES (?, 'messenger', ?, ?, ?, 'active', 1, ?, ?)
+                """,
+                (company_id, display_name, page_id, encrypt_secret(access_token), now, now),
+            )
+            channel_account_id = int(cursor.lastrowid)
+            conn.commit()
+
+        return self.get_account(account_id=channel_account_id)
+
     def connect_instagram(self, *, company_id: int, page_id: str, access_token: str, name: str | None = None) -> dict[str, Any]:
         page_id = (page_id or "").strip()
         access_token = (access_token or "").strip()

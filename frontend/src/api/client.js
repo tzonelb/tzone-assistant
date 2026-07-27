@@ -208,6 +208,10 @@ export async function getMySubscriptionRequest() {
   return apiRequest("/api/platform/my-subscription");
 }
 
+export async function startFacebookOAuthRequest() {
+  return apiRequest("/api/channels/facebook/oauth/start");
+}
+
 export async function listMyChannelsRequest() {
   return apiRequest("/api/channels");
 }

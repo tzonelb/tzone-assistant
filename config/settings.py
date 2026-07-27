@@ -98,6 +98,14 @@ class AppConfig:
         "v21.0",
     )
 
+    META_APP_ID: str = os.getenv("META_APP_ID", "")
+    META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
+    META_OAUTH_REDIRECT_URI: str = os.getenv(
+        "META_OAUTH_REDIRECT_URI",
+        "http://localhost:8000/api/channels/facebook/oauth/callback",
+    )
+    FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
+
     FACEBOOK_PAGE_ID: str = os.getenv(
         "FACEBOOK_PAGE_ID",
         "",

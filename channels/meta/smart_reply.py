@@ -12,6 +12,7 @@ from backend.services.diagnostics_service import diagnostics_service
 from channels.meta.logger import log_meta_event
 from channels.meta.sender import send_meta_buttons
 from channels.telegram.sender import send_telegram_buttons
+from channels.whatsapp.sender import send_whatsapp_text
 from core.conversation_store import save_conversation_message
 from database.database import db
 from gateway.message_gateway import message_gateway
@@ -191,6 +192,13 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
                 text=response.text,
                 buttons=buttons,
                 channel=channel,
+            )
+        elif channel == "whatsapp":
+            send_result = send_whatsapp_text(
+                to=user_id,
+                text=response.text,
+                buttons=buttons,
+                company_id=company_id,
             )
         else:
             send_result = send_meta_buttons(

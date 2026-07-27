@@ -14,6 +14,7 @@ from backend.api.routes import (
     conversation_tags,
     developer_center,
     dashboard,
+    facebook_oauth,
     health,
     knowledge,
     manual_messages,
@@ -38,6 +39,7 @@ from backend.services.notification_service import notification_service
 from backend.services.platform_admin_service import platform_admin_service
 from backend.services.saved_reply_service import saved_reply_service
 from backend.services.security_verification_service import security_verification_service
+from backend.services.facebook_oauth_service import facebook_oauth_service
 from channels.meta import (
     webhook as meta_webhook,
 )
@@ -71,6 +73,7 @@ async def lifespan(app: FastAPI):
     diagnostics_service.ensure_schema()
     notification_service.ensure_schema()
     security_verification_service.ensure_schema()
+    facebook_oauth_service.ensure_schema()
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
 
@@ -157,6 +160,7 @@ app.include_router(manual_messages.router)
 app.include_router(roles.router)
 app.include_router(platform_admin.router)
 app.include_router(channel_connections.router)
+app.include_router(facebook_oauth.router)
 app.include_router(saved_replies.router)
 app.include_router(security_verification.router)
 
