@@ -63,10 +63,10 @@ class SecurityVerificationService:
             )
             conn.commit()
 
-    def request_code(self, *, user_id: int, email: str, purpose: str) -> bool:
+    def request_code(self, *, user_id: int, email: str, purpose: str) -> tuple[bool, str]:
         """Generates a 6-digit code, emails it, and stores only its hash.
-        Returns whether the email actually sent (SMTP configured) — the
-        caller decides how to react if it didn't."""
+        Returns (sent, reason) — reason is empty on success, or a
+        specific diagnostic message on failure."""
         code = f"{secrets.randbelow(1000000):06d}"
         now = utc_now()
         expires_at = (now + timedelta(minutes=CODE_TTL_MINUTES)).isoformat()

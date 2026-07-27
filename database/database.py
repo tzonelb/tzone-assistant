@@ -892,6 +892,11 @@ class Database:
             ("settings.manage", "Manage Settings"),
             ("subscriptions.view", "View Subscription"),
             ("subscriptions.manage", "Manage Subscription"),
+            ("modules.appointments", "Use Appointments Module"),
+            ("modules.scheduler", "Use Scheduler Module"),
+            ("modules.catalogue", "Use Catalogue Module"),
+            ("modules.team_chat", "Use Team Chat Module"),
+            ("modules.comments", "Use Comments Module"),
         ]
 
         cursor.executemany("""

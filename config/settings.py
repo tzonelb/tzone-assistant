@@ -63,13 +63,6 @@ class AppConfig:
         "",
     )
 
-    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
-    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-    SMTP_USER: str = os.getenv("SMTP_USER", "")
-    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "no-reply@tz-lb.com")
-    SMTP_USE_TLS: bool = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
-
     WHATSAPP_VERIFY_TOKEN: str = os.getenv(
         "WHATSAPP_VERIFY_TOKEN",
         "tzone_verify_token",
@@ -142,6 +135,34 @@ class AppConfig:
     MEDIA_PATH: str = os.getenv(
         "MEDIA_PATH",
         str(BASE_DIR / "data" / "media"),
+    )
+
+    SMTP_HOST: str = os.getenv(
+        "SMTP_HOST",
+        "",
+    )
+
+    SMTP_PORT: int = int(
+        os.getenv("SMTP_PORT", "587")
+    )
+
+    SMTP_USER: str = os.getenv(
+        "SMTP_USER",
+        "",
+    )
+
+    SMTP_PASSWORD: str = os.getenv(
+        "SMTP_PASSWORD",
+        "",
+    )
+
+    SMTP_FROM_EMAIL: str = os.getenv(
+        "SMTP_FROM_EMAIL",
+        "",
+    )
+
+    SMTP_USE_TLS: bool = (
+        os.getenv("SMTP_USE_TLS", "true").lower() == "true"
     )
 
     SUPPORTED_LANGUAGES: list[str] = field(

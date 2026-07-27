@@ -1268,7 +1268,7 @@ body[data-ui-density="compact"] .app-content {
 .settings-toggle-on span { transform:translateX(19px); }
 .settings-save-bar { position:sticky; bottom:10px; display:flex; justify-content:flex-end; margin-top:14px; }
 .secondary-action { min-height:38px; padding:0 12px; border:1px solid var(--tz-border); border-radius:10px; background:var(--tz-surface); }
-.company-settings-shell { min-height:100dvh; display:grid; grid-template-columns:270px minmax(0,1fr); background:var(--tz-background); }
+.company-settings-shell { width:100%!important; background:var(--tz-background); }
 .company-settings-nav { min-height:100dvh; padding:16px 12px; overflow:auto; color:#fff; background:linear-gradient(180deg,#086dc6,#0758a8); }
 .company-settings-back { display:flex; align-items:center; gap:7px; min-height:38px; border:0; color:#fff; background:transparent; font-weight:800; }
 .company-settings-nav h1 { margin:12px 4px; }

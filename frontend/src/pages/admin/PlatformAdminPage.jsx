@@ -8,6 +8,9 @@ import {
   createPlatformPlanRequest,
   updatePlatformPlanRequest,
   changePlatformCompanyPlanRequest,
+  updatePlatformCompanyModulesRequest,
+  listSubscriptionRequestsRequest,
+  reviewSubscriptionRequestRequest,
   getPlatformUsageRequest,
 } from "../../api/client";
 
@@ -38,6 +41,7 @@ export default function PlatformAdminPage() {
   const [companies, setCompanies] = useState([]);
   const [plans, setPlans] = useState([]);
   const [usage, setUsage] = useState(null);
+  const [subscriptionRequests, setSubscriptionRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -48,20 +52,23 @@ export default function PlatformAdminPage() {
     main_admin_email: "", contact_phone: "", license_code: "",
   });
   const [planTarget, setPlanTarget] = useState(null);
+  const [modulesTarget, setModulesTarget] = useState(null);
 
   const [planModal, setPlanModal] = useState(null); // { mode: "create" | "edit", form, planId }
 
   async function load() {
     setLoading(true);
     try {
-      const [companiesResult, plansResult, usageResult] = await Promise.all([
+      const [companiesResult, plansResult, usageResult, requestsResult] = await Promise.all([
         listPlatformCompaniesRequest(),
         listPlatformPlansRequest(false),
         getPlatformUsageRequest(),
+        listSubscriptionRequestsRequest(),
       ]);
       setCompanies(companiesResult.companies || []);
       setPlans(plansResult.plans || []);
       setUsage(usageResult);
+      setSubscriptionRequests(requestsResult.requests || []);
       setError("");
     } catch (e) {
       setError(e.message || "Unable to load platform data.");
@@ -122,6 +129,21 @@ export default function PlatformAdminPage() {
     }
   }
 
+  async function saveModules(e) {
+    e.preventDefault();
+    if (!modulesTarget) return;
+    setSaving(true);
+    try {
+      await updatePlatformCompanyModulesRequest(modulesTarget.companyId, modulesTarget.values);
+      setModulesTarget(null);
+      await load();
+    } catch (x) {
+      setError(x.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openCreatePlan() {
     setPlanModal({ mode: "create", form: { ...emptyPlanForm } });
   }
@@ -161,6 +183,18 @@ export default function PlatformAdminPage() {
     }
   }
 
+  async function reviewRequest(requestId, approve) {
+    setSaving(true);
+    try {
+      await reviewSubscriptionRequestRequest(requestId, approve);
+      await load();
+    } catch (x) {
+      setError(x.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div style={styles.shell}>
       <header style={styles.header}>
@@ -174,7 +208,7 @@ export default function PlatformAdminPage() {
       </header>
 
       <nav style={styles.tabBar}>
-        {[["companies", "Companies"], ["plans", "Plans & Features"], ["usage", "Usage"]].map(([key, label]) => (
+        {[["companies", "Companies"], ["plans", "Plans & Features"], ["requests", "Subscription Requests"], ["usage", "Usage"]].map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -259,6 +293,24 @@ export default function PlatformAdminPage() {
                         <button type="button" style={styles.linkButton} disabled={saving} onClick={() => toggleStatus(company)}>
                           {company.status === "active" ? "Suspend" : "Reactivate"}
                         </button>
+                        <div>
+                          <button
+                            type="button"
+                            style={styles.linkButton}
+                            onClick={() => setModulesTarget({
+                              companyId: company.id,
+                              values: {
+                                appointments: Boolean(company.module_appointments_enabled),
+                                scheduler: Boolean(company.module_scheduler_enabled),
+                                catalogue: Boolean(company.module_catalogue_enabled),
+                                team_chat: Boolean(company.module_team_chat_enabled),
+                                comments: Boolean(company.module_comments_enabled),
+                              },
+                            })}
+                          >
+                            Modules
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -313,6 +365,53 @@ export default function PlatformAdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+        ) : null}
+
+        {!loading && tab === "requests" ? (
+          <section>
+            <h2 style={styles.sectionTitle}>Subscription Requests</h2>
+            <p style={styles.sectionSubtitle}>Companies requesting a plan change or renewal — approving applies the plan immediately.</p>
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.tableHeadRow}>
+                    <th style={styles.th}>Company</th>
+                    <th style={styles.th}>Requested plan</th>
+                    <th style={styles.th}>Note</th>
+                    <th style={styles.th}>Status</th>
+                    <th style={styles.th}>Requested</th>
+                    <th style={styles.th}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {subscriptionRequests.map((req) => (
+                    <tr key={req.id} style={styles.tableRow}>
+                      <td style={styles.td}>{req.company_name}</td>
+                      <td style={styles.td}>{req.plan_name}</td>
+                      <td style={styles.td}>{req.note || "—"}</td>
+                      <td style={styles.td}>
+                        <span style={{ ...styles.statusPill, ...(req.status === "pending" ? styles.statusInactive : styles.statusActive) }}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td style={styles.td}>{req.created_at?.slice(0, 10)}</td>
+                      <td style={styles.td}>
+                        {req.status === "pending" ? (
+                          <div style={{ display: "flex", gap: 10 }}>
+                            <button type="button" style={styles.linkButton} disabled={saving} onClick={() => reviewRequest(req.id, true)}>Approve</button>
+                            <button type="button" style={styles.linkButton} disabled={saving} onClick={() => reviewRequest(req.id, false)}>Reject</button>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                  {!subscriptionRequests.length ? (
+                    <tr><td style={styles.td} colSpan={6}>No subscription requests yet.</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </section>
         ) : null}
@@ -400,6 +499,37 @@ export default function PlatformAdminPage() {
               </select>
             </label>
             <button style={styles.primaryButton} type="submit" disabled={saving || !planTarget.planId}>{saving ? "Saving…" : "Change plan"}</button>
+          </form>
+        </div>
+      ) : null}
+
+      {modulesTarget ? (
+        <div style={styles.modalBackdrop} onMouseDown={() => setModulesTarget(null)}>
+          <form style={styles.modal} onSubmit={saveModules} onMouseDown={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.sectionTitle}>Modules for this company</h2>
+              <button type="button" style={styles.closeButton} onClick={() => setModulesTarget(null)}>×</button>
+            </div>
+            {[
+              ["appointments", "Appointments"],
+              ["scheduler", "Scheduler"],
+              ["catalogue", "Catalogue"],
+              ["team_chat", "Team Chat"],
+              ["comments", "Comments"],
+            ].map(([key, label]) => (
+              <label key={key} style={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(modulesTarget.values[key])}
+                  onChange={(e) => setModulesTarget({
+                    ...modulesTarget,
+                    values: { ...modulesTarget.values, [key]: e.target.checked },
+                  })}
+                />
+                {label}
+              </label>
+            ))}
+            <button style={styles.primaryButton} type="submit" disabled={saving}>{saving ? "Saving…" : "Save modules"}</button>
           </form>
         </div>
       ) : null}

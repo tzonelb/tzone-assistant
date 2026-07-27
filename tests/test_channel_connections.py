@@ -79,7 +79,7 @@ def _elevated_headers(client) -> dict:
 
     def _fake_send_email(to_email, subject, body):
         captured["body"] = body
-        return True
+        return True, ""
 
     with patch("backend.services.security_verification_service.send_email", side_effect=_fake_send_email):
         send_resp = client.post("/api/security/send-code", json={"purpose": "channels_access"})
@@ -120,14 +120,21 @@ def test_connect_without_verification_is_rejected(client_and_db):
 
 def test_send_code_fails_clearly_when_smtp_not_configured(client_and_db):
     client = client_and_db
-    # No mock here — real send_email() with no SMTP config should return False.
-    resp = client.post("/api/security/send-code", json={"purpose": "channels_access"})
+    # Force "not configured" explicitly — this test's premise can't
+    # depend on whatever happens to be in the real .env on whichever
+    # machine runs it (it previously did, which is why it passed in
+    # some environments and failed in others once real SMTP creds
+    # were added for manual testing).
+    with patch("config.settings.config.SMTP_HOST", ""), \
+         patch("config.settings.config.SMTP_USER", ""), \
+         patch("config.settings.config.SMTP_PASSWORD", ""):
+        resp = client.post("/api/security/send-code", json={"purpose": "channels_access"})
     assert resp.status_code == 503
 
 
 def test_wrong_code_is_rejected(client_and_db):
     client = client_and_db
-    with patch("backend.services.security_verification_service.send_email", return_value=True):
+    with patch("backend.services.security_verification_service.send_email", return_value=(True, "")):
         client.post("/api/security/send-code", json={"purpose": "channels_access"})
     resp = client.post("/api/security/verify-code", json={"purpose": "channels_access", "code": "000000"})
     assert resp.status_code == 400
@@ -148,7 +155,7 @@ def test_a_code_can_only_be_used_once(client_and_db):
 
     def _fake_send_email(to_email, subject, body):
         captured["body"] = body
-        return True
+        return True, ""
 
     with patch("backend.services.security_verification_service.send_email", side_effect=_fake_send_email):
         client.post("/api/security/send-code", json={"purpose": "channels_access"})

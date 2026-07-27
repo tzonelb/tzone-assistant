@@ -34,6 +34,23 @@ class SetCompanyStatusRequest(BaseModel):
     status: str = Field(pattern="^(active|suspended|cancelled)$")
 
 
+class UpdateModulesRequest(BaseModel):
+    appointments: bool | None = None
+    scheduler: bool | None = None
+    catalogue: bool | None = None
+    team_chat: bool | None = None
+    comments: bool | None = None
+
+
+class RequestPlanRequest(BaseModel):
+    plan_id: int
+    note: str | None = None
+
+
+class ReviewSubscriptionRequestRequest(BaseModel):
+    approve: bool
+
+
 class ChangePlanRequest(BaseModel):
     plan_id: int
     duration_days: int = 30
@@ -119,6 +136,22 @@ def set_company_status(
         raise HTTPException(status_code=404, detail="Company not found")
 
 
+@router.patch("/companies/{company_id}/modules")
+def update_company_modules(
+    company_id: int,
+    payload: UpdateModulesRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    modules = {k: v for k, v in payload.model_dump().items() if v is not None}
+    try:
+        return platform_admin_service.update_modules(
+            company_id=company_id, modules=modules, actor_user_id=current_user.get("id"),
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+
 @router.get("/plans")
 def list_plans(
     active_only: bool = True,
@@ -177,6 +210,86 @@ def platform_usage(
 ):
     _require_super_admin(current_user)
     return platform_admin_service.platform_usage_summary()
+
+
+@router.get("/plans-catalog")
+def plans_catalog(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """Company-scoped, read-only: every active plan's full details, for
+    the self-service comparison table in Company Settings > Subscription.
+    Any logged-in company member can see this — plan pricing isn't secret."""
+    return {"plans": platform_admin_service.list_plans(active_only=True)}
+
+
+@router.post("/subscription-requests")
+def request_plan(
+    payload: RequestPlanRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from backend.services.auth_service import auth_service
+    company_id = auth_service.resolve_company_id(current_user)
+    try:
+        return platform_admin_service.request_plan(
+            company_id=company_id, plan_id=payload.plan_id, note=payload.note,
+            actor_user_id=current_user.get("id"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/my-subscription-requests")
+def my_subscription_requests(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    from backend.services.auth_service import auth_service
+    company_id = auth_service.resolve_company_id(current_user)
+    return {"requests": platform_admin_service.list_subscription_requests(company_id=company_id)}
+
+
+@router.get("/subscription-requests")
+def list_subscription_requests(
+    status: str | None = None,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    return {"requests": platform_admin_service.list_subscription_requests(status=status)}
+
+
+@router.post("/subscription-requests/{request_id}/review")
+def review_subscription_request(
+    request_id: int,
+    payload: ReviewSubscriptionRequestRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    try:
+        return platform_admin_service.review_subscription_request(
+            request_id=request_id, approve=payload.approve, actor_user_id=current_user.get("id"),
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Request not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/my-modules")
+def my_modules(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """Company-scoped, read-only: what modules Super Admin has enabled
+    for this company. Which employees can actually USE an enabled module
+    is controlled separately via Roles & Permissions (modules.* codes)."""
+    from backend.services.auth_service import auth_service
+    company_id = auth_service.resolve_company_id(current_user)
+    detail = platform_admin_service.get_company_detail(company_id=company_id)
+    return {
+        "appointments": bool(detail.get("module_appointments_enabled")),
+        "scheduler": bool(detail.get("module_scheduler_enabled")),
+        "catalogue": bool(detail.get("module_catalogue_enabled")),
+        "team_chat": bool(detail.get("module_team_chat_enabled")),
+        "comments": bool(detail.get("module_comments_enabled")),
+    }
 
 
 @router.get("/my-subscription")

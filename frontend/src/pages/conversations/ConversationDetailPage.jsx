@@ -18,6 +18,7 @@ import {
   DownloadOutlined,
   ExpandLessOutlined,
   ExpandMoreOutlined,
+  FormatQuoteOutlined,
   HistoryOutlined,
   LaunchOutlined,
   NoteAddOutlined,
@@ -34,6 +35,7 @@ import {
   downloadConversationExport,
   getConversationControlRequest,
   getConversationMessagesRequest,
+  listSavedRepliesRequest,
   releaseConversationRequest,
   returnConversationToAiRequest,
   sendConversationReplyRequest,
@@ -236,6 +238,18 @@ export default function ConversationDetailPage({
   const [notesPanelOpen, setNotesPanelOpen] = useState(false);
   const [events, setEvents] = useState([]);
   const [timelinePanelOpen, setTimelinePanelOpen] = useState(false);
+  const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const [savedReplies, setSavedReplies] = useState([]);
+
+  useEffect(() => {
+    listSavedRepliesRequest()
+      .then((result) => setSavedReplies(result?.replies || []))
+      .catch(() => {
+        // Non-critical — the composer works fine without saved replies loaded.
+      });
+  }, []);
+
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [, setClockTick] = useState(0);
 
@@ -465,7 +479,7 @@ export default function ConversationDetailPage({
   const canReply = Boolean(permissions?.can_reply);
   const canManage = Boolean(permissions?.can_manage);
   const canMarkRead = Boolean(permissions?.can_mark_read);
-  const canTakeOver = Boolean(permissions?.can_take_over) && !isAssignedToOther;
+  const canTakeOver = Boolean(permissions?.can_take_over) && (!isAssignedToOther || currentUserIsAdmin);
   const expiryDate = control?.takeover_expires_at
     ? new Date(control.takeover_expires_at)
     : null;
@@ -583,8 +597,8 @@ export default function ConversationDetailPage({
 
   async function ensureTakeoverForReply() {
     if (canReply) return true;
-    if (isAssignedToOther || !canTakeOver || takeoverInFlightRef.current) {
-      if (isAssignedToOther) {
+    if ((isAssignedToOther && !currentUserIsAdmin) || !canTakeOver || takeoverInFlightRef.current) {
+      if (isAssignedToOther && !currentUserIsAdmin) {
         setActionError(`Assigned to ${control?.assigned_user_name || "another employee"}. You have read-only access.`);
       }
       return false;
@@ -1019,22 +1033,9 @@ export default function ConversationDetailPage({
             </div>
           ) : null}
 
+          <div style={{ position: "relative", flex: "0 0 auto" }}>
           <form className="conversation-composer conversation-composer-approved" onSubmit={handleSend}>
             <div className="conversation-composer-row conversation-composer-single-row">
-              <label className="composer-tool-button" title="Attach file">
-                <AttachFileOutlined />
-                <input type="file" hidden />
-              </label>
-
-              <label className="composer-tool-button" title="Attach image">
-                <ImageOutlined />
-                <input type="file" accept="image/*" hidden />
-              </label>
-
-              <button className="composer-tool-button" type="button" title="Voice note">
-                <MicNoneOutlined />
-              </button>
-
               <textarea
                 ref={composerRef}
                 value={draft}
@@ -1047,7 +1048,6 @@ export default function ConversationDetailPage({
                 }
                 readOnly={!canReply}
                 aria-readonly={!canReply}
-                onFocus={ensureTakeoverForReply}
                 onClick={ensureTakeoverForReply}
                 onChange={(event) => {
                   if (canReply) setDraft(event.target.value);
@@ -1061,6 +1061,15 @@ export default function ConversationDetailPage({
               />
 
               <button
+                className="composer-tool-button"
+                type="button"
+                title="More options"
+                onClick={() => setToolsMenuOpen((current) => !current)}
+              >
+                +
+              </button>
+
+              <button
                 type="submit"
                 className="composer-send-circle"
                 aria-label="Send message"
@@ -1070,6 +1079,57 @@ export default function ConversationDetailPage({
               </button>
             </div>
           </form>
+
+          {toolsMenuOpen ? (
+            <div style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 16, width: 210, background: "#fff", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", borderRadius: 10, zIndex: 30, overflow: "hidden", border: "1px solid #e5e7eb" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", fontSize: 14 }} onClick={() => setToolsMenuOpen(false)}>
+                <AttachFileOutlined fontSize="small" /> Attachment
+                <input type="file" hidden />
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", fontSize: 14, borderTop: "1px solid #f1f3f5" }} onClick={() => setToolsMenuOpen(false)}>
+                <ImageOutlined fontSize="small" /> Image
+                <input type="file" accept="image/*" hidden />
+              </label>
+              <button
+                type="button"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "pointer", textAlign: "left" }}
+                onClick={() => { setToolsMenuOpen(false); }}
+              >
+                <MicNoneOutlined fontSize="small" /> Voice note
+              </button>
+              <button
+                type="button"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "pointer", textAlign: "left" }}
+                onClick={() => { setToolsMenuOpen(false); setSavedRepliesOpen((current) => !current); }}
+              >
+                <FormatQuoteOutlined fontSize="small" /> Saved replies
+              </button>
+            </div>
+          ) : null}
+
+          {savedRepliesOpen ? (
+            <div style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 16, left: 16, maxHeight: 260, overflowY: "auto", background: "#fff", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", borderRadius: 10, zIndex: 30, border: "1px solid #e5e7eb" }}>
+              {savedReplies.length ? savedReplies.map((reply) => (
+                <article
+                  key={reply.id}
+                  style={{ padding: "10px 14px", borderBottom: "1px solid #f1f3f5", cursor: canReply || !isAssignedToOther ? "pointer" : "not-allowed" }}
+                  onClick={async () => {
+                    const acquired = await ensureTakeoverForReply();
+                    if (!acquired) return;
+                    setDraft((current) => (current ? `${current} ${reply.body}` : reply.body));
+                    setSavedRepliesOpen(false);
+                    composerRef.current?.focus();
+                  }}
+                >
+                  <p style={{ margin: "0 0 4px", fontWeight: 600, fontSize: 13 }}>{reply.title}</p>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>{reply.body}</span>
+                </article>
+              )) : (
+                <span style={{ display: "block", padding: "14px", fontSize: 13, color: "#6b7280" }}>No saved replies yet — add some from Company Settings → Reply Flow &amp; Saved Replies.</span>
+              )}
+            </div>
+          ) : null}
+          </div>
         </section>
 
         {detailsOpen ? (

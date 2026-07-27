@@ -39,6 +39,20 @@ _PENDING: dict[str, PendingReply] = {}
 _LOCK = Lock()
 
 
+def cancel_all_pending() -> None:
+    """Cancels every scheduled AI-reply timer immediately. Production
+    code never needs this — it exists so tests can clean up background
+    threading.Timer instances between tests. Without this, a timer
+    scheduled by one test (default 20s delay) can fire minutes later
+    during a completely different test, against a database that no
+    longer matches its schema expectations, causing flaky failures."""
+    with _LOCK:
+        for pending in _PENDING.values():
+            if pending.timer is not None:
+                pending.timer.cancel()
+        _PENDING.clear()
+
+
 def _key(company_id: int, channel: str, user_id: str) -> str:
     return f"{company_id}:{channel.strip().lower()}:{user_id.strip()}"
 

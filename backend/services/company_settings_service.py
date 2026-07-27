@@ -15,6 +15,15 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "workspace_code": "tzone",
         "timezone": "Asia/Beirut",
         "default_language": "ar",
+        "business_hours": {
+            "sunday": {"open": True, "from": "09:00", "to": "18:00"},
+            "monday": {"open": True, "from": "09:00", "to": "18:00"},
+            "tuesday": {"open": True, "from": "09:00", "to": "18:00"},
+            "wednesday": {"open": True, "from": "09:00", "to": "18:00"},
+            "thursday": {"open": True, "from": "09:00", "to": "18:00"},
+            "friday": {"open": False, "from": "09:00", "to": "18:00"},
+            "saturday": {"open": False, "from": "09:00", "to": "18:00"},
+        },
     },
     "ai_behavior": {
         "enabled": True,

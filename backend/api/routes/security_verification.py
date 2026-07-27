@@ -27,15 +27,11 @@ def send_code(
     payload: SendCodeRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
-    sent = security_verification_service.request_code(
+    sent, reason = security_verification_service.request_code(
         user_id=current_user["id"], email=current_user["email"], purpose=payload.purpose,
     )
     if not sent:
-        raise HTTPException(
-            status_code=503,
-            detail="Could not send the verification email — the platform's email settings "
-                   "(SMTP_HOST/SMTP_USER/SMTP_PASSWORD in .env) aren't configured yet.",
-        )
+        raise HTTPException(status_code=503, detail=reason)
     return {"status": "sent", "email_hint": _mask_email(current_user["email"])}
 
 

@@ -37,10 +37,33 @@ class PlatformAdminService:
                 "contact_phone": "TEXT",
                 "license_code": "TEXT",
                 "purchased_at": "TEXT",
+                "module_appointments_enabled": "INTEGER NOT NULL DEFAULT 0",
+                "module_scheduler_enabled": "INTEGER NOT NULL DEFAULT 1",
+                "module_catalogue_enabled": "INTEGER NOT NULL DEFAULT 1",
+                "module_team_chat_enabled": "INTEGER NOT NULL DEFAULT 1",
+                "module_comments_enabled": "INTEGER NOT NULL DEFAULT 1",
             }
             for column, column_type in new_columns.items():
                 if column not in existing_columns:
                     conn.execute(f"ALTER TABLE companies ADD COLUMN {column} {column_type}")
+
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS subscription_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    company_id INTEGER NOT NULL,
+                    plan_id INTEGER NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    note TEXT,
+                    requested_by_user_id INTEGER,
+                    reviewed_by_user_id INTEGER,
+                    created_at TEXT NOT NULL,
+                    reviewed_at TEXT,
+                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+                    FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE CASCADE
+                )
+                """
+            )
             conn.commit()
 
     # ---- Companies -------------------------------------------------
@@ -51,6 +74,8 @@ class PlatformAdminService:
                 c.id, c.name, c.slug, c.country, c.currency, c.status,
                 c.created_at,
                 c.main_admin_email, c.contact_phone, c.license_code, c.purchased_at,
+                c.module_appointments_enabled, c.module_scheduler_enabled,
+                c.module_catalogue_enabled, c.module_team_chat_enabled, c.module_comments_enabled,
                 s.id AS subscription_id, s.status AS subscription_status,
                 s.expires_at, s.auto_renew,
                 p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
@@ -218,6 +243,44 @@ class PlatformAdminService:
                 VALUES (?, ?, ?, ?, 'company', ?)
                 """,
                 (config.DEFAULT_WORKSPACE_ID, company_id, actor_user_id, f"company_status_set_{status}", now),
+            )
+            conn.commit()
+
+        return self.get_company_detail(company_id=company_id)
+
+    MODULE_FIELDS = (
+        "module_appointments_enabled", "module_scheduler_enabled",
+        "module_catalogue_enabled", "module_team_chat_enabled", "module_comments_enabled",
+    )
+
+    def update_modules(
+        self, *, company_id: int, modules: dict[str, bool], actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        updates = {
+            f"module_{key}_enabled": int(bool(value))
+            for key, value in modules.items()
+            if f"module_{key}_enabled" in self.MODULE_FIELDS
+        }
+        if not updates:
+            return self.get_company_detail(company_id=company_id)
+
+        now = utc_now_iso()
+        set_clauses = [f"{field} = ?" for field in updates]
+        params = list(updates.values()) + [now, company_id]
+
+        with db.connect() as conn:
+            existing = conn.execute("SELECT id FROM companies WHERE id = ?", (company_id,)).fetchone()
+            if not existing:
+                raise KeyError("Company not found")
+            conn.execute(
+                f"UPDATE companies SET {', '.join(set_clauses)}, updated_at = ? WHERE id = ?", params,
+            )
+            conn.execute(
+                """
+                INSERT INTO audit_logs (workspace_id, company_id, user_id, action, entity_type, created_at)
+                VALUES (?, ?, ?, 'company_modules_updated', 'company', ?)
+                """,
+                (config.DEFAULT_WORKSPACE_ID, company_id, actor_user_id, now),
             )
             conn.commit()
 
@@ -395,6 +458,83 @@ class PlatformAdminService:
             "usage_this_month": [dict(row) for row in totals],
             "companies_by_status": {row["status"]: row["total"] for row in company_counts},
         }
+
+    # ---- Self-service subscription requests -------------------------------------------------
+
+    def request_plan(self, *, company_id: int, plan_id: int, note: str | None, actor_user_id: int | None) -> dict[str, Any]:
+        with db.connect() as conn:
+            plan = conn.execute("SELECT id FROM plans WHERE id = ? AND status = 'active'", (plan_id,)).fetchone()
+            if not plan:
+                raise KeyError("Plan not found or not available")
+
+            now = utc_now_iso()
+            cursor = conn.execute(
+                """
+                INSERT INTO subscription_requests (company_id, plan_id, status, note, requested_by_user_id, created_at)
+                VALUES (?, ?, 'pending', ?, ?, ?)
+                """,
+                (company_id, plan_id, note, actor_user_id, now),
+            )
+            request_id = int(cursor.lastrowid)
+            conn.commit()
+        return self.get_subscription_request(request_id=request_id)
+
+    def get_subscription_request(self, *, request_id: int) -> dict[str, Any]:
+        with db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT sr.*, p.name AS plan_name, p.code AS plan_code, c.name AS company_name
+                FROM subscription_requests sr
+                JOIN plans p ON p.id = sr.plan_id
+                JOIN companies c ON c.id = sr.company_id
+                WHERE sr.id = ?
+                """,
+                (request_id,),
+            ).fetchone()
+        if not row:
+            raise KeyError("Request not found")
+        return dict(row)
+
+    def list_subscription_requests(self, *, company_id: int | None = None, status: str | None = None) -> list[dict[str, Any]]:
+        query = """
+            SELECT sr.*, p.name AS plan_name, p.code AS plan_code, c.name AS company_name
+            FROM subscription_requests sr
+            JOIN plans p ON p.id = sr.plan_id
+            JOIN companies c ON c.id = sr.company_id
+            WHERE 1=1
+        """
+        params: list[Any] = []
+        if company_id is not None:
+            query += " AND sr.company_id = ?"
+            params.append(company_id)
+        if status:
+            query += " AND sr.status = ?"
+            params.append(status)
+        query += " ORDER BY sr.created_at DESC"
+
+        with db.connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def review_subscription_request(
+        self, *, request_id: int, approve: bool, actor_user_id: int | None,
+    ) -> dict[str, Any]:
+        request = self.get_subscription_request(request_id=request_id)
+        if request["status"] != "pending":
+            raise ValueError(f"This request was already {request['status']}")
+
+        now = utc_now_iso()
+        with db.connect() as conn:
+            conn.execute(
+                "UPDATE subscription_requests SET status = ?, reviewed_by_user_id = ?, reviewed_at = ? WHERE id = ?",
+                ("approved" if approve else "rejected", actor_user_id, now, request_id),
+            )
+            conn.commit()
+
+        if approve:
+            self.change_plan(company_id=request["company_id"], plan_id=request["plan_id"])
+
+        return self.get_subscription_request(request_id=request_id)
 
 
 platform_admin_service = PlatformAdminService()

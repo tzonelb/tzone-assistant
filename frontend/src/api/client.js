@@ -160,6 +160,50 @@ export async function getSessionChangesRequest(purpose, token) {
   return apiRequest(`/api/security/changes?purpose=${encodeURIComponent(purpose)}&token=${encodeURIComponent(token)}`);
 }
 
+export async function getPlansCatalogRequest() {
+  return apiRequest("/api/platform/plans-catalog");
+}
+
+export async function requestPlanChangeRequest(planId, note) {
+  return apiRequest("/api/platform/subscription-requests", { method: "POST", body: { plan_id: planId, note } });
+}
+
+export async function getMySubscriptionRequestsRequest() {
+  return apiRequest("/api/platform/my-subscription-requests");
+}
+
+export async function listSubscriptionRequestsRequest(status) {
+  return apiRequest(`/api/platform/subscription-requests${status ? `?status=${status}` : ""}`);
+}
+
+export async function reviewSubscriptionRequestRequest(requestId, approve) {
+  return apiRequest(`/api/platform/subscription-requests/${requestId}/review`, { method: "POST", body: { approve } });
+}
+
+export async function updatePlatformCompanyModulesRequest(companyId, modules) {
+  return apiRequest(`/api/platform/companies/${companyId}/modules`, { method: "PATCH", body: modules });
+}
+
+export async function getMyModulesRequest() {
+  return apiRequest("/api/platform/my-modules");
+}
+
+export async function listSavedRepliesRequest() {
+  return apiRequest("/api/saved-replies");
+}
+
+export async function createSavedReplyRequest(title, body) {
+  return apiRequest("/api/saved-replies", { method: "POST", body: { title, body } });
+}
+
+export async function updateSavedReplyRequest(id, title, body) {
+  return apiRequest(`/api/saved-replies/${id}`, { method: "PATCH", body: { title, body } });
+}
+
+export async function deleteSavedReplyRequest(id) {
+  return apiRequest(`/api/saved-replies/${id}`, { method: "DELETE" });
+}
+
 export async function getMySubscriptionRequest() {
   return apiRequest("/api/platform/my-subscription");
 }

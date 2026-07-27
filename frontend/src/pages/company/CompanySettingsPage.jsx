@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest } from "../../api/client";
+import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSavedRepliesRequest, createSavedReplyRequest, updateSavedReplyRequest, deleteSavedReplyRequest } from "../../api/client";
 import SecureChannelsPanel from "./SecureChannelsPanel";
 
 const SECTIONS = [
@@ -9,14 +9,11 @@ const SECTIONS = [
   ["branding", "Branding", "Company logo, colours and customer-facing identity.", ["Logo", "Primary colour", "Secondary colour", "Export branding"]],
   ["ai", "AI Behavior", "AI response timing and human takeover workflow.", []],
   ["knowledge", "AI Teaching & Knowledge", "Instructions, files, FAQs and answer safety.", ["System instructions", "Knowledge sources", "Fallback behavior", "Answer confidence"]],
-  ["flow", "Reply Flow", "Order of welcome, language, intent, knowledge and escalation.", ["Welcome step", "Language detection", "Intent detection", "Escalation"]],
-  ["replies", "Saved Replies", "Reusable replies, menus and channel templates.", ["Opening message", "Away message", "Quick replies", "Buttons and menus"]],
+  ["flow", "Reply Flow & Saved Replies", "Order of welcome, language, intent, knowledge, escalation — plus reusable replies employees can insert from any conversation.", []],
   ["departments", "Departments", "Departments, routing and escalation paths.", ["Department list", "Default queue", "Escalation owner", "Assignment rules"]],
-  ["hours", "Business Hours", "Opening hours and outside-hours behavior.", ["Weekly schedule", "Holidays", "Outside-hours reply", "Timezone"]],
   ["channels", "Channels", "Messenger, WhatsApp, Instagram, Telegram, email and website.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
   ["api", "API & Webhooks", "Callbacks, access keys and integration health.", ["Webhook URL", "Verify token", "API access", "Delivery logs"]],
   ["security", "Security", "Tenant isolation, sessions and audit controls.", ["Encryption status", "Session policy", "Audit retention", "IP restrictions"]],
-  ["modules", "Modules", "Enable or hide optional platform modules.", ["Appointments", "Scheduler", "Catalogue", "Team Chat"]],
   ["backup", "Backup", "Backup policy, retention and restoration.", ["Automatic backup", "Retention", "Last backup", "Restore point"]],
   ["subscription", "Subscription", "Plan, limits, usage and billing.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
 ];
@@ -59,59 +56,172 @@ function WorkflowSettings() {
 
 function SubscriptionView() {
   const [data, setData] = useState(null);
+  const [modules, setModules] = useState(null);
+  const [plans, setPlans] = useState([]);
+  const [myRequests, setMyRequests] = useState([]);
   const [error, setError] = useState("");
+  const [requesting, setRequesting] = useState(null);
+  const [notes, setNotes] = useState({});
 
-  useEffect(() => {
-    getMySubscriptionRequest()
-      .then(setData)
+  function load() {
+    Promise.all([
+      getMySubscriptionRequest(),
+      getMyModulesRequest(),
+      getPlansCatalogRequest(),
+      getMySubscriptionRequestsRequest(),
+    ])
+      .then(([sub, mods, catalog, requests]) => {
+        setData(sub);
+        setModules(mods);
+        setPlans(catalog.plans || []);
+        setMyRequests(requests.requests || []);
+      })
       .catch((e) => setError(e.message || "Could not load subscription."));
-  }, []);
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function submitRequest(planId) {
+    setRequesting(planId);
+    setError("");
+    try {
+      await requestPlanChangeRequest(planId, notes[planId] || "");
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setRequesting(null);
+    }
+  }
 
   if (error) return <p style={{ color: "#c0392b" }}>{error}</p>;
-  if (!data) return <p>Loading…</p>;
-  if (!data.has_subscription) return <p>No active subscription yet — contact your platform administrator.</p>;
+  if (!data || !modules) return <p>Loading…</p>;
+
+  const pendingPlanIds = new Set(myRequests.filter((r) => r.status === "pending").map((r) => r.plan_id));
 
   return (
     <div className="company-setting-fields">
-      <article className="company-setting-field">
-        <div>
-          <strong>{data.plan_name} plan</strong>
-          <span>
-            {data.subscription_status}
-            {data.expires_at ? ` · renews/expires ${data.expires_at.slice(0, 10)}` : ""}
-            {" · $"}{data.price_monthly}/mo
-          </span>
+      {/* 1. Current plan, front and center */}
+      {data.has_subscription ? (
+        <div className="workflow-settings-card">
+          <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+            <div>
+              <strong style={{ fontSize: 16 }}>{data.plan_name}</strong>
+              <br />
+              <span style={{ color: "#6b7280" }}>
+                {data.subscription_status}
+                {data.expires_at ? ` · renews/expires ${data.expires_at.slice(0, 10)}` : ""}
+                {" · $"}{data.price_monthly}/mo
+              </span>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, padding: "8px 0" }}>
+            <div><strong>{data.users.used} / {data.users.max}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>Users</span></div>
+            <div><strong>{data.channels.used} / {data.channels.max}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>Channels</span></div>
+            <div><strong>{data.max_ai_messages}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>AI msgs/mo limit</span></div>
+          </div>
         </div>
-      </article>
-      <article className="company-setting-field">
-        <div><strong>Users</strong><span>{data.users.used} / {data.users.max} used</span></div>
-      </article>
-      <article className="company-setting-field">
-        <div><strong>Connected channels</strong><span>{data.channels.used} / {data.channels.max} used</span></div>
-      </article>
-      <article className="company-setting-field">
-        <div><strong>AI messages / month</strong><span>limit: {data.max_ai_messages}</span></div>
-      </article>
-      <article className="company-setting-field">
-        <div>
-          <strong>Features on this plan</strong>
-          <span>
-            {Object.entries(data.features).filter(([, on]) => on).map(([k]) => k).join(", ") || "none enabled"}
-          </span>
+      ) : (
+        <p>No active subscription yet — request a plan below.</p>
+      )}
+
+      {/* 2. Modules — compact, read-only */}
+      <div className="workflow-settings-card">
+        <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+          <div>
+            <strong>Modules enabled for your company</strong>
+            <br />
+            <span style={{ color: "#6b7280" }}>Set by your platform administrator. To let an employee use one, grant the matching permission from Roles &amp; Permissions.</span>
+          </div>
         </div>
-      </article>
-      <div className="settings-card-grid">
-        <article className="settings-card">
-          <h3>Managed by your platform administrator</h3>
-          <p>Plan changes, limits and feature toggles are controlled from the Super Admin dashboard — this view is read-only.</p>
-        </article>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, padding: "4px 0 8px" }}>
+          {Object.entries(MODULE_LABELS).map(([key, label]) => (
+            <span
+              key={key}
+              style={{
+                fontSize: 12, padding: "4px 10px", borderRadius: 999,
+                background: modules[key] ? "#e6f4ea" : "#f3f4f6",
+                color: modules[key] ? "#1e7e34" : "#9ca3af",
+              }}
+            >
+              {modules[key] ? "✓" : "—"} {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Compare & request — cards, not a cramped table */}
+      <div className="workflow-setting-row" style={{ borderBottom: "none", marginTop: 8 }}>
+        <div>
+          <strong>Compare plans</strong>
+          <br />
+          <span style={{ color: "#6b7280" }}>Requesting a plan sends it to your platform administrator for approval — nothing changes until they approve it.</span>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+        {plans.map((plan) => {
+          const isCurrent = data.has_subscription && plan.code === data.plan_code;
+          const isPending = pendingPlanIds.has(plan.id);
+          const features = [
+            plan.voice_ai_enabled && "Voice AI",
+            plan.image_ai_enabled && "Image AI",
+            plan.accounting_connector_enabled && "Accounting",
+            plan.product_connector_enabled && "Products",
+          ].filter(Boolean);
+
+          return (
+            <div key={plan.id} className="workflow-settings-card" style={isCurrent ? { borderColor: "#4f7fff", borderWidth: 2 } : undefined}>
+              <div style={{ padding: "4px 0" }}>
+                <strong style={{ fontSize: 15 }}>{plan.name}</strong>
+                <div style={{ fontSize: 20, fontWeight: 700, margin: "4px 0" }}>${plan.price_monthly}<span style={{ fontSize: 13, fontWeight: 400, color: "#6b7280" }}>/mo</span></div>
+                <ul style={{ listStyle: "none", padding: 0, margin: "8px 0", fontSize: 13, color: "#374151", lineHeight: 1.8 }}>
+                  <li>{plan.max_users} users</li>
+                  <li>{plan.max_channel_accounts} channels</li>
+                  <li>{plan.max_ai_messages} AI messages/mo</li>
+                  <li>{features.length ? features.join(", ") : "No extra features"}</li>
+                </ul>
+                {isCurrent ? (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#4f7fff" }}>Current plan</span>
+                ) : isPending ? (
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "#b8860b" }}>Requested — pending review</span>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input
+                      type="text"
+                      placeholder="Note (optional) — e.g. Whish reference #"
+                      value={notes[plan.id] || ""}
+                      onChange={(e) => setNotes({ ...notes, [plan.id]: e.target.value })}
+                      style={{ padding: "7px 9px", borderRadius: 8, border: "1px solid #d5dae5", fontSize: 12 }}
+                    />
+                    <button type="button" disabled={requesting === plan.id} onClick={() => submitRequest(plan.id)}>
+                      {requesting === plan.id ? "Requesting…" : "Request this plan"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
+
 function ProfileSettings() {
-  const [values, setValues] = useState({ company_name: "", workspace_code: "", timezone: "Asia/Beirut", default_language: "ar" });
+  const [values, setValues] = useState({
+    company_name: "", workspace_code: "", timezone: "Asia/Beirut", default_language: "ar",
+    business_hours: {
+      sunday: { open: true, from: "09:00", to: "18:00" },
+      monday: { open: true, from: "09:00", to: "18:00" },
+      tuesday: { open: true, from: "09:00", to: "18:00" },
+      wednesday: { open: true, from: "09:00", to: "18:00" },
+      thursday: { open: true, from: "09:00", to: "18:00" },
+      friday: { open: false, from: "09:00", to: "18:00" },
+      saturday: { open: false, from: "09:00", to: "18:00" },
+    },
+  });
   const [locked, setLocked] = useState([]);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
@@ -145,6 +255,48 @@ function ProfileSettings() {
       <div className="workflow-setting-row">
         <div><strong>Timezone</strong></div>
         <input value={values.timezone} disabled={locked.includes("timezone")} onChange={(e) => setValues({ ...values, timezone: e.target.value })} placeholder="Asia/Beirut" />
+      </div>
+      <div className="workflow-setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+        <strong>Business hours</strong>
+        {["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"].map((day) => {
+          const dayValue = values.business_hours?.[day] || { open: false, from: "09:00", to: "18:00" };
+          return (
+            <div key={day} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, width: 110, textTransform: "capitalize" }}>
+                <input
+                  type="checkbox"
+                  checked={dayValue.open}
+                  disabled={locked.includes("business_hours")}
+                  onChange={(e) => setValues({
+                    ...values,
+                    business_hours: { ...values.business_hours, [day]: { ...dayValue, open: e.target.checked } },
+                  })}
+                />
+                {day}
+              </label>
+              <input
+                type="time"
+                value={dayValue.from}
+                disabled={locked.includes("business_hours") || !dayValue.open}
+                onChange={(e) => setValues({
+                  ...values,
+                  business_hours: { ...values.business_hours, [day]: { ...dayValue, from: e.target.value } },
+                })}
+              />
+              <span>to</span>
+              <input
+                type="time"
+                value={dayValue.to}
+                disabled={locked.includes("business_hours") || !dayValue.open}
+                onChange={(e) => setValues({
+                  ...values,
+                  business_hours: { ...values.business_hours, [day]: { ...dayValue, to: e.target.value } },
+                })}
+              />
+              {!dayValue.open ? <span style={{ color: "#9ca3af", fontSize: 12 }}>Closed</span> : null}
+            </div>
+          );
+        })}
       </div>
       <div className="workflow-setting-row">
         <div><strong>Default language</strong></div>
@@ -213,6 +365,112 @@ function ReplyFlowSettings() {
   );
 }
 
+function SavedRepliesManager() {
+  const [replies, setReplies] = useState([]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+
+  function load() {
+    listSavedRepliesRequest()
+      .then((result) => setReplies(result?.replies || []))
+      .catch((e) => setError(e.message || "Could not load saved replies."));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  function startEdit(reply) {
+    setEditingId(reply.id);
+    setTitle(reply.title);
+    setBody(reply.body);
+  }
+
+  function startNew() {
+    setEditingId("new");
+    setTitle("");
+    setBody("");
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      if (editingId === "new") {
+        await createSavedReplyRequest(title, body);
+      } else {
+        await updateSavedReplyRequest(editingId, title, body);
+      }
+      setEditingId(null);
+      load();
+    } catch (x) {
+      setError(x.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id) {
+    setError("");
+    try {
+      await deleteSavedReplyRequest(id);
+      load();
+    } catch (x) {
+      setError(x.message);
+    }
+  }
+
+  return (
+    <div className="workflow-settings-card" style={{ marginTop: 20 }}>
+      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+        <div>
+          <strong>Saved replies</strong>
+          <br />
+          <span style={{ fontWeight: 400, color: "#6b7280" }}>Employees insert these from inside any conversation — they never send automatically.</span>
+        </div>
+        {editingId ? null : <button type="button" onClick={startNew}>+ New saved reply</button>}
+      </div>
+
+      {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
+
+      {editingId ? (
+        <form onSubmit={save} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 0" }}>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (e.g. Greeting)" required
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message text" required rows={3}
+            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
+          <div style={{ display: "flex", gap: 10 }}>
+            <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
+            <button type="button" onClick={() => setEditingId(null)}>Cancel</button>
+          </div>
+        </form>
+      ) : null}
+
+      {replies.map((reply) => (
+        <div className="workflow-setting-row" key={reply.id}>
+          <div><strong>{reply.title}</strong><br /><span style={{ fontWeight: 400, color: "#6b7280" }}>{reply.body}</span></div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => startEdit(reply)}>Edit</button>
+            <button type="button" onClick={() => remove(reply.id)}>Delete</button>
+          </div>
+        </div>
+      ))}
+      {!replies.length && !editingId ? <p style={{ padding: "12px 0", color: "#6b7280" }}>No saved replies yet.</p> : null}
+    </div>
+  );
+}
+
+function ReplyFlowAndSavedReplies() {
+  return (
+    <div>
+      <ReplyFlowSettings />
+      <SavedRepliesManager />
+    </div>
+  );
+}
+
 const MODULE_LABELS = {
   appointments: "Appointments",
   scheduler: "Scheduler",
@@ -220,44 +478,6 @@ const MODULE_LABELS = {
   team_chat: "Team Chat",
   comments: "Comments",
 };
-
-function ModulesSettings() {
-  const [values, setValues] = useState({});
-  const [locked, setLocked] = useState([]);
-  const [status, setStatus] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    getCompanySettingSectionRequest("modules")
-      .then((result) => { setValues(result?.values || {}); setLocked(result?.locked_keys || []); })
-      .catch((error) => setStatus(error.message || "Settings could not load."));
-  }, []);
-
-  async function save() {
-    setSaving(true); setStatus("");
-    try {
-      const result = await updateCompanySettingSectionRequest("modules", values);
-      setValues(result?.values || values);
-      setStatus("Modules saved.");
-    } catch (error) { setStatus(error.message || "Settings could not save."); }
-    finally { setSaving(false); }
-  }
-
-  return (
-    <div className="workflow-settings-card">
-      {Object.entries(MODULE_LABELS).map(([key, label]) => (
-        <label className="workflow-toggle" key={key}>
-          <input
-            type="checkbox" checked={Boolean(values[key])} disabled={locked.includes(key)}
-            onChange={(e) => setValues({ ...values, [key]: e.target.checked })}
-          />
-          <div><strong>{label}</strong></div>
-        </label>
-      ))}
-      <div className="workflow-settings-footer"><span>{status}</span><button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save modules"}</button></div>
-    </div>
-  );
-}
 
 function SecurityStatusView() {
   const [changes, setChanges] = useState([]);
@@ -287,5 +507,5 @@ export default function CompanySettingsPage() {
   const navigate = useNavigate(); const [active, setActive] = useState("profile"); const [query, setQuery] = useState("");
   const visible = useMemo(() => SECTIONS.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [query]);
   const selected = SECTIONS.find(([id]) => id === active) || visible[0] || SECTIONS[0];
-  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "subscription" ? <SubscriptionView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowSettings /> : active === "modules" ? <ModulesSettings /> : active === "security" ? <SecurityStatusView /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
+  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "subscription" ? <SubscriptionView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowAndSavedReplies /> : active === "security" ? <SecurityStatusView /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
 }

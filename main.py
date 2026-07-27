@@ -20,6 +20,7 @@ from backend.api.routes import (
     notifications,
     platform_admin,
     roles,
+    saved_replies,
     security_verification,
     test_whatsapp,
     tickets,
@@ -35,6 +36,7 @@ from backend.services.customer_service import customer_service
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.notification_service import notification_service
 from backend.services.platform_admin_service import platform_admin_service
+from backend.services.saved_reply_service import saved_reply_service
 from backend.services.security_verification_service import security_verification_service
 from channels.meta import (
     webhook as meta_webhook,
@@ -70,6 +72,7 @@ async def lifespan(app: FastAPI):
     notification_service.ensure_schema()
     security_verification_service.ensure_schema()
     platform_admin_service.ensure_schema()
+    saved_reply_service.ensure_schema()
 
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
@@ -154,6 +157,7 @@ app.include_router(manual_messages.router)
 app.include_router(roles.router)
 app.include_router(platform_admin.router)
 app.include_router(channel_connections.router)
+app.include_router(saved_replies.router)
 app.include_router(security_verification.router)
 
 app.include_router(

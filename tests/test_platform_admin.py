@@ -77,6 +77,154 @@ def test_non_super_admin_cannot_access_platform_routes(client_and_db):
     assert resp.status_code == 403
 
 
+def test_company_can_request_a_plan_change(client_and_db):
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    create_resp = admin_client.post("/api/platform/companies", json={"name": "Request Co", "slug": "request-co", "plan_id": 1})
+    company_id = create_resp.json()["id"]
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (4, 'req@request-co.test', 'Requester', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 4, 'active')",
+            (company_id,),
+        )
+        conn.commit()
+
+    member_client = client_and_db(4, is_super_admin=False)
+    resp = member_client.post("/api/platform/subscription-requests", json={"plan_id": 1, "note": "Please renew"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "pending"
+
+    my_requests = member_client.get("/api/platform/my-subscription-requests")
+    assert len(my_requests.json()["requests"]) == 1
+
+
+def test_super_admin_can_approve_a_subscription_request(client_and_db):
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    create_resp = admin_client.post("/api/platform/companies", json={"name": "Approve Co", "slug": "approve-co"})
+    company_id = create_resp.json()["id"]
+
+    with db.connect() as conn:
+        cursor = conn.execute("INSERT INTO plans (name, code, max_users) VALUES ('Pro Plan', 'pro-plan-approve', 20)")
+        plan_id = cursor.lastrowid
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (5, 'req2@approve-co.test', 'Requester', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 5, 'active')",
+            (company_id,),
+        )
+        conn.commit()
+
+    member_client = client_and_db(5, is_super_admin=False)
+    request_resp = member_client.post("/api/platform/subscription-requests", json={"plan_id": plan_id})
+    request_id = request_resp.json()["id"]
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    approve_resp = admin_client.post(f"/api/platform/subscription-requests/{request_id}/review", json={"approve": True})
+    assert approve_resp.status_code == 200, approve_resp.text
+    assert approve_resp.json()["status"] == "approved"
+
+    company_detail = admin_client.get(f"/api/platform/companies/{company_id}")
+    assert company_detail.json()["subscription"]["plan_code"] == "pro-plan-approve"
+
+
+def test_reviewing_an_already_reviewed_request_is_rejected(client_and_db):
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    create_resp = admin_client.post("/api/platform/companies", json={"name": "Twice Co", "slug": "twice-co"})
+    company_id = create_resp.json()["id"]
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (6, 'req3@twice-co.test', 'Requester', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 6, 'active')",
+            (company_id,),
+        )
+        conn.commit()
+
+    member_client = client_and_db(6, is_super_admin=False)
+    request_resp = member_client.post("/api/platform/subscription-requests", json={"plan_id": 1})
+    request_id = request_resp.json()["id"]
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    admin_client.post(f"/api/platform/subscription-requests/{request_id}/review", json={"approve": True})
+    second_resp = admin_client.post(f"/api/platform/subscription-requests/{request_id}/review", json={"approve": True})
+    assert second_resp.status_code == 400
+
+
+def test_plans_catalog_accessible_to_regular_company_member(client_and_db):
+    client = client_and_db(2, is_super_admin=False)
+    resp = client.get("/api/platform/plans-catalog")
+    assert resp.status_code == 200
+    assert len(resp.json()["plans"]) >= 1
+
+
+def test_super_admin_can_toggle_company_modules(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    create_resp = client.post("/api/platform/companies", json={"name": "Module Co", "slug": "module-co"})
+    company_id = create_resp.json()["id"]
+
+    resp = client.patch(
+        f"/api/platform/companies/{company_id}/modules",
+        json={"appointments": True, "team_chat": False},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["module_appointments_enabled"] == 1
+    assert body["module_team_chat_enabled"] == 0
+    assert body["module_scheduler_enabled"] == 1  # untouched field keeps its default
+
+
+def test_non_super_admin_cannot_toggle_modules(client_and_db):
+    admin_client = client_and_db(1, is_super_admin=True)
+    create_resp = admin_client.post("/api/platform/companies", json={"name": "Locked Co", "slug": "locked-co"})
+    company_id = create_resp.json()["id"]
+
+    regular_client = client_and_db(2, is_super_admin=False)
+    resp = regular_client.patch(f"/api/platform/companies/{company_id}/modules", json={"appointments": True})
+    assert resp.status_code == 403
+
+
+def test_company_can_see_its_own_enabled_modules_readonly(client_and_db):
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    create_resp = admin_client.post("/api/platform/companies", json={"name": "Own Modules Co", "slug": "own-modules-co"})
+    company_id = create_resp.json()["id"]
+    admin_client.patch(f"/api/platform/companies/{company_id}/modules", json={"appointments": True})
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (3, 'member@own-modules.test', 'Member', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 3, 'active')",
+            (company_id,),
+        )
+        conn.commit()
+
+    member_client = client_and_db(3, is_super_admin=False)
+    resp = member_client.get("/api/platform/my-modules")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["appointments"] is True
+    assert body["scheduler"] is True  # default-enabled
+
+
 def test_super_admin_can_create_and_list_company(client_and_db):
     client = client_and_db(1, is_super_admin=True)
 
