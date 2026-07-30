@@ -12,6 +12,7 @@ import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import ModulePage from "./pages/modules/ModulePage";
 import CataloguePage from "./pages/catalogue/CataloguePage";
 import CallsPage from "./pages/calls/CallsPage";
+import TeamChatPage from "./pages/team-chat/TeamChatPage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
 import AITeachingPage from "./pages/ai-teaching/AITeachingPage";
@@ -47,7 +48,7 @@ export default function App() {
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
         <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/team-chat" element={<ModulePage title="Team Chat" description="Internal messages, follow-ups, mentions, shared files and instructions without private WhatsApp groups." />} />
+        <Route path="/team-chat" element={<TeamChatPage />} />
         <Route path="/roles" element={<RolesPermissionsPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

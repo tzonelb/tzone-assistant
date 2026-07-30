@@ -249,6 +249,23 @@ export async function deleteCallLogRequest(callId) {
   return apiRequest(`/api/calls/${callId}`, { method: "DELETE" });
 }
 
+export async function teamChatOptionsRequest() {
+  return apiRequest("/api/team-chat/options");
+}
+
+export async function listTeamMessagesRequest({ beforeId, limit } = {}) {
+  const query = createQueryString({ before_id: beforeId, limit });
+  return apiRequest(`/api/team-chat${query}`);
+}
+
+export async function sendTeamMessageRequest(payload) {
+  return apiRequest("/api/team-chat", { method: "POST", body: payload });
+}
+
+export async function deleteTeamMessageRequest(messageId) {
+  return apiRequest(`/api/team-chat/${messageId}`, { method: "DELETE" });
+}
+
 export async function listCustomersRequest({ search, lifecycleStage, tag, assignedUserId, segmentId, limit, offset } = {}) {
   const query = createQueryString({
     search,
