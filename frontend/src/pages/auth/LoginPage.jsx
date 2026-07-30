@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
+import tzoneLogo from "../../assets/tzone-logo.png";
 
 
 export default function LoginPage() {
@@ -53,7 +54,7 @@ export default function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-presentation">
-        <div className="login-logo">T</div>
+        <img src={tzoneLogo} alt="T-ZONE" className="login-logo" />
 
         <div>
           <span className="login-kicker">

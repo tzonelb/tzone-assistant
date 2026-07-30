@@ -74,7 +74,6 @@ a {
   max-width: 760px;
 }
 
-.login-logo,
 .brand-mark {
   display: grid;
   place-items: center;
@@ -92,8 +91,11 @@ a {
 .login-logo {
   width: 110px;
   height: 110px;
+  flex: 0 0 auto;
+  padding: 16px;
   border-radius: 32px;
-  font-size: 54px;
+  background: #fff;
+  object-fit: contain;
   box-shadow:
     0 24px 55px
     rgb(22 137 232 / 24%);
