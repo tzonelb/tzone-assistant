@@ -320,7 +320,6 @@ export default function CustomersPage() {
     <section className="customers-page">
       <PageHeader
         eyebrow="CRM"
-        description="Every customer identity across Messenger, WhatsApp, Instagram, Telegram and website — with lifecycle stage, tags and saved segments."
         actions={
           <AppButton
             variant="secondary"
