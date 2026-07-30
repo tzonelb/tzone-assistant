@@ -10,3 +10,17 @@ class CustomerUpdateRequest(BaseModel):
     country: str | None = Field(default=None, max_length=80)
     timezone: str | None = Field(default=None, max_length=80)
     notes: str | None = None
+    lifecycle_stage: str | None = Field(default=None, max_length=40)
+    tags: list[str] | None = None
+
+
+class SegmentFilters(BaseModel):
+    search: str | None = Field(default=None, max_length=200)
+    lifecycle_stage: str | None = Field(default=None, max_length=40)
+    tag: str | None = Field(default=None, max_length=80)
+    channel: str | None = Field(default=None, max_length=40)
+
+
+class SegmentCreateRequest(BaseModel):
+    name: str = Field(max_length=120)
+    filters: SegmentFilters = Field(default_factory=SegmentFilters)

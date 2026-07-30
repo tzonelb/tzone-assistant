@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from backend.api.schemas.customers import CustomerUpdateRequest
+from backend.api.schemas.customers import CustomerUpdateRequest, SegmentCreateRequest
 from backend.services.auth_service import auth_service, get_current_user
-from backend.services.customer_service import customer_service
+from backend.services.customer_service import LIFECYCLE_STAGES, customer_service
 
 
 router = APIRouter(prefix="/api/customers", tags=["Customers"])
+segments_router = APIRouter(prefix="/api/customer-segments", tags=["Customer Segments"])
 
 
 def current_context(current_user=Depends(get_current_user)):
@@ -15,17 +16,37 @@ def current_context(current_user=Depends(get_current_user)):
     return current_user, int(company_id)
 
 
+@router.get("/options")
+def customer_options():
+    """Static reference data for the Contacts UI — the fixed lifecycle
+    pipeline. Tags stay free-form (no options list) since they're
+    company-defined, same philosophy as Knowledge entry tags."""
+    return {"lifecycle_stages": LIFECYCLE_STAGES}
+
+
 @router.get("")
 def list_customers(
     search: str | None = Query(default=None),
+    lifecycle_stage: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    segment_id: int | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     context=Depends(current_context),
 ):
     _, company_id = context
-    return customer_service.list_customers(
-        company_id=company_id, search=search, limit=limit, offset=offset
-    )
+    try:
+        return customer_service.list_customers(
+            company_id=company_id,
+            search=search,
+            lifecycle_stage=lifecycle_stage,
+            tag=tag,
+            segment_id=segment_id,
+            limit=limit,
+            offset=offset,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/{customer_id}")
@@ -53,3 +74,35 @@ def update_customer(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@segments_router.get("")
+def list_segments(context=Depends(current_context)):
+    _, company_id = context
+    return {"items": customer_service.list_segments(company_id=company_id)}
+
+
+@segments_router.post("")
+def create_segment(payload: SegmentCreateRequest, context=Depends(current_context)):
+    current_user, company_id = context
+    try:
+        return customer_service.create_segment(
+            company_id=company_id,
+            name=payload.name,
+            filters=payload.filters.model_dump(exclude_none=True),
+            actor_user_id=current_user.get("id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@segments_router.delete("/{segment_id}")
+def delete_segment(segment_id: int, context=Depends(current_context)):
+    _, company_id = context
+    try:
+        customer_service.delete_segment(company_id=company_id, segment_id=segment_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"deleted": True}
