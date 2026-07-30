@@ -64,6 +64,15 @@ def get_customer(customer_id: int, context=Depends(current_context)):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.get("/{customer_id}/timeline")
+def get_customer_timeline(customer_id: int, context=Depends(current_context)):
+    _, company_id = context
+    try:
+        return {"items": customer_service.get_timeline(company_id=company_id, customer_id=customer_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.put("/{customer_id}")
 def update_customer(
     customer_id: int,

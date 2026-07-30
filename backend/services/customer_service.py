@@ -110,6 +110,10 @@ class CustomerService:
                 )
             if "assigned_user_id" not in customer_columns:
                 conn.execute("ALTER TABLE customers ADD COLUMN assigned_user_id INTEGER")
+            if "custom_fields_json" not in customer_columns:
+                conn.execute("ALTER TABLE customers ADD COLUMN custom_fields_json TEXT NOT NULL DEFAULT '{}'")
+            if "documents_json" not in customer_columns:
+                conn.execute("ALTER TABLE customers ADD COLUMN documents_json TEXT NOT NULL DEFAULT '[]'")
 
             conn.execute(
                 """
@@ -139,6 +143,36 @@ class CustomerService:
             if cleaned and cleaned not in normalized:
                 normalized.append(cleaned)
         return normalized
+
+    @staticmethod
+    def _normalize_custom_fields(fields: dict[str, Any] | None) -> dict[str, str]:
+        """Free-form key/value fields the employee defines per contact —
+        e.g. "ID number", "Insurance plan", "Preferred branch". Deliberately
+        schemaless so any future vertical (clinic, restaurant, delivery...)
+        can capture what it needs without a backend change."""
+        if not fields:
+            return {}
+        normalized: dict[str, str] = {}
+        for key, value in fields.items():
+            clean_key = str(key).strip()[:80]
+            clean_value = str(value).strip()[:2000] if value is not None else ""
+            if clean_key:
+                normalized[clean_key] = clean_value
+        return dict(list(normalized.items())[:50])
+
+    @staticmethod
+    def _normalize_documents(documents: list[Any] | None) -> list[dict[str, str]]:
+        if not documents:
+            return []
+        normalized: list[dict[str, str]] = []
+        for item in documents:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip()[:120]
+            url = str(item.get("url") or "").strip()[:2000]
+            if label and url:
+                normalized.append({"label": label, "url": url})
+        return normalized[:50]
 
     @staticmethod
     def _clean(value: Any) -> str | None:
@@ -283,10 +317,87 @@ class CustomerService:
         result["channels"] = sorted({item["channel"] for item in identities})
         result["conversation_count"] = int(conversation_count or 0)
         result["tags"] = self._parse_tags(result.pop("tags_json", "[]"))
+        result["custom_fields"] = self._parse_json_object(result.pop("custom_fields_json", "{}"))
+        result["documents"] = self._parse_json_list(result.pop("documents_json", "[]"))
         result["assigned_user_name"] = (
             (assigned_user["full_name"] or assigned_user["email"]) if assigned_user else None
         )
         return result
+
+    @staticmethod
+    def _parse_json_object(raw: str | None) -> dict[str, Any]:
+        try:
+            parsed = json.loads(raw or "{}")
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
+    def _parse_json_list(raw: str | None) -> list[Any]:
+        try:
+            parsed = json.loads(raw or "[]")
+        except (TypeError, ValueError):
+            return []
+        return parsed if isinstance(parsed, list) else []
+
+    def get_timeline(self, *, company_id: int, customer_id: int) -> list[dict[str, Any]]:
+        """Chronological history for the Client File — profile edits (from
+        customer_audit) merged with every conversation this contact has had,
+        newest first. This is intentionally read-only/derived: nothing new
+        to maintain, it just reads history that already exists."""
+        with db.connect() as conn:
+            exists = conn.execute(
+                "SELECT id FROM customers WHERE id = ? AND company_id = ?",
+                (customer_id, company_id),
+            ).fetchone()
+            if not exists:
+                raise KeyError("Customer not found")
+
+            audit_rows = conn.execute(
+                """
+                SELECT ca.action, ca.data_json, ca.created_at,
+                       COALESCE(u.full_name, u.email) AS actor_name
+                FROM customer_audit ca
+                LEFT JOIN users u ON u.id = ca.actor_user_id
+                WHERE ca.customer_id = ? AND ca.company_id = ?
+                """,
+                (customer_id, company_id),
+            ).fetchall()
+
+            conversation_rows = conn.execute(
+                """
+                SELECT channel, external_user_id, department, topic, status, created_at
+                FROM conversations
+                WHERE customer_id = ? AND company_id = ?
+                """,
+                (customer_id, company_id),
+            ).fetchall()
+
+        events: list[dict[str, Any]] = []
+        for row in audit_rows:
+            try:
+                data = json.loads(row["data_json"] or "{}")
+            except (TypeError, ValueError):
+                data = {}
+            events.append({
+                "type": "profile_updated",
+                "actor_name": row["actor_name"],
+                "changes": data,
+                "created_at": row["created_at"],
+            })
+        for row in conversation_rows:
+            events.append({
+                "type": "conversation_started",
+                "channel": row["channel"],
+                "external_user_id": row["external_user_id"],
+                "department": row["department"],
+                "topic": row["topic"],
+                "status": row["status"],
+                "created_at": row["created_at"],
+            })
+
+        events.sort(key=lambda item: item["created_at"] or "", reverse=True)
+        return events
 
     @staticmethod
     def _parse_tags(raw_tags_json: str | None) -> list[str]:
@@ -401,6 +512,16 @@ class CustomerService:
 
         if "tags" in values and values["tags"] is not None:
             cleaned["tags_json"] = json.dumps(self._normalize_tags(values["tags"]))
+
+        if "custom_fields" in values and values["custom_fields"] is not None:
+            cleaned["custom_fields_json"] = json.dumps(
+                self._normalize_custom_fields(values["custom_fields"]), ensure_ascii=False
+            )
+
+        if "documents" in values and values["documents"] is not None:
+            cleaned["documents_json"] = json.dumps(
+                self._normalize_documents(values["documents"]), ensure_ascii=False
+            )
 
         assign_requested = "assigned_user_id" in values
         assigned_user_id = values.get("assigned_user_id")

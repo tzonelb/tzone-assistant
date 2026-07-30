@@ -193,6 +193,65 @@ def test_segments_are_isolated_per_company(client_and_db):
     assert all(item["name"] != "Other Co Segment" for item in resp.json()["items"])
 
 
+def test_set_and_clear_custom_fields(client_and_db):
+    client = client_and_db
+    contact = _make_contact(client)
+
+    resp = client.put(
+        f"/api/customers/{contact['id']}",
+        json={"custom_fields": {"ID number": "12345", "  Preferred branch  ": " Tripoli "}},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["custom_fields"] == {"ID number": "12345", "Preferred branch": "Tripoli"}
+
+    resp = client.put(f"/api/customers/{contact['id']}", json={"custom_fields": {"ID number": "12345"}})
+    assert resp.json()["custom_fields"] == {"ID number": "12345"}
+
+
+def test_set_and_clear_documents(client_and_db):
+    client = client_and_db
+    contact = _make_contact(client)
+
+    resp = client.put(
+        f"/api/customers/{contact['id']}",
+        json={"documents": [{"label": "ID photo", "url": "https://files.example.com/id.jpg"}, {"label": "", "url": "https://ignored"}]},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["documents"] == [{"label": "ID photo", "url": "https://files.example.com/id.jpg"}]
+
+    resp = client.put(f"/api/customers/{contact['id']}", json={"documents": []})
+    assert resp.json()["documents"] == []
+
+
+def test_timeline_includes_profile_updates_and_conversations(client_and_db):
+    from database.database import db
+
+    client = client_and_db
+    contact = _make_contact(client)
+    client.put(f"/api/customers/{contact['id']}", json={"lifecycle_stage": "vip"})
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO conversations (company_id, channel, external_user_id, customer_id, status, created_at) "
+            "VALUES (?, 'telegram', 'u1', ?, 'open', datetime('now'))",
+            (COMPANY_ID, contact["id"]),
+        )
+        conn.commit()
+
+    resp = client.get(f"/api/customers/{contact['id']}/timeline")
+    assert resp.status_code == 200, resp.text
+    items = resp.json()["items"]
+    types = {item["type"] for item in items}
+    assert types == {"profile_updated", "conversation_started"}
+
+
+def test_timeline_404_for_missing_customer(client_and_db):
+    client = client_and_db
+    resp = client.get("/api/customers/99999/timeline")
+    assert resp.status_code == 404
+
+
 def test_options_endpoint_returns_active_company_employees(client_and_db):
     client = client_and_db
     resp = client.get("/api/customers/options")

@@ -236,8 +236,16 @@ export async function listCustomersRequest({ search, lifecycleStage, tag, segmen
   return apiRequest(`/api/customers${query}`);
 }
 
+export async function getCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${customerId}`);
+}
+
 export async function updateCustomerRequest(customerId, updates) {
   return apiRequest(`/api/customers/${customerId}`, { method: "PUT", body: updates });
+}
+
+export async function getCustomerTimelineRequest(customerId) {
+  return apiRequest(`/api/customers/${customerId}/timeline`);
 }
 
 export async function listCustomerSegmentsRequest() {

@@ -11,6 +11,7 @@ import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import ModulePage from "./pages/modules/ModulePage";
 import CustomersPage from "./pages/customers/CustomersPage";
+import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/conversations/:channel/:userId" element={<ConversationsPage />} />
         <Route path="/comments" element={<CommentsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
         <Route path="/catalogue" element={<ModulePage title="Master Catalogue" description="One product catalogue synchronized with WhatsApp, websites, accounting systems and future sales channels." />} />
         <Route path="/ai-teaching" element={<ModulePage title="AI Teaching" description="Instructions, tone, examples and testing tools used to teach the company AI assistant." />} />
         <Route path="/tasks" element={<ModulePage title="Tasks" description="Tasks, follow-ups, payments, services and internal cases assigned to the team." />} />

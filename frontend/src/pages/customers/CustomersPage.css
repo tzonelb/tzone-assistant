@@ -68,6 +68,17 @@
   gap: 11px;
 }
 
+.customer-name-cell-link {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.customer-name-cell-link strong {
+  color: var(--tz-primary);
+}
+
 .customer-avatar {
   width: 39px;
   height: 39px;

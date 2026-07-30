@@ -13,6 +13,8 @@ class CustomerUpdateRequest(BaseModel):
     lifecycle_stage: str | None = Field(default=None, max_length=40)
     tags: list[str] | None = None
     assigned_user_id: int | None = None
+    custom_fields: dict[str, str] | None = None
+    documents: list[dict[str, str]] | None = None
 
 
 class SegmentFilters(BaseModel):

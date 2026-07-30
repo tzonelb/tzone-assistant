@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AddOutlined, CloseOutlined } from "@mui/icons-material";
 import {
   createCustomerSegmentRequest,
@@ -55,6 +56,7 @@ function TagEditor({ tags, disabled, onAdd, onRemove }) {
 }
 
 export default function CustomersPage() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [lifecycleStages, setLifecycleStages] = useState([]);
@@ -239,13 +241,13 @@ export default function CustomersPage() {
       key: "display_name",
       label: "Contact",
       render: (_value, row) => (
-        <div className="customer-name-cell">
+        <button type="button" className="customer-name-cell customer-name-cell-link" onClick={() => navigate(`/customers/${row.id}`)}>
           <div className="customer-avatar">{(row.display_name || row.internal_name || "?").charAt(0).toUpperCase()}</div>
           <div>
             <strong>{row.display_name || row.internal_name || "Unnamed contact"}</strong>
             <span>{row.phone || row.email || "No phone or email on file"}</span>
           </div>
-        </div>
+        </button>
       ),
     },
     {
