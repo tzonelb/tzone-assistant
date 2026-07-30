@@ -16,10 +16,10 @@ def format_whatsapp_message(text, buttons=None):
     return msg
 
 
-def send_whatsapp_text(to, text, buttons=None, company_id=None):
-    """Sends via the company's own connected WhatsApp number/token if
-    one exists, otherwise falls back to the platform-wide .env config
-    (keeps existing single-tenant setups working unchanged)."""
+def _resolve_whatsapp_credentials(company_id=None):
+    """Company's own connected WhatsApp number/token if one exists,
+    otherwise the platform-wide .env config (keeps existing
+    single-tenant setups working unchanged)."""
     phone_number_id = config.WHATSAPP_PHONE_NUMBER_ID
     access_token = config.WHATSAPP_ACCESS_TOKEN
 
@@ -40,6 +40,12 @@ def send_whatsapp_text(to, text, buttons=None, company_id=None):
             if company_token:
                 phone_number_id = row["phone_number_id"]
                 access_token = company_token
+
+    return phone_number_id, access_token
+
+
+def send_whatsapp_text(to, text, buttons=None, company_id=None):
+    phone_number_id, access_token = _resolve_whatsapp_credentials(company_id)
 
     if not access_token or not phone_number_id:
         logger.warning("WhatsApp credentials missing.")
@@ -73,4 +79,50 @@ def send_whatsapp_text(to, text, buttons=None, company_id=None):
     "sent": response.status_code < 400,
     "status_code": response.status_code,
     "response": response.json() if response.text else {}
+    }
+
+
+# WhatsApp Cloud API accepts "image", "video", "audio", and "document"
+# message types, each taking a public HTTPS "link" (no upload step
+# needed on our side). Captions are supported on image/video but not
+# on audio — WhatsApp silently ignores a caption field there, so it's
+# only included for the types that use it.
+def send_whatsapp_media(to, media_url, media_type, caption=None, company_id=None):
+    phone_number_id, access_token = _resolve_whatsapp_credentials(company_id)
+
+    if not access_token or not phone_number_id:
+        logger.warning("WhatsApp credentials missing.")
+        return {"sent": False, "reason": "missing_credentials"}
+
+    if media_type not in ("image", "video", "audio"):
+        return {"sent": False, "reason": f"unsupported_media_type:{media_type}"}
+
+    url = (
+        f"https://graph.facebook.com/"
+        f"{config.WHATSAPP_API_VERSION}/"
+        f"{phone_number_id}/messages"
+    )
+
+    media_payload = {"link": media_url}
+    if caption and media_type in ("image", "video"):
+        media_payload["caption"] = caption
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": str(to),
+        "type": media_type,
+        media_type: media_payload,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    response = httpx.post(url, json=payload, headers=headers, timeout=20)
+
+    return {
+        "sent": response.status_code < 400,
+        "status_code": response.status_code,
+        "response": response.json() if response.text else {}
     }

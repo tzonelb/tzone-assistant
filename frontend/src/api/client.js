@@ -266,6 +266,36 @@ export async function deleteTeamMessageRequest(messageId) {
   return apiRequest(`/api/team-chat/${messageId}`, { method: "DELETE" });
 }
 
+export async function uploadMediaRequest(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers = { Accept: "application/json" };
+  const token = getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/media/upload`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+  } catch {
+    throw new Error("Cannot connect to the T-ZONE server. Make sure FastAPI is running on port 8000.");
+  }
+
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    const message = resolveApiErrorMessage(data, response.status);
+    const error = new Error(message);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
 export async function appointmentOptionsRequest() {
   return apiRequest("/api/appointments/options");
 }

@@ -640,3 +640,82 @@ def test_delete_only_allowed_while_draft(client_and_db):
 
     delete_after_send_resp = client.delete(f"/api/broadcasts/{broadcast2['id']}")
     assert delete_after_send_resp.status_code == 400
+
+
+def test_create_with_media_stores_url_and_type(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "With Image", "message_text": "check this out", "channel": "telegram",
+            "media_url": "https://example.com/promo.jpg", "media_type": "image",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["media_url"] == "https://example.com/promo.jpg"
+    assert body["media_type"] == "image"
+
+
+def test_create_with_media_rejects_unsupported_type(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Bad Media", "message_text": "x", "channel": "telegram",
+            "media_url": "https://example.com/file.exe", "media_type": "executable",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_send_with_media_dispatches_via_media_sender(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Media Blast", "message_text": "look at this", "channel": "telegram",
+            "media_url": "https://example.com/promo.jpg", "media_type": "image",
+        },
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_media",
+        return_value={"ok": True},
+    ) as mock_media_send, patch(
+        "backend.services.broadcast_service.send_telegram_text",
+    ) as mock_text_send:
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+
+    assert send_resp.status_code == 200, send_resp.text
+    assert send_resp.json()["sent_count"] == 1
+    mock_media_send.assert_called_once()
+    assert mock_media_send.call_args.kwargs["media_url"] == "https://example.com/promo.jpg"
+    assert mock_media_send.call_args.kwargs["media_type"] == "image"
+    assert mock_media_send.call_args.kwargs["caption"] == "look at this"
+    mock_text_send.assert_not_called()
+
+
+def test_send_without_media_still_uses_text_sender(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Plain Text", "message_text": "hello", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_media",
+    ) as mock_media_send, patch(
+        "backend.services.broadcast_service.send_telegram_text", return_value={"ok": True},
+    ) as mock_text_send:
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+
+    assert send_resp.status_code == 200, send_resp.text
+    mock_text_send.assert_called_once()
+    mock_media_send.assert_not_called()

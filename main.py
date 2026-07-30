@@ -4,6 +4,7 @@ from contextlib import suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import (
     ai_teaching_chat,
@@ -26,6 +27,7 @@ from backend.api.routes import (
     departments,
     instructions,
     manual_messages,
+    media_uploads,
     notifications,
     platform_admin,
     roles,
@@ -41,6 +43,7 @@ from backend.services.auth_service import (
 )
 from backend.services.appointment_service import appointment_service
 from backend.services.broadcast_service import broadcast_service
+from backend.services.media_upload_service import media_upload_service, UPLOAD_ROOT
 from backend.services.call_log_service import call_log_service
 from backend.services.catalogue_service import catalogue_service
 from backend.services.team_chat_service import team_chat_service
@@ -175,6 +178,7 @@ async def lifespan(app: FastAPI):
     call_log_service.ensure_schema()
     team_chat_service.ensure_schema()
     appointment_service.ensure_schema()
+    media_upload_service.ensure_storage()
 
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
@@ -250,7 +254,11 @@ app.add_middleware(
 )
 
 
+UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
+
 app.include_router(health.router)
+app.include_router(media_uploads.router)
 app.include_router(tickets.router)
 app.include_router(knowledge_entries.router)
 app.include_router(ai_teaching_chat.router)

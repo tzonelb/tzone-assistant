@@ -32,6 +32,21 @@
   white-space: pre-wrap;
 }
 
+.broadcast-detail-media {
+  margin-top: var(--tz-space-3);
+}
+
+.broadcast-detail-media img,
+.broadcast-detail-media video {
+  max-width: 100%;
+  max-height: 320px;
+  border-radius: var(--tz-radius-md);
+}
+
+.broadcast-detail-media audio {
+  width: 100%;
+}
+
 .broadcast-detail-notsent-card.tz-card {
   display: grid;
   gap: var(--tz-space-3);

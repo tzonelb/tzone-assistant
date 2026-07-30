@@ -15,6 +15,7 @@ import {
   listBroadcastsRequest,
   listCustomerSegmentsRequest,
   sendBroadcastRequest,
+  uploadMediaRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, StatusBadge } from "../../components/common";
 import "./BroadcastPage.css";
@@ -109,6 +110,12 @@ export default function BroadcastPage() {
   const [creating, setCreating] = useState(false);
   const [composeError, setComposeError] = useState("");
 
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaType, setMediaType] = useState("");
+  const [mediaFileName, setMediaFileName] = useState("");
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaError, setMediaError] = useState("");
+
   const [segments, setSegments] = useState([]);
   const [lifecycleStages, setLifecycleStages] = useState([]);
 
@@ -153,6 +160,35 @@ export default function BroadcastPage() {
     setTagInput(EMPTY_COMPOSE_FORM.tagInput);
     setNumbersInput(EMPTY_COMPOSE_FORM.numbersInput);
     setComposeError("");
+    setMediaUrl("");
+    setMediaType("");
+    setMediaFileName("");
+    setMediaError("");
+  }
+
+  async function handleMediaFileChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setMediaUploading(true);
+    setMediaError("");
+    try {
+      const result = await uploadMediaRequest(file);
+      setMediaUrl(result.url);
+      setMediaType(result.media_type);
+      setMediaFileName(file.name);
+    } catch (requestError) {
+      setMediaError(requestError.message || "Could not upload this file.");
+    } finally {
+      setMediaUploading(false);
+    }
+  }
+
+  function removeMedia() {
+    setMediaUrl("");
+    setMediaType("");
+    setMediaFileName("");
+    setMediaError("");
   }
 
   function openCompose() {
@@ -213,6 +249,8 @@ export default function BroadcastPage() {
         lifecycle_stage: targetMode === "filter" ? (lifecycleStage || undefined) : undefined,
         tag: targetMode === "filter" ? (tagInput.trim() || undefined) : undefined,
         numbers: targetMode === "numbers" ? parsedNumbers : undefined,
+        media_url: mediaUrl || undefined,
+        media_type: mediaUrl ? mediaType : undefined,
       };
       const created = await createBroadcastRequest(payload);
       setComposeOpen(false);
@@ -413,6 +451,27 @@ export default function BroadcastPage() {
                   <span className={`broadcast-char-counter ${messageText.length >= MESSAGE_LIMIT ? "is-limit" : ""}`}>
                     {messageText.length} / {MESSAGE_LIMIT}
                   </span>
+                </label>
+
+                <label className="broadcast-field">
+                  Attach media (optional)
+                  {mediaUrl ? (
+                    <div className="broadcast-media-attached">
+                      <span>{mediaFileName || mediaUrl} <em>({mediaType})</em></span>
+                      <button type="button" onClick={removeMedia}>Remove</button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="file"
+                        accept="image/*,video/*,audio/*"
+                        disabled={mediaUploading}
+                        onChange={handleMediaFileChange}
+                      />
+                      {mediaUploading ? <span className="broadcast-field-note">Uploading…</span> : null}
+                    </>
+                  )}
+                  {mediaError ? <span className="broadcast-field-note broadcast-media-error">{mediaError}</span> : null}
                 </label>
 
                 <label className="broadcast-field">

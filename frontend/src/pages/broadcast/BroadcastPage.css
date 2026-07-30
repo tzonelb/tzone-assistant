@@ -147,6 +147,38 @@
   font-family: inherit;
 }
 
+.broadcast-media-attached {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  background: var(--tz-primary-soft);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.broadcast-media-attached em {
+  color: var(--tz-text-muted);
+  font-style: normal;
+}
+
+.broadcast-media-attached button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--tz-radius-round);
+  color: var(--tz-danger);
+  background: var(--tz-surface);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.broadcast-media-error {
+  color: var(--tz-danger);
+}
+
 .broadcast-numbers-count {
   justify-self: end;
   color: var(--tz-text-muted);

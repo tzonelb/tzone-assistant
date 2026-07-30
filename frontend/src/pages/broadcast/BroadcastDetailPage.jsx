@@ -210,6 +210,17 @@ export default function BroadcastDetailPage() {
       <AppCard padding="medium" className="broadcast-detail-message-card">
         <h3 className="client-file-section-title">Message</h3>
         <p className="broadcast-detail-message-text">{broadcast.message_text}</p>
+        {broadcast.media_url ? (
+          <div className="broadcast-detail-media">
+            {broadcast.media_type === "image" ? (
+              <img src={broadcast.media_url} alt="Broadcast attachment" />
+            ) : broadcast.media_type === "video" ? (
+              <video src={broadcast.media_url} controls />
+            ) : (
+              <audio src={broadcast.media_url} controls />
+            )}
+          </div>
+        ) : null}
       </AppCard>
 
       {isDraft ? (

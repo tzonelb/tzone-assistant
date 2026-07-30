@@ -106,6 +106,14 @@ class AppConfig:
     )
     FRONTEND_BASE_URL: str = os.getenv("FRONTEND_BASE_URL", "http://localhost:5173")
 
+    # Must be a real public HTTPS URL once deployed — WhatsApp/Telegram/
+    # Messenger all fetch media by URL, so they can't reach a localhost
+    # address. Broadcast media uploads are stored locally and served from
+    # this base; until it's set to the real deployed domain, media
+    # broadcasts will upload fine but the provider-side send will fail
+    # (the same "needs real deployment" caveat as Calls needing Twilio).
+    PUBLIC_BACKEND_URL: str = os.getenv("PUBLIC_BACKEND_URL", "http://localhost:8000")
+
     FACEBOOK_PAGE_ID: str = os.getenv(
         "FACEBOOK_PAGE_ID",
         "",

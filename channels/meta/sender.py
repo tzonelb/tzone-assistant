@@ -130,6 +130,68 @@ def send_meta_text(
         return result
 
 
+# Messenger/Instagram's Send API attachment message has no caption
+# field of its own (unlike WhatsApp/Telegram) — a caption is sent as a
+# separate follow-up text message using the existing send_meta_text.
+_META_ATTACHMENT_TYPE = {"image": "image", "video": "video", "audio": "audio"}
+
+
+def send_meta_media(
+    recipient_id: str,
+    media_url: str,
+    media_type: str,
+    caption: str | None = None,
+    channel: str = "messenger",
+    company_id: int | None = None,
+) -> dict:
+    if is_fake_meta_id(recipient_id):
+        result = {"ok": False, "skipped": True, "reason": "fake_test_id", "recipient_id": recipient_id, "channel": channel}
+        log_meta_event("send_skipped", result)
+        return result
+
+    attachment_type = _META_ATTACHMENT_TYPE.get(media_type)
+    if not attachment_type:
+        return {"ok": False, "error": f"Unsupported media type: {media_type}", "channel": channel}
+
+    access_token = _resolve_token(channel, company_id)
+    if not access_token:
+        result = {"ok": False, "error": "No access token available for this channel (not connected, and META_PAGE_ACCESS_TOKEN is missing)"}
+        log_meta_event("send_failed", result)
+        return result
+
+    url = f"https://graph.facebook.com/{config.META_API_VERSION}/me/messages"
+    payload = {
+        "recipient": {"id": recipient_id},
+        "message": {
+            "attachment": {
+                "type": attachment_type,
+                "payload": {"url": media_url, "is_reusable": True},
+            }
+        },
+    }
+    params = {"access_token": access_token}
+
+    try:
+        response, response_data = _post_message_with_tag_fallback(url, params, payload, recipient_id)
+        result = {
+            "ok": response.ok,
+            "status_code": response.status_code,
+            "channel": channel,
+            "recipient_id": recipient_id,
+            "response": response_data,
+        }
+        log_meta_event("send_result", result)
+    except Exception as e:
+        result = {"ok": False, "channel": channel, "recipient_id": recipient_id, "error": str(e)}
+        log_meta_event("send_error", result)
+        return result
+
+    if result["ok"] and caption:
+        send_meta_text(recipient_id=recipient_id, text=caption, channel=channel, company_id=company_id)
+
+    return result
+
+
 def send_meta_buttons(
     recipient_id: str,
     text: str,

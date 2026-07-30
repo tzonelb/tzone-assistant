@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from database.database import db
-from channels.telegram.sender import send_telegram_text
-from channels.meta.sender import send_meta_text
-from channels.whatsapp.sender import send_whatsapp_text
+from channels.telegram.sender import send_telegram_text, send_telegram_media
+from channels.meta.sender import send_meta_text, send_meta_media
+from channels.whatsapp.sender import send_whatsapp_text, send_whatsapp_media
 from backend.services.customer_service import customer_service
 from backend.services.message_status_service import message_status_service
 
@@ -18,6 +18,7 @@ def utc_now_iso() -> str:
 
 
 SUPPORTED_CHANNELS = {"telegram", "messenger", "instagram", "whatsapp"}
+SUPPORTED_MEDIA_TYPES = {"image", "video", "audio"}
 
 
 class BroadcastService:
@@ -59,6 +60,10 @@ class BroadcastService:
             }
             if "raw_numbers_json" not in broadcast_columns:
                 conn.execute("ALTER TABLE broadcasts ADD COLUMN raw_numbers_json TEXT")
+            if "media_url" not in broadcast_columns:
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN media_url TEXT")
+            if "media_type" not in broadcast_columns:
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN media_type TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS broadcast_recipients (
@@ -186,6 +191,8 @@ class BroadcastService:
         lifecycle_stage: str | None = None,
         tag: str | None = None,
         numbers: list[str] | None = None,
+        media_url: str | None = None,
+        media_type: str | None = None,
         actor_user_id: int | None = None,
     ) -> dict[str, Any]:
         name = (name or "").strip()
@@ -200,6 +207,17 @@ class BroadcastService:
                 f'"{channel}" is not a supported channel. Choose one of: '
                 f'{", ".join(sorted(SUPPORTED_CHANNELS))}.'
             )
+
+        media_url = (media_url or "").strip() or None
+        if media_url:
+            media_type = (media_type or "").strip().lower()
+            if media_type not in SUPPORTED_MEDIA_TYPES:
+                raise ValueError(
+                    f'"{media_type}" is not a supported media type. Choose one of: '
+                    f'{", ".join(sorted(SUPPORTED_MEDIA_TYPES))}.'
+                )
+        else:
+            media_type = None
 
         using_numbers = bool(numbers)
         if using_numbers and (segment_id is not None or lifecycle_stage is not None or tag is not None):
@@ -231,13 +249,13 @@ class BroadcastService:
                     company_id, name, message_text, channel, segment_id,
                     lifecycle_stage, tag, status, recipient_count,
                     sent_count, failed_count, created_by_user_id, created_at,
-                    raw_numbers_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, 0, 0, ?, ?, ?)
+                    raw_numbers_json, media_url, media_type
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, 0, 0, ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id, name, message_text, normalized_channel, segment_id,
                     lifecycle_stage, tag, len(recipients), actor_user_id, now,
-                    raw_numbers_json,
+                    raw_numbers_json, media_url, media_type,
                 ),
             )
             broadcast_id = int(cursor.lastrowid)
@@ -263,7 +281,14 @@ class BroadcastService:
         return dict(row)
 
     def _dispatch(
-        self, *, channel: str, recipient_id: str, text: str, company_id: int
+        self,
+        *,
+        channel: str,
+        recipient_id: str,
+        text: str,
+        company_id: int,
+        media_url: str | None = None,
+        media_type: str | None = None,
     ) -> tuple[bool, dict[str, Any]]:
         """Sends via the exact same per-channel send functions used for
         manual employee replies (see manual_messages.py's dispatch
@@ -271,6 +296,20 @@ class BroadcastService:
         response is preserved so callers can extract a provider_message_id
         or an error message, while success is still a normalized bool
         for the existing sent/failed counting."""
+        if media_url and media_type:
+            if channel == "telegram":
+                result = send_telegram_media(recipient_id=recipient_id, media_url=media_url, media_type=media_type, caption=text)
+                return bool(result.get("ok")), result
+            elif channel == "whatsapp":
+                result = send_whatsapp_media(recipient_id, media_url, media_type, caption=text, company_id=company_id)
+                return bool(result.get("sent")), result
+            else:
+                result = send_meta_media(
+                    recipient_id=recipient_id, media_url=media_url, media_type=media_type,
+                    caption=text, channel=channel, company_id=company_id,
+                )
+                return bool(result.get("ok")), result
+
         if channel == "telegram":
             result = send_telegram_text(recipient_id=recipient_id, text=text)
             return bool(result.get("ok")), result
@@ -360,6 +399,8 @@ class BroadcastService:
                     recipient_id=recipient["external_user_id"],
                     text=broadcast["message_text"],
                     company_id=company_id,
+                    media_url=broadcast.get("media_url"),
+                    media_type=broadcast.get("media_type"),
                 )
             except Exception as exc:
                 success = False

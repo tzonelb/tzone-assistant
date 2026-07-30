@@ -9,3 +9,5 @@ class BroadcastCreateRequest(BaseModel):
     lifecycle_stage: str | None = Field(default=None, max_length=40)
     tag: str | None = Field(default=None, max_length=80)
     numbers: list[str] | None = None
+    media_url: str | None = Field(default=None, max_length=1000)
+    media_type: str | None = Field(default=None, max_length=20)
