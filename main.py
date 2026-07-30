@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes import (
     analytics,
     auth,
+    broadcasts,
     channel_connections,
     conversations,
     company_settings,
@@ -26,12 +27,14 @@ from backend.api.routes import (
     roles,
     saved_replies,
     security_verification,
+    tasks,
     test_whatsapp,
     tickets,
 )
 from backend.services.auth_service import (
     auth_service,
 )
+from backend.services.broadcast_service import broadcast_service
 from backend.services.conversation_control_service import (
     conversation_control_service,
 )
@@ -42,6 +45,7 @@ from backend.services.notification_service import notification_service
 from backend.services.platform_admin_service import platform_admin_service
 from backend.services.saved_reply_service import saved_reply_service
 from backend.services.security_verification_service import security_verification_service
+from backend.services.task_service import task_service
 from backend.services.facebook_oauth_service import facebook_oauth_service
 from core.knowledge_manager import knowledge_manager
 from backend.services.department_service import department_service
@@ -70,6 +74,14 @@ async def takeover_timeout_worker() -> None:
         await asyncio.sleep(10)
 
 
+_AUTO_SEND_SKIP_REASON_TEXT = {
+    "customer_already_replied": "customer already replied",
+    "human_owned": "conversation is currently handled by a human",
+    "missing_message_text": "no follow-up message was saved",
+    "missing_reminder_set_at": "could not verify it was still safe to send",
+}
+
+
 async def reminder_worker() -> None:
     while True:
         try:
@@ -80,16 +92,48 @@ async def reminder_worker() -> None:
                     or reminder.get("customer_alias")
                     or f"{reminder['channel']} customer"
                 )
+
+                # Additive: build title/body from the new auto-send outcome
+                # (sent / skipped-with-reason / failed / not requested) so
+                # the notification reflects what actually happened, instead
+                # of always showing the same generic "you set a reminder"
+                # text. See conversation_control_service.check_due_reminders
+                # for how auto_send_status/auto_send_skip_reason are derived.
+                auto_send_status = reminder.get("auto_send_status", "not_requested")
+                if auto_send_status == "sent":
+                    title = f"Auto follow-up sent to {display_name}"
+                    body = (
+                        reminder.get("reminder_note")
+                        or "The pre-authored follow-up message was sent automatically."
+                    )
+                elif auto_send_status == "skipped":
+                    reason_text = _AUTO_SEND_SKIP_REASON_TEXT.get(
+                        reminder.get("auto_send_skip_reason"),
+                        "the safety checks did not pass",
+                    )
+                    title = f"Reminder due for {display_name}"
+                    body = f"Auto follow-up skipped — {reason_text}."
+                elif auto_send_status == "failed":
+                    title = f"Reminder due for {display_name}"
+                    body = "Auto follow-up failed to send — you may need to follow up manually."
+                else:
+                    title = f"Follow up with {display_name}"
+                    body = reminder.get("reminder_note") or "You set a reminder to follow up on this conversation."
+
                 notification_service.create(
                     company_id=reminder["company_id"],
                     notification_type="conversation_reminder",
-                    title=f"Follow up with {display_name}",
-                    body=reminder.get("reminder_note") or "You set a reminder to follow up on this conversation.",
+                    title=title,
+                    body=body,
                     channel=reminder["channel"],
                     external_user_id=reminder["external_user_id"],
                     conversation_id=reminder["id"],
                     severity="info",
-                    data={"user_id": reminder.get("reminder_set_by_user_id")},
+                    data={
+                        "user_id": reminder.get("reminder_set_by_user_id"),
+                        "auto_send_status": auto_send_status,
+                        "auto_send_skip_reason": reminder.get("auto_send_skip_reason"),
+                    },
                 )
         except Exception as exc:
             print("REMINDER WORKER ERROR:", exc)
@@ -104,6 +148,7 @@ async def lifespan(app: FastAPI):
     conversation_control_service.ensure_schema()
     company_settings_service.ensure_schema()
     customer_service.ensure_schema()
+    broadcast_service.ensure_schema()
     diagnostics_service.ensure_schema()
     notification_service.ensure_schema()
     security_verification_service.ensure_schema()
@@ -114,6 +159,7 @@ async def lifespan(app: FastAPI):
     message_status_service.ensure_schema()
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
+    task_service.ensure_schema()
 
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
@@ -201,6 +247,7 @@ app.include_router(conversations.router)
 app.include_router(company_settings.router)
 app.include_router(customers.router)
 app.include_router(customers.segments_router)
+app.include_router(broadcasts.router)
 app.include_router(analytics.router)
 app.include_router(conversation_tags.router)
 app.include_router(developer_center.router)
@@ -212,6 +259,7 @@ app.include_router(channel_connections.router)
 app.include_router(facebook_oauth.router)
 app.include_router(saved_replies.router)
 app.include_router(security_verification.router)
+app.include_router(tasks.router)
 
 app.include_router(
     whatsapp_webhook.router

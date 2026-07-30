@@ -269,6 +269,31 @@ export async function deleteCustomerSegmentRequest(segmentId) {
   return apiRequest(`/api/customer-segments/${segmentId}`, { method: "DELETE" });
 }
 
+export async function taskOptionsRequest() {
+  return apiRequest("/api/tasks/options");
+}
+
+export async function listTasksRequest({ status, assignedUserId, customerId } = {}) {
+  const query = createQueryString({
+    status,
+    assigned_user_id: assignedUserId,
+    customer_id: customerId,
+  });
+  return apiRequest(`/api/tasks${query}`);
+}
+
+export async function createTaskRequest(payload) {
+  return apiRequest("/api/tasks", { method: "POST", body: payload });
+}
+
+export async function updateTaskRequest(taskId, updates) {
+  return apiRequest(`/api/tasks/${taskId}`, { method: "PUT", body: updates });
+}
+
+export async function deleteTaskRequest(taskId) {
+  return apiRequest(`/api/tasks/${taskId}`, { method: "DELETE" });
+}
+
 export async function getAnalyticsSummaryRequest() {
   return apiRequest("/api/analytics");
 }
@@ -305,10 +330,15 @@ export async function deleteSavedReplyRequest(id) {
   return apiRequest(`/api/saved-replies/${id}`, { method: "DELETE" });
 }
 
-export async function setConversationReminderRequest(channel, userId, reminderAt, note) {
+export async function setConversationReminderRequest(channel, userId, reminderAt, note, autoSend, messageText) {
   return apiRequest(`/conversations/${channel}/${userId}/reminder`, {
     method: "POST",
-    body: { reminder_at: reminderAt, note: note || null },
+    body: {
+      reminder_at: reminderAt,
+      note: note || null,
+      auto_send: Boolean(autoSend),
+      message_text: messageText || null,
+    },
   });
 }
 
@@ -771,4 +801,24 @@ export async function updateCompanySettingSectionRequest(section, values) {
     method: "PUT",
     body: { values },
   });
+}
+
+export async function createBroadcastRequest(payload) {
+  return apiRequest("/api/broadcasts", { method: "POST", body: payload });
+}
+
+export async function listBroadcastsRequest() {
+  return apiRequest("/api/broadcasts");
+}
+
+export async function sendBroadcastRequest(broadcastId) {
+  return apiRequest(`/api/broadcasts/${broadcastId}/send`, { method: "POST" });
+}
+
+export async function deleteBroadcastRequest(broadcastId) {
+  return apiRequest(`/api/broadcasts/${broadcastId}`, { method: "DELETE" });
+}
+
+export async function getBroadcastReportRequest(broadcastId) {
+  return apiRequest(`/api/broadcasts/${broadcastId}/report`);
 }

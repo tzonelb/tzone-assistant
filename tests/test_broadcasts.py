@@ -1,0 +1,486 @@
+"""
+Real tests for the Broadcast feature: sending one message to every
+contact matching a filter (a saved Segment, or a lifecycle_stage/tag),
+on one channel, reusing the exact same per-channel send functions used
+for manual employee replies.
+
+Every sender function is mocked at the point of use inside
+backend.services.broadcast_service — no real network calls are made.
+
+Run with: python3 -m pytest tests/test_broadcasts.py -v
+"""
+import os
+import sys
+import tempfile
+import time
+from pathlib import Path
+from unittest.mock import patch
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import pytest
+from fastapi.testclient import TestClient
+
+COMPANY_ID = 1
+
+
+@pytest.fixture()
+def client_and_db():
+    from database.database import db
+    from backend.services.auth_service import auth_service
+    from backend.services.customer_service import customer_service
+    from backend.services.broadcast_service import broadcast_service
+    from backend.services.message_status_service import message_status_service
+
+    tmp_db_path = tempfile.mktemp(suffix=".db")
+    original_db_path = db.db_path
+    db.db_path = Path(tmp_db_path)
+
+    db.create_tables()
+    auth_service.create_tables()
+    customer_service.ensure_schema()
+    broadcast_service.ensure_schema()
+    message_status_service.ensure_schema()
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (1, 'agent@test.local', 'Agent', 'active', 0)"
+        )
+        conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (1, 'Test Co', 'test-co', 1)")
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 1, 'active')"
+        )
+        conn.commit()
+
+    from main import app
+    from backend.services.auth_service import get_current_user
+
+    async def _override():
+        return {"id": 1, "email": "agent@test.local", "is_super_admin": False, "active_company_id": COMPANY_ID}
+    app.dependency_overrides[get_current_user] = _override
+
+    yield TestClient(app)
+
+    app.dependency_overrides.clear()
+    db.db_path = original_db_path
+    import gc
+    gc.collect()
+    for _attempt in range(5):
+        try:
+            if os.path.exists(tmp_db_path):
+                os.remove(tmp_db_path)
+            break
+        except PermissionError:
+            time.sleep(0.1)
+
+
+def _make_contact(*, company_id=COMPANY_ID, channel="telegram", external_user_id="u1", display_name="Rami"):
+    from backend.services.customer_service import customer_service
+    return customer_service.upsert_from_channel(
+        company_id=company_id, channel=channel, external_user_id=external_user_id, display_name=display_name,
+    )
+
+
+def test_create_computes_recipient_count_for_channel_and_lifecycle_stage(client_and_db):
+    client = client_and_db
+    a = _make_contact(external_user_id="a", display_name="A")
+    _make_contact(external_user_id="b", display_name="B")
+    client.put(f"/api/customers/{a['id']}", json={"lifecycle_stage": "customer"})
+
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Customer Blast",
+            "message_text": "Hello customers!",
+            "channel": "telegram",
+            "lifecycle_stage": "customer",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["recipient_count"] == 1
+    assert body["status"] == "draft"
+
+
+def test_create_rejects_empty_message_text(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Empty", "message_text": "   ", "channel": "telegram"},
+    )
+    assert resp.status_code == 400
+
+
+def test_create_rejects_invalid_channel(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Bad Channel", "message_text": "hi", "channel": "carrier-pigeon"},
+    )
+    assert resp.status_code == 400
+
+
+def test_send_dispatches_to_every_matching_recipient_and_updates_status(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+    _make_contact(external_user_id="b", display_name="B")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "All Telegram", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    broadcast = create_resp.json()
+    assert broadcast["recipient_count"] == 2
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        return_value={"ok": True},
+    ) as mock_send:
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+
+    assert send_resp.status_code == 200, send_resp.text
+    body = send_resp.json()
+    assert body["status"] == "sent"
+    assert body["sent_count"] == 2
+    assert body["failed_count"] == 0
+    assert mock_send.call_count == 2
+
+
+def test_send_counts_a_failed_send_without_crashing_the_whole_send(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+    _make_contact(external_user_id="b", display_name="B")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Mixed Results", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        side_effect=[{"ok": True}, Exception("network exploded")],
+    ):
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+
+    assert send_resp.status_code == 200, send_resp.text
+    body = send_resp.json()
+    assert body["status"] == "sent"
+    assert body["sent_count"] == 1
+    assert body["failed_count"] == 1
+
+
+def test_send_returns_400_on_already_sent_broadcast(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Once Only", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}):
+        first = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert first.status_code == 200, first.text
+
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}) as mock_send:
+        second = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert second.status_code == 400
+    mock_send.assert_not_called()
+
+
+def test_send_uses_correct_sender_and_success_flag_per_channel(client_and_db):
+    """whatsapp's sender returns {'sent': bool} not {'ok': bool} — make
+    sure the dispatch checks the right key for that channel."""
+    client = client_and_db
+    _make_contact(channel="whatsapp", external_user_id="wa-1", display_name="WA Contact")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "WA Blast", "message_text": "Hi via WhatsApp!", "channel": "whatsapp"},
+    )
+    broadcast = create_resp.json()
+    assert broadcast["recipient_count"] == 1
+
+    with patch(
+        "backend.services.broadcast_service.send_whatsapp_text",
+        return_value={"sent": True},
+    ) as mock_send:
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+
+    assert send_resp.status_code == 200, send_resp.text
+    body = send_resp.json()
+    assert body["sent_count"] == 1
+    assert body["failed_count"] == 0
+    mock_send.assert_called_once()
+
+
+def test_segment_based_targeting_resolves_the_right_recipients(client_and_db):
+    client = client_and_db
+    a = _make_contact(external_user_id="a", display_name="A")
+    _make_contact(external_user_id="b", display_name="B")
+    client.put(f"/api/customers/{a['id']}", json={"lifecycle_stage": "customer", "tags": ["reseller"]})
+
+    segment_resp = client.post(
+        "/api/customer-segments",
+        json={"name": "Active Resellers", "filters": {"lifecycle_stage": "customer", "tag": "reseller"}},
+    )
+    assert segment_resp.status_code == 200, segment_resp.text
+    segment = segment_resp.json()
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Reseller Blast", "message_text": "Hi resellers!", "channel": "telegram", "segment_id": segment["id"]},
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    body = create_resp.json()
+    assert body["recipient_count"] == 1
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        return_value={"ok": True},
+    ) as mock_send:
+        send_resp = client.post(f"/api/broadcasts/{body['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+    assert send_resp.json()["sent_count"] == 1
+    mock_send.assert_called_once()
+    assert mock_send.call_args.kwargs["recipient_id"] == "a"
+
+
+def test_create_with_unknown_segment_id_returns_404(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Ghost Segment", "message_text": "hi", "channel": "telegram", "segment_id": 99999},
+    )
+    assert resp.status_code == 404
+
+
+def test_company_isolation_for_broadcasts_and_segments(client_and_db):
+    from database.database import db
+    with db.connect() as conn:
+        conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (2, 'Other Co', 'other-co', 1)")
+        conn.commit()
+
+    from backend.services.customer_service import customer_service
+    from backend.services.broadcast_service import broadcast_service
+
+    customer_service.upsert_from_channel(
+        company_id=2, channel="telegram", external_user_id="other-co-user", display_name="Other Co Contact",
+    )
+    other_segment = customer_service.create_segment(company_id=2, name="Other Co Segment", filters={}, actor_user_id=None)
+    other_broadcast = broadcast_service.create_broadcast(
+        company_id=2, name="Other Co Broadcast", message_text="hi", channel="telegram", actor_user_id=None,
+    )
+
+    client = client_and_db
+    list_resp = client.get("/api/broadcasts")
+    assert list_resp.status_code == 200
+    assert all(item["name"] != "Other Co Broadcast" for item in list_resp.json()["items"])
+
+    get_resp = client.get(f"/api/broadcasts/{other_broadcast['id']}")
+    assert get_resp.status_code == 404
+
+    # A segment from another company must not be usable to target company 1's broadcast.
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Cross-Company Attempt", "message_text": "hi", "channel": "telegram", "segment_id": other_segment["id"]},
+    )
+    assert create_resp.status_code == 404
+
+
+def test_send_records_provider_message_id_and_sent_delivery_status_for_telegram(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Telegram Tracking", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        return_value={"ok": True, "response": {"result": {"message_id": 555}}},
+    ):
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+
+    from database.database import db
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM broadcast_recipients WHERE broadcast_id = ?",
+            (broadcast["id"],),
+        ).fetchone()
+    assert row is not None
+    assert row["provider_message_id"] == "555"
+    assert row["send_status"] == "sent"
+    assert row["external_user_id"] == "a"
+
+    from backend.services.message_status_service import message_status_service
+    statuses = message_status_service.get_statuses(channel="telegram", provider_message_ids=["555"])
+    assert statuses["555"] == "sent"
+
+
+def test_get_broadcast_report_totals_match_after_send(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+    _make_contact(external_user_id="b", display_name="B")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Report Totals", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        side_effect=[
+            {"ok": True, "response": {"result": {"message_id": 111}}},
+            Exception("network exploded"),
+        ],
+    ):
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+
+    report_resp = client.get(f"/api/broadcasts/{broadcast['id']}/report")
+    assert report_resp.status_code == 200, report_resp.text
+    report = report_resp.json()
+
+    assert report["channel_tracking_supported"] is True
+    assert report["totals"]["recipients"] == 2
+    assert report["totals"]["sent"] == 1
+    assert report["totals"]["failed"] == 1
+    assert report["totals"]["pending"] == 1
+    assert report["totals"]["delivered"] == 0
+    assert report["totals"]["read"] == 0
+    assert len(report["recipients"]) == 2
+
+    failed_row = next(r for r in report["recipients"] if r["send_status"] == "failed")
+    assert failed_row["error"] == "network exploded"
+    assert failed_row["delivery_status"] is None
+
+    sent_row = next(r for r in report["recipients"] if r["send_status"] == "sent")
+    assert sent_row["delivery_status"] == "sent"
+    assert sent_row["error"] is None
+
+
+def test_get_broadcast_report_reflects_read_status_after_webhook_update(client_and_db):
+    client = client_and_db
+    _make_contact(channel="messenger", external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Read Tracking", "message_text": "Hi there!", "channel": "messenger"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_meta_text",
+        return_value={"ok": True, "response": {"message_id": "mid.abc123"}},
+    ):
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+
+    # Simulate a delivery/read webhook arriving later for this provider_message_id.
+    from backend.services.message_status_service import message_status_service
+    message_status_service.update_status(channel="messenger", provider_message_id="mid.abc123", status="read")
+
+    report = client.get(f"/api/broadcasts/{broadcast['id']}/report").json()
+    assert report["totals"]["read"] == 1
+    assert report["totals"]["delivered"] == 1
+    assert report["totals"]["pending"] == 0
+
+    recipient = report["recipients"][0]
+    assert recipient["delivery_status"] == "read"
+
+
+def test_whatsapp_broadcast_report_shows_tracking_unsupported(client_and_db):
+    client = client_and_db
+    _make_contact(channel="whatsapp", external_user_id="wa-1", display_name="WA Contact")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "WA Report", "message_text": "Hi via WhatsApp!", "channel": "whatsapp"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_whatsapp_text",
+        return_value={"sent": True},
+    ):
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+
+    report = client.get(f"/api/broadcasts/{broadcast['id']}/report").json()
+    assert report["channel_tracking_supported"] is False
+    assert report["totals"]["sent"] == 1
+    assert report["totals"]["pending"] == 0
+    recipient = report["recipients"][0]
+    assert recipient["send_status"] == "sent"
+    assert recipient["delivery_status"] is None
+
+
+def test_failed_send_creates_broadcast_recipient_row_without_crashing(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Failure Row", "message_text": "hi", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        return_value={"ok": False, "error": "Telegram rejected the message."},
+    ):
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+    assert send_resp.json()["failed_count"] == 1
+
+    from database.database import db
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM broadcast_recipients WHERE broadcast_id = ?",
+            (broadcast["id"],),
+        ).fetchone()
+    assert row["send_status"] == "failed"
+    assert row["provider_message_id"] is None
+    assert row["error"] == "Telegram rejected the message."
+
+
+def test_get_broadcast_report_returns_404_for_unknown_broadcast(client_and_db):
+    client = client_and_db
+    resp = client.get("/api/broadcasts/99999/report")
+    assert resp.status_code == 404
+
+
+def test_delete_only_allowed_while_draft(client_and_db):
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Draft To Delete", "message_text": "hi", "channel": "telegram"},
+    )
+    broadcast = create_resp.json()
+
+    delete_resp = client.delete(f"/api/broadcasts/{broadcast['id']}")
+    assert delete_resp.status_code == 200, delete_resp.text
+    assert delete_resp.json() == {"deleted": True}
+    assert client.get(f"/api/broadcasts/{broadcast['id']}").status_code == 404
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Sent Broadcast", "message_text": "hi", "channel": "telegram"},
+    )
+    broadcast2 = create_resp.json()
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}):
+        client.post(f"/api/broadcasts/{broadcast2['id']}/send")
+
+    delete_after_send_resp = client.delete(f"/api/broadcasts/{broadcast2['id']}")
+    assert delete_after_send_resp.status_code == 400

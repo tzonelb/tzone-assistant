@@ -13,6 +13,9 @@ import ModulePage from "./pages/modules/ModulePage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
+import TasksPage from "./pages/tasks/TasksPage";
+import BroadcastPage from "./pages/broadcast/BroadcastPage";
+import BroadcastDetailPage from "./pages/broadcast/BroadcastDetailPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -32,9 +35,11 @@ export default function App() {
         <Route path="/comments" element={<CommentsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
+        <Route path="/broadcast" element={<BroadcastPage />} />
+        <Route path="/broadcast/:broadcastId" element={<BroadcastDetailPage />} />
         <Route path="/catalogue" element={<ModulePage title="Master Catalogue" description="One product catalogue synchronized with WhatsApp, websites, accounting systems and future sales channels." />} />
         <Route path="/ai-teaching" element={<ModulePage title="AI Teaching" description="Instructions, tone, examples and testing tools used to teach the company AI assistant." />} />
-        <Route path="/tasks" element={<ModulePage title="Tasks" description="Tasks, follow-ups, payments, services and internal cases assigned to the team." />} />
+        <Route path="/tasks" element={<TasksPage />} />
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
         <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
         <Route path="/analytics" element={<AnalyticsPage />} />

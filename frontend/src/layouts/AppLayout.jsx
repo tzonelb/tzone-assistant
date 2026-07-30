@@ -34,6 +34,7 @@ const pageTitles = {
   "/conversations": "Conversations",
   "/comments": "Comments",
   "/customers": "Customers",
+  "/broadcast": "Broadcast",
   "/catalogue": "Master Catalogue",
   "/ai-teaching": "AI Teaching",
   "/tasks": "Tasks",
