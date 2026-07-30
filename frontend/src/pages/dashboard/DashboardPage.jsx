@@ -116,8 +116,6 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-page">
       <PageHeader
-        eyebrow={summary?.company?.name || "COMPANY COMMAND CENTER"}
-        description="Monitor conversations, customers, AI knowledge, connected channels and business activity."
         actions={
           <>
             <AppButton

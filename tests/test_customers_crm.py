@@ -428,6 +428,37 @@ def test_bulk_update_skips_customer_from_another_company(client_and_db):
     assert customer_service.get_customer(company_id=2, customer_id=other["id"])["lifecycle_stage"] == "lead"
 
 
+def test_ensure_schema_backfills_conversations_missing_customer_id(client_and_db):
+    """Regression test for a real production bug: some conversations were
+    created without ever going through upsert_from_channel (e.g. hit an
+    error, or predate that wiring), leaving customer_id permanently NULL
+    with nothing to ever revisit them. ensure_schema() must self-heal
+    these by linking (or creating) a customer on every startup."""
+    from backend.services.customer_service import customer_service
+    from database.database import db
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO conversations (company_id, channel, external_user_id, status, official_customer_name, created_at) "
+            "VALUES (?, 'telegram', 'orphan-1', 'open', 'Orphan Customer', datetime('now'))",
+            (COMPANY_ID,),
+        )
+        conn.commit()
+
+    customer_service.ensure_schema()  # triggers the backfill again
+
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT customer_id FROM conversations WHERE channel = 'telegram' AND external_user_id = 'orphan-1'"
+        ).fetchone()
+    assert row["customer_id"] is not None
+
+    client = client_and_db
+    resp = client.get(f"/api/customers/{row['customer_id']}")
+    assert resp.status_code == 200
+    assert resp.json()["display_name"] == "Orphan Customer"
+
+
 def test_contacts_are_isolated_per_company(client_and_db):
     from database.database import db
     with db.connect() as conn:

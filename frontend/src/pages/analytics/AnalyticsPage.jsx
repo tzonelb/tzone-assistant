@@ -103,8 +103,6 @@ export default function AnalyticsPage() {
   return (
     <section className="analytics-page">
       <PageHeader
-        eyebrow="ANALYTICS & REPORTS"
-        description="Operational KPIs for your company — channel mix, AI vs human handling, contact lifecycle and tags."
         actions={
           <AppButton variant="secondary" icon={<RefreshOutlined fontSize="small" />} onClick={load}>
             Refresh

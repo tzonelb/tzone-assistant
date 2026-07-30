@@ -89,28 +89,30 @@ export default function AppTable({
                         column.align || "left",
                     }}
                   >
-                    <button
-                      type="button"
-                      className={
-                        column.sortable
-                          ? "tz-table-sort-button"
-                          : "tz-table-heading"
-                      }
-                      disabled={!column.sortable}
-                      onClick={() =>
-                        handleSort(column)
-                      }
-                    >
-                      <span>{column.label}</span>
+                    {column.sortable ? (
+                      <button
+                        type="button"
+                        className="tz-table-sort-button"
+                        onClick={() =>
+                          handleSort(column)
+                        }
+                      >
+                        <span>{column.label}</span>
 
-                      {activeSort ? (
-                        sortDirection === "asc" ? (
-                          <ArrowUpwardOutlined fontSize="inherit" />
-                        ) : (
-                          <ArrowDownwardOutlined fontSize="inherit" />
-                        )
-                      ) : null}
-                    </button>
+                        {activeSort ? (
+                          sortDirection === "asc" ? (
+                            <ArrowUpwardOutlined fontSize="inherit" />
+                          ) : (
+                            <ArrowDownwardOutlined fontSize="inherit" />
+                          )
+                        ) : null}
+                      </button>
+                    ) : (
+                      // Not sortable: render the label directly, no disabled
+                      // button wrapper — that would swallow pointer events
+                      // for interactive labels like a "select all" checkbox.
+                      <span className="tz-table-heading">{column.label}</span>
+                    )}
                   </th>
                 );
               })}

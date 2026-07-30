@@ -158,6 +158,10 @@
   margin-bottom: var(--tz-space-3);
 }
 
+.tz-page-header-actions-only {
+  justify-content: flex-end;
+}
+
 .tz-page-header-content {
   min-width: 0;
 }

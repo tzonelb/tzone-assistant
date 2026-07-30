@@ -133,6 +133,34 @@ class CustomerService:
             )
             conn.commit()
 
+        self._backfill_unlinked_conversations()
+
+    def _backfill_unlinked_conversations(self) -> None:
+        """Self-healing pass for conversations.customer_id: every channel
+        processor calls upsert_from_channel() on each incoming message,
+        which links the conversation as a side effect — but any
+        conversation that predates that wiring (or hit an error before
+        reaching that call) is left with customer_id NULL forever, since
+        nothing else ever revisits it. Runs on every startup; only rows
+        still unlinked do any work, so it's cheap once caught up."""
+        with db.connect() as conn:
+            rows = conn.execute(
+                "SELECT id, company_id, channel, external_user_id, official_customer_name, customer_profile_picture "
+                "FROM conversations WHERE customer_id IS NULL"
+            ).fetchall()
+        for row in rows:
+            try:
+                self.upsert_from_channel(
+                    company_id=row["company_id"],
+                    channel=row["channel"],
+                    external_user_id=row["external_user_id"],
+                    display_name=row["official_customer_name"],
+                    profile_picture=row["customer_profile_picture"],
+                )
+            except Exception:
+                # A single malformed historical row must never block startup.
+                continue
+
     @staticmethod
     def _normalize_tags(tags: list[str] | None) -> list[str]:
         if not tags:
