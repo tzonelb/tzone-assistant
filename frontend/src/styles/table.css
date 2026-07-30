@@ -18,21 +18,21 @@
 }
 
 .tz-table th {
-  padding: 13px 16px;
+  padding: 10px 13px;
   border-bottom: 1px solid var(--tz-border);
   color: var(--tz-text-secondary);
   background: var(--tz-surface-secondary);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .tz-table td {
-  padding: 15px 16px;
+  padding: 11px 13px;
   border-bottom: 1px solid var(--tz-border);
   color: var(--tz-text-primary);
-  font-size: 14px;
+  font-size: 13px;
   vertical-align: middle;
 }
 
@@ -76,27 +76,27 @@
 }
 
 .tz-table-footer {
-  min-height: 60px;
+  min-height: 48px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 12px 16px;
+  gap: 16px;
+  padding: 10px 13px;
   border-top: 1px solid var(--tz-border);
   color: var(--tz-text-secondary);
   background: var(--tz-surface-secondary);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .tz-pagination {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .tz-pagination button {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   border: 1px solid var(--tz-border);
@@ -158,8 +158,8 @@
 
 .tz-select {
   width: 100%;
-  min-height: 44px;
-  padding: 0 13px;
+  min-height: 38px;
+  padding: 0 11px;
   border: 1px solid var(--tz-border);
   border-radius: var(--tz-radius-md);
   outline: none;

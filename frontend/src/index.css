@@ -7,6 +7,11 @@
   color: var(--tz-text-primary);
   background: var(--tz-background);
   color-scheme: light;
+  /* Baseline density confirmed against manual 80% browser zoom. The app
+     shell below was switched from 100vh to 100% specifically so this
+     composes correctly (100vh doesn't reliably line up with `zoom` in
+     Chromium; percentage heights inherited through the DOM do). */
+  zoom: 0.8;
 }
 
 :root[data-theme="dark"] {

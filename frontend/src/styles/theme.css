@@ -67,18 +67,18 @@
 
   /* Spacing */
   --tz-space-1: 4px;
-  --tz-space-2: 8px;
-  --tz-space-3: 12px;
-  --tz-space-4: 16px;
-  --tz-space-5: 20px;
-  --tz-space-6: 24px;
-  --tz-space-7: 28px;
-  --tz-space-8: 32px;
+  --tz-space-2: 6px;
+  --tz-space-3: 10px;
+  --tz-space-4: 13px;
+  --tz-space-5: 16px;
+  --tz-space-6: 20px;
+  --tz-space-7: 22px;
+  --tz-space-8: 26px;
 
   /* Layout */
-  --tz-sidebar-width: 270px;
+  --tz-sidebar-width: 236px;
   --tz-sidebar-collapsed-width: 78px;
-  --tz-topbar-height: 83px;
+  --tz-topbar-height: 60px;
 
   /* Animation */
   --tz-transition-fast: 140ms ease;

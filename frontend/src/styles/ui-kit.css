@@ -1,10 +1,10 @@
 .tz-button {
-  min-height: 42px;
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--tz-space-2);
-  padding: 0 16px;
+  padding: 0 14px;
   border: 1px solid transparent;
   border-radius: var(--tz-radius-md);
   font-weight: 800;
@@ -56,15 +56,15 @@
 }
 
 .tz-button-small {
-  min-height: 35px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border-radius: var(--tz-radius-sm);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .tz-button-large {
-  min-height: 52px;
-  padding: 0 22px;
+  min-height: 44px;
+  padding: 0 18px;
 }
 
 .tz-button-full {
@@ -109,9 +109,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 27px;
-  padding: 0 10px;
+  gap: 5px;
+  min-height: 23px;
+  padding: 0 9px;
   border-radius: var(--tz-radius-round);
   font-size: 11px;
   font-weight: 900;
@@ -174,14 +174,15 @@
 .tz-page-header h2 {
   margin: 0;
   color: var(--tz-text-primary);
-  font-size: 29px;
+  font-size: 23px;
   letter-spacing: -0.025em;
 }
 
 .tz-page-header p {
   max-width: 720px;
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   color: var(--tz-text-secondary);
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -266,8 +267,8 @@
 
 .tz-search input {
   width: 100%;
-  min-height: 44px;
-  padding: 0 42px;
+  min-height: 38px;
+  padding: 0 38px;
   border: 1px solid var(--tz-border);
   border-radius: var(--tz-radius-md);
   outline: none;
