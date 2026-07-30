@@ -1,6 +1,10 @@
 .customers-page {
   display: grid;
-  gap: var(--tz-space-5);
+  gap: var(--tz-space-3);
+}
+
+.customer-filter-card.tz-card-padding-medium {
+  padding: var(--tz-space-4);
 }
 
 .customer-segment-chips {

@@ -152,10 +152,10 @@
 
 .tz-page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--tz-space-5);
-  margin-bottom: var(--tz-space-6);
+  margin-bottom: var(--tz-space-3);
 }
 
 .tz-page-header-content {
