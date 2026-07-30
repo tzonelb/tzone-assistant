@@ -10,6 +10,8 @@ from backend.api.routes import (
     analytics,
     auth,
     broadcasts,
+    calls,
+    catalogue,
     channel_connections,
     conversations,
     company_settings,
@@ -36,6 +38,8 @@ from backend.services.auth_service import (
     auth_service,
 )
 from backend.services.broadcast_service import broadcast_service
+from backend.services.call_log_service import call_log_service
+from backend.services.catalogue_service import catalogue_service
 from backend.services.ai_teaching_chat_service import ai_teaching_chat_service
 from backend.services.conversation_control_service import (
     conversation_control_service,
@@ -163,6 +167,8 @@ async def lifespan(app: FastAPI):
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
     task_service.ensure_schema()
+    catalogue_service.ensure_schema()
+    call_log_service.ensure_schema()
 
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
@@ -264,6 +270,8 @@ app.include_router(facebook_oauth.router)
 app.include_router(saved_replies.router)
 app.include_router(security_verification.router)
 app.include_router(tasks.router)
+app.include_router(catalogue.router)
+app.include_router(calls.router)
 
 app.include_router(
     whatsapp_webhook.router

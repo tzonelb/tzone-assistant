@@ -1,0 +1,137 @@
+.catalogue-page {
+  display: grid;
+  gap: var(--tz-space-3);
+}
+
+.product-filter-card.tz-card-padding-medium {
+  padding: var(--tz-space-4);
+}
+
+.product-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tz-space-3);
+}
+
+.product-filter-bar .tz-search {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+
+.product-filter-bar .tz-select {
+  width: auto;
+  min-width: 180px;
+}
+
+.product-name-cell {
+  display: grid;
+  gap: 2px;
+  max-width: 320px;
+}
+
+.product-name-cell span {
+  overflow: hidden;
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-status-select {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.product-empty-cell {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.product-stock-low {
+  color: var(--tz-danger);
+  font-weight: 700;
+}
+
+.product-delete-button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  color: var(--tz-text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.product-delete-button:hover {
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+}
+
+.product-new-fields {
+  display: grid;
+  gap: var(--tz-space-4);
+}
+
+.product-field {
+  display: grid;
+  gap: 6px;
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.product-field input,
+.product-field textarea {
+  padding: 0 13px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  outline: none;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+  font-family: inherit;
+  font-weight: 400;
+}
+
+.product-field input {
+  min-height: 42px;
+}
+
+.product-field textarea {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  resize: vertical;
+}
+
+.product-field input:focus,
+.product-field textarea:focus {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 4px rgb(22 137 232 / 9%);
+}
+
+.product-field-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--tz-space-3);
+}
+
+@media (max-width: 560px) {
+  .product-field-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.product-image-preview {
+  width: 80px;
+  height: 80px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  object-fit: cover;
+}
+
+.product-form-error {
+  margin: 0;
+  color: var(--tz-danger);
+  font-size: 13px;
+}

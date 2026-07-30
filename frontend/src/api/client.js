@@ -232,6 +232,23 @@ export async function customerOptionsRequest() {
   return apiRequest("/api/customers/options");
 }
 
+export async function callOptionsRequest() {
+  return apiRequest("/api/calls/options");
+}
+
+export async function listCallLogsRequest({ direction, status } = {}) {
+  const query = createQueryString({ direction, status });
+  return apiRequest(`/api/calls${query}`);
+}
+
+export async function createCallLogRequest(payload) {
+  return apiRequest("/api/calls", { method: "POST", body: payload });
+}
+
+export async function deleteCallLogRequest(callId) {
+  return apiRequest(`/api/calls/${callId}`, { method: "DELETE" });
+}
+
 export async function listCustomersRequest({ search, lifecycleStage, tag, assignedUserId, segmentId, limit, offset } = {}) {
   const query = createQueryString({
     search,
@@ -300,6 +317,27 @@ export async function updateTaskRequest(taskId, updates) {
 
 export async function deleteTaskRequest(taskId) {
   return apiRequest(`/api/tasks/${taskId}`, { method: "DELETE" });
+}
+
+export async function catalogueOptionsRequest() {
+  return apiRequest("/api/catalogue/options");
+}
+
+export async function listProductsRequest({ search, category, status } = {}) {
+  const query = createQueryString({ search, category, status });
+  return apiRequest(`/api/catalogue${query}`);
+}
+
+export async function createProductRequest(payload) {
+  return apiRequest("/api/catalogue", { method: "POST", body: payload });
+}
+
+export async function updateProductRequest(productId, updates) {
+  return apiRequest(`/api/catalogue/${productId}`, { method: "PUT", body: updates });
+}
+
+export async function deleteProductRequest(productId) {
+  return apiRequest(`/api/catalogue/${productId}`, { method: "DELETE" });
 }
 
 export async function getAnalyticsSummaryRequest() {

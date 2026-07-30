@@ -35,6 +35,7 @@ const pageTitles = {
   "/comments": "Comments",
   "/customers": "Customers",
   "/broadcast": "Broadcast",
+  "/calls": "Calls",
   "/catalogue": "Master Catalogue",
   "/ai-teaching": "AI Teaching",
   "/tasks": "Tasks",
