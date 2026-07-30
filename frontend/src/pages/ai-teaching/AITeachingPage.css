@@ -1,0 +1,70 @@
+.ai-teaching-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tz-space-3);
+  margin-bottom: 4px;
+}
+
+.ai-teaching-section-hint {
+  margin: 0 0 var(--tz-space-4);
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.ai-teaching-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-teaching-content-preview {
+  margin: 3px 0 0;
+  max-width: 420px;
+  overflow: hidden;
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-teaching-empty-hint {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.ai-teaching-tag-chip button {
+  display: none;
+}
+
+.ai-teaching-field {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 12px;
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-teaching-field input,
+.ai-teaching-field textarea {
+  padding: 0 11px;
+  min-height: 36px;
+  border: 1px solid var(--tz-border);
+  border-radius: 10px;
+  outline: none;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ai-teaching-field textarea {
+  min-height: auto;
+  padding: 8px 11px;
+  resize: vertical;
+}
+
+.ai-teaching-knowledge-dialog {
+  width: min(100%, 560px);
+}

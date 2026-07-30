@@ -12,6 +12,7 @@ import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import ModulePage from "./pages/modules/ModulePage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
+import AITeachingPage from "./pages/ai-teaching/AITeachingPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import TasksPage from "./pages/tasks/TasksPage";
 import BroadcastPage from "./pages/broadcast/BroadcastPage";
@@ -38,7 +39,7 @@ export default function App() {
         <Route path="/broadcast" element={<BroadcastPage />} />
         <Route path="/broadcast/:broadcastId" element={<BroadcastDetailPage />} />
         <Route path="/catalogue" element={<ModulePage title="Master Catalogue" description="One product catalogue synchronized with WhatsApp, websites, accounting systems and future sales channels." />} />
-        <Route path="/ai-teaching" element={<ModulePage title="AI Teaching" description="Instructions, tone, examples and testing tools used to teach the company AI assistant." />} />
+        <Route path="/ai-teaching" element={<AITeachingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
         <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
