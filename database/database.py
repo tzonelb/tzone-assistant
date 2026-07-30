@@ -897,6 +897,7 @@ class Database:
             ("modules.catalogue", "Use Catalogue Module"),
             ("modules.team_chat", "Use Team Chat Module"),
             ("modules.comments", "Use Comments Module"),
+            ("modules.ai_teaching_chat", "Use AI Teaching Chat Module"),
         ]
 
         cursor.executemany("""

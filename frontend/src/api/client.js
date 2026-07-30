@@ -192,6 +192,14 @@ export async function listInstructionsRequest() {
   return apiRequest("/api/instructions");
 }
 
+export async function listAiTeachingChatRequest() {
+  return apiRequest("/api/ai-teaching-chat");
+}
+
+export async function sendAiTeachingChatRequest(text) {
+  return apiRequest("/api/ai-teaching-chat", { method: "POST", body: { text } });
+}
+
 export async function createInstructionRequest(text, tags) {
   return apiRequest("/api/instructions", { method: "POST", body: { text, tags: tags || [] } });
 }

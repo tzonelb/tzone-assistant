@@ -68,3 +68,56 @@
 .ai-teaching-knowledge-dialog {
   width: min(100%, 560px);
 }
+
+.ai-teaching-chat-log {
+  display: grid;
+  gap: 8px;
+  max-height: 320px;
+  margin-bottom: 12px;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.ai-teaching-chat-bubble {
+  display: grid;
+  gap: 3px;
+  width: fit-content;
+  max-width: 70%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.ai-teaching-chat-bubble.is-manager {
+  justify-self: end;
+  color: #fff;
+  background: var(--tz-primary);
+}
+
+.ai-teaching-chat-bubble.is-assistant {
+  justify-self: start;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface-secondary);
+}
+
+.ai-teaching-chat-bubble em {
+  color: var(--tz-success);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.ai-teaching-chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-teaching-chat-form input {
+  flex: 1;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--tz-border);
+  border-radius: 10px;
+  outline: none;
+  font-size: 13px;
+}

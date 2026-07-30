@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
+    ai_teaching_chat,
     analytics,
     auth,
     broadcasts,
@@ -35,6 +36,7 @@ from backend.services.auth_service import (
     auth_service,
 )
 from backend.services.broadcast_service import broadcast_service
+from backend.services.ai_teaching_chat_service import ai_teaching_chat_service
 from backend.services.conversation_control_service import (
     conversation_control_service,
 )
@@ -149,6 +151,7 @@ async def lifespan(app: FastAPI):
     company_settings_service.ensure_schema()
     customer_service.ensure_schema()
     broadcast_service.ensure_schema()
+    ai_teaching_chat_service.ensure_schema()
     diagnostics_service.ensure_schema()
     notification_service.ensure_schema()
     security_verification_service.ensure_schema()
@@ -238,6 +241,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(tickets.router)
 app.include_router(knowledge_entries.router)
+app.include_router(ai_teaching_chat.router)
 app.include_router(departments.router)
 app.include_router(instructions.router)
 app.include_router(test_whatsapp.router)

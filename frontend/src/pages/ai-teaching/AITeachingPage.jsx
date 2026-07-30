@@ -5,9 +5,11 @@ import {
   createKnowledgeEntryRequest,
   deleteInstructionRequest,
   deleteKnowledgeEntryRequest,
+  listAiTeachingChatRequest,
   listDepartmentsRequest,
   listInstructionsRequest,
   listKnowledgeEntriesRequest,
+  sendAiTeachingChatRequest,
   updateInstructionRequest,
   updateKnowledgeEntryRequest,
 } from "../../api/client";
@@ -124,6 +126,79 @@ function KnowledgeDialog({ open, initial, departments, saving, error, onCancel, 
         </footer>
       </form>
     </div>
+  );
+}
+
+function TeachingChat() {
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const [forbidden, setForbidden] = useState(false);
+
+  useEffect(() => {
+    listAiTeachingChatRequest()
+      .then((result) => setMessages(Array.isArray(result?.messages) ? result.messages : []))
+      .catch((requestError) => {
+        if (requestError.status === 403) setForbidden(true);
+        else setError(requestError.message || "Could not load the teaching chat.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setSending(true);
+    setError("");
+    try {
+      const result = await sendAiTeachingChatRequest(text);
+      setMessages((current) => [...current, result.manager_message, result.assistant_message]);
+      setDraft("");
+    } catch (requestError) {
+      if (requestError.status === 403) setForbidden(true);
+      else setError(requestError.message || "Message could not be sent.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (forbidden) {
+    return (
+      <AppCard padding="medium">
+        <h3 className="client-file-section-title">Chat with AI to Learn</h3>
+        <p className="ai-teaching-section-hint">You don't have permission to use this yet — ask an owner/admin to grant "Use AI Teaching Chat Module" from Roles &amp; Permissions.</p>
+      </AppCard>
+    );
+  }
+
+  return (
+    <AppCard padding="medium">
+      <h3 className="client-file-section-title">Chat with AI to Learn</h3>
+      <p className="ai-teaching-section-hint">Talk to the AI directly — when you give it an instruction, it confirms and remembers it (saved into Instructions above automatically). Manager/admin only.</p>
+      {loading ? (
+        <LoadingState title="Loading chat..." />
+      ) : (
+        <>
+          <div className="ai-teaching-chat-log">
+            {messages.length === 0 ? <p className="ai-teaching-empty-hint">No messages yet — try "Always greet customers in Arabic first."</p> : null}
+            {messages.map((message) => (
+              <div className={`ai-teaching-chat-bubble ${message.role === "manager" ? "is-manager" : "is-assistant"}`} key={message.id}>
+                <span>{message.text}</span>
+                {message.instruction_saved ? <em>Saved as a new instruction</em> : null}
+              </div>
+            ))}
+          </div>
+          {error ? <p className="customer-segment-error">{error}</p> : null}
+          <form className="ai-teaching-chat-form" onSubmit={submit}>
+            <input value={draft} disabled={sending} placeholder="Teach the AI something..." onChange={(event) => setDraft(event.target.value)} />
+            <AppButton type="submit" variant="primary" loading={sending} disabled={!draft.trim()}>Send</AppButton>
+          </form>
+        </>
+      )}
+    </AppCard>
   );
 }
 
@@ -290,6 +365,8 @@ export default function AITeachingPage() {
         <p className="ai-teaching-section-hint">Question/answer pairs the AI draws on to answer customers accurately — pricing, policies, product details.</p>
         <AppTable columns={knowledgeColumns} rows={knowledge} emptyTitle="No knowledge entries yet" emptyDescription="Add what the AI needs to know to answer customers correctly." />
       </AppCard>
+
+      <TeachingChat />
 
       <InstructionDialog
         open={Boolean(instructionDialog)}
