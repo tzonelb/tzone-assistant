@@ -58,6 +58,7 @@ export default function CustomersPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [lifecycleStages, setLifecycleStages] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [segments, setSegments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -102,7 +103,10 @@ export default function CustomersPage() {
 
   useEffect(() => {
     customerOptionsRequest()
-      .then((result) => setLifecycleStages(Array.isArray(result?.lifecycle_stages) ? result.lifecycle_stages : []))
+      .then((result) => {
+        setLifecycleStages(Array.isArray(result?.lifecycle_stages) ? result.lifecycle_stages : []);
+        setEmployees(Array.isArray(result?.employees) ? result.employees : []);
+      })
       .catch(() => {});
   }, []);
 
@@ -180,6 +184,18 @@ export default function CustomersPage() {
     }
   }
 
+  async function changeAssignee(row, value) {
+    setSavingRowId(row.id);
+    try {
+      await updateCustomerRequest(row.id, { assigned_user_id: value ? Number(value) : null });
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Could not update the assigned employee.");
+    } finally {
+      setSavingRowId(null);
+    }
+  }
+
   const activeFilters = Boolean(search || stageFilter || tagFilter);
 
   async function saveSegment(event) {
@@ -227,9 +243,39 @@ export default function CustomersPage() {
           <div className="customer-avatar">{(row.display_name || row.internal_name || "?").charAt(0).toUpperCase()}</div>
           <div>
             <strong>{row.display_name || row.internal_name || "Unnamed contact"}</strong>
-            <span>{row.phone || row.email || `${row.identity_count || 0} channel identities`}</span>
+            <span>{row.phone || row.email || "No phone or email on file"}</span>
           </div>
         </div>
+      ),
+    },
+    {
+      key: "channels",
+      label: "Channels",
+      render: (value) => (
+        <div className="customer-channel-list">
+          {(value || []).length
+            ? value.map((channel) => (
+              <span className="customer-channel-chip" style={{ "--channel-color": `var(--tz-channel-${channel}, var(--tz-text-muted))` }} key={channel}>
+                {humanize(channel)}
+              </span>
+            ))
+            : <span className="customer-channel-empty">—</span>}
+        </div>
+      ),
+    },
+    {
+      key: "assigned_user_id",
+      label: "Assigned to",
+      render: (value, row) => (
+        <select
+          className="tz-select customer-stage-select"
+          value={value || ""}
+          disabled={savingRowId === row.id}
+          onChange={(event) => changeAssignee(row, event.target.value)}
+        >
+          <option value="">Unassigned</option>
+          {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
+        </select>
       ),
     },
     {
@@ -274,7 +320,6 @@ export default function CustomersPage() {
     <section className="customers-page">
       <PageHeader
         eyebrow="CRM"
-        title="Contacts"
         description="Every customer identity across Messenger, WhatsApp, Instagram, Telegram and website — with lifecycle stage, tags and saved segments."
         actions={
           <AppButton

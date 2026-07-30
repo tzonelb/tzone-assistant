@@ -12,6 +12,7 @@ class CustomerUpdateRequest(BaseModel):
     notes: str | None = None
     lifecycle_stage: str | None = Field(default=None, max_length=40)
     tags: list[str] | None = None
+    assigned_user_id: int | None = None
 
 
 class SegmentFilters(BaseModel):

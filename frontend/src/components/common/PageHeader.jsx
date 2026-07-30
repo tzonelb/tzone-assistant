@@ -1,6 +1,5 @@
 export default function PageHeader({
   eyebrow,
-  title,
   description,
   actions = null,
 }) {
@@ -12,8 +11,6 @@ export default function PageHeader({
             {eyebrow}
           </span>
         ) : null}
-
-        <h2>{title}</h2>
 
         {description ? (
           <p>{description}</p>

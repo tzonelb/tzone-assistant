@@ -96,6 +96,27 @@
   font-size: 13px;
 }
 
+.customer-channel-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.customer-channel-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--channel-color, var(--tz-border));
+  border-radius: var(--tz-radius-round);
+  color: var(--channel-color, var(--tz-text-secondary));
+  background: color-mix(in srgb, var(--channel-color, var(--tz-text-muted)) 12%, transparent);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.customer-channel-empty {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
 .customer-tag-editor {
   display: grid;
   gap: 6px;

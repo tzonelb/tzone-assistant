@@ -193,6 +193,68 @@ def test_segments_are_isolated_per_company(client_and_db):
     assert all(item["name"] != "Other Co Segment" for item in resp.json()["items"])
 
 
+def test_options_endpoint_returns_active_company_employees(client_and_db):
+    client = client_and_db
+    resp = client.get("/api/customers/options")
+    assert resp.status_code == 200
+    employees = resp.json()["employees"]
+    assert any(item["id"] == 1 for item in employees)
+
+
+def test_assign_and_unassign_customer_to_employee(client_and_db):
+    client = client_and_db
+    contact = _make_contact(client)
+
+    assign_resp = client.put(f"/api/customers/{contact['id']}", json={"assigned_user_id": 1})
+    assert assign_resp.status_code == 200, assign_resp.text
+    assert assign_resp.json()["assigned_user_id"] == 1
+    assert assign_resp.json()["assigned_user_name"] == "Agent"
+
+    unassign_resp = client.put(f"/api/customers/{contact['id']}", json={"assigned_user_id": None})
+    assert unassign_resp.status_code == 200, unassign_resp.text
+    assert unassign_resp.json()["assigned_user_id"] is None
+
+
+def test_cannot_assign_to_a_user_outside_the_company(client_and_db):
+    from database.database import db
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (99, 'outsider@test.local', 'Outsider', 'active', 0)"
+        )
+        conn.commit()
+
+    client = client_and_db
+    contact = _make_contact(client)
+    resp = client.put(f"/api/customers/{contact['id']}", json={"assigned_user_id": 99})
+    assert resp.status_code == 400
+
+
+def test_list_and_get_expose_real_channels_not_just_a_count(client_and_db):
+    from backend.services.customer_service import customer_service
+
+    contact = _make_contact(client_and_db, channel="telegram", external_user_id="multi-1")
+    customer_service.upsert_from_channel(
+        company_id=COMPANY_ID, channel="whatsapp", external_user_id="multi-1-wa", display_name="Rami",
+    )
+    # Force the two identities onto the same customer record to simulate a merged contact.
+    from database.database import db
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE customer_identities SET customer_id = ? WHERE company_id = ? AND channel = 'whatsapp' AND external_user_id = 'multi-1-wa'",
+            (contact["id"], COMPANY_ID),
+        )
+        conn.commit()
+
+    client = client_and_db
+    get_resp = client.get(f"/api/customers/{contact['id']}")
+    assert sorted(get_resp.json()["channels"]) == ["telegram", "whatsapp"]
+
+    list_resp = client.get("/api/customers")
+    listed = next(item for item in list_resp.json()["items"] if item["id"] == contact["id"])
+    assert sorted(listed["channels"]) == ["telegram", "whatsapp"]
+
+
 def test_contacts_are_isolated_per_company(client_and_db):
     from database.database import db
     with db.connect() as conn:

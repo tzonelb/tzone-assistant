@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from backend.api.routes.conversations import _company_employees
 from backend.api.schemas.customers import CustomerUpdateRequest, SegmentCreateRequest
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.customer_service import LIFECYCLE_STAGES, customer_service
@@ -17,11 +18,16 @@ def current_context(current_user=Depends(get_current_user)):
 
 
 @router.get("/options")
-def customer_options():
-    """Static reference data for the Contacts UI — the fixed lifecycle
-    pipeline. Tags stay free-form (no options list) since they're
-    company-defined, same philosophy as Knowledge entry tags."""
-    return {"lifecycle_stages": LIFECYCLE_STAGES}
+def customer_options(context=Depends(current_context)):
+    """Reference data for the Contacts UI — the fixed lifecycle pipeline
+    plus the company's active employees (for the assignment dropdown).
+    Tags stay free-form (no options list) since they're company-defined,
+    same philosophy as Knowledge entry tags."""
+    _, company_id = context
+    return {
+        "lifecycle_stages": LIFECYCLE_STAGES,
+        "employees": _company_employees(company_id),
+    }
 
 
 @router.get("")

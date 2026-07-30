@@ -108,6 +108,8 @@ class CustomerService:
                 conn.execute(
                     f"ALTER TABLE customers ADD COLUMN lifecycle_stage TEXT NOT NULL DEFAULT '{DEFAULT_LIFECYCLE_STAGE}'"
                 )
+            if "assigned_user_id" not in customer_columns:
+                conn.execute("ALTER TABLE customers ADD COLUMN assigned_user_id INTEGER")
 
             conn.execute(
                 """
@@ -270,10 +272,20 @@ class CustomerService:
                 "SELECT COUNT(*) AS total FROM conversations WHERE customer_id = ? AND company_id = ?",
                 (customer_id, company_id),
             ).fetchone()["total"]
+            assigned_user = None
+            if row["assigned_user_id"] is not None:
+                assigned_user = conn.execute(
+                    "SELECT id, full_name, email FROM users WHERE id = ?",
+                    (row["assigned_user_id"],),
+                ).fetchone()
         result = dict(row)
         result["identities"] = [dict(item) for item in identities]
+        result["channels"] = sorted({item["channel"] for item in identities})
         result["conversation_count"] = int(conversation_count or 0)
         result["tags"] = self._parse_tags(result.pop("tags_json", "[]"))
+        result["assigned_user_name"] = (
+            (assigned_user["full_name"] or assigned_user["email"]) if assigned_user else None
+        )
         return result
 
     @staticmethod
@@ -346,7 +358,9 @@ class CustomerService:
                 f"""
                 SELECT c.*,
                        (SELECT COUNT(*) FROM customer_identities ci WHERE ci.customer_id = c.id) AS identity_count,
-                       (SELECT COUNT(*) FROM conversations cv WHERE cv.customer_id = c.id) AS conversation_count
+                       (SELECT GROUP_CONCAT(DISTINCT ci.channel) FROM customer_identities ci WHERE ci.customer_id = c.id) AS channels_concat,
+                       (SELECT COUNT(*) FROM conversations cv WHERE cv.customer_id = c.id) AS conversation_count,
+                       (SELECT COALESCE(u.full_name, u.email) FROM users u WHERE u.id = c.assigned_user_id) AS assigned_user_name
                 FROM customers c
                 WHERE {clause}
                 ORDER BY c.last_seen_at DESC, c.id DESC
@@ -358,6 +372,8 @@ class CustomerService:
         for row in rows:
             item = dict(row)
             item["tags"] = self._parse_tags(item.pop("tags_json", "[]"))
+            channels_concat = item.pop("channels_concat", None)
+            item["channels"] = sorted(channels_concat.split(",")) if channels_concat else []
             items.append(item)
         return {"items": items, "total": int(total or 0)}
 
@@ -386,10 +402,12 @@ class CustomerService:
         if "tags" in values and values["tags"] is not None:
             cleaned["tags_json"] = json.dumps(self._normalize_tags(values["tags"]))
 
-        if not cleaned:
+        assign_requested = "assigned_user_id" in values
+        assigned_user_id = values.get("assigned_user_id")
+
+        if not cleaned and not assign_requested:
             return self.get_customer(company_id=company_id, customer_id=customer_id)
         now = utc_now_iso()
-        assignments = ", ".join(f"{key} = ?" for key in cleaned)
         with db.connect() as conn:
             existing = conn.execute(
                 "SELECT id FROM customers WHERE id = ? AND company_id = ?",
@@ -397,6 +415,18 @@ class CustomerService:
             ).fetchone()
             if not existing:
                 raise KeyError("Customer not found")
+
+            if assign_requested and assigned_user_id is not None:
+                is_company_employee = conn.execute(
+                    "SELECT 1 FROM company_users WHERE company_id = ? AND user_id = ? AND status = 'active'",
+                    (company_id, assigned_user_id),
+                ).fetchone()
+                if not is_company_employee:
+                    raise ValueError("Assigned user must be an active employee of this company.")
+            if assign_requested:
+                cleaned["assigned_user_id"] = assigned_user_id
+
+            assignments = ", ".join(f"{key} = ?" for key in cleaned)
             conn.execute(
                 f"UPDATE customers SET {assignments}, updated_at = ? WHERE id = ? AND company_id = ?",
                 [*cleaned.values(), now, customer_id, company_id],

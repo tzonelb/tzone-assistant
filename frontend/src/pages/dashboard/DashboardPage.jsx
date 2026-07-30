@@ -116,8 +116,7 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-page">
       <PageHeader
-        eyebrow="COMPANY COMMAND CENTER"
-        title={summary?.company?.name || "Company Dashboard"}
+        eyebrow={summary?.company?.name || "COMPANY COMMAND CENTER"}
         description="Monitor conversations, customers, AI knowledge, connected channels and business activity."
         actions={
           <>
