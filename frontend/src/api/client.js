@@ -220,6 +220,38 @@ export async function deleteDepartmentRequest(name) {
   return apiRequest(`/api/departments/${encodeURIComponent(name)}`, { method: "DELETE" });
 }
 
+export async function customerOptionsRequest() {
+  return apiRequest("/api/customers/options");
+}
+
+export async function listCustomersRequest({ search, lifecycleStage, tag, segmentId, limit, offset } = {}) {
+  const query = createQueryString({
+    search,
+    lifecycle_stage: lifecycleStage,
+    tag,
+    segment_id: segmentId,
+    limit,
+    offset,
+  });
+  return apiRequest(`/api/customers${query}`);
+}
+
+export async function updateCustomerRequest(customerId, updates) {
+  return apiRequest(`/api/customers/${customerId}`, { method: "PUT", body: updates });
+}
+
+export async function listCustomerSegmentsRequest() {
+  return apiRequest("/api/customer-segments");
+}
+
+export async function createCustomerSegmentRequest(name, filters) {
+  return apiRequest("/api/customer-segments", { method: "POST", body: { name, filters: filters || {} } });
+}
+
+export async function deleteCustomerSegmentRequest(segmentId) {
+  return apiRequest(`/api/customer-segments/${segmentId}`, { method: "DELETE" });
+}
+
 export async function listKnowledgeEntriesRequest() {
   return apiRequest("/api/knowledge");
 }
