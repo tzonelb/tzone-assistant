@@ -9,6 +9,7 @@ from typing import Any
 from backend.services.company_settings_service import company_settings_service
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.diagnostics_service import diagnostics_service
+from backend.services.message_status_service import message_status_service
 from channels.meta.logger import log_meta_event
 from channels.meta.sender import send_meta_buttons
 from channels.telegram.sender import send_telegram_buttons
@@ -52,6 +53,34 @@ def cancel_all_pending() -> None:
             if pending.timer is not None:
                 pending.timer.cancel()
         _PENDING.clear()
+
+
+def _record_sent_status(*, channel: str, send_result: dict, company_id: int, recipient_id: str) -> str | None:
+    """Extracts the provider's message id from whatever shape that
+    channel's sender returns, and records a 'sent' status for the
+    ticks feature. Best-effort — a missing/unexpected shape just means
+    no ticks show for that message, never an error. Returns the id so
+    the caller can also save it into the message's own metadata."""
+    try:
+        response = send_result.get("response") if isinstance(send_result, dict) else None
+        if not isinstance(response, dict):
+            return None
+        if channel == "whatsapp":
+            messages = response.get("messages") or []
+            provider_message_id = messages[0].get("id") if messages else None
+        elif channel == "telegram":
+            provider_message_id = response.get("result", {}).get("message_id")
+        else:
+            provider_message_id = response.get("message_id")
+        if provider_message_id:
+            message_status_service.record_sent(
+                channel=channel, provider_message_id=str(provider_message_id),
+                company_id=company_id, recipient_id=recipient_id,
+            )
+            return str(provider_message_id)
+    except Exception:
+        pass
+    return None
 
 
 def _key(company_id: int, channel: str, user_id: str) -> str:
@@ -166,6 +195,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
             channel=channel,
             user_id=user_id,
             message=combined_message,
+            company_id=company_id,
         )
 
         # A human may take over while the model is generating. Do not send an AI
@@ -210,6 +240,8 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
             )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
 
+        sent_provider_message_id = _record_sent_status(channel=channel, send_result=send_result, company_id=company_id, recipient_id=user_id)
+
         diagnostics_service.record(
             event_type="ai_reply_sent",
             company_id=company_id,
@@ -245,6 +277,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
                 "source": "meta_ai_smart_delay",
                 "batched_message_count": len(messages),
                 "smart_delay_seconds": configured_delay,
+                "provider_message_id": sent_provider_message_id,
             },
         )
 

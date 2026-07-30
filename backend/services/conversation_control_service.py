@@ -258,6 +258,14 @@ class ConversationControlService:
                         "INTEGER NOT NULL DEFAULT 0",
                     "tags_json":
                         "TEXT NOT NULL DEFAULT '[]'",
+                    "reminder_at":
+                        "TEXT",
+                    "reminder_note":
+                        "TEXT",
+                    "reminder_set_by_user_id":
+                        "INTEGER",
+                    "reminder_notified_at":
+                        "TEXT",
                 },
             )
 
@@ -697,6 +705,82 @@ class ConversationControlService:
             conn.commit()
 
         return expired_count
+
+    def set_reminder(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        reminder_at: str,
+        note: str | None,
+        actor_user_id: int | None,
+    ) -> dict[str, Any]:
+        """Set (or replace) a follow-up reminder on a conversation.
+        reminder_at is an ISO timestamp — when it's reached, a
+        notification is created (see check_due_reminders)."""
+        state = self.get_or_create(
+            company_id=company_id, channel=channel, external_user_id=external_user_id,
+        )
+        with db.connect() as conn:
+            conn.execute(
+                """
+                UPDATE conversations
+                SET reminder_at = ?, reminder_note = ?, reminder_set_by_user_id = ?,
+                    reminder_notified_at = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (reminder_at, note, actor_user_id, utc_now_iso(), state["id"]),
+            )
+            conn.commit()
+        return self.get_state(company_id=company_id, channel=channel, external_user_id=external_user_id)
+
+    def clear_reminder(
+        self, *, company_id: int, channel: str, external_user_id: str,
+    ) -> dict[str, Any]:
+        state = self.get_or_create(
+            company_id=company_id, channel=channel, external_user_id=external_user_id,
+        )
+        with db.connect() as conn:
+            conn.execute(
+                """
+                UPDATE conversations
+                SET reminder_at = NULL, reminder_note = NULL, reminder_notified_at = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (utc_now_iso(), state["id"]),
+            )
+            conn.commit()
+        return self.get_state(company_id=company_id, channel=channel, external_user_id=external_user_id)
+
+    def check_due_reminders(self) -> list[dict[str, Any]]:
+        """Called periodically by a background worker. Finds every
+        reminder whose time has passed and hasn't been notified yet,
+        creates a notification for it, and marks it notified so it
+        doesn't fire twice. Returns what fired, mostly for tests."""
+        now_iso = utc_now_iso()
+        with db.connect() as conn:
+            due = conn.execute(
+                """
+                SELECT id, company_id, channel, external_user_id, reminder_note,
+                       reminder_set_by_user_id, official_customer_name, customer_alias
+                FROM conversations
+                WHERE reminder_at IS NOT NULL
+                  AND reminder_at <= ?
+                  AND reminder_notified_at IS NULL
+                """,
+                (now_iso,),
+            ).fetchall()
+
+            fired = []
+            for row in due:
+                conn.execute(
+                    "UPDATE conversations SET reminder_notified_at = ? WHERE id = ?",
+                    (now_iso, row["id"]),
+                )
+                fired.append(dict(row))
+            conn.commit()
+        return fired
 
     def get_state(
         self,

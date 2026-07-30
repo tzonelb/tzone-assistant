@@ -16,7 +16,9 @@ from backend.api.routes import (
     dashboard,
     facebook_oauth,
     health,
-    knowledge,
+    knowledge_entries,
+    departments,
+    instructions,
     manual_messages,
     notifications,
     platform_admin,
@@ -40,6 +42,10 @@ from backend.services.platform_admin_service import platform_admin_service
 from backend.services.saved_reply_service import saved_reply_service
 from backend.services.security_verification_service import security_verification_service
 from backend.services.facebook_oauth_service import facebook_oauth_service
+from core.knowledge_manager import knowledge_manager
+from backend.services.department_service import department_service
+from core.instruction_service import instruction_service
+from backend.services.message_status_service import message_status_service
 from channels.meta import (
     webhook as meta_webhook,
 )
@@ -63,6 +69,33 @@ async def takeover_timeout_worker() -> None:
         await asyncio.sleep(10)
 
 
+async def reminder_worker() -> None:
+    while True:
+        try:
+            fired = conversation_control_service.check_due_reminders()
+            for reminder in fired:
+                display_name = (
+                    reminder.get("official_customer_name")
+                    or reminder.get("customer_alias")
+                    or f"{reminder['channel']} customer"
+                )
+                notification_service.create(
+                    company_id=reminder["company_id"],
+                    notification_type="conversation_reminder",
+                    title=f"Follow up with {display_name}",
+                    body=reminder.get("reminder_note") or "You set a reminder to follow up on this conversation.",
+                    channel=reminder["channel"],
+                    external_user_id=reminder["external_user_id"],
+                    conversation_id=reminder["id"],
+                    severity="info",
+                    data={"user_id": reminder.get("reminder_set_by_user_id")},
+                )
+        except Exception as exc:
+            print("REMINDER WORKER ERROR:", exc)
+
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.create_tables()
@@ -74,11 +107,18 @@ async def lifespan(app: FastAPI):
     notification_service.ensure_schema()
     security_verification_service.ensure_schema()
     facebook_oauth_service.ensure_schema()
+    knowledge_manager.ensure_schema()
+    department_service.ensure_schema()
+    instruction_service.ensure_schema()
+    message_status_service.ensure_schema()
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
 
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
+    )
+    reminder_task = asyncio.create_task(
+        reminder_worker()
     )
 
     try:
@@ -109,6 +149,10 @@ async def lifespan(app: FastAPI):
             asyncio.CancelledError
         ):
             await timeout_task
+
+        reminder_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await reminder_task
 
         from channels.telegram import manager as telegram_manager
         await telegram_manager.stop_all()
@@ -146,7 +190,9 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(tickets.router)
-app.include_router(knowledge.router)
+app.include_router(knowledge_entries.router)
+app.include_router(departments.router)
+app.include_router(instructions.router)
 app.include_router(test_whatsapp.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)

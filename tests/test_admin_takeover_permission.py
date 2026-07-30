@@ -43,6 +43,8 @@ def client_and_db():
     auth_service.create_tables()
     conversation_control_service.ensure_schema()
     company_settings_service.ensure_schema()
+    from backend.services.department_service import department_service
+    department_service.ensure_schema()
 
     with db.connect() as conn:
         conn.execute(

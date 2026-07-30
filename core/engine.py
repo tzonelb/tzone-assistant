@@ -11,6 +11,7 @@ from core.ai_router import ai_router
 from core.automation_policy import automation_policy
 from core.conversation_memory import conversation_memory
 from core.knowledge_manager import knowledge_manager
+from core.instruction_service import instruction_service
 from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
@@ -523,8 +524,12 @@ class Engine:
             )
         )
 
+        context_tags = [request.channel]
+        if current_department:
+            context_tags.append(current_department)
+
         knowledge_items = knowledge_manager.list_for_ai(
-            None
+            request.company_id, context_tags=context_tags
         )
 
         try:
@@ -578,6 +583,8 @@ class Engine:
             connector_results=connector_results,
             response_policy=channel_policy,
             match_result=match_result,
+            company_id=request.company_id,
+            instructions=instruction_service.list_texts_for_ai(request.company_id, context_tags=context_tags),
         )
 
         if not ai_result:

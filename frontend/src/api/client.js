@@ -188,6 +188,54 @@ export async function getMyModulesRequest() {
   return apiRequest("/api/platform/my-modules");
 }
 
+export async function listInstructionsRequest() {
+  return apiRequest("/api/instructions");
+}
+
+export async function createInstructionRequest(text, tags) {
+  return apiRequest("/api/instructions", { method: "POST", body: { text, tags: tags || [] } });
+}
+
+export async function updateInstructionRequest(id, text, tags) {
+  return apiRequest(`/api/instructions/${id}`, { method: "PATCH", body: { text, tags } });
+}
+
+export async function deleteInstructionRequest(id) {
+  return apiRequest(`/api/instructions/${id}`, { method: "DELETE" });
+}
+
+export async function reorderInstructionsRequest(orderedIds) {
+  return apiRequest("/api/instructions/reorder", { method: "POST", body: { ordered_ids: orderedIds } });
+}
+
+export async function listDepartmentsRequest() {
+  return apiRequest("/api/departments");
+}
+
+export async function createDepartmentRequest(name) {
+  return apiRequest("/api/departments", { method: "POST", body: { name } });
+}
+
+export async function deleteDepartmentRequest(name) {
+  return apiRequest(`/api/departments/${encodeURIComponent(name)}`, { method: "DELETE" });
+}
+
+export async function listKnowledgeEntriesRequest() {
+  return apiRequest("/api/knowledge");
+}
+
+export async function createKnowledgeEntryRequest(title, content, department, tags) {
+  return apiRequest("/api/knowledge", { method: "POST", body: { title, content, department, tags: tags || [] } });
+}
+
+export async function updateKnowledgeEntryRequest(id, title, content, department, tags) {
+  return apiRequest(`/api/knowledge/${id}`, { method: "PATCH", body: { title, content, department, tags } });
+}
+
+export async function deleteKnowledgeEntryRequest(id) {
+  return apiRequest(`/api/knowledge/${id}`, { method: "DELETE" });
+}
+
 export async function listSavedRepliesRequest() {
   return apiRequest("/api/saved-replies");
 }
@@ -202,6 +250,17 @@ export async function updateSavedReplyRequest(id, title, body) {
 
 export async function deleteSavedReplyRequest(id) {
   return apiRequest(`/api/saved-replies/${id}`, { method: "DELETE" });
+}
+
+export async function setConversationReminderRequest(channel, userId, reminderAt, note) {
+  return apiRequest(`/conversations/${channel}/${userId}/reminder`, {
+    method: "POST",
+    body: { reminder_at: reminderAt, note: note || null },
+  });
+}
+
+export async function clearConversationReminderRequest(channel, userId) {
+  return apiRequest(`/conversations/${channel}/${userId}/reminder`, { method: "DELETE" });
 }
 
 export async function getMySubscriptionRequest() {

@@ -37,6 +37,8 @@ class AIRouter:
         connector_results: list[dict] | None = None,
         response_policy: dict | None = None,
         match_result: dict[str, Any] | None = None,
+        company_id: int | None = None,
+        instructions: list[str] | None = None,
     ) -> dict[str, Any] | None:
         if not config.AI_ENABLED:
             return None
@@ -49,6 +51,7 @@ class AIRouter:
             return None
 
         knowledge = knowledge or []
+        instructions = instructions or []
         connector_results = connector_results or []
         context = context or {}
         response_policy = response_policy or {}
@@ -66,6 +69,8 @@ class AIRouter:
                 connector_results=connector_results,
                 response_policy=response_policy,
                 match_result=match_result,
+                company_id=company_id,
+                instructions=instructions,
             )
 
             result = self.normalize_result(raw_result)
@@ -93,8 +98,17 @@ class AIRouter:
         connector_results: list[dict],
         response_policy: dict,
         match_result: dict[str, Any],
+        company_id: int | None = None,
+        instructions: list[str] | None = None,
     ) -> dict[str, Any]:
         company_prompt = prompt_builder.build_system_prompt(channel)
+        instructions = instructions or []
+        instructions_block = (
+            "\n\nCOMPANY-SPECIFIC INSTRUCTIONS (this company's own rules — follow these strictly, "
+            "they override generic behavior when they conflict):\n"
+            + "\n".join(f"- {text}" for text in instructions)
+            if instructions else ""
+        )
 
         grounded_prompt = """
 You are the customer-facing AI assistant for a business platform.
@@ -140,6 +154,7 @@ The JSON must contain:
   "notes": "..."
 }
 """.strip()
+        grounded_prompt = grounded_prompt + instructions_block
 
         user_payload = {
             "customer_message": message,

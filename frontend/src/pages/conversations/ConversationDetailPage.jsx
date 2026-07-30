@@ -32,6 +32,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   addConversationNoteRequest,
+  clearConversationReminderRequest,
   downloadConversationExport,
   getConversationControlRequest,
   getConversationMessagesRequest,
@@ -39,6 +40,7 @@ import {
   releaseConversationRequest,
   returnConversationToAiRequest,
   sendConversationReplyRequest,
+  setConversationReminderRequest,
   takeOverConversationRequest,
   updateConversationControlRequest,
 } from "../../api/client";
@@ -229,6 +231,8 @@ export default function ConversationDetailPage({
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [aliasDraft, setAliasDraft] = useState("");
+  const [reminderDraft, setReminderDraft] = useState("");
+  const [reminderNoteDraft, setReminderNoteDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
   const [editingTag, setEditingTag] = useState("");
   const [exportScope, setExportScope] = useState("full");
@@ -684,6 +688,39 @@ export default function ConversationDetailPage({
   }
 
 
+  async function saveReminder() {
+    if (!reminderDraft) return;
+    setSaving(true);
+    setActionError("");
+    setActionSuccess("");
+    try {
+      const isoValue = new Date(reminderDraft).toISOString();
+      const result = await setConversationReminderRequest(channel, userId, isoValue, reminderNoteDraft);
+      setControl(result);
+      setActionSuccess("Reminder set.");
+      setReminderDraft("");
+      setReminderNoteDraft("");
+    } catch (requestError) {
+      setActionError(requestError.message || "Reminder could not be set.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearReminder() {
+    setSaving(true);
+    setActionError("");
+    try {
+      const result = await clearConversationReminderRequest(channel, userId);
+      setControl(result);
+      setActionSuccess("Reminder cleared.");
+    } catch (requestError) {
+      setActionError(requestError.message || "Reminder could not be cleared.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveTag() {
     const value = tagDraft.trim();
 
@@ -983,6 +1020,7 @@ export default function ConversationDetailPage({
               const senderType = message?.metadata?.sender_type;
               const employeeName = message?.metadata?.employee_name;
               const deliveryStatus =
+                message?.delivery_status ||
                 message?.metadata?.delivery_status ||
                 message?.metadata?.status ||
                 (direction === "out" ? "sent" : "");
@@ -1006,14 +1044,21 @@ export default function ConversationDetailPage({
                     <div className="message-footer">
                       <time>{formatDateTime(item.createdAt)}</time>
                       {direction === "out" ? (
-                        <span className={`delivery-status ${deliveryStatus}`}>
-                          {deliveryStatus === "read"
-                            ? "✓✓ Read"
-                            : deliveryStatus === "delivered"
-                              ? "✓✓ Delivered"
-                              : deliveryStatus === "failed"
-                                ? "Failed"
-                                : "✓ Sent"}
+                        <span
+                          className={`delivery-status delivery-status-${deliveryStatus}`}
+                          title={
+                            deliveryStatus === "read" ? "Read"
+                              : deliveryStatus === "delivered" ? "Delivered"
+                                : deliveryStatus === "failed" ? "Failed to send"
+                                  : "Sent"
+                          }
+                          style={{
+                            marginLeft: 4,
+                            fontSize: 13,
+                            color: deliveryStatus === "read" ? "#4F63F0" : "#9296AC",
+                          }}
+                        >
+                          {deliveryStatus === "failed" ? "!" : deliveryStatus === "sent" ? "✓" : "✓✓"}
                         </span>
                       ) : null}
                     </div>
@@ -1324,6 +1369,43 @@ export default function ConversationDetailPage({
                     ) : null}
                   </div>
                 </div>
+
+                <label>
+                  <span>Follow-up reminder</span>
+                  <div className="inline-field-action">
+                    <input
+                      type="datetime-local"
+                      value={reminderDraft}
+                      disabled={saving}
+                      onChange={(event) => setReminderDraft(event.target.value)}
+                    />
+                    <AppButton
+                      variant="secondary"
+                      size="small"
+                      disabled={saving || !reminderDraft}
+                      onClick={saveReminder}
+                    >
+                      {control?.reminder_at ? "Update" : "Set"}
+                    </AppButton>
+                  </div>
+                  {control?.reminder_at ? (
+                    <small className="conversation-muted">
+                      Reminder set for {new Date(control.reminder_at).toLocaleString()}
+                      {" — "}
+                      <button type="button" className="tag-delete-button" disabled={saving} onClick={clearReminder}>
+                        Clear
+                      </button>
+                    </small>
+                  ) : null}
+                  <input
+                    type="text"
+                    placeholder="What to follow up about (optional)"
+                    value={reminderNoteDraft}
+                    disabled={saving}
+                    onChange={(event) => setReminderNoteDraft(event.target.value)}
+                    style={{ marginTop: 6 }}
+                  />
+                </label>
               </div>
               </CollapsiblePanel>
             ) : null}

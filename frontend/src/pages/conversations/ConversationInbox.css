@@ -261,7 +261,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
-  padding: 13px 12px 10px;
+  padding: 10px 12px 9px;
   border: 0;
   color: var(--tz-text-primary);
   background: transparent;
@@ -270,14 +270,15 @@
 }
 
 .unified-list-avatar {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--tz-primary);
   background: var(--tz-surface-secondary);
   font-weight: 900;
+  font-size: 14px;
 }
 
 .unified-list-content {
@@ -420,12 +421,12 @@
 }
 
 .conversation-detail-topbar {
-  min-height: 66px;
+  min-height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 10px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--tz-border);
 }
 
@@ -437,14 +438,15 @@
 }
 
 .conversation-detail-avatar {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--tz-primary);
   background: var(--tz-primary-soft);
   font-weight: 900;
+  font-size: 14px;
 }
 
 .conversation-person > div:last-child {
@@ -770,7 +772,7 @@
 }
 .conversation-composer-single-row {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) 38px 44px !important;
+  grid-template-columns: minmax(0, 1fr) 34px 34px !important;
   align-items: end !important;
   gap: 7px !important;
 }
@@ -797,8 +799,8 @@
   border-radius: 20px !important;
 }
 .composer-send-circle {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -809,7 +811,7 @@
   cursor: pointer;
 }
 .composer-send-circle:disabled { opacity: .45; cursor: not-allowed; }
-.composer-send-circle svg { font-size: 20px; }
+.composer-send-circle svg { font-size: 16px; }
 
 /* MASTER UI LOCK OVERRIDES */
 .unified-inbox-page { height: calc(100dvh - 72px); display:flex; flex-direction:column; min-height:0; overflow:hidden; padding:8px 12px 12px; }
@@ -846,14 +848,14 @@
 .conversation-slide-actions button { width:32px; height:32px; display:grid; place-items:center; border:0; border-radius:9px; color:var(--tz-text-secondary); background:var(--tz-surface-secondary); }
 .conversation-detail-grid { grid-template-columns:minmax(0,1fr) 292px; height:100%; overflow:hidden; }
 .conversation-detail-shell.details-collapsed .conversation-detail-grid { grid-template-columns:minmax(0,1fr); }
-.conversation-detail-topbar { min-height:58px; padding:7px 10px; }
+.conversation-detail-topbar { min-height:54px; padding:7px 10px; }
 .conversation-chat-column { display:flex; flex-direction:column; overflow:hidden; }
 .conversation-messages { flex:1 1 auto; min-height:0; }
 .conversation-composer { flex:0 0 auto; padding:8px 10px; }
-.conversation-composer-single-row { display:grid!important; grid-template-columns:minmax(0,1fr) 38px 44px!important; align-items:end; gap:6px; }
-.conversation-composer-single-row textarea { min-height:42px!important; max-height:110px!important; resize:none; padding:10px 12px!important; }
-.composer-tool-button { width:38px!important; height:38px!important; border-radius:50%!important; }
-.composer-send-circle { width:42px!important; height:42px!important; border-radius:50%!important; }
+.conversation-composer-single-row { display:grid!important; grid-template-columns:minmax(0,1fr) 34px 34px!important; align-items:end; gap:6px; }
+.conversation-composer-single-row textarea { min-height:34px!important; max-height:96px!important; resize:none; padding:8px 10px!important; }
+.composer-tool-button { width:34px!important; height:34px!important; border-radius:50%!important; }
+.composer-send-circle { width:34px!important; height:34px!important; border-radius:50%!important; }
 .customer-profile-card { padding:12px; }
 .customer-profile-head { display:flex; align-items:center; gap:10px; }
 .customer-profile-head>div:last-child { min-width:0; display:grid; }
@@ -867,7 +869,7 @@
 
 
 /* Locked conversation workspace fixes */
-.unified-inbox-page{height:calc(100dvh - var(--tz-topbar-height));min-height:0;padding:8px 14px 12px;overflow:hidden}.unified-inbox-shell{height:100%;min-height:0}.global-channel-tabs{flex:0 0 auto}.unified-inbox-grid{min-height:0}.detail-accordion-header{position:relative;z-index:1;pointer-events:auto}.detail-accordion-body{display:block;position:relative;z-index:2;pointer-events:auto}.conversation-slide-actions button.action-star.is-active{color:#b77900;background:#fff4cc;border-color:#f2c94c}.conversation-slide-actions button.action-done.is-active{color:#087f5b;background:#dff8ec;border-color:#20b486}.conversation-slide-actions button.action-archive.is-active{color:#0b6fce;background:#e5f2ff;border-color:#3aa0f3}.control-action-star.is-active{color:#9a6700!important;background:#fff3bf!important;border-color:#f2c94c!important}.control-action-done.is-active{color:#fff!important;background:#12966f!important;border-color:#12966f!important}.control-action-archive.is-active{color:#fff!important;background:#1689e8!important;border-color:#1689e8!important}.conversation-composer-approved{padding:10px 12px}.conversation-composer-single-row{grid-template-columns:minmax(0,1fr) 38px 44px}.conversation-composer-single-row textarea{width:100%;min-height:44px;max-height:100px}.composer-send-circle{width:44px;height:44px}.conversation-details-column{overflow-y:auto;overflow-x:hidden}.detail-card{overflow:visible}.detail-accordion-body{overflow:visible}.customer-profile-card{flex:0 0 auto}
+.unified-inbox-page{height:calc(100dvh - var(--tz-topbar-height));min-height:0;padding:8px 14px 12px;overflow:hidden}.unified-inbox-shell{height:100%;min-height:0}.global-channel-tabs{flex:0 0 auto}.unified-inbox-grid{min-height:0}.detail-accordion-header{position:relative;z-index:1;pointer-events:auto}.detail-accordion-body{display:block;position:relative;z-index:2;pointer-events:auto}.conversation-slide-actions button.action-star.is-active{color:#b77900;background:#fff4cc;border-color:#f2c94c}.conversation-slide-actions button.action-done.is-active{color:#087f5b;background:#dff8ec;border-color:#20b486}.conversation-slide-actions button.action-archive.is-active{color:#0b6fce;background:#e5f2ff;border-color:#3aa0f3}.control-action-star.is-active{color:#9a6700!important;background:#fff3bf!important;border-color:#f2c94c!important}.control-action-done.is-active{color:#fff!important;background:#12966f!important;border-color:#12966f!important}.control-action-archive.is-active{color:#fff!important;background:#1689e8!important;border-color:#1689e8!important}.conversation-composer-approved{padding:8px 10px}.conversation-composer-single-row{grid-template-columns:minmax(0,1fr) 34px 34px}.conversation-composer-single-row textarea{width:100%;min-height:38px;max-height:90px}.composer-send-circle{width:34px;height:34px}.conversation-details-column{overflow-y:auto;overflow-x:hidden}.detail-card{overflow:visible}.detail-accordion-body{overflow:visible}.customer-profile-card{flex:0 0 auto}
 
 /* FINAL SMALL UI FIX — keeps the locked layout unchanged */
 .conversation-detail-topbar {

@@ -1,62 +1,69 @@
 :root {
-  /* Brand */
-  --tz-primary: #39aef2;
-  --tz-primary-dark: #178bd6;
-  --tz-primary-soft: #eaf7ff;
+  /* Brand — modern indigo-blue, less saturated/flat than the old palette */
+  --tz-primary: #4F63F0;
+  --tz-primary-dark: #3B4ED6;
+  --tz-primary-soft: #EEF1FE;
 
-  --tz-brand-blue: #2f9fe7;
-  --tz-brand-blue-dark: #197fc5;
-  --tz-brand-blue-deep: #0e6eb3;
-  --tz-brand-green: #49bf5c;
+  --tz-brand-blue: #4F63F0;
+  --tz-brand-blue-dark: #3B4ED6;
+  --tz-brand-blue-deep: #2E3EB8;
+  --tz-brand-green: #22C07D;
 
-  --tz-secondary: #16b892;
-  --tz-secondary-dark: #0d8c70;
-  --tz-secondary-soft: #e7faf4;
+  --tz-secondary: #22C07D;
+  --tz-secondary-dark: #17A369;
+  --tz-secondary-soft: #E7FAF1;
 
   /* Status */
-  --tz-success: #14966f;
-  --tz-success-soft: #e6f8f1;
+  --tz-success: #17A369;
+  --tz-success-soft: #E7FAF1;
 
-  --tz-warning: #d99016;
-  --tz-warning-soft: #fff6e4;
+  --tz-warning: #DB9B1E;
+  --tz-warning-soft: #FFF7E6;
 
-  --tz-danger: #c83f4d;
-  --tz-danger-soft: #fff0f2;
+  --tz-danger: #E0475A;
+  --tz-danger-soft: #FEEEF0;
 
-  --tz-info: #1878c8;
-  --tz-info-soft: #eaf5ff;
+  --tz-info: #4F63F0;
+  --tz-info-soft: #EEF1FE;
 
-  /* Backgrounds */
-  --tz-background: #f4f7fb;
-  --tz-surface: #ffffff;
-  --tz-surface-secondary: #f8fafc;
-  --tz-sidebar: #2f9fe7;
-  --tz-sidebar-hover: rgb(255 255 255 / 12%);
+  /* Channel accent colors — used for tags, avatar rings, badges */
+  --tz-channel-messenger: #4F63F0;
+  --tz-channel-whatsapp: #22C07D;
+  --tz-channel-telegram: #2FA8E8;
+  --tz-channel-instagram: #E1306C;
+  --tz-channel-website: #6B7280;
+
+  /* Backgrounds — soft lavender-tinted neutrals, not stark gray */
+  --tz-background: #F7F7FC;
+  --tz-surface: #FFFFFF;
+  --tz-surface-secondary: #FAFAFE;
+  --tz-sidebar: #FFFFFF;
+  --tz-sidebar-hover: #F1F0FE;
 
   /* Text */
-  --tz-text-primary: #182238;
-  --tz-text-secondary: #68758a;
-  --tz-text-muted: #8995a7;
+  --tz-text-primary: #16182B;
+  --tz-text-secondary: #666B85;
+  --tz-text-muted: #9296AC;
   --tz-text-on-dark: #ffffff;
 
   /* Borders */
-  --tz-border: #e3e8ef;
-  --tz-border-strong: #d6dee8;
+  --tz-border: #ECEBF7;
+  --tz-border-strong: #DDDCF0;
 
-  /* Radius */
-  --tz-radius-xs: 7px;
-  --tz-radius-sm: 10px;
-  --tz-radius-md: 14px;
-  --tz-radius-lg: 18px;
-  --tz-radius-xl: 22px;
-  --tz-radius-2xl: 28px;
+  /* Radius — slightly softer/rounder for a more contemporary feel */
+  --tz-radius-xs: 8px;
+  --tz-radius-sm: 12px;
+  --tz-radius-md: 16px;
+  --tz-radius-lg: 20px;
+  --tz-radius-xl: 24px;
+  --tz-radius-2xl: 30px;
   --tz-radius-round: 999px;
 
-  /* Shadows */
-  --tz-shadow-xs: 0 2px 8px rgb(23 38 61 / 6%);
-  --tz-shadow-sm: 0 8px 22px rgb(23 38 61 / 8%);
-  --tz-shadow-md: 0 16px 38px rgb(23 38 61 / 11%);
-  --tz-shadow-lg: 0 30px 70px rgb(23 38 61 / 15%);
+  /* Shadows — softer, more diffuse */
+  --tz-shadow-xs: 0 2px 6px rgb(28 26 66 / 5%);
+  --tz-shadow-sm: 0 6px 18px rgb(28 26 66 / 7%);
+  --tz-shadow-md: 0 14px 32px rgb(28 26 66 / 9%);
+  --tz-shadow-lg: 0 26px 60px rgb(28 26 66 / 13%);
 
   /* Spacing */
   --tz-space-1: 4px;

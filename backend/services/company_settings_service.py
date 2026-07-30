@@ -15,6 +15,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "workspace_code": "tzone",
         "timezone": "Asia/Beirut",
         "default_language": "ar",
+        "logo_url": "",
         "business_hours": {
             "sunday": {"open": True, "from": "09:00", "to": "18:00"},
             "monday": {"open": True, "from": "09:00", "to": "18:00"},

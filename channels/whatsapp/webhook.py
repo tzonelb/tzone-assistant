@@ -37,6 +37,22 @@ async def receive_message(request: Request):
         metadata = value.get("metadata", {})
         incoming_phone_number_id = str(metadata.get("phone_number_id", ""))
 
+        # Status updates (sent/delivered/read) arrive in their own
+        # array, separate from actual messages — record them and move
+        # on; this never touches the message-receiving flow below.
+        statuses = value.get("statuses", [])
+        if statuses:
+            from backend.services.message_status_service import message_status_service
+            for status_event in statuses:
+                provider_message_id = status_event.get("id")
+                status_value = status_event.get("status")
+                if provider_message_id and status_value in ("sent", "delivered", "read"):
+                    message_status_service.update_status(
+                        channel="whatsapp", provider_message_id=provider_message_id, status=status_value,
+                    )
+            if not value.get("messages"):
+                return {"status": "ok", "reason": "status_update_only"}
+
         # Multi-tenant: does this phone_number_id belong to a company
         # that connected its own WhatsApp? If not, fall back to the
         # legacy single .env-configured number, and ignore anything

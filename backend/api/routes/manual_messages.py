@@ -16,6 +16,7 @@ from backend.services.conversation_control_service import (
     ConversationOwnershipConflict,
     conversation_control_service,
 )
+from backend.services.message_status_service import message_status_service
 from channels.meta.sender import send_meta_text
 from channels.telegram.sender import send_telegram_text
 from core.conversation_store import (
@@ -265,6 +266,7 @@ def send_manual_conversation_reply(
             text=message_text,
             channel=normalized_channel,
             company_id=company_id,
+            is_human_agent=True,
         )
 
     if not send_result.get("ok"):
@@ -299,6 +301,12 @@ def send_manual_conversation_reply(
             response_payload.get("message_id")
             if isinstance(response_payload, dict)
             else None
+        )
+
+    if provider_message_id:
+        message_status_service.record_sent(
+            channel=normalized_channel, provider_message_id=str(provider_message_id),
+            company_id=company_id, recipient_id=normalized_user_id,
         )
 
     saved_message = (

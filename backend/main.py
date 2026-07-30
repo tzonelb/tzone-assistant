@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from backend.api.routes import health, tickets, knowledge, test_whatsapp, conversations
+from backend.api.routes import health, tickets, knowledge_entries, test_whatsapp, conversations
 from channels.whatsapp import webhook as whatsapp_webhook
 from channels.meta import webhook as meta_webhook
 from channels.meta import debug as meta_debug
@@ -14,7 +14,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(tickets.router)
-app.include_router(knowledge.router)
+app.include_router(knowledge_entries.router)
 app.include_router(test_whatsapp.router)
 app.include_router(conversations.router)
 

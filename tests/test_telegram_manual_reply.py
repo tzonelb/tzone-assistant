@@ -44,6 +44,8 @@ def client_and_db(tmp_path):
     auth_service.create_tables()
     conversation_control_service.ensure_schema()
     company_settings_service.ensure_schema()
+    from backend.services.message_status_service import message_status_service
+    message_status_service.ensure_schema()
 
     with db.connect() as conn:
         conn.execute(
@@ -136,3 +138,24 @@ def test_telegram_channel_is_accepted_by_validation(client_and_db):
             json={"text": "hi"},
         )
     assert resp.status_code == 200, resp.text
+
+
+def test_reading_conversation_after_a_reply_does_not_500(client_and_db):
+    """Regression guard: GET /conversations/{channel}/{user_id} crashed
+    with NameError (message_status_service used but never imported)
+    the moment a conversation had an outbound message with a
+    provider_message_id in it — i.e. right after any real reply was
+    sent. py_compile did not catch this (it's a runtime-only
+    NameError), so this test exists specifically to exercise that
+    code path end-to-end."""
+    client = client_and_db
+    fake_response = MagicMock()
+    fake_response.json.return_value = {"ok": True, "result": {"message_id": 555}}
+    with patch("channels.telegram.sender.config.TELEGRAM_BOT_TOKEN", "fake-token-for-tests"), \
+         patch("channels.telegram.sender.requests.post", return_value=fake_response):
+        client.post(f"/conversations/{CHANNEL}/{CUSTOMER_ID}/reply", json={"text": "hello"})
+
+    resp = client.get(f"/conversations/{CHANNEL}/{CUSTOMER_ID}")
+    assert resp.status_code == 200, resp.text
+    messages = resp.json()["messages"]
+    assert any(m.get("delivery_status") for m in messages)

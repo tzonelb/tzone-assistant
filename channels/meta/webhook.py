@@ -48,9 +48,46 @@ async def receive_meta_webhook(request: Request):
 
     log_meta_event("webhook_received", payload)
 
+    _record_messenger_delivery_read_events(payload)
+
     result = process_meta_payload(payload)
 
     return {
         "status": "ok",
         "result": result
     }
+
+
+def _record_messenger_delivery_read_events(payload: dict) -> None:
+    """Messenger sends delivery/read confirmations as their own
+    'messaging' events (a 'delivery' or 'read' key instead of
+    'message') — separate from the actual message content, and not
+    something parse_meta_text_message handles. This only records
+    ticks status; it never touches the normal incoming-message flow."""
+    try:
+        from backend.services.message_status_service import message_status_service
+
+        for entry in payload.get("entry", []):
+            for event in entry.get("messaging", []):
+                delivery = event.get("delivery")
+                if delivery and delivery.get("mids"):
+                    for mid in delivery["mids"]:
+                        message_status_service.update_status(
+                            channel="messenger", provider_message_id=mid, status="delivered",
+                        )
+                read_event = event.get("read")
+                if read_event:
+                    # Messenger's "read" event only gives a watermark
+                    # (a timestamp), not specific message ids — every
+                    # message sent to this user before that watermark
+                    # counts as read. We approximate by marking the
+                    # most recent "delivered" messages for this
+                    # recipient as read via the watermark timestamp.
+                    recipient_id = (event.get("recipient") or {}).get("id")
+                    watermark = read_event.get("watermark")
+                    if recipient_id and watermark:
+                        message_status_service.mark_read_by_watermark(
+                            channel="messenger", recipient_id=recipient_id, watermark=watermark,
+                        )
+    except Exception:
+        pass

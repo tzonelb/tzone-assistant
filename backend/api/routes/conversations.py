@@ -36,6 +36,8 @@ from backend.services.conversation_control_service import (
     ConversationOwnershipConflict,
     conversation_control_service,
 )
+from backend.services.message_status_service import message_status_service
+from backend.services.department_service import department_service
 from core.conversation_store import (
     get_conversation,
 )
@@ -71,18 +73,6 @@ CONVERSATIONS_DIR = (
 )
 
 
-DEPARTMENTS = [
-    "Unassigned",
-    "Sales",
-    "IPTV",
-    "Support",
-    "Accounting",
-    "Maintenance",
-    "Telecom",
-    "Information",
-]
-
-
 class ConversationControlUpdate(
     BaseModel,
 ):
@@ -108,6 +98,11 @@ class ConversationNoteCreate(
 class ConversationTagCreate(BaseModel):
     name: str
     color: str | None = None
+
+
+class ReminderCreate(BaseModel):
+    reminder_at: str  # ISO timestamp
+    note: str | None = None
 
 
 class ConversationTagUpdate(BaseModel):
@@ -858,7 +853,7 @@ def list_conversations(
         "available_channels": available_channels,
         "current_user_id": current_user_id,
         "current_user_is_admin": current_user_is_admin,
-        "departments": DEPARTMENTS,
+        "departments": department_service.list_for_company(company_id=company_id),
         "employees": (
             _company_employees(
                 company_id
@@ -898,7 +893,7 @@ def conversation_options(
 
     return {
         "status": "ok",
-        "departments": DEPARTMENTS,
+        "departments": department_service.list_for_company(company_id=company_id),
         "employees": (
             _company_employees(
                 company_id
@@ -1020,6 +1015,17 @@ def read_conversation(
         actor_user_id=int(current_user["id"]),
     )
 
+    outbound_ids = [
+        str(m["metadata"]["provider_message_id"])
+        for m in messages
+        if m.get("direction") == "out" and m.get("metadata", {}).get("provider_message_id")
+    ]
+    statuses = message_status_service.get_statuses(channel=channel, provider_message_ids=outbound_ids)
+    for m in messages:
+        provider_id = m.get("metadata", {}).get("provider_message_id")
+        if provider_id and str(provider_id) in statuses:
+            m["delivery_status"] = statuses[str(provider_id)]
+
     return {
         "status": "ok",
         "channel": channel,
@@ -1081,7 +1087,7 @@ def read_control(
     )
 
     result["departments"] = (
-        DEPARTMENTS
+        department_service.list_for_company(company_id=company_id)
     )
     current_user_id = int(current_user["id"])
     is_admin = _is_conversation_admin(current_user, company_id)
@@ -1268,7 +1274,7 @@ def update_control(
         payload.department
         is not None
         and payload.department
-        not in DEPARTMENTS
+        not in department_service.list_for_company(company_id=company_id)
     ):
         raise HTTPException(
             status_code=422,
@@ -1767,3 +1773,37 @@ def export_conversation(
         rows,
         filename,
     )
+
+
+@router.post("/{channel}/{user_id}/reminder")
+def set_reminder(
+    channel: str,
+    user_id: str,
+    payload: ReminderCreate,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    state = conversation_control_service.set_reminder(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+        reminder_at=payload.reminder_at,
+        note=payload.note,
+        actor_user_id=current_user["id"],
+    )
+    return state
+
+
+@router.delete("/{channel}/{user_id}/reminder")
+def clear_reminder(
+    channel: str,
+    user_id: str,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    state = conversation_control_service.clear_reminder(
+        company_id=company_id, channel=channel, external_user_id=user_id,
+    )
+    return state
