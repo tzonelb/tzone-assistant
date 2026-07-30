@@ -117,6 +117,7 @@ function TimelineEvent({ event }) {
           <p>
             {event.topic ? `${event.topic} · ` : ""}
             {event.department || "Unassigned"} · {humanize(event.status)}
+            {event.handled_by_name ? ` · Handled by ${event.handled_by_name}` : ""}
           </p>
           <time>{formatDateTime(event.created_at)}</time>
         </div>

@@ -56,7 +56,7 @@
 
 .customer-filter-bar {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) repeat(2, minmax(130px, 170px)) auto;
+  grid-template-columns: minmax(130px, 1fr) repeat(3, minmax(115px, 155px)) auto;
   align-items: center;
   gap: var(--tz-space-3);
 }

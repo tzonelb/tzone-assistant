@@ -224,11 +224,12 @@ export async function customerOptionsRequest() {
   return apiRequest("/api/customers/options");
 }
 
-export async function listCustomersRequest({ search, lifecycleStage, tag, segmentId, limit, offset } = {}) {
+export async function listCustomersRequest({ search, lifecycleStage, tag, assignedUserId, segmentId, limit, offset } = {}) {
   const query = createQueryString({
     search,
     lifecycle_stage: lifecycleStage,
     tag,
+    assigned_user_id: assignedUserId,
     segment_id: segmentId,
     limit,
     offset,

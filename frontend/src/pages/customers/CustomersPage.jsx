@@ -69,6 +69,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
   const [segmentId, setSegmentId] = useState(null);
   const [page, setPage] = useState(1);
 
@@ -88,6 +89,7 @@ export default function CustomersPage() {
         search: search || undefined,
         lifecycleStage: stageFilter || undefined,
         tag: tagFilter || undefined,
+        assignedUserId: assigneeFilter || undefined,
         segmentId: segmentId || undefined,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
@@ -99,7 +101,7 @@ export default function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, stageFilter, tagFilter, segmentId, page]);
+  }, [search, stageFilter, tagFilter, assigneeFilter, segmentId, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -141,6 +143,11 @@ export default function CustomersPage() {
 
   function applyTagFilter(value) {
     setTagFilter(value);
+    setPage(1);
+  }
+
+  function applyAssigneeFilter(value) {
+    setAssigneeFilter(value);
     setPage(1);
   }
 
@@ -348,6 +355,10 @@ export default function CustomersPage() {
           <select className="tz-select" value={tagFilter} onChange={(event) => applyTagFilter(event.target.value)}>
             <option value="">All tags</option>
             {availableTags.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
+          </select>
+          <select className="tz-select" value={assigneeFilter} onChange={(event) => applyAssigneeFilter(event.target.value)}>
+            <option value="">All employees</option>
+            {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
           </select>
           <AppButton
             variant="secondary"

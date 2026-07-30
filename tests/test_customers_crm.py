@@ -119,6 +119,39 @@ def test_list_filters_by_lifecycle_stage(client_and_db):
     assert items[0]["id"] == a["id"]
 
 
+def test_list_filters_by_assigned_employee(client_and_db):
+    client = client_and_db
+    a = _make_contact(client, external_user_id="a", display_name="A")
+    _make_contact(client, external_user_id="b", display_name="B")
+    client.put(f"/api/customers/{a['id']}", json={"assigned_user_id": 1})
+
+    resp = client.get("/api/customers", params={"assigned_user_id": 1})
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == a["id"]
+
+
+def test_timeline_conversation_event_includes_handled_by_name(client_and_db):
+    from database.database import db
+
+    client = client_and_db
+    contact = _make_contact(client)
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO conversations (company_id, channel, external_user_id, customer_id, status, assigned_user_id, created_at) "
+            "VALUES (?, 'telegram', 'u1', ?, 'open', 1, datetime('now'))",
+            (COMPANY_ID, contact["id"]),
+        )
+        conn.commit()
+
+    resp = client.get(f"/api/customers/{contact['id']}/timeline")
+    assert resp.status_code == 200, resp.text
+    conversation_event = next(item for item in resp.json()["items"] if item["type"] == "conversation_started")
+    assert conversation_event["handled_by_name"] == "Agent"
+
+
 def test_list_filters_by_tag(client_and_db):
     client = client_and_db
     a = _make_contact(client, external_user_id="a", display_name="A")

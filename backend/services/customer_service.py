@@ -366,9 +366,11 @@ class CustomerService:
 
             conversation_rows = conn.execute(
                 """
-                SELECT channel, external_user_id, department, topic, status, created_at
-                FROM conversations
-                WHERE customer_id = ? AND company_id = ?
+                SELECT c.channel, c.external_user_id, c.department, c.topic, c.status, c.created_at,
+                       COALESCE(u.full_name, u.email) AS handled_by_name
+                FROM conversations c
+                LEFT JOIN users u ON u.id = c.assigned_user_id
+                WHERE c.customer_id = ? AND c.company_id = ?
                 """,
                 (customer_id, company_id),
             ).fetchall()
@@ -393,6 +395,7 @@ class CustomerService:
                 "department": row["department"],
                 "topic": row["topic"],
                 "status": row["status"],
+                "handled_by_name": row["handled_by_name"],
                 "created_at": row["created_at"],
             })
 
@@ -414,6 +417,7 @@ class CustomerService:
         search: str | None = None,
         lifecycle_stage: str | None = None,
         tag: str | None = None,
+        assigned_user_id: int | None = None,
         segment_id: int | None = None,
         limit: int = 100,
         offset: int = 0,
@@ -452,6 +456,10 @@ class CustomerService:
         if tag_value:
             where.append("c.tags_json LIKE ?")
             params.append(f'%"{str(tag_value).strip()}"%')
+
+        if assigned_user_id is not None:
+            where.append("c.assigned_user_id = ?")
+            params.append(assigned_user_id)
 
         channel_value = filters.get("channel")
         if channel_value:
