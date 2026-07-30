@@ -13,6 +13,7 @@ import ModulePage from "./pages/modules/ModulePage";
 import CataloguePage from "./pages/catalogue/CataloguePage";
 import CallsPage from "./pages/calls/CallsPage";
 import TeamChatPage from "./pages/team-chat/TeamChatPage";
+import AppointmentsPage from "./pages/appointments/AppointmentsPage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
 import AITeachingPage from "./pages/ai-teaching/AITeachingPage";
@@ -46,7 +47,7 @@ export default function App() {
         <Route path="/ai-teaching" element={<AITeachingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
-        <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
+        <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<TeamChatPage />} />
         <Route path="/roles" element={<RolesPermissionsPage />} />

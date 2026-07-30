@@ -266,6 +266,33 @@ export async function deleteTeamMessageRequest(messageId) {
   return apiRequest(`/api/team-chat/${messageId}`, { method: "DELETE" });
 }
 
+export async function appointmentOptionsRequest() {
+  return apiRequest("/api/appointments/options");
+}
+
+export async function listAppointmentsRequest({ status, employeeUserId, customerId, fromDate, toDate } = {}) {
+  const query = createQueryString({
+    status,
+    employee_user_id: employeeUserId,
+    customer_id: customerId,
+    from_date: fromDate,
+    to_date: toDate,
+  });
+  return apiRequest(`/api/appointments${query}`);
+}
+
+export async function createAppointmentRequest(payload) {
+  return apiRequest("/api/appointments", { method: "POST", body: payload });
+}
+
+export async function updateAppointmentRequest(appointmentId, updates) {
+  return apiRequest(`/api/appointments/${appointmentId}`, { method: "PUT", body: updates });
+}
+
+export async function deleteAppointmentRequest(appointmentId) {
+  return apiRequest(`/api/appointments/${appointmentId}`, { method: "DELETE" });
+}
+
 export async function listCustomersRequest({ search, lifecycleStage, tag, assignedUserId, segmentId, limit, offset } = {}) {
   const query = createQueryString({
     search,
