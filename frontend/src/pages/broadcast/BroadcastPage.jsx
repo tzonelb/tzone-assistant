@@ -79,7 +79,16 @@ const EMPTY_COMPOSE_FORM = {
   segmentId: "",
   lifecycleStage: "",
   tagInput: "",
+  numbersInput: "",
 };
+
+// Numbers can be pasted one per line or comma-separated (or a mix of both).
+function parseNumbersInput(rawText) {
+  return String(rawText || "")
+    .split(/[\n,]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
 
 export default function BroadcastPage() {
   const navigate = useNavigate();
@@ -96,6 +105,7 @@ export default function BroadcastPage() {
   const [segmentId, setSegmentId] = useState(EMPTY_COMPOSE_FORM.segmentId);
   const [lifecycleStage, setLifecycleStage] = useState(EMPTY_COMPOSE_FORM.lifecycleStage);
   const [tagInput, setTagInput] = useState(EMPTY_COMPOSE_FORM.tagInput);
+  const [numbersInput, setNumbersInput] = useState(EMPTY_COMPOSE_FORM.numbersInput);
   const [creating, setCreating] = useState(false);
   const [composeError, setComposeError] = useState("");
 
@@ -141,6 +151,7 @@ export default function BroadcastPage() {
     setSegmentId(EMPTY_COMPOSE_FORM.segmentId);
     setLifecycleStage(EMPTY_COMPOSE_FORM.lifecycleStage);
     setTagInput(EMPTY_COMPOSE_FORM.tagInput);
+    setNumbersInput(EMPTY_COMPOSE_FORM.numbersInput);
     setComposeError("");
   }
 
@@ -152,6 +163,15 @@ export default function BroadcastPage() {
   function closeCompose() {
     if (creating) return;
     setComposeOpen(false);
+  }
+
+  function selectTargetMode(mode) {
+    setTargetMode(mode);
+    // Number-list targeting only ever sends on WhatsApp — force the
+    // channel select so the two choices can never disagree.
+    if (mode === "numbers") {
+      setChannel("whatsapp");
+    }
   }
 
   async function handleCreate(event) {
@@ -177,16 +197,22 @@ export default function BroadcastPage() {
       setComposeError("Choose a lifecycle stage or enter a tag to filter by.");
       return;
     }
+    const parsedNumbers = parseNumbersInput(numbersInput);
+    if (targetMode === "numbers" && parsedNumbers.length === 0) {
+      setComposeError("Add at least one phone number.");
+      return;
+    }
 
     setCreating(true);
     try {
       const payload = {
         name: trimmedName,
         message_text: trimmedMessage,
-        channel,
+        channel: targetMode === "numbers" ? "whatsapp" : channel,
         segment_id: targetMode === "segment" ? segmentId : undefined,
         lifecycle_stage: targetMode === "filter" ? (lifecycleStage || undefined) : undefined,
         tag: targetMode === "filter" ? (tagInput.trim() || undefined) : undefined,
+        numbers: targetMode === "numbers" ? parsedNumbers : undefined,
       };
       const created = await createBroadcastRequest(payload);
       setComposeOpen(false);
@@ -391,11 +417,19 @@ export default function BroadcastPage() {
 
                 <label className="broadcast-field">
                   Channel
-                  <select className="tz-select" value={channel} onChange={(event) => setChannel(event.target.value)}>
+                  <select
+                    className="tz-select"
+                    value={targetMode === "numbers" ? "whatsapp" : channel}
+                    disabled={targetMode === "numbers"}
+                    onChange={(event) => setChannel(event.target.value)}
+                  >
                     {CHANNEL_OPTIONS.map((option) => (
                       <option value={option.value} key={option.value}>{option.label}</option>
                     ))}
                   </select>
+                  {targetMode === "numbers" ? (
+                    <span className="broadcast-field-note">Number-list targeting is WhatsApp-only.</span>
+                  ) : null}
                 </label>
 
                 <div className="broadcast-target-section">
@@ -404,20 +438,41 @@ export default function BroadcastPage() {
                     <button
                       type="button"
                       className={`broadcast-target-tab ${targetMode === "segment" ? "is-active" : ""}`}
-                      onClick={() => setTargetMode("segment")}
+                      onClick={() => selectTargetMode("segment")}
                     >
                       Segment
                     </button>
                     <button
                       type="button"
                       className={`broadcast-target-tab ${targetMode === "filter" ? "is-active" : ""}`}
-                      onClick={() => setTargetMode("filter")}
+                      onClick={() => selectTargetMode("filter")}
                     >
                       Filter
                     </button>
+                    <button
+                      type="button"
+                      className={`broadcast-target-tab ${targetMode === "numbers" ? "is-active" : ""}`}
+                      onClick={() => selectTargetMode("numbers")}
+                    >
+                      Phone numbers
+                    </button>
                   </div>
 
-                  {targetMode === "segment" ? (
+                  {targetMode === "numbers" ? (
+                    <label className="broadcast-field">
+                      Phone numbers
+                      <textarea
+                        className="broadcast-message-input broadcast-numbers-input"
+                        value={numbersInput}
+                        placeholder={"One per line, or comma-separated, e.g.\n+1 555 0100\n+1 555 0101, +1 555 0102"}
+                        rows={5}
+                        onChange={(event) => setNumbersInput(event.target.value)}
+                      />
+                      <span className="broadcast-numbers-count">
+                        {parseNumbersInput(numbersInput).length} number{parseNumbersInput(numbersInput).length === 1 ? "" : "s"}
+                      </span>
+                    </label>
+                  ) : targetMode === "segment" ? (
                     <label className="broadcast-field">
                       Segment
                       <select className="tz-select" value={segmentId} onChange={(event) => setSegmentId(event.target.value)}>

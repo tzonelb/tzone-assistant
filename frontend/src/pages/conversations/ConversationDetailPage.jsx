@@ -233,6 +233,8 @@ export default function ConversationDetailPage({
   const [aliasDraft, setAliasDraft] = useState("");
   const [reminderDraft, setReminderDraft] = useState("");
   const [reminderNoteDraft, setReminderNoteDraft] = useState("");
+  const [reminderAutoSendDraft, setReminderAutoSendDraft] = useState(false);
+  const [reminderMessageTextDraft, setReminderMessageTextDraft] = useState("");
   const [tagDraft, setTagDraft] = useState("");
   const [editingTag, setEditingTag] = useState("");
   const [exportScope, setExportScope] = useState("full");
@@ -690,16 +692,26 @@ export default function ConversationDetailPage({
 
   async function saveReminder() {
     if (!reminderDraft) return;
+    if (reminderAutoSendDraft && !reminderMessageTextDraft.trim()) return;
     setSaving(true);
     setActionError("");
     setActionSuccess("");
     try {
       const isoValue = new Date(reminderDraft).toISOString();
-      const result = await setConversationReminderRequest(channel, userId, isoValue, reminderNoteDraft);
+      const result = await setConversationReminderRequest(
+        channel,
+        userId,
+        isoValue,
+        reminderNoteDraft,
+        reminderAutoSendDraft,
+        reminderAutoSendDraft ? reminderMessageTextDraft.trim() : "",
+      );
       setControl(result);
       setActionSuccess("Reminder set.");
       setReminderDraft("");
       setReminderNoteDraft("");
+      setReminderAutoSendDraft(false);
+      setReminderMessageTextDraft("");
     } catch (requestError) {
       setActionError(requestError.message || "Reminder could not be set.");
     } finally {
@@ -1382,7 +1394,11 @@ export default function ConversationDetailPage({
                     <AppButton
                       variant="secondary"
                       size="small"
-                      disabled={saving || !reminderDraft}
+                      disabled={
+                        saving ||
+                        !reminderDraft ||
+                        (reminderAutoSendDraft && !reminderMessageTextDraft.trim())
+                      }
                       onClick={saveReminder}
                     >
                       {control?.reminder_at ? "Update" : "Set"}
@@ -1397,6 +1413,16 @@ export default function ConversationDetailPage({
                       </button>
                     </small>
                   ) : null}
+                  {control?.reminder_auto_send ? (
+                    <div className="reminder-auto-send-armed">
+                      <span className="reminder-auto-send-badge">Auto follow-up armed</span>
+                      {control?.reminder_message_text ? (
+                        <small className="conversation-muted reminder-auto-send-preview">
+                          &ldquo;{control.reminder_message_text}&rdquo;
+                        </small>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <input
                     type="text"
                     placeholder="What to follow up about (optional)"
@@ -1405,6 +1431,28 @@ export default function ConversationDetailPage({
                     onChange={(event) => setReminderNoteDraft(event.target.value)}
                     style={{ marginTop: 6 }}
                   />
+                  <div className="reminder-auto-send-toggle">
+                    <input
+                      type="checkbox"
+                      checked={reminderAutoSendDraft}
+                      disabled={saving}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setReminderAutoSendDraft(checked);
+                        if (!checked) setReminderMessageTextDraft("");
+                      }}
+                    />
+                    <span>Auto-send this as a follow-up message</span>
+                  </div>
+                  {reminderAutoSendDraft ? (
+                    <textarea
+                      className="reminder-auto-send-textarea"
+                      placeholder="Exact message to send automatically when the reminder fires..."
+                      value={reminderMessageTextDraft}
+                      disabled={saving}
+                      onChange={(event) => setReminderMessageTextDraft(event.target.value)}
+                    />
+                  ) : null}
                 </label>
               </div>
               </CollapsiblePanel>

@@ -139,7 +139,16 @@ export default function BroadcastDetailPage() {
   const isDraft = broadcast.status === "draft";
 
   let targetingSummary = "All contacts";
-  if (broadcast.segment_id) {
+  if (broadcast.raw_numbers_json) {
+    let numberCount = broadcast.recipient_count ?? 0;
+    try {
+      const parsed = JSON.parse(broadcast.raw_numbers_json);
+      if (Array.isArray(parsed)) numberCount = parsed.length;
+    } catch {
+      // Fall back to recipient_count if the stored JSON is somehow malformed.
+    }
+    targetingSummary = `Targeted ${numberCount} phone number${numberCount === 1 ? "" : "s"} directly`;
+  } else if (broadcast.segment_id) {
     const segment = segments.find((item) => item.id === broadcast.segment_id);
     targetingSummary = segment ? `Segment: ${segment.name}` : "Segment target";
   } else if (broadcast.lifecycle_stage) {

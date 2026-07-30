@@ -23,6 +23,7 @@
 
 .conversation-control-form select,
 .conversation-control-form input,
+.conversation-control-form textarea,
 .conversation-note-form textarea,
 .export-form select,
 .tags-editor input {
@@ -40,11 +41,61 @@
 
 .conversation-control-form select:focus,
 .conversation-control-form input:focus,
+.conversation-control-form textarea:focus,
 .conversation-note-form textarea:focus,
 .export-form select:focus,
 .tags-editor input:focus {
   border-color: var(--tz-primary);
   box-shadow: 0 0 0 3px rgb(22 137 232 / 9%);
+}
+
+.conversation-control-form textarea {
+  min-height: 64px;
+  margin-top: 2px;
+  resize: vertical;
+}
+
+.reminder-auto-send-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  color: var(--tz-text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.reminder-auto-send-toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--tz-primary);
+}
+
+.reminder-auto-send-armed {
+  display: grid;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--tz-primary);
+  border-radius: 9px;
+  background: var(--tz-primary-soft);
+}
+
+.reminder-auto-send-badge {
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--tz-primary);
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.reminder-auto-send-preview {
+  color: var(--tz-text-secondary);
+  font-style: italic;
+  overflow-wrap: anywhere;
 }
 
 .inline-field-action {

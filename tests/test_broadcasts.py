@@ -459,6 +459,162 @@ def test_get_broadcast_report_returns_404_for_unknown_broadcast(client_and_db):
     assert resp.status_code == 404
 
 
+def test_create_with_numbers_creates_new_customers_with_lead_stage_and_whatsapp_identity(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Cold Outreach",
+            "message_text": "Hi there!",
+            "channel": "whatsapp",
+            "numbers": ["+15550100", "+15550101"],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["recipient_count"] == 2
+    assert body["status"] == "draft"
+
+    from backend.services.customer_service import customer_service
+
+    listing = customer_service.list_customers(company_id=COMPANY_ID)
+    matches = [
+        item for item in listing["items"]
+        if "whatsapp" in item["channels"]
+    ]
+    assert len(matches) == 2
+    for item in matches:
+        assert item["lifecycle_stage"] == "lead"
+        full = customer_service.get_customer(company_id=COMPANY_ID, customer_id=item["id"])
+        whatsapp_identities = [i for i in full["identities"] if i["channel"] == "whatsapp"]
+        assert len(whatsapp_identities) == 1
+        assert whatsapp_identities[0]["external_user_id"] in ("+15550100", "+15550101")
+
+
+def test_create_with_numbers_reuses_existing_customer_for_a_known_number(client_and_db):
+    client = client_and_db
+    existing = _make_contact(channel="whatsapp", external_user_id="+15550199", display_name="Existing WA Contact")
+
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Reuse Existing",
+            "message_text": "Hi again!",
+            "channel": "whatsapp",
+            "numbers": ["+15550199", "+15550200"],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["recipient_count"] == 2
+
+    from backend.services.customer_service import customer_service
+
+    listing = customer_service.list_customers(company_id=COMPANY_ID)
+    matches = [item for item in listing["items"] if "whatsapp" in item["channels"]]
+    # Exactly two whatsapp-linked customers total: the pre-existing one
+    # (reused, not duplicated) plus the one new number.
+    assert len(matches) == 2
+    assert any(item["id"] == existing["id"] for item in matches)
+
+
+def test_create_rejects_numbers_and_segment_id_together(client_and_db):
+    client = client_and_db
+    segment_resp = client.post(
+        "/api/customer-segments",
+        json={"name": "Everyone", "filters": {}},
+    )
+    assert segment_resp.status_code == 200, segment_resp.text
+    segment = segment_resp.json()
+
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Conflicting Targeting",
+            "message_text": "hi",
+            "channel": "whatsapp",
+            "segment_id": segment["id"],
+            "numbers": ["+15550100"],
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_create_rejects_numbers_on_non_whatsapp_channel(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Numbers On Telegram",
+            "message_text": "hi",
+            "channel": "telegram",
+            "numbers": ["+15550100"],
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_send_on_numbers_targeted_broadcast_dispatches_to_reresolved_recipients(client_and_db):
+    client = client_and_db
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "WA Numbers Send",
+            "message_text": "Hi via numbers!",
+            "channel": "whatsapp",
+            "numbers": ["+15550111", "+15550112"],
+        },
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    broadcast = create_resp.json()
+    assert broadcast["recipient_count"] == 2
+
+    with patch(
+        "backend.services.broadcast_service.send_whatsapp_text",
+        return_value={"sent": True},
+    ) as mock_send:
+        send_resp = client.post(f"/api/broadcasts/{broadcast['id']}/send")
+
+    assert send_resp.status_code == 200, send_resp.text
+    body = send_resp.json()
+    assert body["status"] == "sent"
+    assert body["sent_count"] == 2
+    assert body["failed_count"] == 0
+    assert mock_send.call_count == 2
+    dispatched_ids = {call.args[0] for call in mock_send.call_args_list}
+    assert dispatched_ids == {"+15550111", "+15550112"}
+
+
+def test_numbers_list_normalization_dedupes_and_skips_malformed_entries(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/broadcasts",
+        json={
+            "name": "Messy List",
+            "message_text": "hi",
+            "channel": "whatsapp",
+            "numbers": ["+1 555 0100", "15550100", "", "  "],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    # Normalization (re.sub(r"[^\d+]", "", ...)) strips whitespace/formatting
+    # but does NOT treat a leading "+" as equivalent to no "+" — so
+    # "+1 555 0100" -> "+15550100" and "15550100" -> "15550100" remain two
+    # distinct recipients. The two blank/whitespace-only entries normalize
+    # to "" and are skipped. Net result: 2 recipients, not 4.
+    assert body["recipient_count"] == 2
+
+    import json as jsonlib
+    from database.database import db as _db
+    with _db.connect() as conn:
+        row = conn.execute(
+            "SELECT raw_numbers_json FROM broadcasts WHERE id = ?", (body["id"],),
+        ).fetchone()
+    stored_numbers = jsonlib.loads(row["raw_numbers_json"])
+    assert sorted(stored_numbers) == sorted(["+15550100", "15550100"])
+
+
 def test_delete_only_allowed_while_draft(client_and_db):
     client = client_and_db
     _make_contact(external_user_id="a", display_name="A")

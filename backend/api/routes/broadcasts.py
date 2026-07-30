@@ -27,6 +27,7 @@ def create_broadcast(payload: BroadcastCreateRequest, context=Depends(current_co
             segment_id=payload.segment_id,
             lifecycle_stage=payload.lifecycle_stage,
             tag=payload.tag,
+            numbers=payload.numbers,
             actor_user_id=current_user.get("id"),
         )
     except ValueError as exc:

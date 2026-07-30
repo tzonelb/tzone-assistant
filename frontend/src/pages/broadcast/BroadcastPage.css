@@ -137,6 +137,23 @@
   gap: var(--tz-space-3);
 }
 
+.broadcast-field-note {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.broadcast-numbers-input {
+  font-family: inherit;
+}
+
+.broadcast-numbers-count {
+  justify-self: end;
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .broadcast-error-text {
   margin: 0;
   color: var(--tz-danger);

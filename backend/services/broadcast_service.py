@@ -140,6 +140,41 @@ class BroadcastService:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    @staticmethod
+    def _normalize_number(number: str) -> str:
+        """Basic cleanup only — not a phone-parsing library. Strips
+        whitespace and any character that isn't a digit or a leading
+        '+', e.g. "+1 555-0100" -> "+15550100". Two numbers that only
+        differ by whether a '+' or country-code formatting was included
+        are NOT considered equivalent by this normalization."""
+        return re.sub(r"[^\d+]", "", (number or "").strip())
+
+    def _upsert_recipients_from_numbers(
+        self, *, company_id: int, numbers: list[str]
+    ) -> list[dict[str, Any]]:
+        """Resolves a raw pasted/uploaded number list into the same
+        {"customer_id", "external_user_id"} shape _resolve_recipients()
+        returns, so send_broadcast() doesn't need to know which targeting
+        mode created the broadcast. Each normalized number is upserted as
+        a Contact via customer_service.upsert_from_channel — the same
+        find-or-create path every channel webhook already uses — so a
+        number that's already a known WhatsApp contact reuses that
+        customer_id instead of creating a duplicate."""
+        seen: set[str] = set()
+        recipients: list[dict[str, Any]] = []
+        for raw_number in numbers:
+            normalized = self._normalize_number(raw_number)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            customer = customer_service.upsert_from_channel(
+                company_id=company_id,
+                channel="whatsapp",
+                external_user_id=normalized,
+            )
+            recipients.append({"customer_id": customer["id"], "external_user_id": normalized})
+        return recipients
+
     def create_broadcast(
         self,
         *,
@@ -150,6 +185,7 @@ class BroadcastService:
         segment_id: int | None = None,
         lifecycle_stage: str | None = None,
         tag: str | None = None,
+        numbers: list[str] | None = None,
         actor_user_id: int | None = None,
     ) -> dict[str, Any]:
         name = (name or "").strip()
@@ -165,13 +201,27 @@ class BroadcastService:
                 f'{", ".join(sorted(SUPPORTED_CHANNELS))}.'
             )
 
-        recipients = self._resolve_recipients(
-            company_id=company_id,
-            channel=normalized_channel,
-            segment_id=segment_id,
-            lifecycle_stage=lifecycle_stage,
-            tag=tag,
-        )
+        using_numbers = bool(numbers)
+        if using_numbers and (segment_id is not None or lifecycle_stage is not None or tag is not None):
+            raise ValueError("Choose either a segment/filter or a number list, not both.")
+        if using_numbers and normalized_channel != "whatsapp":
+            raise ValueError(
+                "Number-list targeting is WhatsApp-only for now. Choose the WhatsApp "
+                "channel, or target contacts with a segment/filter instead."
+            )
+
+        raw_numbers_json: str | None = None
+        if using_numbers:
+            recipients = self._upsert_recipients_from_numbers(company_id=company_id, numbers=numbers)
+            raw_numbers_json = json.dumps([recipient["external_user_id"] for recipient in recipients])
+        else:
+            recipients = self._resolve_recipients(
+                company_id=company_id,
+                channel=normalized_channel,
+                segment_id=segment_id,
+                lifecycle_stage=lifecycle_stage,
+                tag=tag,
+            )
 
         now = utc_now_iso()
         with db.connect() as conn:
@@ -180,12 +230,14 @@ class BroadcastService:
                 INSERT INTO broadcasts (
                     company_id, name, message_text, channel, segment_id,
                     lifecycle_stage, tag, status, recipient_count,
-                    sent_count, failed_count, created_by_user_id, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, 0, 0, ?, ?)
+                    sent_count, failed_count, created_by_user_id, created_at,
+                    raw_numbers_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, 0, 0, ?, ?, ?)
                 """,
                 (
                     company_id, name, message_text, normalized_channel, segment_id,
                     lifecycle_stage, tag, len(recipients), actor_user_id, now,
+                    raw_numbers_json,
                 ),
             )
             broadcast_id = int(cursor.lastrowid)
@@ -280,13 +332,22 @@ class BroadcastService:
             raise ValueError("This broadcast has already been sent.")
 
         broadcast = self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)
-        recipients = self._resolve_recipients(
-            company_id=company_id,
-            channel=broadcast["channel"],
-            segment_id=broadcast["segment_id"],
-            lifecycle_stage=broadcast["lifecycle_stage"],
-            tag=broadcast["tag"],
-        )
+        if broadcast.get("raw_numbers_json"):
+            try:
+                stored_numbers = json.loads(broadcast["raw_numbers_json"])
+            except (TypeError, ValueError):
+                stored_numbers = []
+            if not isinstance(stored_numbers, list):
+                stored_numbers = []
+            recipients = self._upsert_recipients_from_numbers(company_id=company_id, numbers=stored_numbers)
+        else:
+            recipients = self._resolve_recipients(
+                company_id=company_id,
+                channel=broadcast["channel"],
+                segment_id=broadcast["segment_id"],
+                lifecycle_stage=broadcast["lifecycle_stage"],
+                tag=broadcast["tag"],
+            )
 
         sent_count = 0
         failed_count = 0

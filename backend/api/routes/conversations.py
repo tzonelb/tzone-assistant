@@ -103,6 +103,8 @@ class ConversationTagCreate(BaseModel):
 class ReminderCreate(BaseModel):
     reminder_at: str  # ISO timestamp
     note: str | None = None
+    auto_send: bool = False
+    message_text: str | None = None
 
 
 class ConversationTagUpdate(BaseModel):
@@ -1784,14 +1786,23 @@ def set_reminder(
 ):
     company_id = auth_service.resolve_company_id(current_user)
 
-    state = conversation_control_service.set_reminder(
-        company_id=company_id,
-        channel=channel,
-        external_user_id=user_id,
-        reminder_at=payload.reminder_at,
-        note=payload.note,
-        actor_user_id=current_user["id"],
-    )
+    try:
+        state = conversation_control_service.set_reminder(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            reminder_at=payload.reminder_at,
+            note=payload.note,
+            actor_user_id=current_user["id"],
+            auto_send=payload.auto_send,
+            message_text=payload.message_text,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
+
     return state
 
 

@@ -8,3 +8,4 @@ class BroadcastCreateRequest(BaseModel):
     segment_id: int | None = None
     lifecycle_stage: str | None = Field(default=None, max_length=40)
     tag: str | None = Field(default=None, max_length=80)
+    numbers: list[str] | None = None
