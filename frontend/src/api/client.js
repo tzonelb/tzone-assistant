@@ -241,6 +241,14 @@ export async function getCustomerRequest(customerId) {
   return apiRequest(`/api/customers/${customerId}`);
 }
 
+export async function createCustomerRequest(payload) {
+  return apiRequest("/api/customers", { method: "POST", body: payload });
+}
+
+export async function bulkUpdateCustomersRequest(payload) {
+  return apiRequest("/api/customers/bulk-update", { method: "POST", body: payload });
+}
+
 export async function updateCustomerRequest(customerId, updates) {
   return apiRequest(`/api/customers/${customerId}`, { method: "PUT", body: updates });
 }
@@ -259,6 +267,10 @@ export async function createCustomerSegmentRequest(name, filters) {
 
 export async function deleteCustomerSegmentRequest(segmentId) {
   return apiRequest(`/api/customer-segments/${segmentId}`, { method: "DELETE" });
+}
+
+export async function getAnalyticsSummaryRequest() {
+  return apiRequest("/api/analytics");
 }
 
 export async function listKnowledgeEntriesRequest() {

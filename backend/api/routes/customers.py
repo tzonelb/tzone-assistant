@@ -1,7 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.api.routes.conversations import _company_employees
-from backend.api.schemas.customers import CustomerUpdateRequest, SegmentCreateRequest
+from backend.api.schemas.customers import (
+    CustomerBulkUpdateRequest,
+    CustomerCreateRequest,
+    CustomerUpdateRequest,
+    SegmentCreateRequest,
+)
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.customer_service import LIFECYCLE_STAGES, customer_service
 
@@ -55,6 +60,36 @@ def list_customers(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("")
+def create_customer(payload: CustomerCreateRequest, context=Depends(current_context)):
+    current_user, company_id = context
+    try:
+        return customer_service.create_customer(
+            company_id=company_id,
+            display_name=payload.display_name,
+            phone=payload.phone,
+            email=payload.email,
+            actor_user_id=current_user.get("id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/bulk-update")
+def bulk_update_customers(payload: CustomerBulkUpdateRequest, context=Depends(current_context)):
+    current_user, company_id = context
+    try:
+        return customer_service.bulk_update_customers(
+            company_id=company_id,
+            customer_ids=payload.customer_ids,
+            lifecycle_stage=payload.lifecycle_stage,
+            add_tag=payload.add_tag,
+            actor_user_id=current_user.get("id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/{customer_id}")

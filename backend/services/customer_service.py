@@ -284,6 +284,93 @@ class CustomerService:
 
         return self.get_customer(company_id=company_id, customer_id=customer_id)
 
+    def create_customer(
+        self,
+        *,
+        company_id: int,
+        display_name: str | None = None,
+        phone: str | None = None,
+        email: str | None = None,
+        actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Manual contact creation — for walk-ins, phone leads, or any
+        contact who hasn't messaged in on a connected channel yet. Unlike
+        upsert_from_channel(), this never writes a customer_identities row
+        since there's no channel identity to attach."""
+        display_name = self._clean(display_name)
+        phone = self._clean(phone)
+        email = self._clean(email)
+        if not display_name and not phone and not email:
+            raise ValueError("Provide at least a name, phone, or email to create a contact.")
+        now = utc_now_iso()
+        with db.connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO customers (
+                    company_id, display_name, phone, email, lifecycle_stage,
+                    first_seen_at, last_seen_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (company_id, display_name, phone, email, DEFAULT_LIFECYCLE_STAGE, now, now, now, now),
+            )
+            customer_id = int(cursor.lastrowid)
+            conn.execute(
+                """
+                INSERT INTO customer_audit (
+                    company_id, customer_id, actor_user_id, action, data_json, created_at
+                ) VALUES (?, ?, ?, 'customer_created', ?, ?)
+                """,
+                (
+                    company_id, customer_id, actor_user_id,
+                    json.dumps({"display_name": display_name, "phone": phone, "email": email}),
+                    now,
+                ),
+            )
+            conn.commit()
+        return self.get_customer(company_id=company_id, customer_id=customer_id)
+
+    def bulk_update_customers(
+        self,
+        *,
+        company_id: int,
+        customer_ids: list[int],
+        lifecycle_stage: str | None = None,
+        add_tag: str | None = None,
+        actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Applies a lifecycle-stage change and/or an added tag to many
+        contacts at once, reusing update_customer() per id so validation
+        (valid stage, tag de-duplication) stays in one place. customer_ids
+        that don't belong to this company are silently skipped rather than
+        failing the whole batch — an id from another tenant is treated the
+        same as a stale/missing id, not an error."""
+        add_tag = self._clean(add_tag)
+        updated = 0
+        for customer_id in customer_ids:
+            try:
+                existing = self.get_customer(company_id=company_id, customer_id=customer_id)
+            except KeyError:
+                continue
+
+            values: dict[str, Any] = {}
+            if lifecycle_stage is not None:
+                values["lifecycle_stage"] = lifecycle_stage
+            if add_tag:
+                current_tags = existing.get("tags") or []
+                values["tags"] = current_tags if add_tag in current_tags else [*current_tags, add_tag]
+
+            if not values:
+                continue
+
+            self.update_customer(
+                company_id=company_id,
+                customer_id=customer_id,
+                values=values,
+                actor_user_id=actor_user_id,
+            )
+            updated += 1
+        return {"updated": updated}
+
     def get_customer(self, *, company_id: int, customer_id: int) -> dict[str, Any]:
         with db.connect() as conn:
             row = conn.execute(

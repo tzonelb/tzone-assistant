@@ -17,6 +17,18 @@ class CustomerUpdateRequest(BaseModel):
     documents: list[dict[str, str]] | None = None
 
 
+class CustomerCreateRequest(BaseModel):
+    display_name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=80)
+    email: str | None = Field(default=None, max_length=320)
+
+
+class CustomerBulkUpdateRequest(BaseModel):
+    customer_ids: list[int]
+    lifecycle_stage: str | None = Field(default=None, max_length=40)
+    add_tag: str | None = Field(default=None, max_length=80)
+
+
 class SegmentFilters(BaseModel):
     search: str | None = Field(default=None, max_length=200)
     lifecycle_stage: str | None = Field(default=None, max_length=40)

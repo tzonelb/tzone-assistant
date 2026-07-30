@@ -347,6 +347,87 @@ def test_list_and_get_expose_real_channels_not_just_a_count(client_and_db):
     assert sorted(listed["channels"]) == ["telegram", "whatsapp"]
 
 
+def test_manual_contact_creation_defaults_to_lead_stage(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/customers",
+        json={"display_name": "Walk-in Wael", "phone": "+96170123456"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["display_name"] == "Walk-in Wael"
+    assert body["phone"] == "+96170123456"
+    assert body["lifecycle_stage"] == "lead"
+    assert body["tags"] == []
+    assert body["identities"] == []
+    assert body["channels"] == []
+
+
+def test_manual_contact_creation_requires_an_identifying_field(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/customers", json={})
+    assert resp.status_code == 400
+
+
+def test_bulk_update_changes_lifecycle_stage_for_multiple_contacts(client_and_db):
+    client = client_and_db
+    a = _make_contact(client, external_user_id="a", display_name="A")
+    b = _make_contact(client, external_user_id="b", display_name="B")
+
+    resp = client.post(
+        "/api/customers/bulk-update",
+        json={"customer_ids": [a["id"], b["id"]], "lifecycle_stage": "customer"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"updated": 2}
+
+    assert client.get(f"/api/customers/{a['id']}").json()["lifecycle_stage"] == "customer"
+    assert client.get(f"/api/customers/{b['id']}").json()["lifecycle_stage"] == "customer"
+
+
+def test_bulk_update_add_tag_appends_without_duplicating(client_and_db):
+    client = client_and_db
+    a = _make_contact(client, external_user_id="a", display_name="A")
+    b = _make_contact(client, external_user_id="b", display_name="B")
+    client.put(f"/api/customers/{a['id']}", json={"tags": ["vip-supplier"]})
+
+    resp = client.post(
+        "/api/customers/bulk-update",
+        json={"customer_ids": [a["id"], b["id"]], "add_tag": "vip-supplier"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"updated": 2}
+
+    assert client.get(f"/api/customers/{a['id']}").json()["tags"] == ["vip-supplier"]
+    assert client.get(f"/api/customers/{b['id']}").json()["tags"] == ["vip-supplier"]
+
+
+def test_bulk_update_skips_customer_from_another_company(client_and_db):
+    from database.database import db
+
+    with db.connect() as conn:
+        conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (2, 'Other Co', 'other-co', 1)")
+        conn.commit()
+
+    from backend.services.customer_service import customer_service
+    other = customer_service.upsert_from_channel(
+        company_id=2, channel="telegram", external_user_id="other-co-user", display_name="Other Co Contact",
+    )
+
+    client = client_and_db
+    a = _make_contact(client, external_user_id="a", display_name="A")
+
+    resp = client.post(
+        "/api/customers/bulk-update",
+        json={"customer_ids": [a["id"], other["id"]], "lifecycle_stage": "vip"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"updated": 1}
+
+    assert client.get(f"/api/customers/{a['id']}").json()["lifecycle_stage"] == "vip"
+    assert customer_service.get_customer(company_id=2, customer_id=other["id"])["lifecycle_stage"] == "lead"
+
+
 def test_contacts_are_isolated_per_company(client_and_db):
     from database.database import db
     with db.connect() as conn:

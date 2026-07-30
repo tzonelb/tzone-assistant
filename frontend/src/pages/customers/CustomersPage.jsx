@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddOutlined, CloseOutlined } from "@mui/icons-material";
 import {
+  bulkUpdateCustomersRequest,
+  createCustomerRequest,
   createCustomerSegmentRequest,
   customerOptionsRequest,
   deleteCustomerSegmentRequest,
@@ -81,6 +83,18 @@ export default function CustomersPage() {
   const [segmentToDelete, setSegmentToDelete] = useState(null);
   const [segmentDeleting, setSegmentDeleting] = useState(false);
 
+  const [newContactDialogOpen, setNewContactDialogOpen] = useState(false);
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactSaving, setNewContactSaving] = useState(false);
+  const [newContactError, setNewContactError] = useState("");
+
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkStage, setBulkStage] = useState("");
+  const [bulkTagDraft, setBulkTagDraft] = useState("");
+  const [bulkApplying, setBulkApplying] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -104,6 +118,8 @@ export default function CustomersPage() {
   }, [search, stageFilter, tagFilter, assigneeFilter, segmentId, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => { setSelectedIds(new Set()); }, [page, search, stageFilter, tagFilter, assigneeFilter, segmentId]);
 
   useEffect(() => {
     customerOptionsRequest()
@@ -207,6 +223,82 @@ export default function CustomersPage() {
 
   const activeFilters = Boolean(search || stageFilter || tagFilter);
 
+  function toggleRowSelected(rowId) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(rowId)) next.delete(rowId);
+      else next.add(rowId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    setSelectedIds((current) => {
+      const allSelected = rows.length > 0 && rows.every((row) => current.has(row.id));
+      if (allSelected) return new Set();
+      return new Set(rows.map((row) => row.id));
+    });
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+  }
+
+  async function applyBulkStage(stage) {
+    if (!stage || !selectedIds.size) return;
+    setBulkApplying(true);
+    try {
+      await bulkUpdateCustomersRequest({ customer_ids: [...selectedIds], lifecycle_stage: stage });
+      setBulkStage("");
+      clearSelection();
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Could not update lifecycle stage for the selected contacts.");
+    } finally {
+      setBulkApplying(false);
+    }
+  }
+
+  async function applyBulkTag(event) {
+    event.preventDefault();
+    const tag = bulkTagDraft.trim();
+    if (!tag || !selectedIds.size) return;
+    setBulkApplying(true);
+    try {
+      await bulkUpdateCustomersRequest({ customer_ids: [...selectedIds], add_tag: tag });
+      setBulkTagDraft("");
+      clearSelection();
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Could not add the tag to the selected contacts.");
+    } finally {
+      setBulkApplying(false);
+    }
+  }
+
+  async function saveNewContact(event) {
+    event.preventDefault();
+    setNewContactSaving(true);
+    setNewContactError("");
+    try {
+      const created = await createCustomerRequest({
+        display_name: newContactName.trim() || undefined,
+        phone: newContactPhone.trim() || undefined,
+        email: newContactEmail.trim() || undefined,
+      });
+      setNewContactDialogOpen(false);
+      setNewContactName("");
+      setNewContactPhone("");
+      setNewContactEmail("");
+      await load();
+      navigate(`/customers/${created.id}`);
+    } catch (requestError) {
+      setNewContactError(requestError.message || "Could not create the contact.");
+    } finally {
+      setNewContactSaving(false);
+    }
+  }
+
   async function saveSegment(event) {
     event.preventDefault();
     if (!segmentName.trim()) return;
@@ -243,7 +335,31 @@ export default function CustomersPage() {
     }
   }
 
+  const allOnPageSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
+
   const columns = [
+    {
+      key: "_select",
+      label: (
+        <input
+          type="checkbox"
+          className="customer-row-checkbox"
+          aria-label="Select all contacts on this page"
+          checked={allOnPageSelected}
+          onChange={toggleSelectAllOnPage}
+        />
+      ),
+      width: 40,
+      render: (_value, row) => (
+        <input
+          type="checkbox"
+          className="customer-row-checkbox"
+          aria-label={`Select ${row.display_name || row.internal_name || "contact"}`}
+          checked={selectedIds.has(row.id)}
+          onChange={() => toggleRowSelected(row.id)}
+        />
+      ),
+    },
     {
       key: "display_name",
       label: "Contact",
@@ -360,16 +476,63 @@ export default function CustomersPage() {
             <option value="">All employees</option>
             {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
           </select>
-          <AppButton
-            variant="secondary"
-            icon={<AddOutlined fontSize="small" />}
-            disabled={!activeFilters}
-            onClick={() => setSegmentDialogOpen(true)}
-          >
-            Save as segment
-          </AppButton>
+          <div className="customer-filter-actions">
+            <AppButton
+              variant="secondary"
+              icon={<AddOutlined fontSize="small" />}
+              disabled={!activeFilters}
+              onClick={() => setSegmentDialogOpen(true)}
+            >
+              Save as segment
+            </AppButton>
+            <AppButton
+              variant="primary"
+              icon={<AddOutlined fontSize="small" />}
+              onClick={() => setNewContactDialogOpen(true)}
+            >
+              New contact
+            </AppButton>
+          </div>
         </div>
       </AppCard>
+
+      {selectedIds.size > 0 ? (
+        <AppCard padding="medium" className="customer-bulk-bar">
+          <span className="customer-bulk-count">{selectedIds.size} selected</span>
+          <label className="customer-bulk-field">
+            Set lifecycle stage
+            <select
+              className="tz-select"
+              value={bulkStage}
+              disabled={bulkApplying}
+              onChange={(event) => {
+                setBulkStage(event.target.value);
+                applyBulkStage(event.target.value);
+              }}
+            >
+              <option value="">Choose stage…</option>
+              {lifecycleStages.map((stage) => <option value={stage} key={stage}>{humanize(stage)}</option>)}
+            </select>
+          </label>
+          <form className="customer-bulk-field customer-bulk-tag-form" onSubmit={applyBulkTag}>
+            Add tag
+            <div className="customer-bulk-tag-input">
+              <input
+                value={bulkTagDraft}
+                placeholder="tag name"
+                disabled={bulkApplying}
+                onChange={(event) => setBulkTagDraft(event.target.value)}
+              />
+              <AppButton type="submit" variant="secondary" size="small" disabled={bulkApplying || !bulkTagDraft.trim()}>
+                Add
+              </AppButton>
+            </div>
+          </form>
+          <AppButton type="button" variant="secondary" size="small" disabled={bulkApplying} onClick={clearSelection}>
+            Clear selection
+          </AppButton>
+        </AppCard>
+      ) : null}
 
       {error ? (
         <ErrorState title="Could not load contacts" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />
@@ -415,6 +578,42 @@ export default function CustomersPage() {
             <footer className="tz-dialog-actions">
               <AppButton type="button" variant="secondary" disabled={segmentSaving} onClick={() => setSegmentDialogOpen(false)}>Cancel</AppButton>
               <AppButton type="submit" variant="primary" loading={segmentSaving}>Save segment</AppButton>
+            </footer>
+          </form>
+        </div>
+      ) : null}
+
+      {newContactDialogOpen ? (
+        <div
+          className="tz-dialog-backdrop"
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setNewContactDialogOpen(false); }}
+        >
+          <form className="tz-dialog" onSubmit={saveNewContact}>
+            <header className="tz-dialog-header">
+              <h3>New contact</h3>
+              <button type="button" className="tz-dialog-close" onClick={() => setNewContactDialogOpen(false)}>
+                <CloseOutlined fontSize="small" />
+              </button>
+            </header>
+            <div className="tz-dialog-body customer-new-contact-fields">
+              <label className="customer-segment-name-field">
+                Name
+                <input value={newContactName} onChange={(event) => setNewContactName(event.target.value)} maxLength={200} autoFocus />
+              </label>
+              <label className="customer-segment-name-field">
+                Phone
+                <input value={newContactPhone} onChange={(event) => setNewContactPhone(event.target.value)} maxLength={80} />
+              </label>
+              <label className="customer-segment-name-field">
+                Email
+                <input value={newContactEmail} onChange={(event) => setNewContactEmail(event.target.value)} maxLength={320} />
+              </label>
+              {newContactError ? <p className="customer-segment-error">{newContactError}</p> : null}
+            </div>
+            <footer className="tz-dialog-actions">
+              <AppButton type="button" variant="secondary" disabled={newContactSaving} onClick={() => setNewContactDialogOpen(false)}>Cancel</AppButton>
+              <AppButton type="submit" variant="primary" loading={newContactSaving}>Create contact</AppButton>
             </footer>
           </form>
         </div>

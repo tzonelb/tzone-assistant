@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
+    analytics,
     auth,
     channel_connections,
     conversations,
@@ -200,6 +201,7 @@ app.include_router(conversations.router)
 app.include_router(company_settings.router)
 app.include_router(customers.router)
 app.include_router(customers.segments_router)
+app.include_router(analytics.router)
 app.include_router(conversation_tags.router)
 app.include_router(developer_center.router)
 app.include_router(notifications.router)
