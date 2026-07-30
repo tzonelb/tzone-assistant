@@ -114,6 +114,21 @@ class AppConfig:
     # (the same "needs real deployment" caveat as Calls needing Twilio).
     PUBLIC_BACKEND_URL: str = os.getenv("PUBLIC_BACKEND_URL", "http://localhost:8000")
 
+    # Comma-separated list of origins allowed to call this API from a
+    # browser. Defaults to the local Vite dev server so nothing changes
+    # for local development. In production, set this to the real
+    # deployed frontend origin(s), e.g. "https://app.yourdomain.com".
+    ALLOWED_ORIGINS: list[str] = field(
+        default_factory=lambda: [
+            origin.strip()
+            for origin in os.getenv(
+                "ALLOWED_ORIGINS",
+                "http://localhost:5173,http://127.0.0.1:5173",
+            ).split(",")
+            if origin.strip()
+        ]
+    )
+
     FACEBOOK_PAGE_ID: str = os.getenv(
         "FACEBOOK_PAGE_ID",
         "",

@@ -1,0 +1,20 @@
+{$DOMAIN} {
+	# API and uploaded media go to the backend container; everything
+	# else is the built React app (client-side routed, so any path
+	# that isn't a real static file falls back to index.html).
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle /uploads/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	encode gzip
+}

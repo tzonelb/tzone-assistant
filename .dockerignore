@@ -1,0 +1,17 @@
+.venv
+__pycache__
+*.pyc
+.git
+.env
+.env.*
+!.env.example
+database/*.db
+database/*.db-wal
+database/*.db-shm
+uploads/
+frontend/node_modules
+frontend/dist
+LOG_UPDATE
+LOG_UPDATE_BACKUPS
+*_backup_*
+core_backup_*
