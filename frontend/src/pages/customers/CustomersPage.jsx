@@ -9,7 +9,7 @@ import {
   listCustomersRequest,
   updateCustomerRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, SearchBar } from "../../components/common";
+import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, SearchBar } from "../../components/common";
 import "./CustomersPage.css";
 
 const PAGE_SIZE = 25;
@@ -320,20 +320,6 @@ export default function CustomersPage() {
 
   return (
     <section className="customers-page">
-      <PageHeader
-        eyebrow="CRM"
-        actions={
-          <AppButton
-            variant="secondary"
-            icon={<AddOutlined fontSize="small" />}
-            disabled={!activeFilters}
-            onClick={() => setSegmentDialogOpen(true)}
-          >
-            Save as segment
-          </AppButton>
-        }
-      />
-
       {segments.length ? (
         <div className="customer-segment-chips">
           {segments.map((segment) => (
@@ -363,6 +349,14 @@ export default function CustomersPage() {
             <option value="">All tags</option>
             {availableTags.map((tag) => <option value={tag} key={tag}>{tag}</option>)}
           </select>
+          <AppButton
+            variant="secondary"
+            icon={<AddOutlined fontSize="small" />}
+            disabled={!activeFilters}
+            onClick={() => setSegmentDialogOpen(true)}
+          >
+            Save as segment
+          </AppButton>
         </div>
       </AppCard>
 
