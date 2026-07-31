@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, FacebookOutlined, Instagram, SendOutlined } from "@mui/icons-material";
+import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, SendOutlined } from "@mui/icons-material";
+import { useSearchParams } from "react-router-dom";
 import {
   createScheduledPostRequest,
   deleteScheduledPostRequest,
@@ -9,6 +10,7 @@ import {
   uploadMediaRequest,
 } from "../../api/client";
 import { AppButton, AppCard, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { channelIcon } from "./channelIcon";
 import "./PublishPage.css";
 
 const TABS = [
@@ -19,10 +21,6 @@ const TABS = [
 ];
 
 const STATUS_TONE = { draft: "neutral", scheduled: "info", sent: "success", failed: "danger" };
-
-function channelIcon(channel) {
-  return channel === "instagram" ? Instagram : FacebookOutlined;
-}
 
 function formatDateTime(value) {
   if (!value) return "—";
@@ -190,6 +188,9 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
 }
 
 export default function PublishPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const channelFilter = searchParams.get("channel");
+
   const [activeTab, setActiveTab] = useState("scheduled");
   const [posts, setPosts] = useState([]);
   const [channelAccounts, setChannelAccounts] = useState([]);
@@ -208,7 +209,8 @@ export default function PublishPage() {
     setError("");
     try {
       const result = await listScheduledPostsRequest({ status: activeTab });
-      setPosts(Array.isArray(result?.items) ? result.items : []);
+      const items = Array.isArray(result?.items) ? result.items : [];
+      setPosts(channelFilter ? items.filter((post) => post.channel_account_ids.includes(Number(channelFilter))) : items);
     } catch (requestError) {
       setError(requestError.message || "Posts could not be loaded.");
     } finally {
@@ -216,13 +218,24 @@ export default function PublishPage() {
     }
   }
 
-  useEffect(() => { load(); }, [activeTab]);
+  useEffect(() => { load(); }, [activeTab, channelFilter]);
 
   useEffect(() => {
     scheduledPostOptionsRequest()
       .then((result) => setChannelAccounts(Array.isArray(result?.channel_accounts) ? result.channel_accounts : []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("new") === "1") {
+      setDialogOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   async function savePost(values) {
     setSaving(true);
@@ -264,8 +277,18 @@ export default function PublishPage() {
     }
   }
 
+  const filteredAccountName = channelFilter
+    ? channelAccounts.find((account) => String(account.id) === channelFilter)?.name
+    : null;
+
   return (
     <section className="publish-page">
+      {filteredAccountName ? (
+        <div className="publish-channel-filter-chip">
+          Showing posts for <strong>{filteredAccountName}</strong>
+          <button type="button" onClick={() => setSearchParams({})}>Clear</button>
+        </div>
+      ) : null}
       <div className="publish-header-row">
         <div className="publish-tabs">
           {TABS.map((tab) => (

@@ -3,6 +3,28 @@
   gap: var(--tz-space-4);
 }
 
+.publish-channel-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-primary-soft);
+  color: var(--tz-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.publish-channel-filter-chip button {
+  padding: 3px 10px;
+  border: 1px solid var(--tz-primary);
+  border-radius: var(--tz-radius-round);
+  color: var(--tz-primary);
+  background: var(--tz-surface);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .publish-header-row {
   display: flex;
   align-items: center;

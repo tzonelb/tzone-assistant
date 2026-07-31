@@ -40,3 +40,140 @@
   max-width: 360px;
   font-size: 13px;
 }
+
+.community-hub-new-row {
+  flex: 0 0 auto;
+  margin: 6px 0 4px;
+}
+
+.community-hub-new-row button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  color: #fff;
+  background: rgb(255 255 255 / 15%);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.community-hub-new-row button:hover {
+  background: rgb(255 255 255 / 24%);
+}
+
+.community-channels-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 14px 0 4px;
+  padding: 0 9px;
+  color: rgb(255 255 255 / 55%);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.community-channels-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.community-channels-heading-actions button {
+  display: flex;
+  border: 0;
+  color: rgb(255 255 255 / 65%);
+  background: transparent;
+}
+
+.community-channels-heading-actions button:hover {
+  color: #fff;
+}
+
+.community-channels-empty {
+  display: block;
+  width: calc(100% - 6px);
+  margin: 2px 3px;
+  padding: 8px 9px;
+  border: 1px dashed rgb(255 255 255 / 30%);
+  border-radius: 9px;
+  color: rgb(255 255 255 / 70%);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.community-channels-empty:hover {
+  color: #fff;
+  border-color: rgb(255 255 255 / 55%);
+}
+
+.community-channel-group {
+  margin-bottom: 2px;
+}
+
+.community-channel-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 9px;
+  color: rgb(255 255 255 / 82%);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.community-channel-group-head:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 10%);
+}
+
+.community-channel-group-head span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-channel-group-links {
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+}
+
+.community-channel-group-links a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: rgb(255 255 255 / 62%);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.community-channel-group-links a:hover,
+.community-channel-group-links a.is-active {
+  color: #fff;
+  background: rgb(255 255 255 / 12%);
+}
+
+.community-hub-footer {
+  flex: 0 0 auto;
+  padding: 10px 9px 2px;
+  color: rgb(255 255 255 / 50%);
+  font-size: 11px;
+  font-weight: 600;
+}
