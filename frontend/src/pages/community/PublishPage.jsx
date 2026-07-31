@@ -62,14 +62,22 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   const [when, setWhen] = useState("now");
   const [scheduledAt, setScheduledAt] = useState("");
   const [createAnother, setCreateAnother] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [rightPanel, setRightPanel] = useState("preview");
 
   useEffect(() => {
     if (!open) {
       setText(""); setSelectedAccountIds([]); setContentOverrides({}); setChannelPostTypes({});
       setCustomizeMode(false); setExpandedAccountId(null); setChannelPickerOpen(false); setMediaUrl(""); setMediaType("");
       setMediaFileName(""); setMediaError(""); setWhen("now"); setScheduledAt(""); setCreateAnother(false);
+      setFullscreen(false); setRightPanel("preview");
     }
   }, [open]);
+
+  function resetContentOnly() {
+    setText(""); setContentOverrides({}); setMediaUrl(""); setMediaType(""); setMediaFileName("");
+    setWhen("now"); setScheduledAt("");
+  }
 
   if (!open) return null;
 
@@ -130,16 +138,18 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
     };
   }
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
     if (!canSave) return;
-    onSave(buildPayload({ asDraft: false }));
+    const ok = await onSave(buildPayload({ asDraft: false }), { createAnother });
+    if (ok && createAnother) resetContentOnly();
   }
 
-  function submitDraft() {
+  async function submitDraft() {
     if (!text.trim() && !mediaUrl) return;
     if (selectedAccountIds.length === 0) return;
-    onSave(buildPayload({ asDraft: true }));
+    const ok = await onSave(buildPayload({ asDraft: true }), { createAnother });
+    if (ok && createAnother) resetContentOnly();
   }
 
   const canSave = (text.trim() || mediaUrl) && selectedAccountIds.length > 0 && (when === "now" || scheduledAt);
@@ -147,17 +157,25 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
 
   return (
     <div className="bp-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel(); }}>
-      <form className="bp-dialog" onSubmit={submit}>
+      <form className={`bp-dialog ${fullscreen ? "is-fullscreen" : ""}`} onSubmit={submit}>
         <header className="bp-header">
           <div className="bp-header-left">
             <h3>Create Post</h3>
-            <button type="button" className="bp-tags-btn"><LocalOfferOutlined fontSize="small" /> Tags</button>
+            <button type="button" className="bp-tags-btn" disabled title="Post tagging isn't built yet"><LocalOfferOutlined fontSize="small" /> Tags</button>
           </div>
           <div className="bp-header-right">
-            <button type="button" className="bp-header-action"><ArticleOutlined fontSize="small" /> Templates</button>
-            <button type="button" className="bp-header-action"><AutoAwesomeOutlined fontSize="small" /> AI Assistant</button>
-            <button type="button" className="bp-header-action is-active"><VisibilityOutlined fontSize="small" /> Preview</button>
-            <button type="button" className="bp-icon-btn"><OpenInFullOutlined fontSize="small" /></button>
+            <button type="button" className={`bp-header-action ${rightPanel === "templates" ? "is-active" : ""}`} onClick={() => setRightPanel("templates")}>
+              <ArticleOutlined fontSize="small" /> Templates
+            </button>
+            <button type="button" className={`bp-header-action ${rightPanel === "ai" ? "is-active" : ""}`} onClick={() => setRightPanel("ai")}>
+              <AutoAwesomeOutlined fontSize="small" /> AI Assistant
+            </button>
+            <button type="button" className={`bp-header-action ${rightPanel === "preview" ? "is-active" : ""}`} onClick={() => setRightPanel("preview")}>
+              <VisibilityOutlined fontSize="small" /> Preview
+            </button>
+            <button type="button" className="bp-icon-btn" onClick={() => setFullscreen((current) => !current)} title={fullscreen ? "Exit fullscreen" : "Fullscreen"}>
+              <OpenInFullOutlined fontSize="small" />
+            </button>
             <button type="button" className="bp-icon-btn" onClick={onCancel} disabled={saving}><CloseOutlined fontSize="small" /></button>
           </div>
         </header>
@@ -320,14 +338,34 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
           </div>
 
           <aside className="bp-preview">
-            <h4>Post Previews <InfoIcon /></h4>
-            <div className="bp-preview-empty">
-              <div className="bp-preview-card">
-                <span className="bp-preview-card-avatar" />
-                <span className="bp-preview-card-line" />
-              </div>
-              <p>See your post's preview here</p>
-            </div>
+            {rightPanel === "templates" ? (
+              <>
+                <h4><ArticleOutlined fontSize="small" /> Templates</h4>
+                <div className="bp-preview-empty">
+                  <p>Reusable post templates aren't built yet.</p>
+                  <span>This needs its own saved-template library, similar to Saved Replies — ask if you want it next.</span>
+                </div>
+              </>
+            ) : rightPanel === "ai" ? (
+              <>
+                <h4><AutoAwesomeOutlined fontSize="small" /> AI Assistant</h4>
+                <div className="bp-preview-empty">
+                  <p>AI post-writing isn't wired up yet.</p>
+                  <span>T-ZONE already has a real AI pipeline (used for AI Teaching/replies) — connecting it here to draft or repurpose post text is realistic, ask if you want it next.</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <h4>Post Previews <InfoIcon /></h4>
+                <div className="bp-preview-empty">
+                  <div className="bp-preview-card">
+                    <span className="bp-preview-card-avatar" />
+                    <span className="bp-preview-card-line" />
+                  </div>
+                  <p>See your post's preview here</p>
+                </div>
+              </>
+            )}
           </aside>
         </div>
 
@@ -356,7 +394,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                   disabled={saving || (!text.trim() && !mediaUrl) || selectedAccountIds.length === 0}
                   onClick={submitDraft}
                 >
-                  Save as Draft
+                  Save Drafts
                 </AppButton>
                 <AppButton type="submit" variant="primary" className="bp-cta" loading={saving} disabled={!canSave}>
                   {when === "now" ? "Post now" : "Schedule Posts"}
@@ -424,15 +462,17 @@ export default function PublishPage() {
   }, []);
 
 
-  async function savePost(values) {
+  async function savePost(values, { createAnother } = {}) {
     setSaving(true);
     setSaveError("");
     try {
       await createScheduledPostRequest(values);
-      setDialogOpen(false);
+      if (!createAnother) setDialogOpen(false);
       await load();
+      return true;
     } catch (requestError) {
       setSaveError(requestError.message || "Could not save this post.");
+      return false;
     } finally {
       setSaving(false);
     }
