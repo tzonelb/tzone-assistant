@@ -323,6 +323,31 @@ export async function deleteAppointmentRequest(appointmentId) {
   return apiRequest(`/api/appointments/${appointmentId}`, { method: "DELETE" });
 }
 
+export async function scheduledPostOptionsRequest() {
+  return apiRequest("/api/scheduled-posts/options");
+}
+
+export async function listScheduledPostsRequest({ status } = {}) {
+  const query = createQueryString({ status });
+  return apiRequest(`/api/scheduled-posts${query}`);
+}
+
+export async function createScheduledPostRequest(payload) {
+  return apiRequest("/api/scheduled-posts", { method: "POST", body: payload });
+}
+
+export async function updateScheduledPostRequest(postId, updates) {
+  return apiRequest(`/api/scheduled-posts/${postId}`, { method: "PUT", body: updates });
+}
+
+export async function publishScheduledPostNowRequest(postId) {
+  return apiRequest(`/api/scheduled-posts/${postId}/publish-now`, { method: "POST" });
+}
+
+export async function deleteScheduledPostRequest(postId) {
+  return apiRequest(`/api/scheduled-posts/${postId}`, { method: "DELETE" });
+}
+
 export async function listCustomersRequest({ search, lifecycleStage, tag, assignedUserId, segmentId, limit, offset } = {}) {
   const query = createQueryString({
     search,

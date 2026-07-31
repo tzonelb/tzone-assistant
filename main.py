@@ -32,6 +32,7 @@ from backend.api.routes import (
     platform_admin,
     roles,
     saved_replies,
+    scheduled_posts,
     security_verification,
     tasks,
     team_chat,
@@ -44,6 +45,7 @@ from backend.services.auth_service import (
 from backend.services.appointment_service import appointment_service
 from backend.services.broadcast_service import broadcast_service
 from backend.services.media_upload_service import media_upload_service, UPLOAD_ROOT
+from backend.services.scheduled_post_service import scheduled_post_service
 from backend.services.call_log_service import call_log_service
 from backend.services.catalogue_service import catalogue_service
 from backend.services.team_chat_service import team_chat_service
@@ -154,6 +156,16 @@ async def reminder_worker() -> None:
         await asyncio.sleep(30)
 
 
+async def scheduled_post_worker() -> None:
+    while True:
+        try:
+            scheduled_post_service.publish_due_posts()
+        except Exception as exc:
+            print("SCHEDULED POST WORKER ERROR:", exc)
+
+        await asyncio.sleep(30)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.create_tables()
@@ -179,12 +191,16 @@ async def lifespan(app: FastAPI):
     team_chat_service.ensure_schema()
     appointment_service.ensure_schema()
     media_upload_service.ensure_storage()
+    scheduled_post_service.ensure_schema()
 
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
     )
     reminder_task = asyncio.create_task(
         reminder_worker()
+    )
+    scheduled_post_task = asyncio.create_task(
+        scheduled_post_worker()
     )
 
     try:
@@ -219,6 +235,10 @@ async def lifespan(app: FastAPI):
         reminder_task.cancel()
         with suppress(asyncio.CancelledError):
             await reminder_task
+
+        scheduled_post_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduled_post_task
 
         from channels.telegram import manager as telegram_manager
         await telegram_manager.stop_all()
@@ -285,6 +305,7 @@ app.include_router(catalogue.router)
 app.include_router(calls.router)
 app.include_router(team_chat.router)
 app.include_router(appointments.router)
+app.include_router(scheduled_posts.router)
 
 app.include_router(
     whatsapp_webhook.router

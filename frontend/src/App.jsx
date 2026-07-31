@@ -5,11 +5,10 @@ import RolesPermissionsPage from "./pages/admin/RolesPermissionsPage";
 import PlatformAdminPage from "./pages/admin/PlatformAdminPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
 import ConversationsPage from "./pages/conversations/ConversationsPage";
-import CommentsPage from "./pages/comments/CommentsPage";
+import CommunityHubPage from "./pages/community/CommunityHubPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
-import ModulePage from "./pages/modules/ModulePage";
 import CataloguePage from "./pages/catalogue/CataloguePage";
 import CallsPage from "./pages/calls/CallsPage";
 import TeamChatPage from "./pages/team-chat/TeamChatPage";
@@ -31,13 +30,13 @@ export default function App() {
       <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ConversationDetailPage standalone /></ProtectedRoute>} />
       <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdminPage /></ProtectedRoute>} />
       <Route path="/company-settings/*" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
+      <Route path="/community/*" element={<ProtectedRoute><CommunityHubPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><UISettingsPage /></ProtectedRoute>} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/conversations" element={<ConversationsPage />} />
         <Route path="/conversations/:channel/:userId" element={<ConversationsPage />} />
-        <Route path="/comments" element={<CommentsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
         <Route path="/broadcast" element={<BroadcastPage />} />
@@ -46,7 +45,6 @@ export default function App() {
         <Route path="/calls" element={<CallsPage />} />
         <Route path="/ai-teaching" element={<AITeachingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
-        <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<TeamChatPage />} />
