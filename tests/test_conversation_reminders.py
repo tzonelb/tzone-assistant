@@ -27,10 +27,23 @@ def client_and_db():
     from backend.services.conversation_control_service import conversation_control_service
     from backend.services.notification_service import notification_service
     from backend.services.message_status_service import message_status_service
+    import core.conversation_store as conversation_store
 
     tmp_db_path = tempfile.mktemp(suffix=".db")
     original_db_path = db.db_path
     db.db_path = Path(tmp_db_path)
+
+    # Auto-send success (see test_due_auto_send_reminder_sends_message_...
+    # below) goes through the REAL save_conversation_message(), which
+    # writes to core.conversation_store.BASE_DIR on disk — a real
+    # filesystem path, not something the sqlite db-path swap above
+    # isolates. Without this redirect, every run of this file appends
+    # fake "auto_follow_up" messages to the actual dev data directory
+    # under this exact CUSTOMER_ID, which then shows up in the live UI
+    # looking exactly like a real customer being spammed by the AI.
+    tmp_conversations_dir = Path(tempfile.mkdtemp())
+    original_conversations_dir = conversation_store.BASE_DIR
+    conversation_store.BASE_DIR = tmp_conversations_dir
 
     db.create_tables()
     auth_service.create_tables()
@@ -60,6 +73,9 @@ def client_and_db():
 
     app.dependency_overrides.clear()
     db.db_path = original_db_path
+    conversation_store.BASE_DIR = original_conversations_dir
+    import shutil
+    shutil.rmtree(tmp_conversations_dir, ignore_errors=True)
     import gc
     gc.collect()
     for _attempt in range(5):
