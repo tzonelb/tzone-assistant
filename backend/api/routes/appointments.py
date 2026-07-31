@@ -16,6 +16,19 @@ def current_context(current_user=Depends(get_current_user)):
     return current_user, int(company_id)
 
 
+def _can_view_all(current_user, company_id: int) -> bool:
+    """Owner/admin (or a super admin) see every employee's appointments
+    for oversight; a regular employee only ever sees their own —
+    "users.manage" is the existing admin-level permission code, reused
+    here rather than inventing a new one just for this."""
+    return auth_service.has_permission(
+        user_id=current_user.get("id"),
+        company_id=company_id,
+        permission_code="users.manage",
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    )
+
+
 @router.get("/options")
 def appointment_options(context=Depends(current_context)):
     _, company_id = context
@@ -55,7 +68,9 @@ def list_appointments(
     to_date: str | None = Query(default=None),
     context=Depends(current_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+    if not _can_view_all(current_user, company_id):
+        employee_user_id = current_user.get("id")
     return appointment_service.list_appointments(
         company_id=company_id,
         status=status,
@@ -68,16 +83,25 @@ def list_appointments(
 
 @router.get("/{appointment_id}")
 def get_appointment(appointment_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
     try:
-        return appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
+        appointment = appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not _can_view_all(current_user, company_id) and appointment.get("employee_user_id") != current_user.get("id"):
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    return appointment
 
 
 @router.put("/{appointment_id}")
 def update_appointment(appointment_id: int, payload: AppointmentUpdateRequest, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    try:
+        existing = appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not _can_view_all(current_user, company_id) and existing.get("employee_user_id") != current_user.get("id"):
+        raise HTTPException(status_code=404, detail="Appointment not found")
     try:
         return appointment_service.update_appointment(
             company_id=company_id,
@@ -92,7 +116,13 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdateRequest, c
 
 @router.delete("/{appointment_id}")
 def delete_appointment(appointment_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    try:
+        existing = appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not _can_view_all(current_user, company_id) and existing.get("employee_user_id") != current_user.get("id"):
+        raise HTTPException(status_code=404, detail="Appointment not found")
     try:
         appointment_service.delete_appointment(company_id=company_id, appointment_id=appointment_id)
     except KeyError as exc:
