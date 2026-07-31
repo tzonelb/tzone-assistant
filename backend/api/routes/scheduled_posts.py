@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.api.schemas.scheduled_posts import ScheduledPostCreateRequest, ScheduledPostUpdateRequest
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.channel_account_service import channel_account_service
-from backend.services.scheduled_post_service import POST_CHANNELS, STATUSES, scheduled_post_service
+from backend.services.scheduled_post_service import POST_CHANNELS, POST_TYPES, STATUSES, scheduled_post_service
 
 
 router = APIRouter(prefix="/api/scheduled-posts", tags=["Scheduled Posts"])
@@ -21,7 +21,7 @@ def scheduled_post_options(context=Depends(current_context)):
     _, company_id = context
     accounts = channel_account_service.list_for_company(company_id=company_id)
     postable = [account for account in accounts if account["channel"] in POST_CHANNELS]
-    return {"statuses": STATUSES, "channel_accounts": postable}
+    return {"statuses": STATUSES, "channel_accounts": postable, "post_types": POST_TYPES}
 
 
 @router.post("")
@@ -34,6 +34,8 @@ def create_post(payload: ScheduledPostCreateRequest, context=Depends(current_con
             channel_account_ids=payload.channel_account_ids,
             media_urls=payload.media_urls,
             media_type=payload.media_type,
+            content_overrides=payload.content_overrides,
+            channel_post_types=payload.channel_post_types,
             status=payload.status,
             scheduled_at=payload.scheduled_at,
             actor_user_id=current_user.get("id"),

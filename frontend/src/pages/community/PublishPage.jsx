@@ -29,9 +29,15 @@ function formatDateTime(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
+const POST_TYPE_LABELS = { feed: "Post", reels: "Reel", story: "Story" };
+
 function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSave }) {
   const [text, setText] = useState("");
   const [selectedAccountIds, setSelectedAccountIds] = useState([]);
+  const [contentOverrides, setContentOverrides] = useState({});
+  const [channelPostTypes, setChannelPostTypes] = useState({});
+  const [expandedAccountId, setExpandedAccountId] = useState(null);
+  const [channelPickerOpen, setChannelPickerOpen] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
   const [mediaType, setMediaType] = useState("");
   const [mediaFileName, setMediaFileName] = useState("");
@@ -42,7 +48,8 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
 
   useEffect(() => {
     if (!open) {
-      setText(""); setSelectedAccountIds([]); setMediaUrl(""); setMediaType("");
+      setText(""); setSelectedAccountIds([]); setContentOverrides({}); setChannelPostTypes({});
+      setExpandedAccountId(null); setChannelPickerOpen(false); setMediaUrl(""); setMediaType("");
       setMediaFileName(""); setMediaError(""); setWhen("now"); setScheduledAt("");
     }
   }, [open]);
@@ -50,9 +57,19 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   if (!open) return null;
 
   function toggleAccount(accountId) {
-    setSelectedAccountIds((current) =>
-      current.includes(accountId) ? current.filter((id) => id !== accountId) : [...current, accountId]
-    );
+    setSelectedAccountIds((current) => {
+      const next = current.includes(accountId) ? current.filter((id) => id !== accountId) : [...current, accountId];
+      if (!current.includes(accountId)) setExpandedAccountId(accountId);
+      return next;
+    });
+  }
+
+  function setOverrideText(accountId, value) {
+    setContentOverrides((current) => ({ ...current, [accountId]: value }));
+  }
+
+  function setPostType(accountId, postType) {
+    setChannelPostTypes((current) => ({ ...current, [accountId]: postType }));
   }
 
   async function handleMediaFileChange(event) {
@@ -74,11 +91,21 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   }
 
   function buildPayload({ asDraft }) {
+    const overrides = {};
+    const postTypes = {};
+    selectedAccountIds.forEach((accountId) => {
+      const overrideText = (contentOverrides[accountId] || "").trim();
+      if (overrideText) overrides[accountId] = overrideText;
+      const postType = channelPostTypes[accountId];
+      if (postType && postType !== "feed") postTypes[accountId] = postType;
+    });
     return {
       text: text.trim() || null,
       channel_account_ids: selectedAccountIds,
       media_urls: mediaUrl ? [mediaUrl] : [],
       media_type: mediaUrl ? mediaType : null,
+      content_overrides: overrides,
+      channel_post_types: postTypes,
       status: asDraft ? "draft" : "scheduled",
       scheduled_at: asDraft
         ? null
@@ -112,29 +139,94 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
             {channelAccounts.length === 0 ? (
               <p className="publish-no-channels">No Facebook Page or Instagram account connected yet — connect one from Company Settings → Channels first.</p>
             ) : (
-              channelAccounts.map((account) => {
-                const Icon = channelIcon(account.channel);
-                const selected = selectedAccountIds.includes(account.id);
-                return (
-                  <button
-                    type="button"
-                    key={account.id}
-                    className={`publish-channel-avatar ${selected ? "is-selected" : ""}`}
-                    onClick={() => toggleAccount(account.id)}
-                    title={account.name}
-                  >
-                    <Icon fontSize="small" />
-                    <span>{account.name}</span>
+              <>
+                {channelAccounts.filter((account) => selectedAccountIds.includes(account.id)).map((account) => {
+                  const Icon = channelIcon(account.channel);
+                  return (
+                    <button
+                      type="button"
+                      key={account.id}
+                      className="publish-channel-avatar is-selected"
+                      onClick={() => setExpandedAccountId((current) => (current === account.id ? null : account.id))}
+                      title={account.name}
+                    >
+                      <Icon fontSize="small" />
+                      <span>{account.name}</span>
+                    </button>
+                  );
+                })}
+                <div className="publish-channel-picker-wrap">
+                  <button type="button" className="publish-channel-add-btn" onClick={() => setChannelPickerOpen((current) => !current)}>
+                    <AddOutlined fontSize="small" />
                   </button>
-                );
-              })
+                  {channelPickerOpen ? (
+                    <div className="publish-channel-picker">
+                      {channelAccounts.map((account) => {
+                        const Icon = channelIcon(account.channel);
+                        const selected = selectedAccountIds.includes(account.id);
+                        return (
+                          <label key={account.id} className="publish-channel-picker-row">
+                            <input type="checkbox" checked={selected} onChange={() => toggleAccount(account.id)} />
+                            <Icon fontSize="small" />
+                            <span>{account.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              </>
             )}
           </div>
 
           <label className="ai-teaching-field">
-            Post text
-            <textarea rows={5} value={text} disabled={saving} onChange={(event) => setText(event.target.value)} placeholder="Start writing..." />
+            Post text (shared across every selected channel by default)
+            <textarea rows={4} value={text} disabled={saving} onChange={(event) => setText(event.target.value)} placeholder="Start writing..." />
           </label>
+
+          {selectedAccountIds.length > 0 ? (
+            <div className="publish-channel-panels">
+              {channelAccounts.filter((account) => selectedAccountIds.includes(account.id)).map((account) => {
+                const Icon = channelIcon(account.channel);
+                const isExpanded = expandedAccountId === account.id;
+                const postType = channelPostTypes[account.id] || "feed";
+                return (
+                  <div key={account.id} className={`publish-channel-panel ${isExpanded ? "is-expanded" : ""}`}>
+                    <button type="button" className="publish-channel-panel-head" onClick={() => setExpandedAccountId(isExpanded ? null : account.id)}>
+                      <Icon fontSize="small" />
+                      <span>{account.name}</span>
+                      <em>{POST_TYPE_LABELS[postType]}</em>
+                    </button>
+                    {isExpanded ? (
+                      <div className="publish-channel-panel-body">
+                        <div className="publish-post-type-row">
+                          {Object.entries(POST_TYPE_LABELS).map(([value, label]) => (
+                            <label key={value} className="publish-when-option">
+                              <input
+                                type="radio"
+                                name={`post-type-${account.id}`}
+                                checked={postType === value}
+                                disabled={saving}
+                                onChange={() => setPostType(account.id, value)}
+                              />
+                              {label}
+                            </label>
+                          ))}
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={contentOverrides[account.id] || ""}
+                          disabled={saving}
+                          placeholder={text || "Uses the shared text above unless you customize it here..."}
+                          onChange={(event) => setOverrideText(account.id, event.target.value)}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
 
           <label className="ai-teaching-field">
             Media (optional)

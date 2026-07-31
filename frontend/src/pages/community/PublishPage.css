@@ -165,6 +165,121 @@
   background: var(--tz-primary);
 }
 
+.publish-channel-picker-wrap {
+  position: relative;
+}
+
+.publish-channel-add-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px dashed var(--tz-border);
+  border-radius: 50%;
+  color: var(--tz-text-secondary);
+  background: var(--tz-surface);
+}
+
+.publish-channel-add-btn:hover {
+  border-color: var(--tz-primary);
+  color: var(--tz-primary);
+}
+
+.publish-channel-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  min-width: 220px;
+  padding: 8px;
+  border: 1px solid var(--tz-border);
+  border-radius: 12px;
+  background: var(--tz-surface);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 12%);
+}
+
+.publish-channel-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.publish-channel-picker-row:hover {
+  background: var(--tz-surface-secondary);
+}
+
+.publish-channel-panels {
+  display: grid;
+  gap: 8px;
+}
+
+.publish-channel-panel {
+  border: 1px solid var(--tz-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.publish-channel-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.publish-channel-panel.is-expanded .publish-channel-panel-head {
+  background: var(--tz-surface-secondary);
+  border-bottom: 1px solid var(--tz-border);
+}
+
+.publish-channel-panel-head span {
+  flex: 1;
+}
+
+.publish-channel-panel-head em {
+  padding: 2px 8px;
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-primary-soft);
+  color: var(--tz-primary);
+  font-size: 10px;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.publish-channel-panel-body {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.publish-channel-panel-body textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--tz-border);
+  border-radius: 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.publish-post-type-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
 .publish-when-row {
   display: flex;
   align-items: center;

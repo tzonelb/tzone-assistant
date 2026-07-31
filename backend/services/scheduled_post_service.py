@@ -25,6 +25,13 @@ POST_CHANNELS = {"messenger", "instagram"}
 STATUSES = ["draft", "scheduled", "sent", "failed"]
 DEFAULT_STATUS = "draft"
 
+# Post type per channel — mirrors Buffer's Post/Reel/Story radio. Facebook
+# Stories publishing needs the `pages_manage_posts` + Stories-specific Meta
+# App Review approval that most apps never get — real API errors surface
+# to the user instead of pretending it silently worked.
+POST_TYPES = ["feed", "reels", "story"]
+DEFAULT_POST_TYPE = "feed"
+
 
 class ScheduledPostService:
     def ensure_schema(self) -> None:
@@ -38,6 +45,8 @@ class ScheduledPostService:
                     media_urls_json TEXT NOT NULL DEFAULT '[]',
                     media_type TEXT,
                     channel_account_ids_json TEXT NOT NULL DEFAULT '[]',
+                    content_overrides_json TEXT NOT NULL DEFAULT '{}',
+                    channel_post_types_json TEXT NOT NULL DEFAULT '{}',
                     status TEXT NOT NULL DEFAULT 'draft',
                     scheduled_at TEXT,
                     published_at TEXT,
@@ -49,6 +58,17 @@ class ScheduledPostService:
                 )
                 """
             )
+            existing_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(scheduled_posts)")
+            }
+            if "content_overrides_json" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE scheduled_posts ADD COLUMN content_overrides_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            if "channel_post_types_json" not in existing_columns:
+                conn.execute(
+                    "ALTER TABLE scheduled_posts ADD COLUMN channel_post_types_json TEXT NOT NULL DEFAULT '{}'"
+                )
             conn.commit()
 
     def _validate_channel_accounts(
@@ -71,6 +91,33 @@ class ScheduledPostService:
             selected.append(account)
         return selected
 
+    def _clean_content_overrides(self, content_overrides: dict[str, Any] | None) -> dict[str, str]:
+        if not content_overrides:
+            return {}
+        cleaned = {}
+        for account_id, text in content_overrides.items():
+            text = (text or "").strip()
+            if text:
+                cleaned[str(account_id)] = text
+        return cleaned
+
+    def _clean_channel_post_types(
+        self, *, channel_post_types: dict[str, Any] | None, channel_account_ids: list[int]
+    ) -> dict[str, str]:
+        if not channel_post_types:
+            return {}
+        cleaned = {}
+        for account_id in channel_account_ids:
+            post_type = channel_post_types.get(str(account_id)) or channel_post_types.get(account_id)
+            if not post_type:
+                continue
+            post_type = str(post_type).strip().lower()
+            if post_type not in POST_TYPES:
+                raise ValueError(f'"{post_type}" is not a valid post type. Choose one of: {", ".join(POST_TYPES)}.')
+            if post_type != DEFAULT_POST_TYPE:
+                cleaned[str(account_id)] = post_type
+        return cleaned
+
     def create_post(
         self,
         *,
@@ -79,6 +126,8 @@ class ScheduledPostService:
         channel_account_ids: list[int],
         media_urls: list[str] | None = None,
         media_type: str | None = None,
+        content_overrides: dict[str, Any] | None = None,
+        channel_post_types: dict[str, Any] | None = None,
         status: str = DEFAULT_STATUS,
         scheduled_at: str | None = None,
         actor_user_id: int | None = None,
@@ -95,6 +144,10 @@ class ScheduledPostService:
             raise ValueError("A scheduled post needs a scheduled_at date/time (or post it now instead).")
 
         self._validate_channel_accounts(company_id=company_id, channel_account_ids=channel_account_ids)
+        cleaned_overrides = self._clean_content_overrides(content_overrides)
+        cleaned_post_types = self._clean_channel_post_types(
+            channel_post_types=channel_post_types, channel_account_ids=channel_account_ids
+        )
 
         now = utc_now_iso()
         with db.connect() as conn:
@@ -102,13 +155,14 @@ class ScheduledPostService:
                 """
                 INSERT INTO scheduled_posts (
                     company_id, text, media_urls_json, media_type, channel_account_ids_json,
+                    content_overrides_json, channel_post_types_json,
                     status, scheduled_at, created_by_user_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id, text, json.dumps(media_urls), media_type,
-                    json.dumps(channel_account_ids), status, scheduled_at,
-                    actor_user_id, now, now,
+                    json.dumps(channel_account_ids), json.dumps(cleaned_overrides), json.dumps(cleaned_post_types),
+                    status, scheduled_at, actor_user_id, now, now,
                 ),
             )
             post_id = int(cursor.lastrowid)
@@ -123,6 +177,8 @@ class ScheduledPostService:
         item = dict(row)
         item["media_urls"] = json.loads(item.pop("media_urls_json") or "[]")
         item["channel_account_ids"] = json.loads(item.pop("channel_account_ids_json") or "[]")
+        item["content_overrides"] = json.loads(item.pop("content_overrides_json", None) or "{}")
+        item["channel_post_types"] = json.loads(item.pop("channel_post_types_json", None) or "{}")
         item["results"] = json.loads(item.pop("results_json") or "{}")
         return item
 
@@ -172,6 +228,13 @@ class ScheduledPostService:
         if "channel_account_ids" in values and values["channel_account_ids"] is not None:
             self._validate_channel_accounts(company_id=company_id, channel_account_ids=values["channel_account_ids"])
             cleaned["channel_account_ids_json"] = json.dumps(values["channel_account_ids"])
+        if "content_overrides" in values:
+            cleaned["content_overrides_json"] = json.dumps(self._clean_content_overrides(values["content_overrides"]))
+        if "channel_post_types" in values:
+            account_ids = values.get("channel_account_ids") or existing["channel_account_ids"]
+            cleaned["channel_post_types_json"] = json.dumps(
+                self._clean_channel_post_types(channel_post_types=values["channel_post_types"], channel_account_ids=account_ids)
+            )
         if "scheduled_at" in values:
             cleaned["scheduled_at"] = values["scheduled_at"]
         if "status" in values and values["status"] is not None:
@@ -215,10 +278,27 @@ class ScheduledPostService:
     # results dict is what the UI should actually render, not just the
     # top-level status.
     # -----------------------------------------------------------------
-    def _publish_to_messenger_page(self, *, page_id: str, access_token: str, text: str | None, media_urls: list[str], media_type: str | None) -> dict[str, Any]:
+    def _publish_to_messenger_page(
+        self, *, page_id: str, access_token: str, text: str | None, media_urls: list[str],
+        media_type: str | None, post_type: str = DEFAULT_POST_TYPE,
+    ) -> dict[str, Any]:
         base = f"https://graph.facebook.com/{config.META_API_VERSION}/{page_id}"
         try:
-            if media_type == "video" and media_urls:
+            if post_type == "story" and media_urls:
+                endpoint = "video_stories" if media_type == "video" else "photo_stories"
+                file_field = "video_url" if media_type == "video" else "url"
+                response = requests.post(
+                    f"{base}/{endpoint}",
+                    data={file_field: media_urls[0], "access_token": access_token},
+                    timeout=60,
+                )
+            elif post_type == "reels" and media_type == "video" and media_urls:
+                response = requests.post(
+                    f"{base}/video_reels",
+                    data={"file_url": media_urls[0], "description": text or "", "access_token": access_token},
+                    timeout=60,
+                )
+            elif media_type == "video" and media_urls:
                 response = requests.post(
                     f"{base}/videos",
                     data={"file_url": media_urls[0], "description": text or "", "access_token": access_token},
@@ -243,13 +323,22 @@ class ScheduledPostService:
         except requests.RequestException as exc:
             return {"ok": False, "error": str(exc)}
 
-    def _publish_to_instagram(self, *, ig_user_id: str, access_token: str, text: str | None, media_urls: list[str], media_type: str | None) -> dict[str, Any]:
+    def _publish_to_instagram(
+        self, *, ig_user_id: str, access_token: str, text: str | None, media_urls: list[str],
+        media_type: str | None, post_type: str = DEFAULT_POST_TYPE,
+    ) -> dict[str, Any]:
         if not media_urls:
             return {"ok": False, "error": "Instagram posts require at least one image or video — text-only posts aren't supported by Instagram's API."}
         base = f"https://graph.facebook.com/{config.META_API_VERSION}/{ig_user_id}"
         try:
             container_payload = {"caption": text or "", "access_token": access_token}
-            if media_type == "video":
+            if post_type == "story":
+                container_payload["media_type"] = "STORIES"
+                if media_type == "video":
+                    container_payload["video_url"] = media_urls[0]
+                else:
+                    container_payload["image_url"] = media_urls[0]
+            elif post_type == "reels" or media_type == "video":
                 container_payload["media_type"] = "REELS"
                 container_payload["video_url"] = media_urls[0]
             else:
@@ -291,15 +380,19 @@ class ScheduledPostService:
                 results[str(account_id)] = {"ok": False, "error": str(exc)}
                 continue
 
+            channel_text = post["content_overrides"].get(str(account_id)) or post["text"]
+            channel_post_type = post["channel_post_types"].get(str(account_id), DEFAULT_POST_TYPE)
             if account["channel"] == "messenger":
                 result = self._publish_to_messenger_page(
                     page_id=account["page_id"], access_token=access_token,
-                    text=post["text"], media_urls=post["media_urls"], media_type=post["media_type"],
+                    text=channel_text, media_urls=post["media_urls"], media_type=post["media_type"],
+                    post_type=channel_post_type,
                 )
             else:
                 result = self._publish_to_instagram(
                     ig_user_id=account["instagram_business_id"], access_token=access_token,
-                    text=post["text"], media_urls=post["media_urls"], media_type=post["media_type"],
+                    text=channel_text, media_urls=post["media_urls"], media_type=post["media_type"],
+                    post_type=channel_post_type,
                 )
             results[str(account_id)] = result
             any_success = any_success or result["ok"]

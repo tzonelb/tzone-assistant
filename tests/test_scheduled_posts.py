@@ -191,3 +191,50 @@ def test_posts_isolated_per_company(client_and_db):
     from backend.services.scheduled_post_service import scheduled_post_service
     with pytest.raises(KeyError):
         scheduled_post_service.create_post(company_id=2, text="other company", channel_account_ids=[1])
+
+
+def test_create_stores_content_overrides_and_post_types(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/scheduled-posts", json={
+        "text": "shared text",
+        "channel_account_ids": [1, 2],
+        "content_overrides": {"2": "instagram-only caption"},
+        "channel_post_types": {"2": "reels"},
+    })
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["content_overrides"] == {"2": "instagram-only caption"}
+    assert body["channel_post_types"] == {"2": "reels"}
+
+
+def test_create_rejects_invalid_post_type(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/scheduled-posts", json={
+        "text": "hi", "channel_account_ids": [1], "channel_post_types": {"1": "not-a-real-type"},
+    })
+    assert resp.status_code == 400
+
+
+def test_publish_uses_per_channel_override_and_reel_type(client_and_db):
+    client = client_and_db
+    with patch(
+        "backend.services.scheduled_post_service.channel_account_service.get_decrypted_token",
+        return_value="fake-token",
+    ), patch("backend.services.scheduled_post_service.requests.post") as mock_post:
+        mock_post.return_value.ok = True
+        mock_post.return_value.content = b'{"id": "post_123"}'
+        mock_post.return_value.json.return_value = {"id": "post_123"}
+
+        created = client.post("/api/scheduled-posts", json={
+            "text": "shared text",
+            "channel_account_ids": [1],
+            "media_urls": ["https://cdn.test/video.mp4"],
+            "media_type": "video",
+            "content_overrides": {"1": "override just for facebook"},
+            "channel_post_types": {"1": "reels"},
+        }).json()
+        client.post(f"/api/scheduled-posts/{created['id']}/publish-now")
+
+    mock_post.assert_called_once()
+    assert "/page123/video_reels" in mock_post.call_args.args[0]
+    assert mock_post.call_args.kwargs["data"]["description"] == "override just for facebook"
