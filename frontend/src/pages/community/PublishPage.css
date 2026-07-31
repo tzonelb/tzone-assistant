@@ -229,9 +229,33 @@
 }
 
 .publish-channel-panel {
-  border: 1px solid var(--buffer-border);
   border-radius: 12px;
   overflow: hidden;
+}
+
+.publish-channel-panel.is-expanded {
+  border: 1px solid var(--buffer-border);
+}
+
+.publish-channel-panel-collapsed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: #fdf6ea;
+  color: var(--buffer-text-muted);
+  font-size: 13px;
+  text-align: left;
+}
+
+.publish-channel-panel-collapsed-row span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .publish-channel-panel-head {

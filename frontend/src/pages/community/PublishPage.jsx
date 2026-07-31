@@ -244,13 +244,21 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                   const Icon = channelIcon(account.channel);
                   const isExpanded = expandedAccountId === account.id;
                   const postType = channelPostTypes[account.id] || "feed";
+                  const overrideText = contentOverrides[account.id] || "";
                   return (
                     <div key={account.id} className={`publish-channel-panel ${isExpanded ? "is-expanded" : ""}`}>
-                      <button type="button" className="publish-channel-panel-head" onClick={() => setExpandedAccountId(isExpanded ? null : account.id)}>
-                        <Icon fontSize="small" />
-                        <span>{account.name}</span>
-                        <em>{POST_TYPE_LABELS[postType]}</em>
-                      </button>
+                      {isExpanded ? (
+                        <button type="button" className="publish-channel-panel-head" onClick={() => setExpandedAccountId(null)}>
+                          <Icon fontSize="small" />
+                          <span>{account.name}</span>
+                          <em>{POST_TYPE_LABELS[postType]}</em>
+                        </button>
+                      ) : (
+                        <button type="button" className="publish-channel-panel-collapsed-row" onClick={() => setExpandedAccountId(account.id)}>
+                          <Icon fontSize="small" />
+                          <span>{overrideText || text || "What would you like to share?"}</span>
+                        </button>
+                      )}
                       {isExpanded ? (
                         <div className="publish-channel-panel-body">
                           <div className="publish-post-type-row">
