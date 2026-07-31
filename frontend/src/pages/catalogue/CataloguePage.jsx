@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { AddOutlined, CloseOutlined, DeleteOutlineOutlined } from "@mui/icons-material";
+import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, UploadFileOutlined } from "@mui/icons-material";
 import {
   catalogueOptionsRequest,
   createProductRequest,
   deleteProductRequest,
+  importCatalogueCsvRequest,
+  importWhatsAppCatalogueRequest,
   listProductsRequest,
   updateProductRequest,
 } from "../../api/client";
@@ -31,6 +33,103 @@ function formatPrice(priceCents) {
   return `$${(Number(priceCents || 0) / 100).toFixed(2)}`;
 }
 
+function ImportDialog({ open, onCancel, onImported }) {
+  const [mode, setMode] = useState("csv");
+  const [catalogId, setCatalogId] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  useEffect(() => {
+    if (!open) { setMode("csv"); setCatalogId(""); setError(""); setResult(null); }
+  }, [open]);
+
+  if (!open) return null;
+
+  async function handleCsvFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    setError("");
+    setResult(null);
+    try {
+      const summary = await importCatalogueCsvRequest(file);
+      setResult(summary);
+      onImported();
+    } catch (requestError) {
+      setError(requestError.message || "Could not import this file.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleWhatsAppImport(event) {
+    event.preventDefault();
+    if (!catalogId.trim()) return;
+    setImporting(true);
+    setError("");
+    setResult(null);
+    try {
+      const summary = await importWhatsAppCatalogueRequest(catalogId.trim());
+      setResult(summary);
+      onImported();
+    } catch (requestError) {
+      setError(requestError.message || "Could not import from WhatsApp Catalogue.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  return (
+    <div className="tz-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !importing) onCancel(); }}>
+      <div className="tz-dialog product-import-dialog">
+        <header className="tz-dialog-header">
+          <h3>Import products</h3>
+          <button type="button" className="tz-dialog-close" onClick={onCancel} disabled={importing}><CloseOutlined fontSize="small" /></button>
+        </header>
+        <div className="tz-dialog-body">
+          <div className="publish-tabs">
+            <button type="button" className={`publish-tab ${mode === "csv" ? "is-active" : ""}`} onClick={() => setMode("csv")}>CSV file</button>
+            <button type="button" className={`publish-tab ${mode === "whatsapp" ? "is-active" : ""}`} onClick={() => setMode("whatsapp")}>WhatsApp Catalogue</button>
+          </div>
+
+          {mode === "csv" ? (
+            <label className="product-field" style={{ marginTop: 16 }}>
+              CSV file (columns: name, sku, description, category, price, stock_quantity — only "name" is required)
+              <input type="file" accept=".csv,text/csv" disabled={importing} onChange={handleCsvFile} />
+              <span className="product-import-note">Works for any product export from a POS system or website admin panel, as long as it's a CSV.</span>
+            </label>
+          ) : (
+            <form onSubmit={handleWhatsAppImport} style={{ marginTop: 16 }}>
+              <label className="product-field">
+                Meta Commerce Catalog ID
+                <input value={catalogId} disabled={importing} onChange={(event) => setCatalogId(event.target.value)} placeholder="e.g. 1234567890" />
+                <span className="product-import-note">Uses your already-connected WhatsApp channel's access token — connect one first from Company Settings → Channels.</span>
+              </label>
+              <AppButton type="submit" variant="primary" loading={importing} disabled={!catalogId.trim()} style={{ marginTop: 10 }}>
+                Import from WhatsApp
+              </AppButton>
+            </form>
+          )}
+
+          {importing && mode === "csv" ? <p className="product-import-note">Importing…</p> : null}
+          {error ? <p className="product-form-error">{error}</p> : null}
+          {result ? (
+            <p className="product-import-result">
+              {result.created} created, {result.updated} updated
+              {result.errors?.length ? `, ${result.errors.length} row(s) skipped: ${result.errors.join(" ")}` : "."}
+            </p>
+          ) : null}
+        </div>
+        <footer className="tz-dialog-actions">
+          <AppButton type="button" variant="secondary" onClick={onCancel}>Close</AppButton>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 export default function CataloguePage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +146,7 @@ export default function CataloguePage() {
   const [deleting, setDeleting] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -211,9 +311,14 @@ export default function CataloguePage() {
     <section className="catalogue-page">
       <PageHeader
         actions={
-          <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openDialog}>
-            New Product
-          </AppButton>
+          <>
+            <AppButton variant="secondary" icon={<UploadFileOutlined fontSize="small" />} onClick={() => setImportDialogOpen(true)}>
+              Import
+            </AppButton>
+            <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openDialog}>
+              New Product
+            </AppButton>
+          </>
         }
       />
 
@@ -359,6 +464,12 @@ export default function CataloguePage() {
         loading={deleting}
         onConfirm={confirmDeleteProduct}
         onCancel={() => setProductToDelete(null)}
+      />
+
+      <ImportDialog
+        open={importDialogOpen}
+        onCancel={() => setImportDialogOpen(false)}
+        onImported={load}
       />
     </section>
   );

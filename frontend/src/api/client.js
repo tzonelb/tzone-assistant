@@ -439,6 +439,36 @@ export async function deleteProductRequest(productId) {
   return apiRequest(`/api/catalogue/${productId}`, { method: "DELETE" });
 }
 
+export async function importCatalogueCsvRequest(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const headers = { Accept: "application/json" };
+  const token = getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/catalogue/import/csv`, { method: "POST", headers, body: formData });
+  } catch {
+    throw new Error("Cannot connect to the T-ZONE server. Make sure FastAPI is running on port 8000.");
+  }
+
+  const data = await parseResponse(response);
+  if (!response.ok) {
+    const message = resolveApiErrorMessage(data, response.status);
+    const error = new Error(message);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  return data;
+}
+
+export async function importWhatsAppCatalogueRequest(catalogId) {
+  return apiRequest("/api/catalogue/import/whatsapp", { method: "POST", body: { catalog_id: catalogId } });
+}
+
 export async function getAnalyticsSummaryRequest() {
   return apiRequest("/api/analytics");
 }

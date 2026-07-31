@@ -221,3 +221,94 @@ def test_products_are_isolated_per_company(client_and_db):
 
     delete_resp = client.delete(f"/api/catalogue/{other_product['id']}")
     assert delete_resp.status_code == 404
+
+
+def test_import_csv_creates_products(client_and_db):
+    client = client_and_db
+    csv_content = (
+        "name,sku,description,category,price,stock_quantity\n"
+        "Speaker 8 Inch,SPK-8,Loud bass speaker,Audio,49.99,10\n"
+        "Wireless Earbuds,EAR-1,,Audio,19.5,25\n"
+    )
+    resp = client.post(
+        "/api/catalogue/import/csv",
+        files={"file": ("products.csv", csv_content.encode("utf-8"), "text/csv")},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["created"] == 2
+    assert body["updated"] == 0
+    assert body["errors"] == []
+
+    items = client.get("/api/catalogue").json()["items"]
+    assert len(items) == 2
+    speaker = next(item for item in items if item["sku"] == "SPK-8")
+    assert speaker["price_cents"] == 4999
+    assert speaker["stock_quantity"] == 10
+
+
+def test_import_csv_upserts_by_sku_on_rerun(client_and_db):
+    client = client_and_db
+    csv_content = "name,sku,price\nSpeaker,SPK-8,49.99\n"
+    client.post("/api/catalogue/import/csv", files={"file": ("a.csv", csv_content.encode(), "text/csv")})
+
+    updated_csv = "name,sku,price\nSpeaker (updated name),SPK-8,39.99\n"
+    resp = client.post("/api/catalogue/import/csv", files={"file": ("b.csv", updated_csv.encode(), "text/csv")})
+    body = resp.json()
+    assert body["created"] == 0
+    assert body["updated"] == 1
+
+    items = client.get("/api/catalogue").json()["items"]
+    assert len(items) == 1
+    assert items[0]["name"] == "Speaker (updated name)"
+    assert items[0]["price_cents"] == 3999
+
+
+def test_import_csv_requires_name_column(client_and_db):
+    client = client_and_db
+    csv_content = "sku,price\nX,1\n"
+    resp = client.post("/api/catalogue/import/csv", files={"file": ("bad.csv", csv_content.encode(), "text/csv")})
+    assert resp.status_code == 400
+
+
+def test_import_csv_skips_rows_missing_name(client_and_db):
+    client = client_and_db
+    csv_content = "name,price\n,10\nValid Product,5\n"
+    resp = client.post("/api/catalogue/import/csv", files={"file": ("mixed.csv", csv_content.encode(), "text/csv")})
+    body = resp.json()
+    assert body["created"] == 1
+    assert len(body["errors"]) == 1
+
+
+def test_import_whatsapp_requires_connected_channel(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/catalogue/import/whatsapp", json={"catalog_id": "12345"})
+    assert resp.status_code == 400
+    assert "Connect a WhatsApp channel" in resp.json()["detail"]
+
+
+def test_import_whatsapp_catalog_creates_products(client_and_db):
+    from unittest.mock import patch
+
+    client = client_and_db
+    with patch(
+        "backend.services.channel_account_service.channel_account_service.get_active_token",
+        return_value="fake-wa-token",
+    ), patch("backend.services.catalogue_service.requests.get") as mock_get:
+        mock_get.return_value.json.return_value = {
+            "data": [
+                {"name": "Router X1", "retailer_id": "RTR-1", "price": "25.00 USD", "description": "Home router"},
+                {"name": "Cable 5m", "retailer_id": "CBL-5", "price": "3.00 USD"},
+            ],
+            "paging": {},
+        }
+        resp = client.post("/api/catalogue/import/whatsapp", json={"catalog_id": "cat_123"})
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["created"] == 2
+
+    items = client.get("/api/catalogue").json()["items"]
+    router = next(item for item in items if item["sku"] == "RTR-1")
+    assert router["price_cents"] == 2500
+    assert router["category"] == "WhatsApp Catalogue"

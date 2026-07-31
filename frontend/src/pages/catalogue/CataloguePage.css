@@ -135,3 +135,46 @@
   color: var(--tz-danger);
   font-size: 13px;
 }
+
+.product-import-dialog {
+  width: min(520px, 92vw);
+}
+
+.product-import-dialog .publish-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-surface);
+}
+
+.product-import-dialog .publish-tab {
+  min-height: 32px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--tz-radius-round);
+  color: var(--tz-text-secondary);
+  background: transparent;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.product-import-dialog .publish-tab.is-active {
+  color: white;
+  background: linear-gradient(135deg, var(--tz-primary), var(--tz-secondary));
+}
+
+.product-import-note {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.product-import-result {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--tz-primary-soft);
+  font-size: 13px;
+}

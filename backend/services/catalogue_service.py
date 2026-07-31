@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import csv
+import io
 import sqlite3
 from datetime import datetime, timezone
 from typing import Any
+
+import requests
 
 from database.database import db
 
@@ -273,6 +277,194 @@ class CatalogueService:
             conn.commit()
         if cursor.rowcount == 0:
             raise KeyError("Product not found")
+
+    def _upsert_import_row(
+        self, conn, *, company_id: int, name: str, sku: str | None, description: str | None,
+        category: str | None, price_cents: int, stock_quantity: int, image_url: str | None,
+        actor_user_id: int | None, now: str,
+    ) -> str:
+        """Shared by every import source: create a product, or update it
+        in place if a product with this SKU already exists for this
+        company — imports are meant to be re-run (a "Sync" button), so
+        they must be idempotent rather than erroring on the SKU that
+        was created by the previous sync. Returns "created" or "updated"."""
+        existing = None
+        if sku:
+            existing = conn.execute(
+                "SELECT id FROM products WHERE company_id = ? AND sku = ?", (company_id, sku),
+            ).fetchone()
+
+        if existing:
+            conn.execute(
+                """
+                UPDATE products SET name = ?, description = ?, category = ?,
+                    price_cents = ?, stock_quantity = ?, image_url = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (name, description, category, price_cents, stock_quantity, image_url, now, existing["id"]),
+            )
+            return "updated"
+
+        conn.execute(
+            """
+            INSERT INTO products (
+                company_id, name, sku, description, category,
+                price_cents, stock_quantity, status, image_url,
+                created_by_user_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                company_id, name, sku, description, category,
+                price_cents, stock_quantity, DEFAULT_STATUS, image_url,
+                actor_user_id, now, now,
+            ),
+        )
+        return "created"
+
+    def import_from_csv(self, *, company_id: int, file_content: bytes, actor_user_id: int | None = None) -> dict[str, Any]:
+        """Column names are matched case-insensitively; only "name" is
+        required. Works for a CSV exported from pretty much any POS or
+        website product-catalog admin panel, which is why this single
+        importer covers both of those sources rather than needing a
+        bespoke integration per vendor (that's a much bigger, separate
+        ask — see the e-commerce-platform integration item)."""
+        try:
+            text = file_content.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise ValueError("Could not read this file as UTF-8 text — export it as a plain CSV.") from exc
+
+        reader = csv.DictReader(io.StringIO(text))
+        if not reader.fieldnames:
+            raise ValueError("This file has no header row — the first line must name the columns.")
+        field_map = {str(field).strip().lower(): field for field in reader.fieldnames}
+        if "name" not in field_map:
+            raise ValueError('This file needs a "name" column.')
+
+        created = 0
+        updated = 0
+        errors: list[str] = []
+        now = utc_now_iso()
+
+        with db.connect() as conn:
+            for index, row in enumerate(reader, start=2):  # header is line 1
+                name = self._clean(row.get(field_map["name"]))
+                if not name:
+                    errors.append(f"Row {index}: missing name, skipped.")
+                    continue
+                sku = self._clean(row.get(field_map.get("sku", ""))) if "sku" in field_map else None
+                description = self._clean(row.get(field_map.get("description", ""))) if "description" in field_map else None
+                category = self._clean(row.get(field_map.get("category", ""))) if "category" in field_map else None
+                image_url = self._clean(row.get(field_map.get("image_url", ""))) if "image_url" in field_map else None
+
+                price_cents = 0
+                if "price" in field_map:
+                    raw_price = self._clean(row.get(field_map["price"]))
+                    if raw_price:
+                        try:
+                            price_cents = round(float(raw_price) * 100)
+                        except ValueError:
+                            errors.append(f'Row {index}: "{raw_price}" is not a valid price, defaulted to 0.')
+
+                stock_quantity = 0
+                if "stock_quantity" in field_map or "stock" in field_map:
+                    raw_stock = self._clean(row.get(field_map.get("stock_quantity") or field_map.get("stock")))
+                    if raw_stock:
+                        try:
+                            stock_quantity = int(float(raw_stock))
+                        except ValueError:
+                            errors.append(f'Row {index}: "{raw_stock}" is not a valid stock quantity, defaulted to 0.')
+
+                try:
+                    outcome = self._upsert_import_row(
+                        conn, company_id=company_id, name=name, sku=sku, description=description,
+                        category=category, price_cents=max(price_cents, 0), stock_quantity=max(stock_quantity, 0),
+                        image_url=image_url, actor_user_id=actor_user_id, now=now,
+                    )
+                    if outcome == "created":
+                        created += 1
+                    else:
+                        updated += 1
+                except sqlite3.IntegrityError:
+                    errors.append(f"Row {index}: could not save (duplicate SKU conflict).")
+            conn.commit()
+
+        return {"created": created, "updated": updated, "errors": errors}
+
+    def import_from_whatsapp_catalog(
+        self, *, company_id: int, catalog_id: str, actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Pulls products from a Meta Commerce catalog linked to the
+        company's WhatsApp Business Account (Graph API's Catalog
+        Product endpoint — this is the same catalog WhatsApp's own
+        "View catalog" button in a chat reads from). Reuses the token
+        from the company's already-connected WhatsApp channel account
+        rather than asking the user to paste a raw access token."""
+        from backend.services.channel_account_service import channel_account_service
+        from config.settings import config
+
+        access_token = channel_account_service.get_active_token(company_id=company_id, channel="whatsapp")
+        if not access_token:
+            raise ValueError("Connect a WhatsApp channel first (Company Settings → Channels) before importing its catalogue.")
+
+        created = 0
+        updated = 0
+        errors: list[str] = []
+        now = utc_now_iso()
+
+        url = f"https://graph.facebook.com/{config.META_API_VERSION}/{catalog_id}/products"
+        params = {
+            "fields": "name,description,price,retailer_id,availability,image_url",
+            "access_token": access_token,
+            "limit": 100,
+        }
+
+        with db.connect() as conn:
+            pages_fetched = 0
+            while url and pages_fetched < 50:  # hard cap — a runaway pagination loop should never hang a request indefinitely
+                try:
+                    response = requests.get(url, params=params if pages_fetched == 0 else None, timeout=30)
+                    data = response.json()
+                except requests.RequestException as exc:
+                    raise ValueError(f"Could not reach Meta to fetch this catalog: {exc}") from exc
+
+                if "error" in data:
+                    raise ValueError(data["error"].get("message", "Meta rejected this catalog request."))
+
+                for item in data.get("data", []):
+                    name = self._clean(item.get("name"))
+                    if not name:
+                        continue
+                    sku = self._clean(item.get("retailer_id"))
+                    description = self._clean(item.get("description"))
+                    image_url = self._clean(item.get("image_url"))
+
+                    price_cents = 0
+                    raw_price = str(item.get("price") or "").strip()
+                    if raw_price:
+                        numeric_part = "".join(char for char in raw_price if char.isdigit() or char == ".")
+                        try:
+                            price_cents = round(float(numeric_part) * 100) if numeric_part else 0
+                        except ValueError:
+                            price_cents = 0
+
+                    try:
+                        outcome = self._upsert_import_row(
+                            conn, company_id=company_id, name=name, sku=sku, description=description,
+                            category="WhatsApp Catalogue", price_cents=price_cents, stock_quantity=0,
+                            image_url=image_url, actor_user_id=actor_user_id, now=now,
+                        )
+                        if outcome == "created":
+                            created += 1
+                        else:
+                            updated += 1
+                    except sqlite3.IntegrityError:
+                        errors.append(f'"{name}": could not save (duplicate SKU conflict).')
+
+                url = (data.get("paging", {}) or {}).get("next")
+                pages_fetched += 1
+            conn.commit()
+
+        return {"created": created, "updated": updated, "errors": errors}
 
     def list_categories(self, *, company_id: int) -> list[str]:
         with db.connect() as conn:

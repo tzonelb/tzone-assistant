@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 
-from backend.api.schemas.catalogue import ProductCreateRequest, ProductUpdateRequest
+from backend.api.schemas.catalogue import ProductCreateRequest, ProductUpdateRequest, WhatsAppCatalogImportRequest
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.catalogue_service import STATUSES, catalogue_service
 
@@ -83,6 +83,30 @@ def update_product(product_id: int, payload: ProductUpdateRequest, context=Depen
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/import/csv")
+async def import_csv(file: UploadFile, context=Depends(current_context)):
+    current_user, company_id = context
+    content = await file.read()
+    try:
+        return catalogue_service.import_from_csv(
+            company_id=company_id, file_content=content, actor_user_id=current_user.get("id"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/import/whatsapp")
+def import_whatsapp_catalog(payload: WhatsAppCatalogImportRequest, context=Depends(current_context)):
+    current_user, company_id = context
+    try:
+        return catalogue_service.import_from_whatsapp_catalog(
+            company_id=company_id, catalog_id=payload.catalog_id,
+            actor_user_id=current_user.get("id"),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

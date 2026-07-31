@@ -20,3 +20,7 @@ class ProductUpdateRequest(BaseModel):
     stock_quantity: int | None = None
     image_url: str | None = Field(default=None, max_length=2000)
     status: str | None = None
+
+
+class WhatsAppCatalogImportRequest(BaseModel):
+    catalog_id: str = Field(max_length=80)
