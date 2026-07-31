@@ -220,3 +220,60 @@ def test_tasks_are_isolated_per_company(client_and_db):
 
     delete_resp = client.delete(f"/api/tasks/{other_task['id']}")
     assert delete_resp.status_code == 404
+
+
+def test_create_task_with_type(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/tasks", json={"title": "Follow up with lead", "task_type": "follow_up"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["task_type"] == "follow_up"
+
+
+def test_create_task_defaults_type_to_other(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/tasks", json={"title": "X"})
+    assert resp.json()["task_type"] == "other"
+
+
+def test_create_task_rejects_invalid_type(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/tasks", json={"title": "X", "task_type": "not_a_real_type"})
+    assert resp.status_code == 400
+
+
+def test_create_task_linked_to_conversation(client_and_db):
+    from database.database import db
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO conversations (id, company_id, channel, external_user_id, status, created_at, updated_at) "
+            "VALUES (1, 1, 'telegram', 'u123', 'open', datetime('now'), datetime('now'))"
+        )
+        conn.commit()
+
+    client = client_and_db
+    resp = client.post("/api/tasks", json={"title": "Handle complaint", "task_type": "complaint", "conversation_id": 1})
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["conversation_id"] == 1
+    assert body["conversation_channel"] == "telegram"
+    assert body["conversation_external_user_id"] == "u123"
+
+
+def test_create_task_rejects_unknown_conversation(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/tasks", json={"title": "X", "conversation_id": 999})
+    assert resp.status_code == 404
+
+
+def test_update_task_type(client_and_db):
+    client = client_and_db
+    created = client.post("/api/tasks", json={"title": "X"}).json()
+    resp = client.put(f"/api/tasks/{created['id']}", json={"task_type": "sales_inquiry"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["task_type"] == "sales_inquiry"
+
+
+def test_task_options_includes_task_types(client_and_db):
+    client = client_and_db
+    resp = client.get("/api/tasks/options")
+    assert "follow_up" in resp.json()["task_types"]

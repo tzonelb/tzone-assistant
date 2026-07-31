@@ -11,13 +11,15 @@ def utc_now_iso() -> str:
 
 
 # Tasks are a company's internal work list — follow-ups, payments, services
-# and internal cases assigned to the team. Status/priority are fixed, small
-# enumerations (unlike Departments, which are free-form per company) so the
-# UI can render predictable filters/selects without per-company config.
+# and internal cases assigned to the team. Status/priority/type are fixed,
+# small enumerations (unlike Departments, which are free-form per company)
+# so the UI can render predictable filters/selects without per-company config.
 STATUSES = ["open", "in_progress", "done", "cancelled"]
 PRIORITIES = ["low", "normal", "high", "urgent"]
+TASK_TYPES = ["follow_up", "complaint", "service_request", "sales_inquiry", "internal", "other"]
 DEFAULT_STATUS = "open"
 DEFAULT_PRIORITY = "normal"
+DEFAULT_TASK_TYPE = "other"
 
 
 class TaskService:
@@ -36,10 +38,12 @@ class TaskService:
                     company_id INTEGER NOT NULL,
                     title TEXT NOT NULL,
                     description TEXT,
+                    task_type TEXT NOT NULL DEFAULT 'other',
                     status TEXT NOT NULL DEFAULT 'open',
                     priority TEXT NOT NULL DEFAULT 'normal',
                     assigned_user_id INTEGER,
                     customer_id INTEGER,
+                    conversation_id INTEGER,
                     due_at TEXT,
                     created_by_user_id INTEGER,
                     created_at TEXT NOT NULL,
@@ -48,10 +52,16 @@ class TaskService:
                     FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
                     FOREIGN KEY(assigned_user_id) REFERENCES users(id) ON DELETE SET NULL,
                     FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+                    FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE SET NULL,
                     FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
                 )
                 """
             )
+            existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(tasks)").fetchall()}
+            if "task_type" not in existing_columns:
+                conn.execute("ALTER TABLE tasks ADD COLUMN task_type TEXT NOT NULL DEFAULT 'other'")
+            if "conversation_id" not in existing_columns:
+                conn.execute("ALTER TABLE tasks ADD COLUMN conversation_id INTEGER")
             conn.commit()
 
     @staticmethod
@@ -77,15 +87,25 @@ class TaskService:
         if not exists:
             raise KeyError("Customer not found")
 
+    def _validate_conversation(self, conn: Any, *, company_id: int, conversation_id: int) -> None:
+        exists = conn.execute(
+            "SELECT id FROM conversations WHERE id = ? AND company_id = ?",
+            (conversation_id, company_id),
+        ).fetchone()
+        if not exists:
+            raise KeyError("Conversation not found")
+
     def create_task(
         self,
         *,
         company_id: int,
         title: str,
         description: str | None = None,
+        task_type: str = DEFAULT_TASK_TYPE,
         priority: str = DEFAULT_PRIORITY,
         assigned_user_id: int | None = None,
         customer_id: int | None = None,
+        conversation_id: int | None = None,
         due_at: str | None = None,
         actor_user_id: int | None = None,
     ) -> dict[str, Any]:
@@ -97,6 +117,10 @@ class TaskService:
         if clean_priority not in PRIORITIES:
             raise ValueError(f'"{clean_priority}" is not a valid priority. Choose one of: {", ".join(PRIORITIES)}.')
 
+        clean_task_type = str(task_type or DEFAULT_TASK_TYPE).strip().lower()
+        if clean_task_type not in TASK_TYPES:
+            raise ValueError(f'"{clean_task_type}" is not a valid task type. Choose one of: {", ".join(TASK_TYPES)}.')
+
         description = self._clean(description)
         due_at = self._clean(due_at)
         now = utc_now_iso()
@@ -106,18 +130,20 @@ class TaskService:
                 self._validate_assignee(conn, company_id=company_id, assigned_user_id=assigned_user_id)
             if customer_id is not None:
                 self._validate_customer(conn, company_id=company_id, customer_id=customer_id)
+            if conversation_id is not None:
+                self._validate_conversation(conn, company_id=company_id, conversation_id=conversation_id)
 
             cursor = conn.execute(
                 """
                 INSERT INTO tasks (
-                    company_id, title, description, status, priority,
-                    assigned_user_id, customer_id, due_at, created_by_user_id,
+                    company_id, title, description, task_type, status, priority,
+                    assigned_user_id, customer_id, conversation_id, due_at, created_by_user_id,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    company_id, clean_title, description, DEFAULT_STATUS, clean_priority,
-                    assigned_user_id, customer_id, due_at, actor_user_id, now, now,
+                    company_id, clean_title, description, clean_task_type, DEFAULT_STATUS, clean_priority,
+                    assigned_user_id, customer_id, conversation_id, due_at, actor_user_id, now, now,
                 ),
             )
             task_id = int(cursor.lastrowid)
@@ -130,7 +156,9 @@ class TaskService:
         return f"""
             SELECT t.*,
                    (SELECT COALESCE(u.full_name, u.email) FROM users u WHERE u.id = t.assigned_user_id) AS assigned_user_name,
-                   (SELECT COALESCE(c.display_name, c.internal_name) FROM customers c WHERE c.id = t.customer_id) AS customer_name
+                   (SELECT COALESCE(c.display_name, c.internal_name) FROM customers c WHERE c.id = t.customer_id) AS customer_name,
+                   (SELECT conv.channel FROM conversations conv WHERE conv.id = t.conversation_id) AS conversation_channel,
+                   (SELECT conv.external_user_id FROM conversations conv WHERE conv.id = t.conversation_id) AS conversation_external_user_id
             FROM tasks t
             WHERE {where_clause}
         """
@@ -209,6 +237,12 @@ class TaskService:
 
         if "due_at" in values:
             cleaned["due_at"] = self._clean(values["due_at"])
+
+        if "task_type" in values and values["task_type"] is not None:
+            task_type = str(values["task_type"]).strip().lower()
+            if task_type not in TASK_TYPES:
+                raise ValueError(f'"{task_type}" is not a valid task type. Choose one of: {", ".join(TASK_TYPES)}.')
+            cleaned["task_type"] = task_type
 
         if "priority" in values and values["priority"] is not None:
             priority = str(values["priority"]).strip().lower()

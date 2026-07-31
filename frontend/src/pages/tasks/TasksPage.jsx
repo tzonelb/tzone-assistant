@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AddOutlined, CloseOutlined, DeleteOutlineOutlined } from "@mui/icons-material";
+import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, ForumOutlined } from "@mui/icons-material";
 import {
   createTaskRequest,
   deleteTaskRequest,
@@ -14,10 +14,12 @@ import "./TasksPage.css";
 
 const PRIORITY_TONE = { low: "neutral", normal: "info", high: "warning", urgent: "danger" };
 const FALLBACK_PRIORITIES = ["low", "normal", "high", "urgent"];
+const FALLBACK_TASK_TYPES = ["follow_up", "complaint", "service_request", "sales_inquiry", "internal", "other"];
 
 const EMPTY_FORM = {
   title: "",
   description: "",
+  taskType: "other",
   priority: "normal",
   assignedUserId: "",
   dueDate: "",
@@ -59,6 +61,7 @@ export default function TasksPage() {
 
   const [statuses, setStatuses] = useState([]);
   const [priorities, setPriorities] = useState([]);
+  const [taskTypes, setTaskTypes] = useState([]);
   const [employees, setEmployees] = useState([]);
 
   const [statusFilter, setStatusFilter] = useState("");
@@ -101,6 +104,7 @@ export default function TasksPage() {
       .then((result) => {
         setStatuses(Array.isArray(result?.statuses) ? result.statuses : []);
         setPriorities(Array.isArray(result?.priorities) ? result.priorities : []);
+        setTaskTypes(Array.isArray(result?.task_types) ? result.task_types : []);
         setEmployees(Array.isArray(result?.employees) ? result.employees : []);
       })
       .catch(() => {});
@@ -161,6 +165,7 @@ export default function TasksPage() {
       await createTaskRequest({
         title: form.title.trim(),
         description: form.description.trim() || undefined,
+        task_type: form.taskType,
         priority: form.priority,
         assigned_user_id: form.assignedUserId ? Number(form.assignedUserId) : undefined,
         customer_id: selectedCustomer ? selectedCustomer.id : undefined,
@@ -199,6 +204,11 @@ export default function TasksPage() {
           {row.description ? <span>{row.description}</span> : null}
         </div>
       ),
+    },
+    {
+      key: "task_type",
+      label: "Type",
+      render: (value) => humanize(value),
     },
     {
       key: "priority",
@@ -246,6 +256,24 @@ export default function TasksPage() {
         <span className={isOverdue(value, row.status) ? "task-due-overdue" : undefined}>
           {formatDueDate(value)}
         </span>
+      ),
+    },
+    {
+      key: "conversation_channel",
+      label: "",
+      width: 44,
+      render: (_value, row) => (
+        row.conversation_channel && row.conversation_external_user_id ? (
+          <button
+            type="button"
+            className="task-delete-button"
+            aria-label="Open the conversation this task came from"
+            title="Open source conversation"
+            onClick={() => navigate(`/conversations/${encodeURIComponent(row.conversation_channel)}/${encodeURIComponent(row.conversation_external_user_id)}`)}
+          >
+            <ForumOutlined fontSize="small" />
+          </button>
+        ) : null
       ),
     },
     {
@@ -337,6 +365,18 @@ export default function TasksPage() {
                 />
               </label>
               <div className="task-field-row">
+                <label className="task-field">
+                  Type
+                  <select
+                    className="tz-select"
+                    value={form.taskType}
+                    onChange={(event) => setForm((current) => ({ ...current, taskType: event.target.value }))}
+                  >
+                    {(taskTypes.length ? taskTypes : FALLBACK_TASK_TYPES).map((type) => (
+                      <option value={type} key={type}>{humanize(type)}</option>
+                    ))}
+                  </select>
+                </label>
                 <label className="task-field">
                   Priority
                   <select

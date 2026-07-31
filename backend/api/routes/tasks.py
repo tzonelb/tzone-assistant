@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.api.routes.conversations import _company_employees
 from backend.api.schemas.tasks import TaskCreateRequest, TaskUpdateRequest
 from backend.services.auth_service import auth_service, get_current_user
-from backend.services.task_service import PRIORITIES, STATUSES, task_service
+from backend.services.task_service import PRIORITIES, STATUSES, TASK_TYPES, task_service
 
 
 router = APIRouter(prefix="/api/tasks", tags=["Tasks"])
@@ -25,6 +25,7 @@ def task_options(context=Depends(current_context)):
     return {
         "statuses": STATUSES,
         "priorities": PRIORITIES,
+        "task_types": TASK_TYPES,
         "employees": _company_employees(company_id),
     }
 
@@ -37,9 +38,11 @@ def create_task(payload: TaskCreateRequest, context=Depends(current_context)):
             company_id=company_id,
             title=payload.title,
             description=payload.description,
+            task_type=payload.task_type,
             priority=payload.priority,
             assigned_user_id=payload.assigned_user_id,
             customer_id=payload.customer_id,
+            conversation_id=payload.conversation_id,
             due_at=payload.due_at,
             actor_user_id=current_user.get("id"),
         )
