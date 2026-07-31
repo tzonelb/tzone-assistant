@@ -321,6 +321,14 @@ class ConversationControlService:
                 """
             )
 
+            self._add_missing_columns(
+                conn,
+                "conversation_notes",
+                {
+                    "mentioned_user_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+                },
+            )
+
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS branches (
@@ -2057,6 +2065,7 @@ class ConversationControlService:
         external_user_id: str,
         author_user_id: int,
         note: str,
+        mentioned_user_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         clean_note = note.strip()
 
@@ -2074,6 +2083,20 @@ class ConversationControlService:
         )
 
         with db.connect() as conn:
+            valid_mentions: list[int] = []
+            if mentioned_user_ids:
+                placeholders = ",".join("?" for _ in mentioned_user_ids)
+                mention_rows = conn.execute(
+                    f"""
+                    SELECT users.id FROM users
+                    JOIN company_users ON company_users.user_id = users.id
+                    WHERE company_users.company_id = ? AND company_users.status = 'active'
+                      AND users.id IN ({placeholders})
+                    """,
+                    (company_id, *mentioned_user_ids),
+                ).fetchall()
+                valid_mentions = [int(row["id"]) for row in mention_rows]
+
             cursor = conn.execute(
                 """
                 INSERT INTO conversation_notes (
@@ -2081,15 +2104,17 @@ class ConversationControlService:
                     company_id,
                     author_user_id,
                     note,
+                    mentioned_user_ids_json,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     state["id"],
                     company_id,
                     author_user_id,
                     clean_note,
+                    json.dumps(valid_mentions),
                     utc_now_iso(),
                 ),
             )
@@ -2133,7 +2158,38 @@ class ConversationControlService:
                 (note_id,),
             ).fetchone()
 
-        return dict(row)
+        note_dict = self._decode_note(row)
+
+        if valid_mentions:
+            from backend.services.notification_service import notification_service
+            author_name = note_dict.get("author_name") or "A colleague"
+            for mentioned_user_id in valid_mentions:
+                if mentioned_user_id == author_user_id:
+                    continue
+                notification_service.create(
+                    company_id=company_id,
+                    notification_type="conversation_mention",
+                    title=f"{author_name} mentioned you in a note",
+                    body=clean_note,
+                    recipient_user_id=mentioned_user_id,
+                    channel=channel,
+                    external_user_id=external_user_id,
+                    conversation_id=state["id"],
+                    actor_user_id=author_user_id,
+                    severity="info",
+                    data={"note_id": note_id},
+                )
+
+        return note_dict
+
+    @staticmethod
+    def _decode_note(row) -> dict[str, Any]:
+        item = dict(row)
+        try:
+            item["mentioned_user_ids"] = json.loads(item.get("mentioned_user_ids_json") or "[]")
+        except (TypeError, ValueError):
+            item["mentioned_user_ids"] = []
+        return item
 
     def list_tags(self, company_id: int) -> list[dict[str, Any]]:
         with db.connect() as conn:
@@ -2358,7 +2414,7 @@ class ConversationControlService:
         return {
             "conversation": state,
             "events": events,
-            "notes": [dict(row) for row in note_rows],
+            "notes": [self._decode_note(row) for row in note_rows],
         }
 
 

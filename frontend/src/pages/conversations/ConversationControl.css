@@ -138,6 +138,39 @@
   resize: vertical;
 }
 
+.conversation-note-mention {
+  color: var(--tz-primary);
+}
+
+.conversation-note-mention-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  z-index: 20;
+  display: grid;
+  gap: 2px;
+  width: 220px;
+  margin-bottom: 6px;
+  padding: 6px;
+  border: 1px solid var(--tz-border);
+  border-radius: 10px;
+  background: var(--tz-surface);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 0.15);
+}
+
+.conversation-note-mention-menu button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+
+.conversation-note-mention-menu button:hover {
+  background: var(--tz-surface-secondary);
+}
+
 .conversation-note-list,
 .conversation-timeline {
   display: grid;

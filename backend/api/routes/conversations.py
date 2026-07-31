@@ -93,6 +93,7 @@ class ConversationNoteCreate(
     BaseModel,
 ):
     note: str
+    mentioned_user_ids: list[int] = []
 
 
 class ConversationTagCreate(BaseModel):
@@ -1426,6 +1427,7 @@ def add_note(
                     current_user["id"]
                 ),
                 note=payload.note,
+                mentioned_user_ids=payload.mentioned_user_ids,
             )
         )
 

@@ -744,12 +744,13 @@ export async function addConversationNoteRequest(
   channel,
   userId,
   note,
+  mentionedUserIds = [],
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/notes`,
     {
       method: "POST",
-      body: { note },
+      body: { note, mentioned_user_ids: mentionedUserIds },
     },
   );
 }

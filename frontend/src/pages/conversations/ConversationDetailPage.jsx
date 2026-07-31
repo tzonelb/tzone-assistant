@@ -33,6 +33,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   addConversationNoteRequest,
   clearConversationReminderRequest,
+  createTaskRequest,
   downloadConversationExport,
   getConversationControlRequest,
   getConversationMessagesRequest,
@@ -103,6 +104,16 @@ function parseServerDate(value) {
 function formatDateTime(value) {
   const date = parseServerDate(value);
   return date ? date.toLocaleString() : String(value || "");
+}
+
+
+function renderNoteText(text, employees) {
+  const names = (employees || []).map((employee) => employee.full_name).filter(Boolean).sort((a, b) => b.length - a.length);
+  if (names.length === 0) return text;
+  const pattern = new RegExp(`(@(?:${names.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}))`, "g");
+  return text.split(pattern).map((part, index) => (
+    pattern.test(part) ? <strong key={index} className="conversation-note-mention">{part}</strong> : <span key={index}>{part}</span>
+  ));
 }
 
 
@@ -230,6 +241,8 @@ export default function ConversationDetailPage({
   const [actionSuccess, setActionSuccess] = useState("");
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
+  const [noteMentionedUserIds, setNoteMentionedUserIds] = useState([]);
+  const [noteMentionQuery, setNoteMentionQuery] = useState(null);
   const [aliasDraft, setAliasDraft] = useState("");
   const [reminderDraft, setReminderDraft] = useState("");
   const [reminderNoteDraft, setReminderNoteDraft] = useState("");
@@ -808,8 +821,10 @@ export default function ConversationDetailPage({
     setActionError("");
 
     try {
-      await addConversationNoteRequest(channel, userId, note);
+      await addConversationNoteRequest(channel, userId, note, noteMentionedUserIds);
       setNoteDraft("");
+      setNoteMentionedUserIds([]);
+      setNoteMentionQuery(null);
       await loadConversation({ silent: true });
     } catch (requestError) {
       setActionError(
@@ -818,6 +833,41 @@ export default function ConversationDetailPage({
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  function handleNoteDraftChange(event) {
+    const value = event.target.value;
+    setNoteDraft(value);
+    const cursor = event.target.selectionStart;
+    const upToCursor = value.slice(0, cursor);
+    const match = upToCursor.match(/@([^\s@]*)$/);
+    setNoteMentionQuery(match ? match[1] : null);
+  }
+
+  function insertNoteMention(employee) {
+    const textarea = document.getElementById("conversation-note-textarea");
+    const cursor = textarea ? textarea.selectionStart : noteDraft.length;
+    const upToCursor = noteDraft.slice(0, cursor);
+    const replaced = upToCursor.replace(/@([^\s@]*)$/, `@${employee.full_name || employee.display_name} `);
+    setNoteDraft(`${replaced}${noteDraft.slice(cursor)}`);
+    setNoteMentionQuery(null);
+    setNoteMentionedUserIds((current) => (current.includes(employee.id) ? current : [...current, employee.id]));
+  }
+
+  async function createTaskFromConversation() {
+    setActionError("");
+    try {
+      await createTaskRequest({
+        title: `Follow up: ${officialCustomerName || userId}`,
+        task_type: "follow_up",
+        conversation_id: control?.id,
+        customer_id: control?.customer_id || undefined,
+      });
+      setActionSuccess("Task created — see it on the Tasks page.");
+      window.setTimeout(() => setActionSuccess(""), 4000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a task from this conversation.");
     }
   }
 
@@ -1485,12 +1535,29 @@ export default function ConversationDetailPage({
               open={notesPanelOpen}
               onToggle={() => setNotesPanelOpen((current) => !current)}
             >
-              {canManage ? (
-                <form className="conversation-note-form" onSubmit={handleNoteSubmit}>
+              <AppButton type="button" variant="secondary" size="small" onClick={createTaskFromConversation} style={{ marginBottom: 10 }}>
+                + Create task from this conversation
+              </AppButton>
+
+              {canManage || canReply ? (
+                <form className="conversation-note-form" onSubmit={handleNoteSubmit} style={{ position: "relative" }}>
+                  {noteMentionQuery !== null ? (
+                    <div className="conversation-note-mention-menu">
+                      {employees
+                        .filter((employee) => (employee.display_name || "").toLowerCase().includes(noteMentionQuery.toLowerCase()))
+                        .slice(0, 6)
+                        .map((employee) => (
+                          <button type="button" key={employee.id} onClick={() => insertNoteMention(employee)}>
+                            {employee.display_name}
+                          </button>
+                        ))}
+                    </div>
+                  ) : null}
                   <textarea
+                    id="conversation-note-textarea"
                     value={noteDraft}
-                    placeholder="Write an internal note..."
-                    onChange={(event) => setNoteDraft(event.target.value)}
+                    placeholder="Write an internal note... use @ to tag a colleague"
+                    onChange={handleNoteDraftChange}
                   />
                   <AppButton type="submit" variant="primary" size="small" disabled={!noteDraft.trim()}>
                     Add note
@@ -1501,7 +1568,7 @@ export default function ConversationDetailPage({
               <div className="conversation-note-list">
                 {notes.length ? notes.map((note) => (
                   <article key={note.id}>
-                    <p>{note.note}</p>
+                    <p>{renderNoteText(note.note, employees)}</p>
                     <span>By {note.author_name || "Unknown user"}</span>
                     <time>{formatDateTime(note.created_at)}</time>
                   </article>
