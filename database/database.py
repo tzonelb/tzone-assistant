@@ -584,6 +584,22 @@ class Database:
             "TIMESTAMP",
         )
 
+        # Brute-force login protection — tracks consecutive failed
+        # attempts per account and a temporary lockout window.
+        self._ensure_column(
+            cursor,
+            "users",
+            "failed_login_attempts",
+            "INTEGER NOT NULL DEFAULT 0",
+        )
+
+        self._ensure_column(
+            cursor,
+            "users",
+            "locked_until",
+            "TIMESTAMP",
+        )
+
         self._ensure_column(
             cursor,
             "conversations",

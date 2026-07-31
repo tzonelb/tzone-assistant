@@ -129,6 +129,31 @@ class AuthService:
             token.encode("utf-8")
         ).hexdigest()
 
+    MAX_FAILED_LOGIN_ATTEMPTS = 5
+    LOCKOUT_MINUTES = 15
+
+    def _register_failed_login(self, conn, *, user_id: int) -> None:
+        """Called with the SAME connection/transaction authenticate() is
+        already using, so the failed-attempt count is committed even
+        though authenticate() returns None right after (the `with`
+        block still exits normally, not via exception)."""
+        row = conn.execute(
+            "SELECT failed_login_attempts FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        attempts = int(row["failed_login_attempts"] or 0) + 1
+
+        locked_until = None
+        if attempts >= self.MAX_FAILED_LOGIN_ATTEMPTS:
+            locked_until = (
+                datetime.now(timezone.utc) + timedelta(minutes=self.LOCKOUT_MINUTES)
+            ).isoformat()
+            attempts = 0
+
+        conn.execute(
+            "UPDATE users SET failed_login_attempts = ?, locked_until = ? WHERE id = ?",
+            (attempts, locked_until, user_id),
+        )
+
     def authenticate(
         self,
         email: str,
@@ -168,6 +193,18 @@ class AuthService:
                 print("FAILED: USER NOT ACTIVE")
                 return None
 
+            locked_until = user_data.get("locked_until")
+            if locked_until:
+                try:
+                    locked_until_dt = datetime.fromisoformat(locked_until)
+                    if locked_until_dt.tzinfo is None:
+                        locked_until_dt = locked_until_dt.replace(tzinfo=timezone.utc)
+                    if locked_until_dt > datetime.now(timezone.utc):
+                        print("FAILED: ACCOUNT LOCKED")
+                        return None
+                except ValueError:
+                    pass
+
             password_ok = self.verify_password(
                 password,
                 user_data.get("password_hash"),
@@ -176,7 +213,13 @@ class AuthService:
 
             if not password_ok:
                 print("FAILED: BAD PASSWORD")
+                self._register_failed_login(conn, user_id=user_data["id"])
                 return None
+
+            conn.execute(
+                "UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE id = ?",
+                (user_data["id"],),
+            )
 
             company_row = conn.execute(
                 """
