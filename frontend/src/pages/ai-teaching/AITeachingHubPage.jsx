@@ -5,6 +5,7 @@ import KnowledgePage from "./KnowledgePage";
 import TrainAndTestPage from "./TrainAndTestPage";
 import "../customers/CustomersPage.css";
 import "./AITeachingPage.css";
+import "../conversations/ConversationInbox.css";
 import "../community/CommunityHubPage.css";
 
 const NAV_ITEMS = [
@@ -17,7 +18,7 @@ export default function AITeachingHubPage() {
   const navigate = useNavigate();
 
   return (
-    <section className="company-settings-shell community-hub-shell">
+    <section className="company-settings-shell company-settings-locked-layout community-hub-shell">
       <aside className="company-settings-nav">
         <button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}>
           <ArrowBackOutlined /> Back to platform

@@ -2,6 +2,7 @@ import { ArrowBackOutlined, ChatBubbleOutlined, InsightsOutlined, SendOutlined }
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import PublishPage from "./PublishPage";
 import InboxPage from "./InboxPage";
+import "../conversations/ConversationInbox.css";
 import "./CommunityHubPage.css";
 
 const NAV_ITEMS = [
@@ -24,7 +25,7 @@ export default function CommunityHubPage() {
   const navigate = useNavigate();
 
   return (
-    <section className="company-settings-shell community-hub-shell">
+    <section className="company-settings-shell company-settings-locked-layout community-hub-shell">
       <aside className="company-settings-nav">
         <button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}>
           <ArrowBackOutlined /> Back to platform
