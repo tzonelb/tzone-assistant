@@ -121,3 +121,13 @@
   outline: none;
   font-size: 13px;
 }
+
+.ai-teaching-test-result {
+  margin-top: 14px;
+}
+
+.ai-teaching-test-meta {
+  margin: 8px 0 0;
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}

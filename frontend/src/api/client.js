@@ -200,6 +200,10 @@ export async function sendAiTeachingChatRequest(text) {
   return apiRequest("/api/ai-teaching-chat", { method: "POST", body: { text } });
 }
 
+export async function testAiReplyRequest({ message, channel, department }) {
+  return apiRequest("/api/ai-teaching-chat/test", { method: "POST", body: { message, channel, department } });
+}
+
 export async function createInstructionRequest(text, tags) {
   return apiRequest("/api/instructions", { method: "POST", body: { text, tags: tags || [] } });
 }

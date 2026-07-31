@@ -36,7 +36,6 @@ const pageTitles = {
   "/broadcast": "Broadcast",
   "/calls": "Calls",
   "/catalogue": "Master Catalogue",
-  "/ai-teaching": "AI Teaching",
   "/tasks": "Tasks",
   "/appointments": "Appointments",
   "/analytics": "Analytics",

@@ -15,7 +15,7 @@ import TeamChatPage from "./pages/team-chat/TeamChatPage";
 import AppointmentsPage from "./pages/appointments/AppointmentsPage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
-import AITeachingPage from "./pages/ai-teaching/AITeachingPage";
+import AITeachingHubPage from "./pages/ai-teaching/AITeachingHubPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import TasksPage from "./pages/tasks/TasksPage";
 import BroadcastPage from "./pages/broadcast/BroadcastPage";
@@ -31,6 +31,7 @@ export default function App() {
       <Route path="/platform-admin" element={<ProtectedRoute><PlatformAdminPage /></ProtectedRoute>} />
       <Route path="/company-settings/*" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
       <Route path="/community/*" element={<ProtectedRoute><CommunityHubPage /></ProtectedRoute>} />
+      <Route path="/ai-teaching/*" element={<ProtectedRoute><AITeachingHubPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><UISettingsPage /></ProtectedRoute>} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -43,7 +44,6 @@ export default function App() {
         <Route path="/broadcast/:broadcastId" element={<BroadcastDetailPage />} />
         <Route path="/catalogue" element={<CataloguePage />} />
         <Route path="/calls" element={<CallsPage />} />
-        <Route path="/ai-teaching" element={<AITeachingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />

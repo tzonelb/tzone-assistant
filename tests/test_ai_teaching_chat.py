@@ -23,6 +23,7 @@ def client_and_db():
     from backend.services.auth_service import auth_service
     from backend.services.ai_teaching_chat_service import ai_teaching_chat_service
     from core.instruction_service import instruction_service
+    from core.knowledge_manager import knowledge_manager
 
     tmp_db_path = tempfile.mktemp(suffix=".db")
     original_db_path = db.db_path
@@ -32,6 +33,7 @@ def client_and_db():
     auth_service.create_tables()
     ai_teaching_chat_service.ensure_schema()
     instruction_service.ensure_schema()
+    knowledge_manager.ensure_schema()
 
     with db.connect() as conn:
         conn.execute(
@@ -152,3 +154,47 @@ def test_send_rejects_empty_message(client_and_db):
     state["user_id"] = 2
     resp = client.post("/api/ai-teaching-chat", json={"text": "   "})
     assert resp.status_code == 400 or resp.status_code == 422
+
+
+def test_test_reply_requires_permission(client_and_db):
+    client, _state = client_and_db
+    resp = client.post("/api/ai-teaching-chat/test", json={"message": "hi"})
+    assert resp.status_code == 403
+
+
+def test_test_reply_runs_real_pipeline_and_persists_nothing(client_and_db):
+    client, state = client_and_db
+    state["user_id"] = 2
+
+    with patch(
+        "core.ai_router.ai_router.call_openai",
+        return_value={"reply": "You can reach us 9-5.", "department": "information", "language": "en", "confidence": 0.9},
+    ) as mock_call:
+        resp = client.post(
+            "/api/ai-teaching-chat/test",
+            json={"message": "What are your hours?", "channel": "website", "department": "sales"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["reply"] == "You can reach us 9-5."
+    assert body["department_detected"] == "information"
+    assert isinstance(body["knowledge_used"], list)
+    assert isinstance(body["instructions_used"], list)
+    mock_call.assert_called_once()
+
+    # Nothing should be persisted anywhere from a test run.
+    from database.database import db
+    with db.connect() as conn:
+        conv_count = conn.execute("SELECT COUNT(*) AS c FROM conversations WHERE company_id = 1").fetchone()["c"]
+    assert conv_count == 0
+
+
+def test_test_reply_returns_502_when_ai_unavailable(client_and_db):
+    client, state = client_and_db
+    state["user_id"] = 2
+
+    with patch("core.ai_router.ai_router.call_openai", side_effect=Exception("network down")):
+        resp = client.post("/api/ai-teaching-chat/test", json={"message": "hi"})
+
+    assert resp.status_code == 502
