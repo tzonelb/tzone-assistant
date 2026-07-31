@@ -148,6 +148,18 @@ export async function loginRequest(company, email, password) {
   });
 }
 
+export async function signupPlansRequest() {
+  return apiRequest("/api/signup/plans", { authenticated: false });
+}
+
+export async function signupRequest(payload) {
+  return apiRequest("/api/signup", {
+    method: "POST",
+    authenticated: false,
+    body: payload,
+  });
+}
+
 export async function sendVerificationCodeRequest(purpose) {
   return apiRequest("/api/security/send-code", { method: "POST", body: { purpose } });
 }

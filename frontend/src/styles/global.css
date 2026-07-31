@@ -239,6 +239,61 @@ a {
   text-align: center;
 }
 
+.login-security-note a {
+  color: #1689e8;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.login-security-note a:hover {
+  text-decoration: underline;
+}
+
+.signup-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.signup-plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid #dbe2ec;
+  border-radius: 14px;
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.signup-plan-card:hover {
+  border-color: #b9d9f6;
+}
+
+.signup-plan-card.is-selected {
+  border-color: #1689e8;
+  box-shadow: 0 0 0 3px rgb(22 137 232 / 12%);
+}
+
+.signup-plan-name {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.signup-plan-price {
+  font-size: 14px;
+  font-weight: 900;
+  color: #1689e8;
+}
+
+.signup-plan-limits {
+  font-size: 12px;
+  color: #6f7a8d;
+}
+
 .app-layout {
   min-height: 100vh;
   display: flex;

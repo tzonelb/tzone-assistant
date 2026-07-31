@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
 import tzoneLogo from "../../assets/tzone-logo.png";
@@ -159,6 +159,11 @@ export default function LoginPage() {
               : "Sign in"}
           </button>
         </form>
+
+        <small className="login-security-note">
+          Don&apos;t have an account?{" "}
+          <Link to="/signup">Create an account</Link>
+        </small>
 
         <small className="login-security-note">
           Protected access · T-ZONE Platform

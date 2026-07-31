@@ -29,10 +29,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "ai_behavior": {
         "enabled": True,
         "mode": "ai_first",
+        "greeting_message": "",
         "collect_message_delay_seconds": 20,
         "return_to_ai_timeout_minutes": 5,
         "reply_access_mode": "take_required",
-        "auto_read_mode": "assigned_owner_only",
+        # Auto-read is always on and is no longer an editable toggle. It is
+        # force-defaulted to True on read (see get_section) so the underlying
+        # read-marking behaviour stays enabled regardless of any stored value.
+        "auto_read": True,
         "auto_release_to_ai": True,
         "welcome_immediate": True,
         "reply_only_when_customer_stops_typing": True,
@@ -180,11 +184,27 @@ class CompanySettingsService:
             if bool(override["is_locked"]):
                 locked.append(key)
 
+        if normalized == "ai_behavior":
+            # Auto-read is always-on: force True regardless of what is stored
+            # (or if the key is absent). The visible toggle was removed; this
+            # keeps the read-marking behaviour permanently enabled.
+            values["auto_read"] = True
+            # Drop the retired mode field so it never resurfaces in the UI.
+            values.pop("auto_read_mode", None)
+
         return {
             "section": normalized,
             "values": values,
             "locked_keys": sorted(set(locked)),
         }
+
+    def is_auto_read_enabled(self, company_id: int) -> bool:
+        """Auto-read is a permanent, always-on behaviour.
+
+        Consumers should call this instead of reading a stored toggle. The
+        toggle was removed from the UI; the behaviour is never disabled.
+        """
+        return True
 
     def get_all(self, company_id: int) -> dict[str, Any]:
         sections = set(DEFAULT_SETTINGS)

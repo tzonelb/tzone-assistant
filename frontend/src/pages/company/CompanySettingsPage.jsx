@@ -6,8 +6,8 @@ import SecureChannelsPanel from "./SecureChannelsPanel";
 
 const SECTIONS = [
   ["profile", "Company Profile", "Identity, contact information, branches, timezone, business details and branding.", ["Company name", "Workspace code", "Timezone", "Default language", "Logo"]],
-  ["departments", "Departments", "Your own departments — set these up first, before AI Behavior, since routing and knowledge scoping depend on them.", []],
-  ["ai", "AI Behavior", "AI response timing and human takeover workflow.", []],
+  ["departments", "Departments", "Your own departments — set these up first, before Chatbot Control, since routing and knowledge scoping depend on them.", []],
+  ["ai", "Chatbot Control", "One place for all bot behaviour — greeting, who replies first, human takeover workflow and saved replies.", []],
   ["flow", "Reply Flow & Saved Replies", "Order of welcome, language, intent, knowledge, escalation — plus reusable replies employees can insert from any conversation.", []],
   ["channels", "Channels", "Messenger, WhatsApp, Instagram, Telegram, email and website.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
   ["api", "API & Webhooks", "Callbacks, access keys and integration health.", ["Webhook URL", "Verify token", "API access", "Delivery logs"]],
@@ -17,7 +17,7 @@ const SECTIONS = [
 ];
 
 function WorkflowSettings() {
-  const [values, setValues] = useState({ reply_access_mode: "take_required", return_to_ai_timeout_minutes: 5, auto_release_to_ai: true, auto_read_mode: "assigned_owner_only" });
+  const [values, setValues] = useState({ mode: "ai_first", greeting_message: "", reply_access_mode: "take_required", return_to_ai_timeout_minutes: 5, auto_release_to_ai: true });
   const [locked, setLocked] = useState([]);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
@@ -32,23 +32,26 @@ function WorkflowSettings() {
     setSaving(true); setStatus("");
     try {
       const result = await updateCompanySettingSectionRequest("ai_behavior", {
+        mode: values.mode,
+        greeting_message: values.greeting_message || "",
         reply_access_mode: values.reply_access_mode,
         return_to_ai_timeout_minutes: Math.max(1, Number(values.return_to_ai_timeout_minutes) || 5),
         auto_release_to_ai: Boolean(values.auto_release_to_ai),
-        auto_read_mode: "assigned_owner_only",
       });
       setValues((current) => ({ ...current, ...(result?.values || {}) }));
-      setStatus("Conversation workflow saved.");
+      setStatus("Chatbot control saved.");
     } catch (error) { setStatus(error.message || "Settings could not save."); }
     finally { setSaving(false); }
   }
 
   return <div className="workflow-settings-card">
+    <div className="workflow-setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}><div><strong>Greeting message</strong><span>Sent when a new conversation starts. Leave blank to use the built-in default welcome.</span></div><textarea rows={2} value={values.greeting_message || ""} disabled={locked.includes("greeting_message")} onChange={(e) => setValues({ ...values, greeting_message: e.target.value })} placeholder="Welcome! How can we help you today?" style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} /></div>
+    <div className="workflow-setting-row"><div><strong>Who replies first?</strong><span>AI first lets the bot answer immediately; human first holds new chats for an employee to open them.</span></div><select value={values.mode} disabled={locked.includes("mode")} onChange={(e) => setValues({ ...values, mode: e.target.value })}><option value="ai_first">AI replies first</option><option value="human_first">Human replies first</option></select></div>
     <div className="workflow-setting-row"><div><strong>Who may reply?</strong><span>Exclusive takeover is safest. Shared mode lets the first employee reply claim an unassigned human chat atomically.</span></div><select value={values.reply_access_mode} disabled={locked.includes("reply_access_mode")} onChange={(e) => setValues({ ...values, reply_access_mode: e.target.value })}><option value="take_required">Take conversation required</option><option value="shared_until_taken">Anyone until first reply</option></select></div>
-    <div className="workflow-setting-row"><div><strong>Automatic read</strong><span>Only the assigned employee clears unread messages. Accidental previews by other employees never hide work.</span></div><select value="assigned_owner_only" disabled><option>Assigned owner only</option></select></div>
     <div className="workflow-setting-row"><div><strong>Return to AI timeout</strong><span>After the employee's last reply, ownership is released and AI resumes automatically.</span></div><div className="timeout-input"><input type="number" min="1" max="1440" value={values.return_to_ai_timeout_minutes} disabled={locked.includes("return_to_ai_timeout_minutes")} onChange={(e) => setValues({ ...values, return_to_ai_timeout_minutes: e.target.value })}/><span>minutes</span></div></div>
     <label className="workflow-toggle"><input type="checkbox" checked={Boolean(values.auto_release_to_ai)} disabled={locked.includes("auto_release_to_ai")} onChange={(e) => setValues({ ...values, auto_release_to_ai: e.target.checked })}/><div><strong>Auto-release ownership and return to AI</strong><span>Clears the assigned employee when the timeout expires, completing the full cycle.</span></div></label>
-    <div className="workflow-settings-footer"><span>{status}</span><button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save workflow"}</button></div>
+    <div className="workflow-setting-row" style={{ borderBottom: "none" }}><div><strong>Saved reply behaviour</strong><span>Saved replies are manual snippets employees insert inside a conversation — they never send automatically. Manage them under the "Reply Flow &amp; Saved Replies" section.</span></div></div>
+    <div className="workflow-settings-footer"><span>{status}</span><button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save chatbot control"}</button></div>
   </div>;
 }
 

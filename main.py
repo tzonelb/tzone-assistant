@@ -34,6 +34,7 @@ from backend.api.routes import (
     saved_replies,
     scheduled_posts,
     security_verification,
+    signup,
     tasks,
     team_chat,
     test_whatsapp,
@@ -283,6 +284,7 @@ app.include_router(departments.router)
 app.include_router(instructions.router)
 app.include_router(test_whatsapp.router)
 app.include_router(auth.router)
+app.include_router(signup.router)
 app.include_router(dashboard.router)
 app.include_router(conversations.router)
 app.include_router(company_settings.router)
