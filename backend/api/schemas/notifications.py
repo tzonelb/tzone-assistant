@@ -34,3 +34,17 @@ class NotificationReadStateRequest(BaseModel):
 
 class NotificationClearRequest(BaseModel):
     notification_ids: list[int] = Field(default_factory=list)
+
+
+class NotificationPreferencesResponse(BaseModel):
+    notify_new_message: str = "all"  # "all" | "none"
+    notify_ai_escalation: bool = True
+    notify_mentions: bool = True
+    notify_tasks: bool = True
+
+
+class NotificationPreferencesUpdateRequest(BaseModel):
+    notify_new_message: str | None = None
+    notify_ai_escalation: bool | None = None
+    notify_mentions: bool | None = None
+    notify_tasks: bool | None = None

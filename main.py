@@ -25,16 +25,19 @@ from backend.api.routes import (
     health,
     knowledge_entries,
     departments,
+    comments,
     instructions,
     manual_messages,
     media_uploads,
     notifications,
+    notification_preferences,
     platform_admin,
     roles,
     saved_replies,
     scheduled_posts,
     security_verification,
     signup,
+    support_tickets,
     tasks,
     team_chat,
     test_whatsapp,
@@ -58,8 +61,11 @@ from backend.services.company_settings_service import company_settings_service
 from backend.services.customer_service import customer_service
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.notification_service import notification_service
+from backend.services.notification_preference_service import notification_preference_service
 from backend.services.platform_admin_service import platform_admin_service
 from backend.services.saved_reply_service import saved_reply_service
+from backend.services.comment_service import comment_service
+from backend.services.support_ticket_service import support_ticket_service
 from backend.services.security_verification_service import security_verification_service
 from backend.services.task_service import task_service
 from backend.services.facebook_oauth_service import facebook_oauth_service
@@ -178,6 +184,7 @@ async def lifespan(app: FastAPI):
     ai_teaching_chat_service.ensure_schema()
     diagnostics_service.ensure_schema()
     notification_service.ensure_schema()
+    notification_preference_service.ensure_schema()
     security_verification_service.ensure_schema()
     facebook_oauth_service.ensure_schema()
     knowledge_manager.ensure_schema()
@@ -186,6 +193,8 @@ async def lifespan(app: FastAPI):
     message_status_service.ensure_schema()
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
+    comment_service.ensure_schema()
+    support_ticket_service.ensure_schema()
     task_service.ensure_schema()
     catalogue_service.ensure_schema()
     call_log_service.ensure_schema()
@@ -285,6 +294,7 @@ app.include_router(instructions.router)
 app.include_router(test_whatsapp.router)
 app.include_router(auth.router)
 app.include_router(signup.router)
+app.include_router(comments.router)
 app.include_router(dashboard.router)
 app.include_router(conversations.router)
 app.include_router(company_settings.router)
@@ -295,12 +305,14 @@ app.include_router(analytics.router)
 app.include_router(conversation_tags.router)
 app.include_router(developer_center.router)
 app.include_router(notifications.router)
+app.include_router(notification_preferences.router)
 app.include_router(manual_messages.router)
 app.include_router(roles.router)
 app.include_router(platform_admin.router)
 app.include_router(channel_connections.router)
 app.include_router(facebook_oauth.router)
 app.include_router(saved_replies.router)
+app.include_router(support_tickets.router)
 app.include_router(security_verification.router)
 app.include_router(tasks.router)
 app.include_router(catalogue.router)

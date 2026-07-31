@@ -132,6 +132,17 @@ function createQueryString(parameters) {
   return value ? `?${value}` : "";
 }
 
+export async function getNotificationPreferencesRequest() {
+  return apiRequest("/api/notification-preferences");
+}
+
+export async function updateNotificationPreferencesRequest(preferences) {
+  return apiRequest("/api/notification-preferences", {
+    method: "PUT",
+    body: preferences,
+  });
+}
+
 function conversationPath(channel, userId) {
   return (
     "/conversations/" +
@@ -190,6 +201,14 @@ export async function listSubscriptionRequestsRequest(status) {
 
 export async function reviewSubscriptionRequestRequest(requestId, approve) {
   return apiRequest(`/api/platform/subscription-requests/${requestId}/review`, { method: "POST", body: { approve } });
+}
+
+export async function listSupportTicketsRequest() {
+  return apiRequest("/api/support-tickets");
+}
+
+export async function createSupportTicketRequest(subject, description, priority) {
+  return apiRequest("/api/support-tickets", { method: "POST", body: { subject, description, priority } });
 }
 
 export async function updatePlatformCompanyModulesRequest(companyId, modules) {
@@ -341,6 +360,19 @@ export async function deleteAppointmentRequest(appointmentId) {
 
 export async function scheduledPostOptionsRequest() {
   return apiRequest("/api/scheduled-posts/options");
+}
+
+export async function listCommentPostsRequest({ channelAccountId } = {}) {
+  const query = createQueryString({ channel_account_id: channelAccountId });
+  return apiRequest(`/api/comments/posts${query}`);
+}
+
+export async function listPostCommentsRequest(postExternalId) {
+  return apiRequest(`/api/comments/posts/${encodeURIComponent(postExternalId)}/comments`);
+}
+
+export async function replyToCommentRequest(commentId, text) {
+  return apiRequest(`/api/comments/${commentId}/reply`, { method: "POST", body: { text } });
 }
 
 export async function listScheduledPostsRequest({ status } = {}) {

@@ -49,6 +49,7 @@ async def receive_meta_webhook(request: Request):
     log_meta_event("webhook_received", payload)
 
     _record_messenger_delivery_read_events(payload)
+    _ingest_community_comments(payload)
 
     result = process_meta_payload(payload)
 
@@ -56,6 +57,19 @@ async def receive_meta_webhook(request: Request):
         "status": "ok",
         "result": result
     }
+
+
+def _ingest_community_comments(payload: dict) -> None:
+    """Facebook Page `feed` comment events and Instagram `comments` events
+    arrive as `changes` on the same webhook. Route them into the unified
+    comment inbox without disturbing the normal message flow. Best-effort:
+    never raises."""
+    try:
+        from backend.services.comment_service import comment_service
+
+        comment_service.ingest_webhook(payload)
+    except Exception:
+        pass
 
 
 def _record_messenger_delivery_read_events(payload: dict) -> None:

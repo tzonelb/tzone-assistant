@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSavedRepliesRequest, createSavedReplyRequest, updateSavedReplyRequest, deleteSavedReplyRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest } from "../../api/client";
+import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSavedRepliesRequest, createSavedReplyRequest, updateSavedReplyRequest, deleteSavedReplyRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest } from "../../api/client";
 import SecureChannelsPanel from "./SecureChannelsPanel";
 
 const SECTIONS = [
@@ -13,7 +13,9 @@ const SECTIONS = [
   ["api", "API & Webhooks", "Callbacks, access keys and integration health.", ["Webhook URL", "Verify token", "API access", "Delivery logs"]],
   ["security", "Security", "Tenant isolation, sessions and audit controls.", ["Encryption status", "Session policy", "Audit retention", "IP restrictions"]],
   ["backup", "Backup", "Backup policy, retention and restoration.", ["Automatic backup", "Retention", "Last backup", "Restore point"]],
-  ["subscription", "Subscription", "Plan, limits, usage and billing.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
+  ["billing", "Billing", "Your plan, usage limits, billing history, and plan-change or renewal requests.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
+  ["help", "Help", "Frequently asked questions about running your workspace on T-ZONE.", []],
+  ["ticketing", "Ticketing", "Open a support or maintenance ticket to the T-ZONE team about platform issues.", []],
 ];
 
 function WorkflowSettings() {
@@ -55,13 +57,16 @@ function WorkflowSettings() {
   </div>;
 }
 
-function SubscriptionView() {
+const REQUEST_STATUS_COLORS = { pending: "#b8860b", approved: "#1e7e34", rejected: "#c0392b" };
+
+function BillingView() {
   const [data, setData] = useState(null);
   const [modules, setModules] = useState(null);
   const [plans, setPlans] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
   const [error, setError] = useState("");
   const [requesting, setRequesting] = useState(null);
+  const [renewing, setRenewing] = useState(false);
   const [notes, setNotes] = useState({});
 
   function load() {
@@ -95,10 +100,27 @@ function SubscriptionView() {
     }
   }
 
+  async function renewCurrentPlan(currentPlanId) {
+    if (!currentPlanId) return;
+    setRenewing(true);
+    setError("");
+    try {
+      await requestPlanChangeRequest(currentPlanId, "Renewal request");
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setRenewing(false);
+    }
+  }
+
   if (error) return <p style={{ color: "#c0392b" }}>{error}</p>;
   if (!data || !modules) return <p>Loading…</p>;
 
   const pendingPlanIds = new Set(myRequests.filter((r) => r.status === "pending").map((r) => r.plan_id));
+  const currentPlan = data.has_subscription ? plans.find((p) => p.code === data.plan_code) : null;
+  const currentPlanId = currentPlan?.id || null;
+  const renewalPending = currentPlanId != null && pendingPlanIds.has(currentPlanId);
 
   return (
     <div className="company-setting-fields">
@@ -120,6 +142,22 @@ function SubscriptionView() {
             <div><strong>{data.users.used} / {data.users.max}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>Users</span></div>
             <div><strong>{data.channels.used} / {data.channels.max}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>Channels</span></div>
             <div><strong>{data.max_ai_messages}</strong><br /><span style={{ fontSize: 12, color: "#6b7280" }}>AI msgs/mo limit</span></div>
+          </div>
+          <div className="workflow-setting-row" style={{ borderBottom: "none", alignItems: "center" }}>
+            <div>
+              <strong>Renew this plan</strong>
+              <br />
+              <span style={{ color: "#6b7280", fontSize: 13 }}>
+                Online payment isn't wired up yet — renewing sends a renewal request to the T-ZONE team, who confirm it and extend your expiry. No card is charged here.
+              </span>
+            </div>
+            {renewalPending ? (
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#b8860b", whiteSpace: "nowrap" }}>Renewal requested — pending</span>
+            ) : (
+              <button type="button" disabled={renewing || !currentPlanId} onClick={() => renewCurrentPlan(currentPlanId)}>
+                {renewing ? "Requesting…" : "Renew plan"}
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -204,6 +242,175 @@ function SubscriptionView() {
             </div>
           );
         })}
+      </div>
+
+      {/* 4. Billing history — real plan-change / renewal request records (no fake invoices) */}
+      <div className="workflow-setting-row" style={{ borderBottom: "none", marginTop: 8 }}>
+        <div>
+          <strong>Billing history</strong>
+          <br />
+          <span style={{ color: "#6b7280" }}>
+            No online invoices yet — payment isn't wired up. This is the real log of the plan-change and renewal requests your company has submitted.
+          </span>
+        </div>
+      </div>
+      <div className="workflow-settings-card">
+        {myRequests.length ? myRequests.map((req) => (
+          <div className="workflow-setting-row" key={req.id}>
+            <div>
+              <strong>{req.plan_name || `Plan #${req.plan_id}`}</strong>
+              <br />
+              <span style={{ color: "#6b7280", fontSize: 13 }}>
+                {req.created_at ? req.created_at.slice(0, 10) : ""}
+                {req.note ? ` · ${req.note}` : ""}
+              </span>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 600, color: REQUEST_STATUS_COLORS[req.status] || "#6b7280", textTransform: "capitalize" }}>
+              {req.status}
+            </span>
+          </div>
+        )) : <p style={{ padding: "12px 0", color: "#6b7280" }}>No billing history yet.</p>}
+      </div>
+    </div>
+  );
+}
+
+const FAQ_ITEMS = [
+  {
+    q: "How do I connect a messaging channel?",
+    a: "Open Company Settings → Channels. Pick the channel (Messenger, WhatsApp, Instagram, Telegram, email or website), then follow the connect flow. Connecting or disconnecting a channel first asks for a 6-digit email verification code, valid for 20 minutes, so credentials stay protected.",
+  },
+  {
+    q: "How does AI-to-human handoff work?",
+    a: "Under Chatbot Control you choose who replies first. In AI-first mode the bot answers immediately and an employee can take over a conversation at any time; in human-first mode new chats wait for an employee to open them. After the employee's last reply, ownership is released and the AI resumes automatically once the return-to-AI timeout passes.",
+  },
+  {
+    q: "How do I add employees and control what they can do?",
+    a: "Invite people from the Employees area, then assign each a role in Roles & Permissions. A module being enabled on your plan only makes it available — an employee also needs the matching permission granted to their role before they can use it.",
+  },
+  {
+    q: "How does billing work?",
+    a: "Your current plan, usage limits and history live under the Billing section here. Online card payment isn't wired up yet, so upgrading, changing or renewing a plan submits a request to the T-ZONE team, who review it and apply the change. Nothing is charged automatically and no plan changes until staff approve the request.",
+  },
+  {
+    q: "How do I reach T-ZONE support?",
+    a: "Open the Ticketing section here and create a support ticket with a subject, description and priority. The T-ZONE team picks it up from there. Use this for platform issues — for your own customers' questions, use the conversations screen.",
+  },
+  {
+    q: "Is my company's data isolated from other companies?",
+    a: "Yes. Every record is scoped to your company (tenant), and channel access tokens are encrypted at rest. The Security section summarizes credential access, storage and the session change log.",
+  },
+];
+
+function HelpView() {
+  const [openIndex, setOpenIndex] = useState(0);
+  return (
+    <div className="company-setting-fields">
+      <div className="workflow-settings-card">
+        {FAQ_ITEMS.map((item, index) => {
+          const isOpen = openIndex === index;
+          return (
+            <div className="workflow-setting-row" key={item.q} style={{ flexDirection: "column", alignItems: "stretch", gap: 8, cursor: "pointer" }} onClick={() => setOpenIndex(isOpen ? -1 : index)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                <strong>{item.q}</strong>
+                <span style={{ color: "#6b7280", fontSize: 18, lineHeight: 1 }}>{isOpen ? "−" : "+"}</span>
+              </div>
+              {isOpen ? <span style={{ color: "#374151", fontSize: 14, lineHeight: 1.6 }}>{item.a}</span> : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const TICKET_PRIORITIES = ["low", "normal", "high", "urgent"];
+const TICKET_STATUS_COLORS = { open: "#1e7e34", in_progress: "#b8860b", closed: "#6b7280", resolved: "#4f7fff" };
+
+function TicketingView() {
+  const [tickets, setTickets] = useState([]);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState("normal");
+
+  function load() {
+    listSupportTicketsRequest()
+      .then((result) => setTickets(result?.tickets || []))
+      .catch((e) => setError(e.message || "Could not load tickets."));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function submit(e) {
+    e.preventDefault();
+    setCreating(true);
+    setError("");
+    try {
+      await createSupportTicketRequest(subject, description, priority);
+      setSubject(""); setDescription(""); setPriority("normal"); setShowForm(false);
+      load();
+    } catch (x) {
+      setError(x.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="company-setting-fields">
+      <div className="workflow-settings-card">
+        <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+          <div>
+            <strong>Support &amp; maintenance tickets</strong>
+            <br />
+            <span style={{ fontWeight: 400, color: "#6b7280" }}>
+              Report a platform issue to the T-ZONE team. Use this for problems with the platform itself — not for your own customers' conversations.
+            </span>
+          </div>
+          {showForm ? null : <button type="button" onClick={() => setShowForm(true)}>+ New ticket</button>}
+        </div>
+
+        {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
+
+        {showForm ? (
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 0" }}>
+            <input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Subject" required
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Describe the issue — what happened, what you expected, and any steps to reproduce." required rows={4}
+              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14 }}>
+              Priority
+              <select value={priority} onChange={(e) => setPriority(e.target.value)}>
+                {TICKET_PRIORITIES.map((p) => <option key={p} value={p} style={{ textTransform: "capitalize" }}>{p}</option>)}
+              </select>
+            </label>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button type="submit" disabled={creating}>{creating ? "Submitting…" : "Submit ticket"}</button>
+              <button type="button" onClick={() => setShowForm(false)}>Cancel</button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+
+      <div className="workflow-settings-card">
+        {tickets.length ? tickets.map((ticket) => (
+          <div className="workflow-setting-row" key={ticket.id} style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <strong>{ticket.subject}</strong>
+              <span style={{ fontSize: 12, fontWeight: 600, color: TICKET_STATUS_COLORS[ticket.status] || "#6b7280", textTransform: "capitalize", whiteSpace: "nowrap" }}>
+                {(ticket.status || "open").replace("_", " ")}
+              </span>
+            </div>
+            <span style={{ color: "#6b7280", fontSize: 13 }}>{ticket.description}</span>
+            <span style={{ color: "#9ca3af", fontSize: 12 }}>
+              Priority: <span style={{ textTransform: "capitalize" }}>{ticket.priority}</span>
+              {ticket.created_at ? ` · ${ticket.created_at.slice(0, 10)}` : ""}
+            </span>
+          </div>
+        )) : <p style={{ padding: "12px 0", color: "#6b7280" }}>No tickets yet. Open one above if you hit a platform issue.</p>}
       </div>
     </div>
   );
@@ -599,5 +806,5 @@ export default function CompanySettingsPage() {
   const navigate = useNavigate(); const [active, setActive] = useState("profile"); const [query, setQuery] = useState("");
   const visible = useMemo(() => SECTIONS.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [query]);
   const selected = SECTIONS.find(([id]) => id === active) || visible[0] || SECTIONS[0];
-  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "subscription" ? <SubscriptionView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowAndSavedReplies /> : active === "security" ? <SecurityStatusView /> : active === "departments" ? <DepartmentsManager /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
+  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowAndSavedReplies /> : active === "security" ? <SecurityStatusView /> : active === "departments" ? <DepartmentsManager /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
 }

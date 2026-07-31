@@ -90,6 +90,27 @@ class NotificationService:
         created_at = utc_now_iso()
         payload = json.dumps(data or {}, ensure_ascii=False)
 
+        # Per-user preference enforcement: when a notification targets a
+        # specific recipient, honour that recipient's category preference.
+        # Broadcast notifications (recipient_user_id is None) are left alone
+        # here — there is no single recipient whose preference applies.
+        if recipient_user_id is not None:
+            try:
+                from backend.services.notification_preference_service import (
+                    notification_preference_service,
+                )
+
+                if not notification_preference_service.should_notify(
+                    user_id=recipient_user_id,
+                    company_id=company_id,
+                    notification_type=notification_type,
+                ):
+                    return {"skipped": True, "notification_type": notification_type}
+            except Exception:
+                # Fail open — never let a preference lookup swallow a real
+                # notification.
+                pass
+
         with db.connect() as conn:
             if dedupe_key:
                 existing = conn.execute(
