@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
-import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, SendOutlined } from "@mui/icons-material";
+import {
+  AddOutlined,
+  ArticleOutlined,
+  AutoAwesomeOutlined,
+  CloseOutlined,
+  DeleteOutlineOutlined,
+  EventOutlined,
+  ImageOutlined,
+  InfoOutlined,
+  InsertEmoticonOutlined,
+  LocalOfferOutlined,
+  OpenInFullOutlined,
+  SendOutlined,
+  TagOutlined,
+  VisibilityOutlined,
+} from "@mui/icons-material";
 import { useSearchParams } from "react-router-dom";
 import {
   createScheduledPostRequest,
@@ -36,6 +51,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   const [selectedAccountIds, setSelectedAccountIds] = useState([]);
   const [contentOverrides, setContentOverrides] = useState({});
   const [channelPostTypes, setChannelPostTypes] = useState({});
+  const [customizeMode, setCustomizeMode] = useState(false);
   const [expandedAccountId, setExpandedAccountId] = useState(null);
   const [channelPickerOpen, setChannelPickerOpen] = useState(false);
   const [mediaUrl, setMediaUrl] = useState("");
@@ -45,12 +61,13 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   const [mediaError, setMediaError] = useState("");
   const [when, setWhen] = useState("now");
   const [scheduledAt, setScheduledAt] = useState("");
+  const [createAnother, setCreateAnother] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setText(""); setSelectedAccountIds([]); setContentOverrides({}); setChannelPostTypes({});
-      setExpandedAccountId(null); setChannelPickerOpen(false); setMediaUrl(""); setMediaType("");
-      setMediaFileName(""); setMediaError(""); setWhen("now"); setScheduledAt("");
+      setCustomizeMode(false); setExpandedAccountId(null); setChannelPickerOpen(false); setMediaUrl(""); setMediaType("");
+      setMediaFileName(""); setMediaError(""); setWhen("now"); setScheduledAt(""); setCreateAnother(false);
     }
   }, [open]);
 
@@ -126,42 +143,54 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   }
 
   const canSave = (text.trim() || mediaUrl) && selectedAccountIds.length > 0 && (when === "now" || scheduledAt);
+  const selectedAccounts = channelAccounts.filter((account) => selectedAccountIds.includes(account.id));
 
   return (
-    <div className="tz-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel(); }}>
-      <form className="tz-dialog publish-create-dialog" onSubmit={submit}>
-        <header className="tz-dialog-header">
-          <h3>Create Post</h3>
-          <button type="button" className="tz-dialog-close" onClick={onCancel} disabled={saving}><CloseOutlined fontSize="small" /></button>
+    <div className="bp-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel(); }}>
+      <form className="bp-dialog" onSubmit={submit}>
+        <header className="bp-header">
+          <div className="bp-header-left">
+            <h3>Create Post</h3>
+            <button type="button" className="bp-tags-btn"><LocalOfferOutlined fontSize="small" /> Tags</button>
+          </div>
+          <div className="bp-header-right">
+            <button type="button" className="bp-header-action"><ArticleOutlined fontSize="small" /> Templates</button>
+            <button type="button" className="bp-header-action"><AutoAwesomeOutlined fontSize="small" /> AI Assistant</button>
+            <button type="button" className="bp-header-action is-active"><VisibilityOutlined fontSize="small" /> Preview</button>
+            <button type="button" className="bp-icon-btn"><OpenInFullOutlined fontSize="small" /></button>
+            <button type="button" className="bp-icon-btn" onClick={onCancel} disabled={saving}><CloseOutlined fontSize="small" /></button>
+          </div>
         </header>
-        <div className="tz-dialog-body">
-          <div className="publish-channel-strip">
-            {channelAccounts.length === 0 ? (
-              <p className="publish-no-channels">No Facebook Page or Instagram account connected yet — connect one from Company Settings → Channels first.</p>
-            ) : (
-              <>
-                {channelAccounts.filter((account) => selectedAccountIds.includes(account.id)).map((account) => {
-                  const Icon = channelIcon(account.channel);
-                  return (
-                    <button
-                      type="button"
-                      key={account.id}
-                      className="publish-channel-avatar is-selected"
-                      onClick={() => setExpandedAccountId((current) => (current === account.id ? null : account.id))}
-                      title={account.name}
-                    >
-                      <Icon fontSize="small" />
-                      <span>{account.name}</span>
-                    </button>
-                  );
-                })}
-                <div className="publish-channel-picker-wrap">
-                  <button type="button" className="publish-channel-add-btn" onClick={() => setChannelPickerOpen((current) => !current)}>
-                    <AddOutlined fontSize="small" />
+
+        <div className="bp-body">
+          <div className="bp-content">
+            <div className="bp-channel-row">
+              {selectedAccounts.map((account) => {
+                const Icon = channelIcon(account.channel);
+                return (
+                  <button
+                    type="button"
+                    key={account.id}
+                    className="bp-channel-avatar"
+                    data-channel={account.channel}
+                    title={account.name}
+                    onClick={() => { setCustomizeMode(true); setExpandedAccountId(account.id); }}
+                  >
+                    <span className="bp-channel-avatar-circle">{account.name.charAt(0).toUpperCase()}</span>
+                    <Icon className="bp-channel-avatar-badge" />
                   </button>
-                  {channelPickerOpen ? (
-                    <div className="publish-channel-picker">
-                      {channelAccounts.map((account) => {
+                );
+              })}
+              <div className="bp-channel-picker-wrap">
+                <button type="button" className="bp-channel-add-btn" onClick={() => setChannelPickerOpen((current) => !current)}>
+                  <AddOutlined fontSize="small" />
+                </button>
+                {channelPickerOpen ? (
+                  <div className="bp-channel-picker">
+                    {channelAccounts.length === 0 ? (
+                      <p className="publish-no-channels">No Facebook Page or Instagram account connected yet — connect one from Company Settings → Channels first.</p>
+                    ) : (
+                      channelAccounts.map((account) => {
                         const Icon = channelIcon(account.channel);
                         const selected = selectedAccountIds.includes(account.id);
                         return (
@@ -171,112 +200,170 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                             <span>{account.name}</span>
                           </label>
                         );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
-              </>
-            )}
-          </div>
-
-          <label className="ai-teaching-field">
-            Post text (shared across every selected channel by default)
-            <textarea rows={4} value={text} disabled={saving} onChange={(event) => setText(event.target.value)} placeholder="Start writing..." />
-          </label>
-
-          {selectedAccountIds.length > 0 ? (
-            <div className="publish-channel-panels">
-              {channelAccounts.filter((account) => selectedAccountIds.includes(account.id)).map((account) => {
-                const Icon = channelIcon(account.channel);
-                const isExpanded = expandedAccountId === account.id;
-                const postType = channelPostTypes[account.id] || "feed";
-                return (
-                  <div key={account.id} className={`publish-channel-panel ${isExpanded ? "is-expanded" : ""}`}>
-                    <button type="button" className="publish-channel-panel-head" onClick={() => setExpandedAccountId(isExpanded ? null : account.id)}>
-                      <Icon fontSize="small" />
-                      <span>{account.name}</span>
-                      <em>{POST_TYPE_LABELS[postType]}</em>
-                    </button>
-                    {isExpanded ? (
-                      <div className="publish-channel-panel-body">
-                        <div className="publish-post-type-row">
-                          {Object.entries(POST_TYPE_LABELS).map(([value, label]) => (
-                            <label key={value} className="publish-when-option">
-                              <input
-                                type="radio"
-                                name={`post-type-${account.id}`}
-                                checked={postType === value}
-                                disabled={saving}
-                                onChange={() => setPostType(account.id, value)}
-                              />
-                              {label}
-                            </label>
-                          ))}
-                        </div>
-                        <textarea
-                          rows={3}
-                          value={contentOverrides[account.id] || ""}
-                          disabled={saving}
-                          placeholder={text || "Uses the shared text above unless you customize it here..."}
-                          onChange={(event) => setOverrideText(account.id, event.target.value)}
-                        />
-                      </div>
-                    ) : null}
+                      })
+                    )}
                   </div>
-                );
-              })}
+                ) : null}
+              </div>
             </div>
-          ) : null}
 
-          <label className="ai-teaching-field">
-            Media (optional)
-            {mediaUrl ? (
-              <div className="broadcast-media-attached">
-                <span>{mediaFileName || mediaUrl} <em>({mediaType})</em></span>
-                <button type="button" onClick={() => { setMediaUrl(""); setMediaType(""); setMediaFileName(""); }}>Remove</button>
+            {!customizeMode ? (
+              <div className="bp-composer">
+                <textarea
+                  rows={8}
+                  value={text}
+                  disabled={saving}
+                  onChange={(event) => setText(event.target.value)}
+                  placeholder="Start writing or get inspired with Templates"
+                />
+                <div className="bp-dropzone">
+                  {mediaUrl ? (
+                    <div className="broadcast-media-attached">
+                      <span>{mediaFileName || mediaUrl} <em>({mediaType})</em></span>
+                      <button type="button" onClick={() => { setMediaUrl(""); setMediaType(""); setMediaFileName(""); }}>Remove</button>
+                    </div>
+                  ) : (
+                    <label className="bp-dropzone-label">
+                      <ImageOutlined />
+                      <span>Drag &amp; drop or <em>select a file</em></span>
+                      <input type="file" accept="image/*,video/*" hidden disabled={mediaUploading} onChange={handleMediaFileChange} />
+                    </label>
+                  )}
+                  {mediaUploading ? <span className="broadcast-field-note">Uploading…</span> : null}
+                  {mediaError ? <span className="broadcast-field-note broadcast-media-error">{mediaError}</span> : null}
+                </div>
+                <div className="bp-toolbar">
+                  <button type="button"><AddOutlined fontSize="small" /></button>
+                  <button type="button"><InsertEmoticonOutlined fontSize="small" /></button>
+                  <button type="button"><TagOutlined fontSize="small" /></button>
+                </div>
               </div>
             ) : (
-              <>
-                <input type="file" accept="image/*,video/*" disabled={mediaUploading} onChange={handleMediaFileChange} />
-                {mediaUploading ? <span className="broadcast-field-note">Uploading…</span> : null}
-              </>
+              <div className="publish-channel-panels">
+                {selectedAccounts.map((account) => {
+                  const Icon = channelIcon(account.channel);
+                  const isExpanded = expandedAccountId === account.id;
+                  const postType = channelPostTypes[account.id] || "feed";
+                  return (
+                    <div key={account.id} className={`publish-channel-panel ${isExpanded ? "is-expanded" : ""}`}>
+                      <button type="button" className="publish-channel-panel-head" onClick={() => setExpandedAccountId(isExpanded ? null : account.id)}>
+                        <Icon fontSize="small" />
+                        <span>{account.name}</span>
+                        <em>{POST_TYPE_LABELS[postType]}</em>
+                      </button>
+                      {isExpanded ? (
+                        <div className="publish-channel-panel-body">
+                          <div className="publish-post-type-row">
+                            {Object.entries(POST_TYPE_LABELS).map(([value, label]) => (
+                              <label key={value} className="publish-when-option">
+                                <input
+                                  type="radio"
+                                  name={`post-type-${account.id}`}
+                                  checked={postType === value}
+                                  disabled={saving}
+                                  onChange={() => setPostType(account.id, value)}
+                                />
+                                {label}
+                              </label>
+                            ))}
+                          </div>
+                          <textarea
+                            rows={3}
+                            value={contentOverrides[account.id] || ""}
+                            disabled={saving}
+                            placeholder={text || "Uses the shared text above unless you customize it here..."}
+                            onChange={(event) => setOverrideText(account.id, event.target.value)}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                {mediaUrl ? (
+                  <div className="broadcast-media-attached">
+                    <span>{mediaFileName || mediaUrl} <em>({mediaType})</em></span>
+                    <button type="button" onClick={() => { setMediaUrl(""); setMediaType(""); setMediaFileName(""); }}>Remove</button>
+                  </div>
+                ) : (
+                  <label className="bp-dropzone-label bp-dropzone-label-compact">
+                    <ImageOutlined fontSize="small" />
+                    <span>Drag &amp; drop or <em>select a file</em></span>
+                    <input type="file" accept="image/*,video/*" hidden disabled={mediaUploading} onChange={handleMediaFileChange} />
+                  </label>
+                )}
+              </div>
             )}
-            {mediaError ? <span className="broadcast-field-note broadcast-media-error">{mediaError}</span> : null}
-          </label>
 
-          <div className="publish-when-row">
-            <label className="publish-when-option">
-              <input type="radio" name="when" checked={when === "now"} onChange={() => setWhen("now")} disabled={saving} />
-              Now
-            </label>
-            <label className="publish-when-option">
-              <input type="radio" name="when" checked={when === "schedule"} onChange={() => setWhen("schedule")} disabled={saving} />
-              Set date &amp; time
-            </label>
-            {when === "schedule" ? (
-              <input type="datetime-local" value={scheduledAt} disabled={saving} onChange={(event) => setScheduledAt(event.target.value)} />
-            ) : null}
+            <div className="publish-when-row">
+              <label className="publish-when-option">
+                <input type="radio" name="when" checked={when === "now"} onChange={() => setWhen("now")} disabled={saving} />
+                Now
+              </label>
+              <label className="publish-when-option">
+                <input type="radio" name="when" checked={when === "schedule"} onChange={() => setWhen("schedule")} disabled={saving} />
+                Set date &amp; time
+              </label>
+              {when === "schedule" ? (
+                <input type="datetime-local" value={scheduledAt} disabled={saving} onChange={(event) => setScheduledAt(event.target.value)} />
+              ) : null}
+            </div>
+
+            {error ? <p className="customer-segment-error">{error}</p> : null}
           </div>
 
-          {error ? <p className="customer-segment-error">{error}</p> : null}
+          <aside className="bp-preview">
+            <h4>Post Previews <InfoIcon /></h4>
+            <div className="bp-preview-empty">
+              <div className="bp-preview-card">
+                <span className="bp-preview-card-avatar" />
+                <span className="bp-preview-card-line" />
+              </div>
+              <p>See your post's preview here</p>
+            </div>
+          </aside>
         </div>
-        <footer className="tz-dialog-actions">
-          <AppButton type="button" variant="secondary" disabled={saving} onClick={onCancel}>Cancel</AppButton>
-          <AppButton
-            type="button"
-            variant="secondary"
-            disabled={saving || (!text.trim() && !mediaUrl) || selectedAccountIds.length === 0}
-            onClick={submitDraft}
-          >
-            Save as Draft
-          </AppButton>
-          <AppButton type="submit" variant="primary" loading={saving} disabled={!canSave}>
-            {when === "now" ? "Post now" : "Schedule"}
-          </AppButton>
+
+        <footer className="bp-footer">
+          <label className="bp-create-another">
+            <input type="checkbox" checked={createAnother} onChange={(event) => setCreateAnother(event.target.checked)} />
+            Create Another
+          </label>
+          <div className="bp-footer-right">
+            <button type="button" className="bp-next-available"><EventOutlined fontSize="small" /> Next Available</button>
+            {!customizeMode ? (
+              <AppButton
+                type="button"
+                variant="primary"
+                className="bp-cta"
+                disabled={selectedAccountIds.length === 0}
+                onClick={() => setCustomizeMode(true)}
+              >
+                Customize for each network →
+              </AppButton>
+            ) : (
+              <>
+                <AppButton
+                  type="button"
+                  variant="secondary"
+                  disabled={saving || (!text.trim() && !mediaUrl) || selectedAccountIds.length === 0}
+                  onClick={submitDraft}
+                >
+                  Save as Draft
+                </AppButton>
+                <AppButton type="submit" variant="primary" className="bp-cta" loading={saving} disabled={!canSave}>
+                  {when === "now" ? "Post now" : "Schedule Posts"}
+                </AppButton>
+              </>
+            )}
+          </div>
         </footer>
       </form>
     </div>
   );
+}
+
+function InfoIcon() {
+  return <InfoOutlined fontSize="inherit" className="bp-info-icon" />;
 }
 
 export default function PublishPage() {

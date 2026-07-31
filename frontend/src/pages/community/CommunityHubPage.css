@@ -1,16 +1,27 @@
 /* This hub intentionally does NOT use the T-ZONE purple/gradient theme —
-   it matches Buffer's own real (light) visual language: white surfaces,
-   near-black text, a single green accent, soft borders. Scoped to
-   .community-hub-shell only so the rest of the platform is unaffected. */
+   it matches Buffer's own real (light) visual language. These values are
+   NOT approximations: pulled directly from Buffer's live production CSS
+   (static.buffer.com/publish/common-*.css → the --global-color-* and
+   --color-* design tokens in its :root block), not eyeballed from a
+   screenshot. Scoped to .community-hub-shell so the rest of the platform's
+   theme is untouched. */
 
 :root {
   --buffer-bg: #ffffff;
-  --buffer-text: #1a1a1a;
-  --buffer-text-muted: #6b7280;
-  --buffer-border: #e5e7eb;
-  --buffer-hover: #f3f4f6;
-  --buffer-green: #1f9d55;
-  --buffer-green-soft: #e6f6ec;
+  --buffer-page-bg: #f7f6f3;
+  --buffer-text: #292928;
+  --buffer-text-muted: #7c7b79;
+  --buffer-border: #eae8e5;
+  --buffer-border-strong: #dedcd9;
+  --buffer-hover: #f7f6f3;
+  --buffer-green: #337046;
+  --buffer-green-soft: #edf5eb;
+  --buffer-green-pill-bg: #b0ec9c;
+  --buffer-green-pill-text: #213130;
+  --buffer-green-pill-bg-hover: #90d788;
+  --buffer-channel-facebook: #0766ff;
+  --buffer-channel-instagram: #f00276;
+  --buffer-channel-tiktok: #000000;
 }
 
 .community-hub-shell {
@@ -100,14 +111,14 @@
   min-height: 36px;
   border: 0;
   border-radius: 999px;
-  color: #fff;
-  background: var(--buffer-green);
+  color: var(--buffer-green-pill-text);
+  background: var(--buffer-green-pill-bg);
   font-size: 13px;
   font-weight: 700;
 }
 
 .community-hub-new-row button:hover {
-  background: #188047;
+  background: var(--buffer-green-pill-bg-hover);
 }
 
 .community-channels-heading {
@@ -224,14 +235,18 @@
 
 /* Buffer-style buttons/cards for every dialog and control rendered inside
    this hub (Create Post, saved-reply pickers, etc) — overrides the
-   platform's default purple gradient button/card styling in this scope only. */
+   platform's default purple gradient button/card styling in this scope only.
+   Buffer's real primary-action buttons are a mint-green pill with dark
+   green text, not a solid dark button with white text. */
 .community-hub-shell .tz-button-primary {
-  background: var(--buffer-green);
-  border-color: var(--buffer-green);
+  color: var(--buffer-green-pill-text);
+  background: var(--buffer-green-pill-bg);
+  border-color: var(--buffer-green-pill-bg);
 }
 
 .community-hub-shell .tz-button-primary:hover:not(:disabled) {
-  background: #188047;
+  background: var(--buffer-green-pill-bg-hover);
+  border-color: var(--buffer-green-pill-bg-hover);
 }
 
 .community-hub-shell .tz-button-secondary {
