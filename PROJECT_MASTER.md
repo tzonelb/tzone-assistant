@@ -1,8 +1,9 @@
 # T-ZONE CRM + AI Platform — Master Project Guide
 
-**Document version:** 2026-07-22  
-**Purpose:** Single onboarding and continuity reference for owners, developers, contractors, and AI coding agents.  
-**Repository baseline:** `b7212114854d5c6f84fea31d1bf5ca912348694c`
+**Document version:** 2026-07-31
+**Purpose:** Single onboarding and continuity reference for owners, developers, contractors, and AI coding agents.
+**Active branch:** `fix/release-timeout-and-channel-fixes`
+**Core principle:** Plug-and-play channel connection (real OAuth, under 2 minutes, zero technical steps for the customer), multi-tenant, backend-owned authorization.
 
 ---
 
@@ -167,53 +168,33 @@ The desired end-to-end flow is:
 
 The active baseline uses direct `sqlite3` access and WAL mode. SQLite is acceptable for local development and early testing. Production architecture should move toward PostgreSQL with one formal migration system after the conversation core is stable.
 
-## 6. Current official state
+## 6. Current module status
 
-### GitHub source of truth
+The conversation core (single-owner control, HTTP 409 conflict handling, AI/human state protection, Release / Return-to-AI, Timeline, read/unread, server-side search, notification behavior) is built and in active use — it is no longer a pending patch. The platform has since grown well beyond it. Runtime secrets, `.env`, databases, customer conversation data, virtual environments, node modules, generated builds, and local backups are excluded from Git.
 
-- `main` contains the secure baseline commit `b7212114854d5c6f84fea31d1bf5ca912348694c`.
-- `patch/9-1-conversation-workflow-recovery` currently starts from the same baseline.
-- Runtime secrets, `.env`, databases, customer conversation data, virtual environments, node modules, and generated builds are excluded from Git.
+### Built and working
+- **Conversations** — real-time omnichannel inbox, AI handling, human takeover, department routing, internal notes with @mentions, single-owner ownership model.
+- **CRM / Contacts** — unified profiles, channel identities, assigned employee, and a per-customer Client File / Timeline.
+- **AI Teaching** — split into Instructions / Knowledge / Train & Test, scoped per department and per channel, with a live "Test your AI" panel running the real reply pipeline.
+- **Broadcast** — bulk messages with image/video/audio, number-list targeting, delivery report.
+- **Tasks** — typed tasks with optional conversation deep-link.
+- **Appointments** — per-employee visibility (owner/admin see all), server-enforced.
+- **Team Chat** — internal employee messaging with mentions.
+- **Master Catalogue** — CSV import and WhatsApp Catalogue import.
+- **Community / Publish** — Buffer-style social scheduler: Home dashboard, per-channel sidebar, Create Post modal with per-network customization (Post / Reel / Story), real Facebook/Instagram Graph API publishing, background due-post worker.
+- **Saved Replies** — department-scoped, admin-managed, employee-usable.
+- **Chatbot Control** — consolidated bot-behavior settings (greeting, who-replies-first, reply access, return-to-AI timeout); auto-read is always-on and no longer a toggle.
+- **Sign-up** — public self-registration creating company + owner role + owner user + trialing subscription, with plan selection.
+- **Security** — login lockout, PBKDF2-SHA256 hashing, Fernet-encrypted channel tokens, Caddy security headers, disk-encryption deployment guidance.
+- **Channel connect** — real Facebook/Instagram OAuth popup flow (plug-and-play).
+- **Deployment scaffolding** — Docker + Caddy (`Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`, `DEPLOYMENT.md`).
 
-### Patch 9.1 code-complete artifact
+### Built but pending an external step
+- **Comments / unified community inbox** — buildable and largely designed; the Meta feed-comment webhook needs a public HTTPS callback URL, which only exists once the platform is deployed to a real domain. The `instagram_manage_comments` permission and webhook subscription are configured once at the platform level (not per customer).
+- **Broadcast/Comments media over real providers** — needs `PUBLIC_BACKEND_URL` set to the deployed HTTPS domain.
 
-A separate assembled source snapshot contains the Patch 9.1 implementation at commit:
-
-`0554e322ad2565e00f116f848a1af52b381a6149`
-
-This artifact is **not yet the official repository state**. It has not been safely applied to the user's working repository, pushed, reviewed through a Pull Request, manually accepted, or merged.
-
-Completed within that artifact:
-
-- atomic single-owner conversation control;
-- HTTP 409 ownership conflicts;
-- AI/human state protection;
-- owner heartbeat and lease renewal;
-- Release and Return-to-AI transitions;
-- Timeline restoration and event integration;
-- read/unread authorization;
-- server-side message search;
-- unread counters and folders;
-- five-card notification bell behavior;
-- exact Clear shown behavior;
-- per-user notification state isolation;
-- stale frontend request protection;
-- dark-theme workflow fixes;
-- automated backend, static, and API tests;
-- protected Messenger integration files unchanged.
-
-Still required before acceptance:
-
-1. Apply the code-complete snapshot to the exact repository source safely.
-2. Confirm all files are visible to Git.
-3. Install frontend dependencies if needed.
-4. Run Python compilation and backend tests.
-5. Run the Vite production build.
-6. Start backend and frontend against a test database.
-7. Complete manual QA with two employees and one administrator.
-8. Test real Messenger traffic without changing the webhook.
-9. Fix any defects and rerun the full suite.
-10. Commit, push, open a PR, pass checks, merge, and tag only after approval.
+### Paused pending an owner decision
+- **Real Calls** (live inbound/outbound + transfer) — requires a telephony provider (Twilio or equivalent) account and number. WhatsApp/Messenger/Instagram have no public voice-call API, so this cannot be done through the social channels.
 
 ## 7. Conversation operating model
 
@@ -242,10 +223,9 @@ See `docs/CONVERSATION_STATE_MACHINE.md`.
 
 ### P0 — release blockers
 
-- Patch 9.1 is not installed and manually accepted.
-- No accepted two-user browser test result exists on the official repository state.
-- Frontend production build has not been run on the deferred code-complete artifact in the user's environment.
-- Launch rollback and smoke-test procedures have not yet been completed on the final candidate.
+- Not yet deployed to a public HTTPS domain — required before Comments webhooks and real media delivery work end-to-end.
+- No formal multi-user acceptance QA run recorded on the current branch (build passing ≠ accepted).
+- Launch rollback and production smoke-test procedures not yet exercised on a real VPS.
 
 ### P1 — near-term architecture debt
 
@@ -270,9 +250,9 @@ See `docs/CONVERSATION_STATE_MACHINE.md`.
 
 ## 9. Delivery roadmap
 
-### Phase 9 — Conversation stabilization
+### Phase 9 — Conversation stabilization ✅
 
-Finish and accept Patch 9.1. Then add realtime presence in 9.2.
+Single-owner conversation core, Timeline, notifications, and takeover model are built and in use.
 
 ### Phase 10 — Workspace operations
 

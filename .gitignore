@@ -88,6 +88,17 @@ patches/
 backups/
 *_BACKUP*/
 *.bundle
+# Local timestamped backup copies (never commit; created by dev tooling)
+_patch_backups/
+_update_backups/
+patch_backups/
+core_backup_*/
+frontend_backup_*/
+backup_before_patch_*/
+backup_patch_*/
+*_backup_*/
+PATCH_*_BACKUP_INFO.txt
+PATCH_BACKUP_INFO_*.txt
 
 # ============================================================
 # Temporary files
