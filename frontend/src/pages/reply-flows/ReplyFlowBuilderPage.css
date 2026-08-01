@@ -120,50 +120,63 @@
 
 .reply-flow-canvas-row {
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   flex: 1 1 auto;
   min-height: 0;
   margin-top: 12px;
+  gap: 16px;
 }
 
 .reply-flow-palette {
   overflow-y: auto;
-  padding-right: 10px;
+  padding-right: 12px;
   border-right: 1px solid var(--tz-border);
 }
 
 .reply-flow-palette h4 {
-  margin: 0 0 10px;
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tz-text-primary);
+}
+
+.reply-flow-palette-hint {
+  margin: 0 0 16px;
   font-size: 12px;
   color: var(--tz-text-muted);
 }
 
 .reply-flow-palette-group {
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 
 .reply-flow-palette-group-title {
   display: block;
-  margin-bottom: 6px;
-  font-size: 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--tz-text-muted);
 }
 
 .reply-flow-palette-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 8px;
-  margin-bottom: 6px;
-  border: 1px solid var(--tz-border);
-  border-radius: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1.5px solid var(--tz-border);
+  border-radius: 10px;
   background: var(--tz-surface);
-  font-size: 12px;
-  font-weight: 600;
   cursor: grab;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.reply-flow-palette-item:hover {
+  border-color: var(--node-color, var(--tz-primary));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--tz-primary)) 15%, transparent);
 }
 
 .reply-flow-palette-item:active {
@@ -173,10 +186,29 @@
 .reply-flow-palette-item-icon {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   flex: 0 0 auto;
+}
+
+.reply-flow-palette-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reply-flow-palette-item-text strong {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tz-text-primary);
+}
+
+.reply-flow-palette-item-text span {
+  font-size: 11px;
+  color: var(--tz-text-muted);
+  line-height: 1.4;
 }
 
 .reply-flow-canvas-wrap {
@@ -202,15 +234,47 @@
   position: absolute;
   top: 12px;
   right: 12px;
+  bottom: 12px;
   z-index: 5;
-  width: 280px;
-  max-height: calc(100% - 24px);
+  width: 420px;
+  max-width: calc(100% - 24px);
   overflow-y: auto;
-  padding: 12px;
+  padding: 18px;
   border: 1px solid var(--tz-border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--tz-surface);
   box-shadow: var(--tz-shadow-md);
+}
+
+.reply-flow-inspector .reply-flow-primary-field {
+  font-size: 13px;
+}
+
+.reply-flow-inspector .reply-flow-primary-field textarea,
+.reply-flow-inspector .reply-flow-primary-field input,
+.reply-flow-inspector .reply-flow-primary-field select {
+  font-size: 14px;
+}
+
+.reply-flow-inspector-no-fields {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tz-text-muted) 8%, transparent);
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.reply-flow-inspector-name {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tz-border);
+  font-size: 11px;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-inspector-name input {
+  font-size: 12px;
 }
 
 .reply-flow-inspector-checkbox {

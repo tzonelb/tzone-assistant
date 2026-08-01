@@ -17,7 +17,7 @@ import "./ReplyFlowBuilderPage.css";
 
 const REACT_FLOW_NODE_TYPES = { step: FlowStepNode };
 
-function NodeConfigField({ field, value, onChange }) {
+function NodeConfigField({ field, value, onChange, autoFocus }) {
   if (field.type === "checkbox") {
     return (
       <label className="reply-flow-inspector-checkbox">
@@ -29,22 +29,22 @@ function NodeConfigField({ field, value, onChange }) {
 
   let control;
   if (field.type === "textarea") {
-    control = <textarea rows={3} value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
+    control = <textarea rows={7} autoFocus={autoFocus} value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
   } else if (field.type === "select") {
     control = (
-      <select className="tz-select" value={value || ""} onChange={(event) => onChange(event.target.value)}>
+      <select className="tz-select" autoFocus={autoFocus} value={value || ""} onChange={(event) => onChange(event.target.value)}>
         <option value="">Choose…</option>
         {field.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
       </select>
     );
   } else if (field.type === "number") {
-    control = <input type="number" value={value ?? ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
+    control = <input type="number" autoFocus={autoFocus} value={value ?? ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
   } else {
-    control = <input value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
+    control = <input autoFocus={autoFocus} value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
   }
 
   return (
-    <label className="ai-teaching-field">
+    <label className="ai-teaching-field reply-flow-primary-field">
       {field.label}
       {control}
       {field.hint ? <span className="reply-flow-field-hint">{field.hint}</span> : null}
@@ -66,7 +66,8 @@ function Palette() {
 
   return (
     <aside className="reply-flow-palette">
-      <h4>Drag onto the canvas</h4>
+      <h4>Steps</h4>
+      <p className="reply-flow-palette-hint">Drag a step onto the canvas to add it.</p>
       {NODE_GROUPS.map((group) => (
         <div className="reply-flow-palette-group" key={group}>
           <span className="reply-flow-palette-group-title">{group}</span>
@@ -80,12 +81,15 @@ function Palette() {
                   className="reply-flow-palette-item"
                   draggable
                   onDragStart={(event) => onDragStart(event, nodeType)}
-                  style={{ borderColor: config.color }}
+                  style={{ "--node-color": config.color }}
                 >
                   <span className="reply-flow-palette-item-icon" style={{ background: `${config.color}1a`, color: config.color }}>
                     <Icon fontSize="small" />
                   </span>
-                  {config.label}
+                  <span className="reply-flow-palette-item-text">
+                    <strong>{config.label}</strong>
+                    <span>{config.description}</span>
+                  </span>
                 </div>
               );
             })}
@@ -177,18 +181,22 @@ function BuilderCanvas({ nodes, edges, setNodes, setEdges, onNodesChange, onEdge
             <span>{NODE_TYPE_CONFIG[selectedNode.data.nodeType]?.label}</span>
             <button type="button" onClick={() => setSelectedNodeId(null)}><CloseOutlined fontSize="small" /></button>
           </div>
-          <label className="ai-teaching-field">
-            Label
-            <input value={selectedNode.data.label || ""} onChange={(event) => updateSelectedLabel(event.target.value)} />
-          </label>
-          {(NODE_FIELDS[selectedNode.data.nodeType] || []).map((field) => (
+          {(NODE_FIELDS[selectedNode.data.nodeType] || []).length === 0 ? (
+            <p className="reply-flow-inspector-no-fields">This step has no content to configure — it just moves the conversation to the next step.</p>
+          ) : null}
+          {(NODE_FIELDS[selectedNode.data.nodeType] || []).map((field, index) => (
             <NodeConfigField
               key={field.key}
               field={field}
               value={selectedNode.data.config?.[field.key]}
               onChange={(value) => updateSelectedConfig(field.key, value)}
+              autoFocus={index === 0}
             />
           ))}
+          <label className="ai-teaching-field reply-flow-inspector-name">
+            Internal step name <span className="reply-flow-field-hint">(for your own reference on the canvas — not sent to the customer)</span>
+            <input value={selectedNode.data.label || ""} onChange={(event) => updateSelectedLabel(event.target.value)} />
+          </label>
           <button type="button" className="reply-flow-inspector-delete" onClick={deleteSelected}>Delete step</button>
         </aside>
       ) : null}
