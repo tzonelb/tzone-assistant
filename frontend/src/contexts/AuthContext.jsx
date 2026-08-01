@@ -14,6 +14,7 @@ import {
   loginRequest,
   logoutRequest,
   saveAccessToken,
+  verifyTwoFactorRequest,
 } from "../api/client";
 
 
@@ -56,13 +57,7 @@ export function AuthProvider({ children }) {
     loadCurrentUser();
   }, [loadCurrentUser]);
 
-  const login = useCallback(async (company, email, password) => {
-    const result = await loginRequest(company, email, password);
-
-    if (!result?.access_token) {
-      throw new Error("The server did not return an access token.");
-    }
-
+  const completeLogin = useCallback(async (result) => {
     saveAccessToken(result.access_token);
 
     const currentUser = await getCurrentUserRequest();
@@ -72,6 +67,31 @@ export function AuthProvider({ children }) {
 
     return result;
   }, []);
+
+  const login = useCallback(async (company, email, password) => {
+    const result = await loginRequest(company, email, password);
+
+    // Account has 2FA enabled — caller must complete the challenge.
+    if (result?.twofa_required) {
+      return result;
+    }
+
+    if (!result?.access_token) {
+      throw new Error("The server did not return an access token.");
+    }
+
+    return completeLogin(result);
+  }, [completeLogin]);
+
+  const verifyTwoFactor = useCallback(async (pendingToken, code) => {
+    const result = await verifyTwoFactorRequest(pendingToken, code);
+
+    if (!result?.access_token) {
+      throw new Error("The server did not return an access token.");
+    }
+
+    return completeLogin(result);
+  }, [completeLogin]);
 
   const logout = useCallback(async () => {
     try {
@@ -94,6 +114,7 @@ export function AuthProvider({ children }) {
       loading,
       authenticated: Boolean(user),
       login,
+      verifyTwoFactor,
       logout,
       refreshUser: loadCurrentUser,
     }),
@@ -102,6 +123,7 @@ export function AuthProvider({ children }) {
       companies,
       loading,
       login,
+      verifyTwoFactor,
       logout,
       loadCurrentUser,
     ],

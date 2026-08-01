@@ -159,6 +159,36 @@ export async function loginRequest(company, email, password) {
   });
 }
 
+export async function verifyTwoFactorRequest(pendingToken, code) {
+  return apiRequest("/api/auth/2fa/verify", {
+    method: "POST",
+    authenticated: false,
+    body: { pending_token: pendingToken, code },
+  });
+}
+
+export async function twoFactorStatusRequest() {
+  return apiRequest("/api/auth/2fa/status");
+}
+
+export async function twoFactorEnrollStartRequest() {
+  return apiRequest("/api/auth/2fa/enroll/start", { method: "POST" });
+}
+
+export async function twoFactorEnrollConfirmRequest(code) {
+  return apiRequest("/api/auth/2fa/enroll/confirm", {
+    method: "POST",
+    body: { code },
+  });
+}
+
+export async function twoFactorDisableRequest(password, code) {
+  return apiRequest("/api/auth/2fa/disable", {
+    method: "POST",
+    body: { password, code },
+  });
+}
+
 export async function signupPlansRequest() {
   return apiRequest("/api/signup/plans", { authenticated: false });
 }
@@ -537,16 +567,20 @@ export async function deleteKnowledgeEntryRequest(id) {
   return apiRequest(`/api/knowledge/${id}`, { method: "DELETE" });
 }
 
-export async function listSavedRepliesRequest() {
-  return apiRequest("/api/saved-replies");
+export async function listSavedRepliesRequest(options = {}) {
+  const department = options?.department;
+  const query = department ? `?department=${encodeURIComponent(department)}` : "";
+  return apiRequest(`/api/saved-replies${query}`);
 }
 
-export async function createSavedReplyRequest(title, body) {
-  return apiRequest("/api/saved-replies", { method: "POST", body: { title, body } });
+export async function createSavedReplyRequest(title, body, department = "") {
+  return apiRequest("/api/saved-replies", { method: "POST", body: { title, body, department } });
 }
 
-export async function updateSavedReplyRequest(id, title, body) {
-  return apiRequest(`/api/saved-replies/${id}`, { method: "PATCH", body: { title, body } });
+export async function updateSavedReplyRequest(id, title, body, department) {
+  const payload = { title, body };
+  if (department !== undefined) payload.department = department;
+  return apiRequest(`/api/saved-replies/${id}`, { method: "PATCH", body: payload });
 }
 
 export async function deleteSavedReplyRequest(id) {

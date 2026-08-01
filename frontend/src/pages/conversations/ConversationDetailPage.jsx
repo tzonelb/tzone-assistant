@@ -512,6 +512,17 @@ export default function ConversationDetailPage({
 
 
   const selectedDepartment = control?.department || "Unassigned";
+
+  // Employees only see saved replies relevant to this conversation's department
+  // (plus general ones with no department). Admins see the full library.
+  const visibleSavedReplies = useMemo(() => {
+    if (currentUserIsAdmin) return savedReplies;
+    const dept = control?.department || "";
+    return savedReplies.filter((reply) => {
+      const replyDept = reply.department || "";
+      return replyDept === "" || replyDept === dept;
+    });
+  }, [savedReplies, currentUserIsAdmin, control?.department]);
   const availableEmployees = useMemo(() => {
     if (selectedDepartment === "Unassigned") {
       return [];
@@ -1216,7 +1227,7 @@ export default function ConversationDetailPage({
 
           {savedRepliesOpen ? (
             <div style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 16, left: 16, maxHeight: 260, overflowY: "auto", background: "#fff", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", borderRadius: 10, zIndex: 30, border: "1px solid #e5e7eb" }}>
-              {savedReplies.length ? savedReplies.map((reply) => (
+              {visibleSavedReplies.length ? visibleSavedReplies.map((reply) => (
                 <article
                   key={reply.id}
                   style={{ padding: "10px 14px", borderBottom: "1px solid #f1f3f5", cursor: canReply || !isAssignedToOther ? "pointer" : "not-allowed" }}
@@ -1232,7 +1243,7 @@ export default function ConversationDetailPage({
                   <span style={{ fontSize: 12, color: "#6b7280" }}>{reply.body}</span>
                 </article>
               )) : (
-                <span style={{ display: "block", padding: "14px", fontSize: 13, color: "#6b7280" }}>No saved replies yet — add some from Company Settings → Reply Flow &amp; Saved Replies.</span>
+                <span style={{ display: "block", padding: "14px", fontSize: 13, color: "#6b7280" }}>No saved replies for this department yet — admins can add some from the Saved Replies page.</span>
               )}
             </div>
           ) : null}

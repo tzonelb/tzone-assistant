@@ -147,6 +147,32 @@ def test_saved_reply_supports_department_scoping(client_and_db):
     assert titles == ["Sales Pitch"]
 
 
+def test_create_persists_department(client_and_db):
+    client = client_and_db
+    create_resp = client.post(
+        "/api/saved-replies", json={"title": "Billing Note", "body": "text", "department": "Billing"},
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    assert create_resp.json()["department"] == "Billing"
+
+    # And it comes back on the department-filtered listing.
+    resp = client.get("/api/saved-replies", params={"department": "Billing"})
+    replies = resp.json()["replies"]
+    assert [r["title"] for r in replies] == ["Billing Note"]
+    assert replies[0]["department"] == "Billing"
+
+
+def test_department_filter_excludes_general_replies(client_and_db):
+    client = client_and_db
+    client.post("/api/saved-replies", json={"title": "Only Sales", "body": "x", "department": "Sales"})
+    client.post("/api/saved-replies", json={"title": "General One", "body": "y"})
+
+    resp = client.get("/api/saved-replies", params={"department": "Sales"})
+    titles = [r["title"] for r in resp.json()["replies"]]
+    assert titles == ["Only Sales"]
+    assert "General One" not in titles
+
+
 def test_plain_employee_cannot_create_or_manage_saved_replies(client_and_db):
     from main import app
     from backend.services.auth_service import get_current_user

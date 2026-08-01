@@ -6,7 +6,7 @@ import tzoneLogo from "../../assets/tzone-logo.png";
 
 
 export default function LoginPage() {
-  const { authenticated, loading, login } = useAuth();
+  const { authenticated, loading, login, verifyTwoFactor } = useAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,9 +17,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pendingToken, setPendingToken] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
 
   if (!loading && authenticated) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  function goToDashboard() {
+    const destination = location.state?.from || "/dashboard";
+    navigate(destination, { replace: true });
   }
 
   async function handleSubmit(event) {
@@ -29,22 +36,42 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      await login(
+      const result = await login(
         company.trim(),
         email.trim(),
         password,
       );
 
-      const destination =
-        location.state?.from || "/dashboard";
+      if (result?.twofa_required) {
+        setPendingToken(result.pending_token);
+        setTwoFactorCode("");
+        return;
+      }
 
-      navigate(destination, {
-        replace: true,
-      });
+      goToDashboard();
     } catch (loginError) {
       setError(
         loginError.message ||
         "Login failed. Please check your information.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleTwoFactorSubmit(event) {
+    event.preventDefault();
+
+    setError("");
+    setSubmitting(true);
+
+    try {
+      await verifyTwoFactor(pendingToken, twoFactorCode.trim());
+      goToDashboard();
+    } catch (verifyError) {
+      setError(
+        verifyError.message ||
+        "That code was not accepted. Please try again.",
       );
     } finally {
       setSubmitting(false);
@@ -82,6 +109,53 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {pendingToken ? (
+          <form className="login-form" onSubmit={handleTwoFactorSubmit}>
+            <label htmlFor="login-2fa-code">
+              Authentication code
+            </label>
+            <p className="login-security-note">
+              Enter the 6-digit code from your authenticator app.
+            </p>
+            <input
+              id="login-2fa-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={twoFactorCode}
+              placeholder="123456"
+              onChange={(event) =>
+                setTwoFactorCode(event.target.value.replace(/\D/g, ""))
+              }
+              required
+            />
+
+            {error ? (
+              <div className="login-error">{error}</div>
+            ) : null}
+
+            <button
+              type="submit"
+              className="primary-action"
+              disabled={submitting || twoFactorCode.length !== 6}
+            >
+              {submitting ? "Verifying..." : "Verify and sign in"}
+            </button>
+
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() => {
+                setPendingToken("");
+                setTwoFactorCode("");
+                setError("");
+              }}
+            >
+              Back
+            </button>
+          </form>
+        ) : (
         <form
           className="login-form"
           onSubmit={handleSubmit}
@@ -159,6 +233,7 @@ export default function LoginPage() {
               : "Sign in"}
           </button>
         </form>
+        )}
 
         <small className="login-security-note">
           Don&apos;t have an account?{" "}

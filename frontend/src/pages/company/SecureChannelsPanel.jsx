@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   sendVerificationCodeRequest,
   verifyCodeRequest,
@@ -9,9 +9,102 @@ import {
   connectInstagramRequest,
   disconnectChannelRequest,
   startFacebookOAuthRequest,
+  getMySubscriptionRequest,
 } from "../../api/client";
+import { CHANNEL_CATEGORIES, CHANNEL_LABELS } from "./channelCatalog";
+import { resolveChannelIcon } from "./channelIcons";
+import "./SecureChannelsPanel.css";
 
 const PURPOSE = "channels_access";
+
+function ChannelsOverview({ channels, usage, locked, onConnect }) {
+  const connectedByKey = channels.reduce((map, ch) => {
+    (map[ch.channel] ||= []).push(ch);
+    return map;
+  }, {});
+
+  const used = usage?.used ?? channels.filter((c) => c.status === "active").length;
+  const max = usage?.max ?? null;
+  const pct = max ? Math.min(100, Math.round((used / max) * 100)) : 0;
+
+  return (
+    <div className="channels-overview">
+      <div className="channels-plan-banner">
+        <div className="channels-plan-banner-main">
+          <strong>Connected channels</strong>
+          <span>
+            {max != null
+              ? `${used} of ${max} channels used on your plan`
+              : `${used} channel${used === 1 ? "" : "s"} connected`}
+          </span>
+        </div>
+        {max != null ? (
+          <div className="channels-plan-usage">
+            <div className="channels-plan-usage-bar">
+              <div className={`channels-plan-usage-fill ${used >= max ? "is-full" : ""}`} style={{ width: `${pct}%` }} />
+            </div>
+            <div className="channels-plan-usage-label">{used >= max ? "Plan limit reached" : `${max - used} remaining`}</div>
+          </div>
+        ) : null}
+      </div>
+
+      {channels.length ? (
+        <div className="channels-connected-list">
+          {channels.map((c) => (
+            <div className="channels-connected-row" key={c.id}>
+              <div className="channels-connected-row-main">
+                <strong>{c.name}</strong>
+                <span>{CHANNEL_LABELS[c.channel] || c.channel}</span>
+              </div>
+              <span className="channels-connected-status">{c.status}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {CHANNEL_CATEGORIES.map((category) => (
+        <div className="channels-directory-category" key={category.title}>
+          <h4>{category.title}</h4>
+          <div className="channels-directory-grid">
+            {category.channels.map((channel) => {
+              const connected = connectedByKey[channel.key] || [];
+              const Icon = resolveChannelIcon(channel.icon);
+              const badge = connected.length
+                ? { cls: "is-connected", label: connected.length > 1 ? `${connected.length} connected` : "Connected" }
+                : channel.availability === "available"
+                ? { cls: "is-available", label: "Available" }
+                : { cls: "is-soon", label: "Coming soon" };
+              return (
+                <div className="channels-directory-card" key={channel.key}>
+                  <div className="channels-directory-card-icon" style={{ background: `${channel.color}1a`, color: channel.color }}>
+                    <Icon fontSize="small" />
+                  </div>
+                  <div className="channels-directory-card-body">
+                    <div className="channels-directory-card-head">
+                      <span className="channels-directory-card-name">{channel.name}</span>
+                      <span className={`channels-directory-badge ${badge.cls}`}>{badge.label}</span>
+                    </div>
+                    <span className="channels-directory-card-note">
+                      {channel.note || (connected.length ? connected.map((c) => c.name).join(" · ") : " ")}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="channels-directory-card-connect"
+                    disabled={channel.availability !== "available"}
+                    onClick={() => onConnect?.(channel)}
+                  >
+                    {channel.availability !== "available" ? "Coming soon" : locked ? "Unlock to connect" : "Connect"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function SecureChannelsPanel() {
   const [stage, setStage] = useState("locked"); // locked -> code_sent -> unlocked -> summary
@@ -23,12 +116,58 @@ export default function SecureChannelsPanel() {
   const [summary, setSummary] = useState([]);
 
   const [channels, setChannels] = useState([]);
+  const [usage, setUsage] = useState(null);
   const [oauthMessage, setOauthMessage] = useState(null);
   const [telegramToken, setTelegramToken] = useState("");
   const [waPhoneId, setWaPhoneId] = useState("");
   const [waToken, setWaToken] = useState("");
   const [igPageId, setIgPageId] = useState("");
   const [igToken, setIgToken] = useState("");
+  const pendingConnectRef = useRef(null);
+  const sectionRefs = useRef({});
+
+  function handleConnectClick(channel) {
+    if (stage === "locked" || stage === "code_sent") {
+      pendingConnectRef.current = channel.connect;
+      if (stage === "locked") handleSendCode();
+      return;
+    }
+    goToConnectSection(channel.connect);
+  }
+
+  function goToConnectSection(connectKey) {
+    if (connectKey === "facebook") {
+      handleFacebookConnect();
+      return;
+    }
+    const el = sectionRefs.current[connectKey];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const input = el.querySelector("input");
+      if (input) input.focus();
+    }
+  }
+
+  useEffect(() => {
+    if (stage === "unlocked" && pendingConnectRef.current) {
+      const target = pendingConnectRef.current;
+      pendingConnectRef.current = null;
+      setTimeout(() => goToConnectSection(target), 100);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stage]);
+
+  async function handleFacebookConnect() {
+    setBusy(true);
+    setError("");
+    try {
+      const result = await startFacebookOAuthRequest();
+      window.location.href = result.authorize_url;
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
 
   async function loadChannels() {
     try {
@@ -36,6 +175,12 @@ export default function SecureChannelsPanel() {
       setChannels(result.channels || []);
     } catch (e) {
       setError(e.message);
+    }
+    try {
+      const sub = await getMySubscriptionRequest();
+      setUsage(sub?.channels || null);
+    } catch {
+      setUsage(null);
     }
   }
 
@@ -152,17 +297,7 @@ export default function SecureChannelsPanel() {
           </form>
         )}
 
-        <div className="users-table-wrap" style={{ marginTop: 16 }}>
-          <table className="users-table">
-            <thead><tr><th>Channel</th><th>Name</th><th>Status</th></tr></thead>
-            <tbody>
-              {channels.map((c) => (
-                <tr key={c.id}><td>{c.channel}</td><td>{c.name}</td><td>{c.status}</td></tr>
-              ))}
-              {!channels.length ? <tr><td colSpan={3}>No channels connected yet.</td></tr> : null}
-            </tbody>
-          </table>
-        </div>
+        <ChannelsOverview channels={channels} usage={usage} locked onConnect={handleConnectClick} />
       </div>
     );
   }
@@ -198,7 +333,9 @@ export default function SecureChannelsPanel() {
     <div className="company-setting-fields">
       {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
 
-      <article className="company-setting-field">
+      <ChannelsOverview channels={channels} usage={usage} onConnect={handleConnectClick} />
+
+      <article className="company-setting-field" style={{ marginTop: 24 }} ref={(el) => (sectionRefs.current.facebook = el)}>
         <div>
           <strong>Connect with Facebook</strong>
           <span>One click — automatically finds your Page(s) and connects Messenger and Instagram together, no manual token copying.</span>
@@ -208,17 +345,7 @@ export default function SecureChannelsPanel() {
         type="button"
         style={{ marginBottom: 24, padding: "10px 18px", background: "#1877f2", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
         disabled={busy}
-        onClick={async () => {
-          setBusy(true);
-          setError("");
-          try {
-            const result = await startFacebookOAuthRequest();
-            window.location.href = result.authorize_url;
-          } catch (e) {
-            setError(e.message);
-            setBusy(false);
-          }
-        }}
+        onClick={handleFacebookConnect}
       >
         Connect with Facebook
       </button>
@@ -228,6 +355,7 @@ export default function SecureChannelsPanel() {
       </article>
       <form
         style={formStyle}
+        ref={(el) => (sectionRefs.current.telegram = el)}
         onSubmit={(e) => {
           e.preventDefault();
           withErrorHandling(async () => {
@@ -245,6 +373,7 @@ export default function SecureChannelsPanel() {
       </article>
       <form
         style={formStyle}
+        ref={(el) => (sectionRefs.current.whatsapp = el)}
         onSubmit={(e) => {
           e.preventDefault();
           withErrorHandling(async () => {

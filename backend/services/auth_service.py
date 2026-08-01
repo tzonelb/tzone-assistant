@@ -1,4 +1,5 @@
 
+import base64
 import hashlib
 import hmac
 import secrets
@@ -57,6 +58,19 @@ class AuthService:
             columns = {row["name"] for row in cursor.execute("PRAGMA table_info(auth_sessions)").fetchall()}
             if "company_id" not in columns:
                 cursor.execute("ALTER TABLE auth_sessions ADD COLUMN company_id INTEGER")
+
+            # Two-factor authentication (TOTP) columns — additive migration
+            # so existing installations pick them up on startup.
+            user_columns = {
+                row["name"]
+                for row in cursor.execute("PRAGMA table_info(users)").fetchall()
+            }
+            if "totp_secret" not in user_columns:
+                cursor.execute("ALTER TABLE users ADD COLUMN totp_secret TEXT")
+            if "totp_enabled" not in user_columns:
+                cursor.execute(
+                    "ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0"
+                )
 
             conn.commit()
 
@@ -430,6 +444,11 @@ class AuthService:
         )
 
         safe_user.pop(
+            "totp_secret",
+            None,
+        )
+
+        safe_user.pop(
             "token_hash",
             None,
         )
@@ -670,6 +689,155 @@ class AuthService:
             ))
 
             conn.commit()
+
+    # ------------------------------------------------------------------
+    # Two-factor authentication (TOTP)
+    # ------------------------------------------------------------------
+    PENDING_2FA_TTL_SECONDS = 300  # 5 minutes
+
+    def user_has_2fa(self, user_id: int) -> bool:
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT totp_enabled FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        return bool(row and row["totp_enabled"])
+
+    def begin_totp_enrollment(self, user_id: int) -> dict[str, Any]:
+        """Generate + store a fresh secret (NOT yet enabled) and return the
+        secret plus an otpauth:// provisioning URI for authenticator apps."""
+        from backend.services import totp_utils
+
+        with db.connect() as conn:
+            user = conn.execute(
+                "SELECT id, email FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            if not user:
+                raise ValueError("User not found.")
+
+            secret = totp_utils.generate_secret()
+            conn.execute(
+                "UPDATE users SET totp_secret = ?, totp_enabled = 0 WHERE id = ?",
+                (secret, user_id),
+            )
+            conn.commit()
+
+        uri = totp_utils.provisioning_uri(secret, account_name=user["email"])
+        return {"secret": secret, "otpauth_uri": uri}
+
+    def confirm_totp_enrollment(self, user_id: int, code: str) -> None:
+        from backend.services import totp_utils
+
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT totp_secret FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            secret = row["totp_secret"] if row else None
+            if not secret:
+                raise ValueError("Start enrollment before confirming a code.")
+            if not totp_utils.verify(secret, code):
+                raise ValueError("Invalid authentication code.")
+            conn.execute(
+                "UPDATE users SET totp_enabled = 1 WHERE id = ?", (user_id,)
+            )
+            conn.commit()
+
+    def verify_totp_code(self, user_id: int, code: str) -> bool:
+        from backend.services import totp_utils
+
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT totp_secret, totp_enabled FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+        if not row or not row["totp_enabled"] or not row["totp_secret"]:
+            return False
+        return totp_utils.verify(row["totp_secret"], code)
+
+    def disable_totp(self, user_id: int, password: str, code: str) -> None:
+        from backend.services import totp_utils
+
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT password_hash, totp_secret, totp_enabled FROM users WHERE id = ?",
+                (user_id,),
+            ).fetchone()
+            if not row:
+                raise ValueError("User not found.")
+            if not self.verify_password(password, row["password_hash"]):
+                raise ValueError("Password is incorrect.")
+            if not row["totp_enabled"] or not row["totp_secret"]:
+                raise ValueError("Two-factor authentication is not enabled.")
+            if not totp_utils.verify(row["totp_secret"], code):
+                raise ValueError("Invalid authentication code.")
+            conn.execute(
+                "UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?",
+                (user_id,),
+            )
+            conn.commit()
+
+    def build_login_user(
+        self, user_id: int, company_id: int | None
+    ) -> dict[str, Any] | None:
+        """Reconstruct the sanitized login user payload (with active company
+        fields) used after a successful 2FA challenge."""
+        with db.connect() as conn:
+            user = conn.execute(
+                "SELECT * FROM users WHERE id = ? LIMIT 1", (user_id,)
+            ).fetchone()
+            if not user:
+                return None
+            safe_user = self.sanitize_user(dict(user))
+            if company_id is not None:
+                company = conn.execute(
+                    "SELECT id, name, slug FROM companies WHERE id = ? LIMIT 1",
+                    (company_id,),
+                ).fetchone()
+                if company:
+                    safe_user["active_company_id"] = company["id"]
+                    safe_user["active_company_name"] = company["name"]
+                    safe_user["active_company_slug"] = company["slug"]
+        return safe_user
+
+    # -- Stateless short-lived pending token (signed user_id + company_id + exp) --
+    def create_pending_2fa_token(
+        self, user_id: int, company_id: int | None
+    ) -> str:
+        exp = int(datetime.now(timezone.utc).timestamp()) + self.PENDING_2FA_TTL_SECONDS
+        payload = f"2fa:{user_id}:{company_id if company_id is not None else ''}:{exp}"
+        signature = hmac.new(
+            config.JWT_SECRET.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        raw = f"{payload}:{signature}"
+        return base64.urlsafe_b64encode(raw.encode("utf-8")).decode("ascii")
+
+    def verify_pending_2fa_token(self, token: str) -> dict[str, Any] | None:
+        try:
+            raw = base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8")
+            marker, user_id_text, company_text, exp_text, signature = raw.split(":")
+        except (ValueError, TypeError, Exception):
+            return None
+        if marker != "2fa":
+            return None
+        payload = f"2fa:{user_id_text}:{company_text}:{exp_text}"
+        expected = hmac.new(
+            config.JWT_SECRET.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, signature):
+            return None
+        try:
+            exp = int(exp_text)
+        except ValueError:
+            return None
+        if exp < int(datetime.now(timezone.utc).timestamp()):
+            return None
+        return {
+            "user_id": int(user_id_text),
+            "company_id": int(company_text) if company_text else None,
+        }
 
 
 auth_service = AuthService()

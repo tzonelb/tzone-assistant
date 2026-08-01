@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { readNotificationPreferences, saveNotificationPreferences } from "../../utils/notificationPreferences";
-import { getNotificationPreferencesRequest, updateNotificationPreferencesRequest } from "../../api/client";
+import { getNotificationPreferencesRequest, updateNotificationPreferencesRequest, twoFactorStatusRequest, twoFactorEnrollStartRequest, twoFactorEnrollConfirmRequest, twoFactorDisableRequest } from "../../api/client";
 
 const DEFAULT_CATEGORY_PREFERENCES = {
   notify_new_message: "all",
@@ -41,6 +41,66 @@ export default function UISettingsPage() {
   const [notifications, setNotifications] = useState(() => readNotificationPreferences(user));
   const [categoryPrefs, setCategoryPrefs] = useState(DEFAULT_CATEGORY_PREFERENCES);
   const [saved, setSaved] = useState(false);
+
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [twoFactorEnroll, setTwoFactorEnroll] = useState(null); // { secret, otpauth_uri }
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [disablePassword, setDisablePassword] = useState("");
+  const [disableCode, setDisableCode] = useState("");
+  const [showDisable, setShowDisable] = useState(false);
+  const [twoFactorError, setTwoFactorError] = useState("");
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
+
+  useEffect(() => {
+    twoFactorStatusRequest()
+      .then((data) => setTwoFactorEnabled(Boolean(data?.enabled)))
+      .catch(() => {});
+  }, []);
+
+  async function startTwoFactorEnroll() {
+    setTwoFactorError("");
+    setTwoFactorBusy(true);
+    try {
+      const data = await twoFactorEnrollStartRequest();
+      setTwoFactorEnroll(data);
+      setTwoFactorCode("");
+    } catch (e) {
+      setTwoFactorError(e.message || "Could not start setup.");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  }
+
+  async function confirmTwoFactorEnroll() {
+    setTwoFactorError("");
+    setTwoFactorBusy(true);
+    try {
+      await twoFactorEnrollConfirmRequest(twoFactorCode.trim());
+      setTwoFactorEnabled(true);
+      setTwoFactorEnroll(null);
+      setTwoFactorCode("");
+    } catch (e) {
+      setTwoFactorError(e.message || "Invalid code.");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  }
+
+  async function submitDisableTwoFactor() {
+    setTwoFactorError("");
+    setTwoFactorBusy(true);
+    try {
+      await twoFactorDisableRequest(disablePassword, disableCode.trim());
+      setTwoFactorEnabled(false);
+      setShowDisable(false);
+      setDisablePassword("");
+      setDisableCode("");
+    } catch (e) {
+      setTwoFactorError(e.message || "Could not disable two-factor authentication.");
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -107,7 +167,47 @@ export default function UISettingsPage() {
 
           {active === "language" ? <section className="settings-section-card"><h3>Language & region</h3><p>The selected timezone controls all conversation, notification and timeline timestamps.</p><div className="settings-form-grid"><label><strong>Language</strong><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="en">English</option><option value="ar">Arabic</option><option value="tr">Turkish</option></select></label><label><strong>Timezone</strong><select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}><option value="Asia/Beirut">Beirut</option><option value="Asia/Qatar">Qatar</option><option value="UTC">UTC</option></select></label></div></section> : null}
 
-          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => setAutoLogout(e.target.value)}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><button type="button" className="secondary-action">Change password</button><button type="button" className="secondary-action">View active sessions</button></div></section> : null}
+          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => setAutoLogout(e.target.value)}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><button type="button" className="secondary-action">Change password</button><button type="button" className="secondary-action">View active sessions</button></div>
+            <div className="settings-2fa" style={{ marginTop: "1.5rem", borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: "1.25rem" }}>
+              <h3>Two-factor authentication</h3>
+              <p>Add a one-time code from an authenticator app (Google Authenticator, Authy, 1Password) to every sign-in.</p>
+              <p><strong>Status: </strong>{twoFactorEnabled ? "Enabled" : "Disabled"}</p>
+              {twoFactorError ? <div className="login-error" style={{ marginBottom: "0.75rem" }}>{twoFactorError}</div> : null}
+
+              {!twoFactorEnabled && !twoFactorEnroll ? (
+                <button type="button" className="primary-action" disabled={twoFactorBusy} onClick={startTwoFactorEnroll}>Enable two-factor authentication</button>
+              ) : null}
+
+              {!twoFactorEnabled && twoFactorEnroll ? (
+                <div className="settings-form-grid">
+                  <p>Add this account to your authenticator app using manual key entry:</p>
+                  <label><strong>Setup key (base32)</strong><input type="text" readOnly value={twoFactorEnroll.secret} onFocus={(e) => e.target.select()} /></label>
+                  <label><strong>otpauth URI</strong><input type="text" readOnly value={twoFactorEnroll.otpauth_uri} onFocus={(e) => e.target.select()} /></label>
+                  <label><strong>Enter the 6-digit code to confirm</strong><input type="text" inputMode="numeric" maxLength={6} value={twoFactorCode} placeholder="123456" onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ""))} /></label>
+                  <div>
+                    <button type="button" className="primary-action" disabled={twoFactorBusy || twoFactorCode.length !== 6} onClick={confirmTwoFactorEnroll}>Confirm & activate</button>
+                    <button type="button" className="secondary-action" onClick={() => { setTwoFactorEnroll(null); setTwoFactorError(""); }}>Cancel</button>
+                  </div>
+                </div>
+              ) : null}
+
+              {twoFactorEnabled && !showDisable ? (
+                <button type="button" className="secondary-action" onClick={() => { setShowDisable(true); setTwoFactorError(""); }}>Disable two-factor authentication</button>
+              ) : null}
+
+              {twoFactorEnabled && showDisable ? (
+                <div className="settings-form-grid">
+                  <p>Confirm your password and a current authenticator code to disable.</p>
+                  <label><strong>Password</strong><input type="password" value={disablePassword} onChange={(e) => setDisablePassword(e.target.value)} /></label>
+                  <label><strong>Authentication code</strong><input type="text" inputMode="numeric" maxLength={6} value={disableCode} placeholder="123456" onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ""))} /></label>
+                  <div>
+                    <button type="button" className="primary-action" disabled={twoFactorBusy || disableCode.length !== 6 || !disablePassword} onClick={submitDisableTwoFactor}>Confirm disable</button>
+                    <button type="button" className="secondary-action" onClick={() => { setShowDisable(false); setDisablePassword(""); setDisableCode(""); setTwoFactorError(""); }}>Cancel</button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            </section> : null}
 
           <div className="settings-save-bar"><button type="button" className="primary-action" onClick={saveAll}>{saved ? "Settings saved" : "Save settings"}</button></div>
         </div>

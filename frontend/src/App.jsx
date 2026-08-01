@@ -19,6 +19,7 @@ import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
 import AITeachingHubPage from "./pages/ai-teaching/AITeachingHubPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import TasksPage from "./pages/tasks/TasksPage";
+import SavedRepliesPage from "./pages/saved-replies/SavedRepliesPage";
 import BroadcastPage from "./pages/broadcast/BroadcastPage";
 import BroadcastDetailPage from "./pages/broadcast/BroadcastDetailPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="/catalogue" element={<CataloguePage />} />
         <Route path="/calls" element={<CallsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/saved-replies" element={<SavedRepliesPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<TeamChatPage />} />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSavedRepliesRequest, createSavedReplyRequest, updateSavedReplyRequest, deleteSavedReplyRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest } from "../../api/client";
+import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest } from "../../api/client";
 import SecureChannelsPanel from "./SecureChannelsPanel";
 
 const SECTIONS = [
@@ -586,103 +586,6 @@ function ReplyFlowSettings() {
   );
 }
 
-function SavedRepliesManager() {
-  const [replies, setReplies] = useState([]);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-
-  function load() {
-    listSavedRepliesRequest()
-      .then((result) => setReplies(result?.replies || []))
-      .catch((e) => setError(e.message || "Could not load saved replies."));
-  }
-
-  useEffect(() => { load(); }, []);
-
-  function startEdit(reply) {
-    setEditingId(reply.id);
-    setTitle(reply.title);
-    setBody(reply.body);
-  }
-
-  function startNew() {
-    setEditingId("new");
-    setTitle("");
-    setBody("");
-  }
-
-  async function save(e) {
-    e.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      if (editingId === "new") {
-        await createSavedReplyRequest(title, body);
-      } else {
-        await updateSavedReplyRequest(editingId, title, body);
-      }
-      setEditingId(null);
-      load();
-    } catch (x) {
-      setError(x.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove(id) {
-    setError("");
-    try {
-      await deleteSavedReplyRequest(id);
-      load();
-    } catch (x) {
-      setError(x.message);
-    }
-  }
-
-  return (
-    <div className="workflow-settings-card" style={{ marginTop: 20 }}>
-      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
-        <div>
-          <strong>Saved replies</strong>
-          <br />
-          <span style={{ fontWeight: 400, color: "#6b7280" }}>Employees insert these from inside any conversation — they never send automatically.</span>
-        </div>
-        {editingId ? null : <button type="button" onClick={startNew}>+ New saved reply</button>}
-      </div>
-
-      {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
-
-      {editingId ? (
-        <form onSubmit={save} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "12px 0" }}>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (e.g. Greeting)" required
-            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message text" required rows={3}
-            style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
-          <div style={{ display: "flex", gap: 10 }}>
-            <button type="submit" disabled={saving}>{saving ? "Saving..." : "Save"}</button>
-            <button type="button" onClick={() => setEditingId(null)}>Cancel</button>
-          </div>
-        </form>
-      ) : null}
-
-      {replies.map((reply) => (
-        <div className="workflow-setting-row" key={reply.id}>
-          <div><strong>{reply.title}</strong><br /><span style={{ fontWeight: 400, color: "#6b7280" }}>{reply.body}</span></div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={() => startEdit(reply)}>Edit</button>
-            <button type="button" onClick={() => remove(reply.id)}>Delete</button>
-          </div>
-        </div>
-      ))}
-      {!replies.length && !editingId ? <p style={{ padding: "12px 0", color: "#6b7280" }}>No saved replies yet.</p> : null}
-    </div>
-  );
-}
-
 function DepartmentsManager() {
   const [departments, setDepartments] = useState([]);
   const [error, setError] = useState("");
@@ -761,11 +664,30 @@ function DepartmentsManager() {
   );
 }
 
+function SavedRepliesLink() {
+  const navigate = useNavigate();
+  return (
+    <div className="workflow-settings-card" style={{ marginTop: 20 }}>
+      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+        <div>
+          <strong>Saved replies</strong>
+          <br />
+          <span style={{ fontWeight: 400, color: "#6b7280" }}>
+            Saved replies now live on their own page. Admins add and manage them there; employees insert
+            department-relevant ones from inside any conversation.
+          </span>
+        </div>
+        <button type="button" onClick={() => navigate("/saved-replies")}>Open Saved Replies</button>
+      </div>
+    </div>
+  );
+}
+
 function ReplyFlowAndSavedReplies() {
   return (
     <div>
       <ReplyFlowSettings />
-      <SavedRepliesManager />
+      <SavedRepliesLink />
     </div>
   );
 }

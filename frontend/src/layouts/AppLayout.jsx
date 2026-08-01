@@ -37,6 +37,7 @@ const pageTitles = {
   "/calls": "Calls",
   "/catalogue": "Master Catalogue",
   "/tasks": "Tasks",
+  "/saved-replies": "Saved Replies",
   "/appointments": "Appointments",
   "/analytics": "Analytics",
   "/team-chat": "Team Chat",
