@@ -18,11 +18,13 @@ USER_ID = "96170000001"
 def flow_env():
     from database.database import db
     from backend.services.auth_service import auth_service
+    from backend.services.catalogue_service import catalogue_service
     from backend.services.conversation_control_service import conversation_control_service
     from backend.services.department_service import department_service
     from backend.services.notification_service import notification_service
     from backend.services.diagnostics_service import diagnostics_service
     from backend.services.reply_flow_service import reply_flow_service
+    from backend.services.task_service import task_service
     from core.instruction_service import instruction_service
     from core.knowledge_manager import knowledge_manager
     from core.reply_flow_engine import reply_flow_engine
@@ -40,6 +42,8 @@ def flow_env():
     reply_flow_service.ensure_schema()
     instruction_service.ensure_schema()
     knowledge_manager.ensure_schema()
+    task_service.ensure_schema()
+    catalogue_service.ensure_schema()
     reply_flow_engine.ensure_schema()
 
     with db.connect() as conn:
@@ -169,7 +173,7 @@ def test_human_handoff_notifies_and_ends_silently(flow_env):
     assert "Angry customer" in row["body"]
 
 
-def test_not_yet_executed_node_type_passes_through(flow_env):
+def test_condition_with_single_edge_falls_through(flow_env):
     from core.reply_flow_engine import reply_flow_engine
 
     _create_flow(
@@ -183,6 +187,141 @@ def test_not_yet_executed_node_type_passes_through(flow_env):
 
     response = reply_flow_engine.maybe_handle(_make_request("hi"))
     assert response.text == "done"
+
+
+def test_condition_branches_true_vs_false_edges(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+
+    _create_flow(
+        nodes=[
+            _node("n1", "ask_question", {"question": "How many?", "save_as": "qty"}),
+            _node("n2", "condition", {"variable": "qty", "operator": "greater_than", "value": "5"}),
+            _node("yes", "canned_reply", {"text": "Bulk order path"}),
+            _node("no", "canned_reply", {"text": "Regular order path"}),
+        ],
+        edges=[_edge("n1", "n2"), _edge("n2", "yes"), _edge("n2", "no")],
+    )
+
+    reply_flow_engine.maybe_handle(_make_request("hi"))  # lands on ask_question
+    bulk = reply_flow_engine.maybe_handle(_make_request("10"))
+    assert bulk.text == "Bulk order path"
+
+
+def test_condition_false_branch(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+
+    _create_flow(
+        nodes=[
+            _node("n1", "ask_question", {"question": "How many?", "save_as": "qty"}),
+            _node("n2", "condition", {"variable": "qty", "operator": "greater_than", "value": "5"}),
+            _node("yes", "canned_reply", {"text": "Bulk order path"}),
+            _node("no", "canned_reply", {"text": "Regular order path"}),
+        ],
+        edges=[_edge("n1", "n2"), _edge("n2", "yes"), _edge("n2", "no")],
+    )
+
+    reply_flow_engine.maybe_handle(_make_request("hi"))
+    regular = reply_flow_engine.maybe_handle(_make_request("2"))
+    assert regular.text == "Regular order path"
+
+
+def test_create_task_node_creates_a_real_task(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+    from backend.services.task_service import task_service
+
+    _create_flow(
+        nodes=[
+            _node("n1", "create_task", {"task_type": "complaint", "note": "Customer is upset about a late delivery."}),
+            _node("n2", "end"),
+        ],
+        edges=[_edge("n1", "n2")],
+    )
+
+    reply_flow_engine.maybe_handle(_make_request("I have a complaint"))
+
+    tasks = task_service.list_tasks(company_id=COMPANY_ID)
+    matching = [t for t in tasks["items"] if t["task_type"] == "complaint"]
+    assert len(matching) == 1
+    assert "late delivery" in matching[0]["description"]
+
+
+def test_appointment_node_creates_a_follow_up_task_not_a_fake_appointment(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+    from backend.services.task_service import task_service
+
+    _create_flow(
+        nodes=[_node("n1", "appointment", {"note": "Wants a repair appointment next week"}), _node("n2", "end")],
+        edges=[_edge("n1", "n2")],
+    )
+
+    reply_flow_engine.maybe_handle(_make_request("I need an appointment"))
+
+    tasks = task_service.list_tasks(company_id=COMPANY_ID)
+    assert len(tasks["items"]) == 1
+    assert "repair appointment" in tasks["items"][0]["description"]
+
+
+def test_product_suggest_uses_real_catalogue_data(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+    from backend.services.catalogue_service import catalogue_service
+
+    catalogue_service.create_product(company_id=COMPANY_ID, name="iPhone 15", sku="IP15", description="Latest model", price_cents=99900)
+
+    _create_flow(
+        nodes=[_node("n1", "product_suggest", {"note": "iPhone"}), _node("n2", "end")],
+        edges=[_edge("n1", "n2")],
+    )
+
+    response = reply_flow_engine.maybe_handle(_make_request("hi"))
+    assert "iPhone 15" in response.text
+    assert "999.00" in response.text
+
+
+def test_product_suggest_says_nothing_when_no_match(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+
+    _create_flow(
+        nodes=[_node("n1", "product_suggest", {"note": "nonexistent gadget"}), _node("n2", "end")],
+        edges=[_edge("n1", "n2")],
+    )
+
+    response = reply_flow_engine.maybe_handle(_make_request("hi"))
+    assert response is None  # nothing invented, nothing sent
+
+
+def test_timeout_followup_arms_a_real_reminder(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+    from backend.services.conversation_control_service import conversation_control_service
+
+    _create_flow(
+        nodes=[
+            _node("n1", "timeout_followup", {"wait_minutes": 30, "text": "Still there?"}),
+            _node("n2", "end"),
+        ],
+        edges=[_edge("n1", "n2")],
+    )
+
+    reply_flow_engine.maybe_handle(_make_request("hi"))
+
+    state = conversation_control_service.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=USER_ID)
+    assert state["reminder_at"] is not None
+    assert state["reminder_auto_send"] == 1
+    assert state["reminder_message_text"] == "Still there?"
+
+
+def test_close_chat_sends_closing_text_and_ends(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+
+    _create_flow(
+        nodes=[_node("n1", "close_chat", {"ask_reschedule": True}), _node("n2", "end")],
+        edges=[_edge("n1", "n2")],
+    )
+
+    response = reply_flow_engine.maybe_handle(_make_request("bye"))
+    assert "follow-up" in response.text.lower()
+
+    second = reply_flow_engine.maybe_handle(_make_request("actually one more thing"))
+    assert second is None  # flow ended
 
 
 def test_department_scoped_flow_preferred_over_catch_all(flow_env):

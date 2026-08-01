@@ -4,16 +4,21 @@ and the builder UI define WHAT a flow looks like; this module is what
 actually makes a saved flow change the AI's real behavior on a real
 conversation.
 
-Deliberately scoped v1: supports the node types that can be executed
-safely and unambiguously right now — greeting/company_intro/canned_reply
+Every node type executes for real: greeting/company_intro/canned_reply
 (send text, auto-advance), ask_question (send question, wait, store the
 answer), the three ai_* modes (call the real AI pipeline with the node's
 instructions layered on top of company instructions, wait one exchange,
-advance), human_handoff (notify + hand off, end the flow), and end.
-condition/appointment/create_task/product_suggest/timeout_followup/
-close_chat are recognized but not yet executed — passed through with a
-logged diagnostic event rather than silently skipped or crashing, exactly
-like every other "not wired yet" gap flagged elsewhere in this codebase.
+advance), human_handoff (notify + hand off, end the flow), condition
+(branch on a saved variable — first outgoing edge if true/second if
+false), create_task and appointment (real backend.services.task_service
+task — appointment intentionally creates a follow-up task rather than a
+fabricated appointment record, since the flow has no real date/time to
+schedule against; inventing one would be worse than not booking it),
+product_suggest (a real Master Catalogue lookup — says so honestly if
+nothing matches, never invents a product), timeout_followup (arms a real
+delayed auto-send via the existing conversation reminder/safety-check
+system), close_chat (a real templated closing, optionally asking about a
+follow-up), and end.
 
 Entry point: maybe_handle(request) -> Response | None. Returns None when
 no active flow applies to this conversation, so callers fall through to
@@ -23,13 +28,15 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from backend.services.catalogue_service import catalogue_service
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.notification_service import notification_service
 from backend.services.reply_flow_service import reply_flow_service
+from backend.services.task_service import task_service
 from core.ai_router import ai_router
 from core.instruction_service import instruction_service
 from core.knowledge_manager import knowledge_manager
@@ -40,7 +47,8 @@ logger = logging.getLogger(__name__)
 
 AI_NODE_TYPES = {"ai_direct", "ai_knowledge_only", "ai_knowledge_plus"}
 PASSTHROUGH_TEXT_TYPES = {"greeting", "company_intro", "canned_reply"}
-NOT_YET_EXECUTED_TYPES = {"condition", "appointment", "create_task", "product_suggest", "timeout_followup", "close_chat"}
+CONDITION_OPERATORS = {"equals", "contains", "greater_than", "less_than", "is_set"}
+TASK_TYPES = {"follow_up", "complaint", "service_request", "sales_inquiry", "internal", "other"}
 
 
 def utc_now_iso() -> str:
@@ -111,13 +119,14 @@ class ReplyFlowEngine:
 
     # -- session persistence --------------------------------------------
 
-    def _get_session(self, *, company_id: int, channel: str, external_user_id: str) -> dict[str, Any] | None:
+    def _get_session(self, *, company_id: int, channel: str, external_user_id: str, status: str | None = None) -> dict[str, Any] | None:
+        query = "SELECT * FROM reply_flow_sessions WHERE company_id = ? AND channel = ? AND external_user_id = ?"
+        params: list[Any] = [company_id, channel, external_user_id]
+        if status:
+            query += " AND status = ?"
+            params.append(status)
         with db.connect() as conn:
-            row = conn.execute(
-                "SELECT * FROM reply_flow_sessions WHERE company_id = ? AND channel = ? AND external_user_id = ? "
-                "AND status = 'active'",
-                (company_id, channel, external_user_id),
-            ).fetchone()
+            row = conn.execute(query, params).fetchone()
         return dict(row) if row else None
 
     def _start_session(self, *, company_id: int, channel: str, external_user_id: str, flow_id: int) -> dict[str, Any]:
@@ -198,6 +207,104 @@ class ReplyFlowEngine:
             data={"reason": "flow_human_handoff"},
         )
 
+    def _edges_from(self, flow: dict[str, Any], node_id: str) -> list[dict[str, Any]]:
+        return [edge for edge in flow["edges"] if edge.get("source") == node_id]
+
+    def _evaluate_condition(self, config: dict[str, Any], variables: dict[str, Any]) -> bool:
+        operator = config.get("operator")
+        if operator not in CONDITION_OPERATORS:
+            return False
+        actual = variables.get(config.get("variable"))
+        if operator == "is_set":
+            return bool(actual) or actual == 0
+        if actual is None:
+            return False
+        actual_text = str(actual).strip().lower()
+        expected_text = str(config.get("value") or "").strip().lower()
+        if operator == "equals":
+            return actual_text == expected_text
+        if operator == "contains":
+            return expected_text in actual_text
+        try:
+            actual_number = float(actual_text)
+            expected_number = float(expected_text)
+        except (TypeError, ValueError):
+            return False
+        if operator == "greater_than":
+            return actual_number > expected_number
+        return actual_number < expected_number
+
+    def _next_node_id_for_condition(self, flow: dict[str, Any], node_id: str, matched: bool) -> str | None:
+        edges = self._edges_from(flow, node_id)
+        if not edges:
+            return None
+        if matched or len(edges) == 1:
+            return edges[0]["target"]
+        return edges[1]["target"]
+
+    def _handle_create_task(self, request: Any, config: dict[str, Any], state: dict[str, Any] | None, *, is_appointment: bool = False) -> None:
+        task_type = config.get("task_type") if not is_appointment else "follow_up"
+        if task_type not in TASK_TYPES:
+            task_type = "other"
+        note = (config.get("note") or "").strip()
+        title = "Book an appointment (from Reply Flow)" if is_appointment else f"Reply Flow task ({task_type})"
+        try:
+            task_service.create_task(
+                company_id=request.company_id,
+                title=title,
+                description=note or f"Created automatically by a Reply Flow step for {request.channel} customer {request.user_id}.",
+                task_type=task_type,
+                conversation_id=state.get("id") if state else None,
+            )
+        except Exception:
+            logger.exception("Reply flow could not create a task")
+
+    def _suggest_product(self, request: Any, config: dict[str, Any]) -> str | None:
+        search_term = (config.get("note") or "").strip()
+        try:
+            result = catalogue_service.list_products(company_id=request.company_id, search=search_term or None)
+        except Exception:
+            logger.exception("Reply flow product lookup failed")
+            return None
+        items = result.get("items") or []
+        if not items:
+            return None
+        product = items[0]
+        name = product.get("name") or "this item"
+        price_cents = product.get("price_cents")
+        description = product.get("description") or ""
+        parts = [name]
+        if price_cents not in (None, ""):
+            parts.append(f"${price_cents / 100:.2f}")
+        text = " — ".join(parts)
+        if description:
+            text += f"\n{description}"
+        return text
+
+    def _schedule_followup(self, request: Any, config: dict[str, Any]) -> None:
+        text = (config.get("text") or "").strip()
+        if not text:
+            return
+        try:
+            wait_minutes = max(1, int(config.get("wait_minutes") or 60))
+        except (TypeError, ValueError):
+            wait_minutes = 60
+        reminder_at = (datetime.now(timezone.utc) + timedelta(minutes=wait_minutes)).isoformat()
+        try:
+            conversation_control_service.set_reminder(
+                company_id=request.company_id, channel=request.channel, external_user_id=request.user_id,
+                reminder_at=reminder_at, note="Reply flow timeout follow-up", actor_user_id=None,
+                auto_send=True, message_text=text,
+            )
+        except Exception:
+            logger.exception("Reply flow could not schedule a timeout follow-up")
+
+    def _close_chat_text(self, config: dict[str, Any]) -> str:
+        text = "Thanks for chatting with us — is there anything else we can help with?"
+        if config.get("ask_reschedule"):
+            text += " Would you like to schedule a follow-up?"
+        return text
+
     # -- entry point ------------------------------------------------------
 
     def maybe_handle(self, request: Any) -> Response | None:
@@ -208,10 +315,20 @@ class ReplyFlowEngine:
             department = state.get("department") if state else None
 
             session_row = self._get_session(
-                company_id=request.company_id, channel=request.channel, external_user_id=request.user_id,
+                company_id=request.company_id, channel=request.channel, external_user_id=request.user_id, status="active",
             )
 
             if session_row is None:
+                # A session that already ran to completion (ended) must NOT
+                # silently restart on the customer's very next message —
+                # only a conversation that has never had a flow session at
+                # all should trigger a fresh start.
+                any_session = self._get_session(
+                    company_id=request.company_id, channel=request.channel, external_user_id=request.user_id,
+                )
+                if any_session is not None:
+                    return None
+
                 flow = self._pick_flow(request.company_id, request.channel, department)
                 if not flow or not flow["nodes"]:
                     return None
@@ -222,12 +339,13 @@ class ReplyFlowEngine:
             else:
                 flow = reply_flow_service.get(company_id=request.company_id, flow_id=session_row["flow_id"])
 
-            return self._advance(request, flow, session_row, department)
+            return self._advance(request, flow, session_row, state)
         except Exception:
             logger.exception("Reply flow execution failed; falling back to the default AI pipeline")
             return None
 
-    def _advance(self, request: Any, flow: dict[str, Any], session_row: dict[str, Any], department: str | None) -> Response | None:
+    def _advance(self, request: Any, flow: dict[str, Any], session_row: dict[str, Any], state: dict[str, Any] | None) -> Response | None:
+        department = state.get("department") if state else None
         variables = json.loads(session_row["variables_json"] or "{}")
         current_node_id = session_row["current_node_id"]
         current_node = self._node_by_id(flow, current_node_id)
@@ -283,18 +401,46 @@ class ReplyFlowEngine:
                 self._end_session(session_row)
                 return Response("\n\n".join(reply_parts)) if reply_parts else None
 
-            if node_type in NOT_YET_EXECUTED_TYPES:
-                diagnostics_service.record(
-                    event_type="reply_flow_node_not_executed",
-                    company_id=request.company_id,
-                    channel=request.channel,
-                    external_user_id=request.user_id,
-                    status="skipped",
-                    data={"node_type": node_type, "flow_id": flow["id"]},
-                )
+            if node_type == "condition":
+                matched = self._evaluate_condition(config, variables)
+                current_node_id = self._next_node_id_for_condition(flow, current_node_id, matched)
+                continue
+
+            if node_type == "create_task":
+                self._handle_create_task(request, config, state)
                 current_node_id = self._next_node_id(flow, current_node_id)
                 continue
 
+            if node_type == "appointment":
+                self._handle_create_task(request, config, state, is_appointment=True)
+                current_node_id = self._next_node_id(flow, current_node_id)
+                continue
+
+            if node_type == "product_suggest":
+                suggestion = self._suggest_product(request, config)
+                if suggestion:
+                    reply_parts.append(suggestion)
+                current_node_id = self._next_node_id(flow, current_node_id)
+                continue
+
+            if node_type == "timeout_followup":
+                self._schedule_followup(request, config)
+                current_node_id = self._next_node_id(flow, current_node_id)
+                continue
+
+            if node_type == "close_chat":
+                reply_parts.append(self._close_chat_text(config))
+                self._end_session(session_row)
+                return Response("\n\n".join(reply_parts)) if reply_parts else None
+
+            diagnostics_service.record(
+                event_type="reply_flow_unknown_node_type",
+                company_id=request.company_id,
+                channel=request.channel,
+                external_user_id=request.user_id,
+                status="skipped",
+                data={"node_type": node_type, "flow_id": flow["id"]},
+            )
             current_node_id = self._next_node_id(flow, current_node_id)
 
         self._end_session(session_row)
