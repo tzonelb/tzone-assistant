@@ -158,6 +158,21 @@ class AppConfig:
         "https://api.openai.com/v1/responses",
     )
 
+    OPENAI_TTS_API_URL: str = os.getenv(
+        "OPENAI_TTS_API_URL",
+        "https://api.openai.com/v1/audio/speech",
+    )
+
+    OPENAI_TTS_MODEL: str = os.getenv(
+        "OPENAI_TTS_MODEL",
+        "tts-1",
+    )
+
+    OPENAI_TTS_VOICE: str = os.getenv(
+        "OPENAI_TTS_VOICE",
+        "alloy",
+    )
+
     UPLOAD_PATH: str = os.getenv(
         "UPLOAD_PATH",
         str(BASE_DIR / "data" / "uploads"),

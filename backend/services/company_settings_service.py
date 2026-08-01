@@ -40,6 +40,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "auto_release_to_ai": True,
         "welcome_immediate": True,
         "reply_only_when_customer_stops_typing": True,
+        "voice_reply_enabled": False,
     },
     "notifications": {
         "new_customer_message": True,

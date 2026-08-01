@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
+import uuid
 from dataclasses import dataclass, field
 from threading import Lock, Timer
 from typing import Any
@@ -9,14 +11,19 @@ from typing import Any
 from backend.services.company_settings_service import company_settings_service
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.diagnostics_service import diagnostics_service
+from backend.services.media_upload_service import media_upload_service
 from backend.services.message_status_service import message_status_service
+from backend.services.platform_admin_service import platform_admin_service
 from channels.meta.logger import log_meta_event
-from channels.meta.sender import send_meta_buttons
-from channels.telegram.sender import send_telegram_buttons
-from channels.whatsapp.sender import send_whatsapp_text
+from channels.meta.sender import send_meta_buttons, send_meta_media
+from channels.telegram.sender import send_telegram_buttons, send_telegram_media
+from channels.whatsapp.sender import send_whatsapp_text, send_whatsapp_media
 from core.conversation_store import save_conversation_message
+from core.tts_service import tts_service
 from database.database import db
 from gateway.message_gateway import message_gateway
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_DELAY_SECONDS = max(
@@ -81,6 +88,39 @@ def _record_sent_status(*, channel: str, send_result: dict, company_id: int, rec
     except Exception:
         pass
     return None
+
+
+def _voice_reply_allowed(*, company_id: int, settings: dict) -> bool:
+    """Voice replies need both the company to have opted in (Chatbot
+    Control) AND the company's plan to actually include Voice AI —
+    the same billing-flag gate used for every other plan feature."""
+    if not settings.get("voice_reply_enabled"):
+        return False
+    limits = platform_admin_service.get_active_subscription_limits(company_id=company_id)
+    return bool(limits and limits.get("voice_ai_enabled"))
+
+
+def _send_voice_reply(*, channel: str, user_id: str, text: str, company_id: int) -> dict | None:
+    """Generates TTS audio for the reply and sends it as a real voice
+    note. Returns None (never raises) on any failure so the caller falls
+    back to a normal text reply — voice is an enhancement, not something
+    that should ever block a customer from getting an answer."""
+    try:
+        audio_bytes = tts_service.generate_speech(text)
+        upload = media_upload_service.save_upload(filename=f"tts-{uuid.uuid4().hex}.mp3", content=audio_bytes)
+    except Exception:
+        logger.exception("Voice reply generation failed; falling back to text")
+        return None
+
+    try:
+        if channel == "whatsapp":
+            return send_whatsapp_media(to=user_id, media_url=upload["url"], media_type="audio", company_id=company_id)
+        if channel == "telegram":
+            return send_telegram_media(recipient_id=user_id, media_url=upload["url"], media_type="audio", channel=channel)
+        return send_meta_media(recipient_id=user_id, media_url=upload["url"], media_type="audio", channel=channel, company_id=company_id)
+    except Exception:
+        logger.exception("Voice reply send failed; falling back to text")
+        return None
 
 
 def _key(company_id: int, channel: str, user_id: str) -> str:
@@ -216,28 +256,36 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
             return
 
         buttons = getattr(response, "buttons", None)
-        if channel == "telegram":
-            send_result = send_telegram_buttons(
-                recipient_id=user_id,
-                text=response.text,
-                buttons=buttons,
-                channel=channel,
-            )
-        elif channel == "whatsapp":
-            send_result = send_whatsapp_text(
-                to=user_id,
-                text=response.text,
-                buttons=buttons,
-                company_id=company_id,
-            )
-        else:
-            send_result = send_meta_buttons(
-                recipient_id=user_id,
-                text=response.text,
-                buttons=buttons,
-                channel=channel,
-                company_id=company_id,
-            )
+        sent_as_voice = False
+        send_result = None
+        # Buttons need to accompany text, so voice only applies to plain replies.
+        if not buttons and _voice_reply_allowed(company_id=company_id, settings=settings):
+            send_result = _send_voice_reply(channel=channel, user_id=user_id, text=response.text, company_id=company_id)
+            sent_as_voice = send_result is not None
+
+        if send_result is None:
+            if channel == "telegram":
+                send_result = send_telegram_buttons(
+                    recipient_id=user_id,
+                    text=response.text,
+                    buttons=buttons,
+                    channel=channel,
+                )
+            elif channel == "whatsapp":
+                send_result = send_whatsapp_text(
+                    to=user_id,
+                    text=response.text,
+                    buttons=buttons,
+                    company_id=company_id,
+                )
+            else:
+                send_result = send_meta_buttons(
+                    recipient_id=user_id,
+                    text=response.text,
+                    buttons=buttons,
+                    channel=channel,
+                    company_id=company_id,
+                )
         duration_ms = int((time.perf_counter() - started_at) * 1000)
 
         sent_provider_message_id = _record_sent_status(channel=channel, send_result=send_result, company_id=company_id, recipient_id=user_id)
@@ -253,6 +301,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
                 "message_count": len(messages),
                 "batched": len(messages) > 1,
                 "delay_seconds": configured_delay,
+                "sent_as_voice": sent_as_voice,
             },
         )
         diagnostics_service.record(
@@ -262,7 +311,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
             external_user_id=user_id,
             status="sent",
             duration_ms=duration_ms,
-            data={"sender_type": "ai", "text_length": len(response.text or "")},
+            data={"sender_type": "ai", "text_length": len(response.text or ""), "sent_as_voice": sent_as_voice},
         )
 
         outgoing = save_conversation_message(
@@ -275,6 +324,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
                 "send_result": send_result,
                 "sender_type": "ai",
                 "source": "meta_ai_smart_delay",
+                "sent_as_voice": sent_as_voice,
                 "batched_message_count": len(messages),
                 "smart_delay_seconds": configured_delay,
                 "provider_message_id": sent_provider_message_id,
