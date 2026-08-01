@@ -67,6 +67,7 @@ from backend.services.notification_preference_service import notification_prefer
 from backend.services.platform_admin_service import platform_admin_service
 from backend.services.saved_reply_service import saved_reply_service
 from backend.services.reply_flow_service import reply_flow_service
+from core.reply_flow_engine import reply_flow_engine
 from backend.services.signup_service import signup_service
 from backend.services.license_key_service import license_key_service
 from backend.services.comment_service import comment_service
@@ -199,6 +200,7 @@ async def lifespan(app: FastAPI):
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
     reply_flow_service.ensure_schema()
+    reply_flow_engine.ensure_schema()
     signup_service.ensure_schema()
     license_key_service.ensure_schema()
     comment_service.ensure_schema()

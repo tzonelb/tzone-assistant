@@ -1,4 +1,5 @@
 from core.engine import engine
+from core.reply_flow_engine import reply_flow_engine
 from core.request import Request
 
 
@@ -11,6 +12,10 @@ class MessageGateway:
             message=message,
             company_id=company_id,
         )
+
+        flow_response = reply_flow_engine.maybe_handle(request)
+        if flow_response is not None:
+            return flow_response
 
         return engine.handle(request)
 
