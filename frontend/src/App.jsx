@@ -20,6 +20,8 @@ import AITeachingHubPage from "./pages/ai-teaching/AITeachingHubPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import TasksPage from "./pages/tasks/TasksPage";
 import SavedRepliesPage from "./pages/saved-replies/SavedRepliesPage";
+import ReplyFlowsListPage from "./pages/reply-flows/ReplyFlowsListPage";
+import ReplyFlowBuilderPage from "./pages/reply-flows/ReplyFlowBuilderPage";
 import BroadcastPage from "./pages/broadcast/BroadcastPage";
 import BroadcastDetailPage from "./pages/broadcast/BroadcastDetailPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
@@ -49,6 +51,8 @@ export default function App() {
         <Route path="/calls" element={<CallsPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/saved-replies" element={<SavedRepliesPage />} />
+        <Route path="/reply-flows" element={<ReplyFlowsListPage />} />
+        <Route path="/reply-flows/:id" element={<ReplyFlowBuilderPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<TeamChatPage />} />

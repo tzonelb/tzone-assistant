@@ -1,0 +1,238 @@
+.reply-flow-builder {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.reply-flow-builder-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--tz-border);
+  flex: 0 0 auto;
+}
+
+.reply-flow-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reply-flow-back:hover {
+  color: var(--tz-primary);
+}
+
+.reply-flow-name-input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--tz-text-primary);
+}
+
+.reply-flow-name-input:hover,
+.reply-flow-name-input:focus {
+  border-color: var(--tz-border);
+  background: var(--tz-surface);
+  outline: none;
+}
+
+.reply-flow-builder-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reply-flow-department-input {
+  width: 140px;
+  padding: 0 10px;
+  min-height: 34px;
+  border: 1px solid var(--tz-border);
+  border-radius: 8px;
+}
+
+.reply-flow-save-error {
+  color: var(--tz-danger);
+  font-size: 12px;
+}
+
+.reply-flow-canvas-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 12px;
+}
+
+.reply-flow-palette {
+  overflow-y: auto;
+  padding-right: 10px;
+  border-right: 1px solid var(--tz-border);
+}
+
+.reply-flow-palette h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-palette-group {
+  margin-bottom: 14px;
+}
+
+.reply-flow-palette-group-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--tz-border);
+  border-radius: 8px;
+  background: var(--tz-surface);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: grab;
+}
+
+.reply-flow-palette-item:active {
+  cursor: grabbing;
+}
+
+.reply-flow-palette-item-icon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+.reply-flow-canvas-wrap {
+  position: relative;
+  min-height: 0;
+}
+
+.reply-flow-canvas-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 10px 16px;
+  border: 1px dashed var(--tz-border);
+  border-radius: 10px;
+  background: var(--tz-surface);
+  color: var(--tz-text-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.reply-flow-inspector {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  width: 220px;
+  padding: 12px;
+  border: 1px solid var(--tz-border);
+  border-radius: 12px;
+  background: var(--tz-surface);
+  box-shadow: var(--tz-shadow-md);
+}
+
+.reply-flow-inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.reply-flow-inspector-head button {
+  border: 0;
+  background: transparent;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-inspector-delete {
+  width: 100%;
+  margin-top: 10px;
+  min-height: 32px;
+  border: 1px solid var(--tz-danger);
+  border-radius: 8px;
+  background: var(--tz-danger-soft);
+  color: var(--tz-danger);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Custom node */
+.flow-step-node {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 170px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--tz-border);
+  border-radius: 12px;
+  background: var(--tz-surface);
+  box-shadow: var(--tz-shadow-sm);
+}
+
+.flow-step-node.is-selected {
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 18%);
+}
+
+.flow-step-node-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.flow-step-node-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.flow-step-node-type {
+  font-size: 10px;
+  color: var(--tz-text-muted);
+  font-weight: 700;
+}
+
+.flow-step-node-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tz-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px;
+}

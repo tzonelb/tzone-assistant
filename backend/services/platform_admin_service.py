@@ -157,7 +157,7 @@ class PlatformAdminService:
         country: str | None = None,
         currency: str = "USD",
         plan_id: int | None = None,
-        trial_days: int = 14,
+        trial_days: int = 5,
         main_admin_email: str | None = None,
         contact_phone: str | None = None,
         license_code: str | None = None,
@@ -381,9 +381,11 @@ class PlatformAdminService:
 
     def get_active_subscription_limits(self, *, company_id: int) -> dict[str, Any] | None:
         """Returns the plan limits/features for a company's current active
-        (or trialing) subscription, or None if it has none. Used to
-        enforce max_users / max_channel_accounts / feature flags
-        elsewhere in the app."""
+        (or trialing) subscription, or None if it has none OR its grace
+        period has passed. Used to enforce max_users / max_channel_accounts
+        / feature flags elsewhere in the app, and as the source of truth
+        for whether a company's access should be locked."""
+        now = utc_now_iso()
         with db.connect() as conn:
             row = conn.execute(
                 """
@@ -392,12 +394,21 @@ class PlatformAdminService:
                 JOIN plans p ON p.id = s.plan_id
                 WHERE s.company_id = ?
                   AND s.status IN ('active', 'trialing')
+                  AND COALESCE(s.grace_period_until, s.expires_at) >= ?
                 ORDER BY s.created_at DESC
                 LIMIT 1
                 """,
-                (company_id,),
+                (company_id, now),
             ).fetchone()
         return dict(row) if row else None
+
+    def is_company_locked(self, *, company_id: int) -> bool:
+        """A company is locked once its subscription (including any grace
+        period) has passed with no renewal — this is the real enforcement
+        the trial/expiry model needs, not just a display number. Companies
+        with zero subscription rows at all (shouldn't normally happen once
+        signup always creates one) are also treated as locked."""
+        return self.get_active_subscription_limits(company_id=company_id) is None
 
     # ---- Subscriptions -------------------------------------------------
 

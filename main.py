@@ -2,8 +2,9 @@ import asyncio
 from contextlib import asynccontextmanager
 from contextlib import suppress
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import (
@@ -34,6 +35,7 @@ from backend.api.routes import (
     platform_admin,
     roles,
     saved_replies,
+    reply_flows,
     scheduled_posts,
     security_verification,
     signup,
@@ -64,6 +66,7 @@ from backend.services.notification_service import notification_service
 from backend.services.notification_preference_service import notification_preference_service
 from backend.services.platform_admin_service import platform_admin_service
 from backend.services.saved_reply_service import saved_reply_service
+from backend.services.reply_flow_service import reply_flow_service
 from backend.services.signup_service import signup_service
 from backend.services.license_key_service import license_key_service
 from backend.services.comment_service import comment_service
@@ -195,6 +198,7 @@ async def lifespan(app: FastAPI):
     message_status_service.ensure_schema()
     platform_admin_service.ensure_schema()
     saved_reply_service.ensure_schema()
+    reply_flow_service.ensure_schema()
     signup_service.ensure_schema()
     license_key_service.ensure_schema()
     comment_service.ensure_schema()
@@ -285,6 +289,60 @@ app.add_middleware(
 )
 
 
+# Paths reachable even by a company whose subscription has expired — the
+# frontend needs these to show "your access is locked, renew to continue"
+# instead of failing opaquely: auth (login/me/logout), billing/plans (so
+# they can actually renew), support tickets (so they can ask for help),
+# signup for a NEW company, the public webhook receivers, and docs.
+_SUBSCRIPTION_LOCK_EXEMPT_PREFIXES = (
+    "/api/auth",
+    "/api/signup",
+    "/api/platform/my-subscription",
+    "/api/platform/plans-catalog",
+    "/api/platform/subscription-requests",
+    "/api/support-tickets",
+    "/webhook",
+    "/uploads",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+)
+
+
+@app.middleware("http")
+async def enforce_subscription_lock(request: Request, call_next):
+    """Any company whose subscription (including its grace period) has
+    expired with no renewal is locked out of the platform — this is the
+    real enforcement behind the trial/expiry model, not just a number shown
+    on a settings page. Super admins are never locked (they manage/unlock
+    companies). Requests with no/invalid token pass through untouched —
+    normal auth handling downstream returns the correct 401."""
+    path = request.url.path
+    if any(path.startswith(prefix) for prefix in _SUBSCRIPTION_LOCK_EXEMPT_PREFIXES):
+        return await call_next(request)
+
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return await call_next(request)
+
+    token = auth_header[7:].strip()
+    user = auth_service.get_user_from_token(token)
+    if not user or user.get("is_super_admin"):
+        return await call_next(request)
+
+    company_id = user.get("active_company_id")
+    if company_id and platform_admin_service.is_company_locked(company_id=company_id):
+        return JSONResponse(
+            status_code=402,
+            content={
+                "detail": "Your subscription has expired. Please renew your plan to continue.",
+                "subscription_locked": True,
+            },
+        )
+
+    return await call_next(request)
+
+
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOAD_ROOT)), name="uploads")
 
@@ -316,6 +374,7 @@ app.include_router(platform_admin.router)
 app.include_router(channel_connections.router)
 app.include_router(facebook_oauth.router)
 app.include_router(saved_replies.router)
+app.include_router(reply_flows.router)
 app.include_router(support_tickets.router)
 app.include_router(security_verification.router)
 app.include_router(tasks.router)

@@ -1,3 +1,8 @@
+.channels-verify-inline {
+  border-color: var(--tz-primary);
+  background: var(--tz-primary-soft);
+}
+
 .channels-plan-banner {
   display: flex;
   align-items: center;

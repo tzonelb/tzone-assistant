@@ -25,7 +25,7 @@ class CreateCompanyRequest(BaseModel):
     country: str | None = None
     currency: str = "USD"
     plan_id: int | None = None
-    trial_days: int = 14
+    trial_days: int = 5
     main_admin_email: str | None = None
     contact_phone: str | None = None
     license_code: str | None = None

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   sendVerificationCodeRequest,
   verifyCodeRequest,
-  getSessionChangesRequest,
   listMyChannelsRequest,
   connectTelegramRequest,
   connectWhatsAppRequest,
@@ -17,7 +16,7 @@ import "./SecureChannelsPanel.css";
 
 const PURPOSE = "channels_access";
 
-function ChannelsOverview({ channels, usage, locked, onConnect }) {
+function ChannelsOverview({ channels, usage, onConnect }) {
   const connectedByKey = channels.reduce((map, ch) => {
     (map[ch.channel] ||= []).push(ch);
     return map;
@@ -85,7 +84,7 @@ function ChannelsOverview({ channels, usage, locked, onConnect }) {
                       <span className={`channels-directory-badge ${badge.cls}`}>{badge.label}</span>
                     </div>
                     <span className="channels-directory-card-note">
-                      {channel.note || (connected.length ? connected.map((c) => c.name).join(" · ") : " ")}
+                      {channel.note || (connected.length ? connected.map((c) => c.name).join(" · ") : " ")}
                     </span>
                   </div>
                   <button
@@ -94,7 +93,7 @@ function ChannelsOverview({ channels, usage, locked, onConnect }) {
                     disabled={channel.availability !== "available"}
                     onClick={() => onConnect?.(channel)}
                   >
-                    {channel.availability !== "available" ? "Coming soon" : locked ? "Unlock to connect" : "Connect"}
+                    {channel.availability !== "available" ? "Coming soon" : "Connect"}
                   </button>
                 </div>
               );
@@ -107,67 +106,30 @@ function ChannelsOverview({ channels, usage, locked, onConnect }) {
 }
 
 export default function SecureChannelsPanel() {
-  const [stage, setStage] = useState("locked"); // locked -> code_sent -> unlocked -> summary
-  const [emailHint, setEmailHint] = useState("");
-  const [code, setCode] = useState("");
-  const [elevatedToken, setElevatedToken] = useState(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [summary, setSummary] = useState([]);
-
+  // Viewing what's connected is always open — no code required. A code is
+  // only ever requested at the moment of an actual connect/disconnect
+  // action (real credentials changing hands), via `withVerification` below.
   const [channels, setChannels] = useState([]);
   const [usage, setUsage] = useState(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
   const [oauthMessage, setOauthMessage] = useState(null);
+
   const [telegramToken, setTelegramToken] = useState("");
   const [waPhoneId, setWaPhoneId] = useState("");
   const [waToken, setWaToken] = useState("");
   const [igPageId, setIgPageId] = useState("");
   const [igToken, setIgToken] = useState("");
-  const pendingConnectRef = useRef(null);
+
+  // Inline verification prompt state — appears only when an action needs it.
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyStage, setVerifyStage] = useState("send"); // send -> code_sent
+  const [emailHint, setEmailHint] = useState("");
+  const [code, setCode] = useState("");
+  const elevatedTokenRef = useRef(null);
+  const pendingActionRef = useRef(null);
+
   const sectionRefs = useRef({});
-
-  function handleConnectClick(channel) {
-    if (stage === "locked" || stage === "code_sent") {
-      pendingConnectRef.current = channel.connect;
-      if (stage === "locked") handleSendCode();
-      return;
-    }
-    goToConnectSection(channel.connect);
-  }
-
-  function goToConnectSection(connectKey) {
-    if (connectKey === "facebook") {
-      handleFacebookConnect();
-      return;
-    }
-    const el = sectionRefs.current[connectKey];
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-      const input = el.querySelector("input");
-      if (input) input.focus();
-    }
-  }
-
-  useEffect(() => {
-    if (stage === "unlocked" && pendingConnectRef.current) {
-      const target = pendingConnectRef.current;
-      pendingConnectRef.current = null;
-      setTimeout(() => goToConnectSection(target), 100);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
-
-  async function handleFacebookConnect() {
-    setBusy(true);
-    setError("");
-    try {
-      const result = await startFacebookOAuthRequest();
-      window.location.href = result.authorize_url;
-    } catch (e) {
-      setError(e.message);
-      setBusy(false);
-    }
-  }
 
   async function loadChannels() {
     try {
@@ -199,13 +161,57 @@ export default function SecureChannelsPanel() {
     }
   }, []);
 
+  function goToConnectSection(connectKey) {
+    if (connectKey === "facebook") {
+      handleFacebookConnect();
+      return;
+    }
+    const el = sectionRefs.current[connectKey];
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const input = el.querySelector("input");
+      if (input) input.focus();
+    }
+  }
+
+  function handleConnectClick(channel) {
+    goToConnectSection(channel.connect);
+  }
+
+  async function handleFacebookConnect() {
+    // Facebook's own OAuth login IS the verification — no extra code needed.
+    setBusy(true);
+    setError("");
+    try {
+      const result = await startFacebookOAuthRequest();
+      window.location.href = result.authorize_url;
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+
+  // Runs `action(elevatedToken)` — if we don't have a valid token for this
+  // session yet, opens the inline verification prompt first and re-runs the
+  // same action automatically once the code is confirmed.
+  async function withVerification(action) {
+    if (elevatedTokenRef.current) {
+      await withErrorHandling(() => action(elevatedTokenRef.current));
+      return;
+    }
+    pendingActionRef.current = action;
+    setVerifyOpen(true);
+    setVerifyStage("send");
+    setError("");
+  }
+
   async function handleSendCode() {
     setBusy(true);
     setError("");
     try {
       const result = await sendVerificationCodeRequest(PURPOSE);
       setEmailHint(result.email_hint);
-      setStage("code_sent");
+      setVerifyStage("code_sent");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -219,33 +225,19 @@ export default function SecureChannelsPanel() {
     setError("");
     try {
       const result = await verifyCodeRequest(PURPOSE, code);
-      setElevatedToken(result.elevated_token);
+      elevatedTokenRef.current = result.elevated_token;
       setCode("");
-      setStage("unlocked");
+      setVerifyOpen(false);
+      const action = pendingActionRef.current;
+      pendingActionRef.current = null;
+      if (action) {
+        await withErrorHandling(() => action(result.elevated_token));
+      }
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy(false);
     }
-  }
-
-  async function handleFinish() {
-    setBusy(true);
-    try {
-      const result = await getSessionChangesRequest(PURPOSE, elevatedToken);
-      setSummary(result.changes || []);
-      setStage("summary");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function closeSummaryAndRelock() {
-    setStage("locked");
-    setElevatedToken(null);
-    setSummary([]);
   }
 
   async function withErrorHandling(fn) {
@@ -261,77 +253,48 @@ export default function SecureChannelsPanel() {
     }
   }
 
-  if (stage === "locked" || stage === "code_sent") {
-    return (
-      <div className="company-setting-fields">
-        {oauthMessage ? (
-          <p style={{ color: oauthMessage.type === "success" ? "#1e7e34" : "#c0392b", fontWeight: 600 }}>
-            {oauthMessage.text}
-          </p>
-        ) : null}
-        <article className="company-setting-field">
-          <div>
-            <strong>Verification required</strong>
-            <span>
-              Connecting or disconnecting a channel handles real account credentials.
-              We'll email a one-time code to your account's email before you can make changes.
-            </span>
-          </div>
-        </article>
-
-        {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
-
-        {stage === "locked" ? (
-          <button type="button" onClick={handleSendCode} disabled={busy}>
-            {busy ? "Sending…" : "Send verification code"}
-          </button>
-        ) : (
-          <form onSubmit={handleVerifyCode} style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span>Code sent to {emailHint}. Enter it below:</span>
-            <input
-              type="text" value={code} onChange={(e) => setCode(e.target.value)}
-              placeholder="123456" maxLength={6} required
-              style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5", width: 100 }}
-            />
-            <button type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify"}</button>
-          </form>
-        )}
-
-        <ChannelsOverview channels={channels} usage={usage} locked onConnect={handleConnectClick} />
-      </div>
-    );
-  }
-
-  if (stage === "summary") {
-    return (
-      <div className="company-setting-fields">
-        <article className="company-setting-field">
-          <div>
-            <strong>Session summary</strong>
-            <span>Here's what changed during this verified session.</span>
-          </div>
-        </article>
-        {summary.length ? (
-          <ul>
-            {summary.map((item, i) => (
-              <li key={i}>{item.description} — {item.created_at}</li>
-            ))}
-          </ul>
-        ) : (
-          <p>No changes were made.</p>
-        )}
-        <button type="button" onClick={closeSummaryAndRelock}>Done</button>
-      </div>
-    );
-  }
-
-  // stage === "unlocked"
   const inputStyle = { flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #d5dae5" };
   const formStyle = { display: "flex", gap: 12, padding: "0 0 20px", flexWrap: "wrap" };
 
   return (
     <div className="company-setting-fields">
+      {oauthMessage ? (
+        <p style={{ color: oauthMessage.type === "success" ? "#1e7e34" : "#c0392b", fontWeight: 600 }}>
+          {oauthMessage.text}
+        </p>
+      ) : null}
       {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
+
+      {verifyOpen ? (
+        <article className="company-setting-field channels-verify-inline">
+          <div>
+            <strong>Verify it's you</strong>
+            <span>
+              This will change a real channel connection. We'll email a one-time code to confirm it's you first.
+            </span>
+            {verifyStage === "send" ? (
+              <div style={{ marginTop: 10 }}>
+                <button type="button" onClick={handleSendCode} disabled={busy}>
+                  {busy ? "Sending…" : "Send verification code"}
+                </button>
+                <button type="button" onClick={() => setVerifyOpen(false)} disabled={busy} style={{ marginLeft: 8 }}>
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleVerifyCode} style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+                <span>Code sent to {emailHint}. Enter it below:</span>
+                <input
+                  type="text" value={code} onChange={(e) => setCode(e.target.value)}
+                  placeholder="123456" maxLength={6} required
+                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5", width: 100 }}
+                />
+                <button type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify"}</button>
+              </form>
+            )}
+          </div>
+        </article>
+      ) : null}
 
       <ChannelsOverview channels={channels} usage={usage} onConnect={handleConnectClick} />
 
@@ -358,8 +321,8 @@ export default function SecureChannelsPanel() {
         ref={(el) => (sectionRefs.current.telegram = el)}
         onSubmit={(e) => {
           e.preventDefault();
-          withErrorHandling(async () => {
-            await connectTelegramRequest(telegramToken, null, elevatedToken);
+          withVerification(async (token) => {
+            await connectTelegramRequest(telegramToken, null, token);
             setTelegramToken("");
           });
         }}
@@ -376,8 +339,8 @@ export default function SecureChannelsPanel() {
         ref={(el) => (sectionRefs.current.whatsapp = el)}
         onSubmit={(e) => {
           e.preventDefault();
-          withErrorHandling(async () => {
-            await connectWhatsAppRequest(waPhoneId, waToken, null, elevatedToken);
+          withVerification(async (token) => {
+            await connectWhatsAppRequest(waPhoneId, waToken, null, token);
             setWaPhoneId(""); setWaToken("");
           });
         }}
@@ -394,8 +357,8 @@ export default function SecureChannelsPanel() {
         style={formStyle}
         onSubmit={(e) => {
           e.preventDefault();
-          withErrorHandling(async () => {
-            await connectInstagramRequest(igPageId, igToken, null, elevatedToken);
+          withVerification(async (token) => {
+            await connectInstagramRequest(igPageId, igToken, null, token);
             setIgPageId(""); setIgToken("");
           });
         }}
@@ -416,7 +379,7 @@ export default function SecureChannelsPanel() {
                   {c.status === "active" ? (
                     <button
                       type="button"
-                      onClick={() => withErrorHandling(() => disconnectChannelRequest(c.id, elevatedToken))}
+                      onClick={() => withVerification((token) => disconnectChannelRequest(c.id, token))}
                       disabled={busy}
                     >
                       Disconnect
@@ -429,10 +392,6 @@ export default function SecureChannelsPanel() {
           </tbody>
         </table>
       </div>
-
-      <button type="button" onClick={handleFinish} disabled={busy} style={{ marginTop: 16 }}>
-        {busy ? "…" : "Done — show what changed"}
-      </button>
     </div>
   );
 }

@@ -1,0 +1,193 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { AddOutlined, ContentCopyOutlined, DeleteOutlineOutlined, EditOutlined } from "@mui/icons-material";
+import {
+  listReplyFlowsRequest,
+  createReplyFlowRequest,
+  deleteReplyFlowRequest,
+  duplicateReplyFlowRequest,
+} from "../../api/client";
+import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import "./ReplyFlowsListPage.css";
+
+const CHANNEL_LABELS = { all: "All channels", whatsapp: "WhatsApp", messenger: "Messenger", instagram: "Instagram", telegram: "Telegram" };
+const STATUS_TONE = { draft: "neutral", active: "success", archived: "danger" };
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
+}
+
+function NewFlowDialog({ open, saving, error, onCancel, onCreate }) {
+  const [name, setName] = useState("");
+  const [channel, setChannel] = useState("all");
+  const [department, setDepartment] = useState("");
+
+  if (!open) return null;
+
+  function submit(event) {
+    event.preventDefault();
+    if (!name.trim()) return;
+    onCreate({ name: name.trim(), channel, department: department.trim() });
+  }
+
+  return (
+    <div className="tz-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel(); }}>
+      <form className="tz-dialog" onSubmit={submit}>
+        <header className="tz-dialog-header"><h3>Create Reply Flow</h3></header>
+        <div className="tz-dialog-body">
+          <label className="ai-teaching-field">
+            Flow name
+            <input value={name} disabled={saving} onChange={(event) => setName(event.target.value)} placeholder="e.g. WhatsApp Sales" required autoFocus />
+          </label>
+          <label className="ai-teaching-field">
+            Channel
+            <select className="tz-select" value={channel} disabled={saving} onChange={(event) => setChannel(event.target.value)}>
+              {Object.entries(CHANNEL_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
+            </select>
+          </label>
+          <label className="ai-teaching-field">
+            Department (optional)
+            <input value={department} disabled={saving} onChange={(event) => setDepartment(event.target.value)} placeholder="e.g. Sales" />
+          </label>
+          {error ? <p className="customer-segment-error">{error}</p> : null}
+        </div>
+        <footer className="tz-dialog-actions">
+          <AppButton type="button" variant="secondary" disabled={saving} onClick={onCancel}>Cancel</AppButton>
+          <AppButton type="submit" variant="primary" loading={saving} disabled={!name.trim()}>Create</AppButton>
+        </footer>
+      </form>
+    </div>
+  );
+}
+
+export default function ReplyFlowsListPage() {
+  const navigate = useNavigate();
+  const [flows, setFlows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await listReplyFlowsRequest();
+      setFlows(Array.isArray(result?.flows) ? result.flows : []);
+    } catch (requestError) {
+      setError(requestError.message || "Reply flows could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function createFlow(values) {
+    setSaving(true);
+    setSaveError("");
+    try {
+      const flow = await createReplyFlowRequest(values);
+      setDialogOpen(false);
+      navigate(`/reply-flows/${flow.id}`);
+    } catch (requestError) {
+      setSaveError(requestError.message || "Could not create this flow.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function duplicateFlow(flow) {
+    try {
+      await duplicateReplyFlowRequest(flow.id);
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Could not duplicate this flow.");
+    }
+  }
+
+  async function confirmDelete() {
+    if (!toDelete) return;
+    setDeleting(true);
+    try {
+      await deleteReplyFlowRequest(toDelete.id);
+      setToDelete(null);
+      await load();
+    } catch (requestError) {
+      setError(requestError.message || "Could not delete this flow.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  const columns = [
+    {
+      key: "name", label: "Flow",
+      render: (value, row) => (
+        <button type="button" className="reply-flows-name-link" onClick={() => navigate(`/reply-flows/${row.id}`)}>
+          <strong>{value}</strong>
+          <span>{row.node_count} step{row.node_count === 1 ? "" : "s"}</span>
+        </button>
+      ),
+    },
+    { key: "channel", label: "Channel", render: (value) => CHANNEL_LABELS[value] || value },
+    { key: "department", label: "Department", render: (value) => value || "All departments" },
+    { key: "status", label: "Status", render: (value) => <StatusBadge status={value} tone={STATUS_TONE[value]} label={value} /> },
+    { key: "updated_at", label: "Updated", render: (value) => formatDateTime(value) },
+    {
+      key: "_actions", label: "", align: "right",
+      render: (_value, row) => (
+        <div className="reply-flows-row-actions">
+          <button type="button" title="Edit" onClick={() => navigate(`/reply-flows/${row.id}`)}><EditOutlined fontSize="small" /></button>
+          <button type="button" title="Duplicate" onClick={() => duplicateFlow(row)}><ContentCopyOutlined fontSize="small" /></button>
+          <button type="button" title="Delete" onClick={() => setToDelete(row)}><DeleteOutlineOutlined fontSize="small" /></button>
+        </div>
+      ),
+    },
+  ];
+
+  if (loading) return <LoadingState label="Loading reply flows…" />;
+  if (error) return <ErrorState title="Could not load reply flows" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
+
+  return (
+    <section className="reply-flows-page">
+      <header className="reply-flows-header">
+        <div>
+          <h2>Reply Flows</h2>
+          <p>Design how the AI responds — per channel, per department. Drag steps onto a canvas and connect them.</p>
+        </div>
+        <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={() => setDialogOpen(true)}>
+          Create Reply Flow
+        </AppButton>
+      </header>
+
+      {flows.length === 0 ? (
+        <AppCard padding="large" className="reply-flows-empty">
+          <p>No reply flows yet.</p>
+          <span>Create one to design a step-by-step conversation for a channel or department.</span>
+        </AppCard>
+      ) : (
+        <AppTable columns={columns} rows={flows} emptyTitle="No reply flows" emptyDescription="Create your first flow." />
+      )}
+
+      <NewFlowDialog open={dialogOpen} saving={saving} error={saveError} onCancel={() => setDialogOpen(false)} onCreate={createFlow} />
+      <ConfirmDialog
+        open={Boolean(toDelete)}
+        title="Delete reply flow"
+        message={`Delete "${toDelete?.name}"? This can't be undone.`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setToDelete(null)}
+      />
+    </section>
+  );
+}

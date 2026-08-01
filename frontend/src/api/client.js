@@ -591,6 +591,30 @@ export async function updateSavedReplyRequest(id, title, body, department) {
   return apiRequest(`/api/saved-replies/${id}`, { method: "PATCH", body: payload });
 }
 
+export async function listReplyFlowsRequest() {
+  return apiRequest("/api/reply-flows");
+}
+
+export async function getReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${id}`);
+}
+
+export async function createReplyFlowRequest(payload) {
+  return apiRequest("/api/reply-flows", { method: "POST", body: payload });
+}
+
+export async function updateReplyFlowRequest(id, payload) {
+  return apiRequest(`/api/reply-flows/${id}`, { method: "PATCH", body: payload });
+}
+
+export async function deleteReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${id}`, { method: "DELETE" });
+}
+
+export async function duplicateReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${id}/duplicate`, { method: "POST" });
+}
+
 export async function deleteSavedReplyRequest(id) {
   return apiRequest(`/api/saved-replies/${id}`, { method: "DELETE" });
 }
