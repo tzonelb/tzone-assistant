@@ -1,9 +1,11 @@
 import { Handle, Position } from "@xyflow/react";
 import { NODE_TYPE_CONFIG } from "./nodeTypesConfig";
+import { previewText } from "./nodeFieldsConfig";
 
 export default function FlowStepNode({ data, selected }) {
   const config = NODE_TYPE_CONFIG[data.nodeType] || {};
   const Icon = config.icon;
+  const preview = previewText(data.nodeType, data.config);
 
   return (
     <div className={`flow-step-node ${selected ? "is-selected" : ""}`} style={{ borderColor: config.color }}>
@@ -14,6 +16,7 @@ export default function FlowStepNode({ data, selected }) {
       <div className="flow-step-node-body">
         <span className="flow-step-node-type">{config.label}</span>
         <span className="flow-step-node-label">{data.label || config.label}</span>
+        {preview ? <span className="flow-step-node-preview">{preview}</span> : null}
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>

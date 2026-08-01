@@ -10,11 +10,47 @@ import { getReplyFlowRequest, updateReplyFlowRequest, listDepartmentsRequest } f
 import { AppButton, LoadingState, ErrorState } from "../../components/common";
 import FlowStepNode from "./FlowStepNode";
 import { NODE_GROUPS, NODE_TYPE_CONFIG } from "./nodeTypesConfig";
+import { NODE_FIELDS } from "./nodeFieldsConfig";
 import MultiSelectPopover from "./MultiSelectPopover";
 import { CHANNEL_OPTIONS } from "./ReplyFlowsListPage";
 import "./ReplyFlowBuilderPage.css";
 
 const REACT_FLOW_NODE_TYPES = { step: FlowStepNode };
+
+function NodeConfigField({ field, value, onChange }) {
+  if (field.type === "checkbox") {
+    return (
+      <label className="reply-flow-inspector-checkbox">
+        <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
+        {field.label}
+      </label>
+    );
+  }
+
+  let control;
+  if (field.type === "textarea") {
+    control = <textarea rows={3} value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
+  } else if (field.type === "select") {
+    control = (
+      <select className="tz-select" value={value || ""} onChange={(event) => onChange(event.target.value)}>
+        <option value="">Choose…</option>
+        {field.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
+      </select>
+    );
+  } else if (field.type === "number") {
+    control = <input type="number" value={value ?? ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
+  } else {
+    control = <input value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
+  }
+
+  return (
+    <label className="ai-teaching-field">
+      {field.label}
+      {control}
+      {field.hint ? <span className="reply-flow-field-hint">{field.hint}</span> : null}
+    </label>
+  );
+}
 
 let nodeIdCounter = 0;
 function nextNodeId() {
@@ -76,7 +112,7 @@ function BuilderCanvas({ nodes, edges, setNodes, setEdges, onNodesChange, onEdge
       id: nextNodeId(),
       type: "step",
       position,
-      data: { nodeType, label: NODE_TYPE_CONFIG[nodeType].label },
+      data: { nodeType, label: NODE_TYPE_CONFIG[nodeType].label, config: {} },
     };
     setNodes((nds) => nds.concat(newNode));
     onDirty();
@@ -91,6 +127,15 @@ function BuilderCanvas({ nodes, edges, setNodes, setEdges, onNodesChange, onEdge
 
   function updateSelectedLabel(value) {
     setNodes((nds) => nds.map((node) => (node.id === selectedNodeId ? { ...node, data: { ...node.data, label: value } } : node)));
+    onDirty();
+  }
+
+  function updateSelectedConfig(key, value) {
+    setNodes((nds) => nds.map((node) => (
+      node.id === selectedNodeId
+        ? { ...node, data: { ...node.data, config: { ...node.data.config, [key]: value } } }
+        : node
+    )));
     onDirty();
   }
 
@@ -136,6 +181,14 @@ function BuilderCanvas({ nodes, edges, setNodes, setEdges, onNodesChange, onEdge
             Label
             <input value={selectedNode.data.label || ""} onChange={(event) => updateSelectedLabel(event.target.value)} />
           </label>
+          {(NODE_FIELDS[selectedNode.data.nodeType] || []).map((field) => (
+            <NodeConfigField
+              key={field.key}
+              field={field}
+              value={selectedNode.data.config?.[field.key]}
+              onChange={(value) => updateSelectedConfig(field.key, value)}
+            />
+          ))}
           <button type="button" className="reply-flow-inspector-delete" onClick={deleteSelected}>Delete step</button>
         </aside>
       ) : null}
