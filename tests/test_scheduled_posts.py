@@ -32,7 +32,15 @@ def client_and_db():
             "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
             "VALUES (1, 'agent@test.local', 'Agent', 'active', 0)"
         )
-        conn.execute("INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 1, 'active')")
+        conn.execute(
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (1, 'Owner', 'owner', 'Full access', 1)"
+        )
+        owner_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'").fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 1, ?, 'active')",
+            (owner_role_id,),
+        )
         conn.execute(
             """
             INSERT INTO channel_accounts (id, company_id, channel, name, page_id, access_token_encrypted, status)

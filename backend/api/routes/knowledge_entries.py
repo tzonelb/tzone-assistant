@@ -31,6 +31,7 @@ class UpdateKnowledgeEntryRequest(BaseModel):
 @router.get("")
 def list_knowledge(current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.view")
     return {"entries": knowledge_manager.list_for_company(company_id=company_id)}
 
 
@@ -40,6 +41,7 @@ def create_knowledge_entry(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     try:
         return knowledge_manager.create(
             company_id=company_id, title=payload.title, content=payload.content,
@@ -56,6 +58,7 @@ def update_knowledge_entry(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     try:
         return knowledge_manager.update(
             company_id=company_id, entry_id=entry_id,
@@ -71,6 +74,7 @@ def delete_knowledge_entry(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     try:
         knowledge_manager.delete(company_id=company_id, entry_id=entry_id)
     except KeyError:

@@ -548,6 +548,22 @@ class AuthService:
 
         return requested_company_id
 
+    def require_permission(
+        self,
+        current_user: dict[str, Any],
+        company_id: int,
+        permission_code: str,
+    ) -> None:
+        """One-liner for route handlers: raises 403 unless the current
+        user holds permission_code (or is a super admin). Real,
+        per-permission-code enforcement — not the old pattern of every
+        admin-only route reusing the same generic users.manage code."""
+        if not self.has_permission(
+            user_id=current_user.get("id"), company_id=company_id,
+            permission_code=permission_code, is_super_admin=bool(current_user.get("is_super_admin")),
+        ):
+            raise HTTPException(status_code=403, detail=f'You do not have permission to do this ("{permission_code}" required).')
+
     def has_permission(
         self,
         user_id: int,

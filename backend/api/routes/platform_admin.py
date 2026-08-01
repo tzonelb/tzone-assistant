@@ -230,6 +230,7 @@ def request_plan(
 ):
     from backend.services.auth_service import auth_service
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "subscriptions.manage")
     try:
         return platform_admin_service.request_plan(
             company_id=company_id, plan_id=payload.plan_id, note=payload.note,
@@ -245,6 +246,7 @@ def my_subscription_requests(
 ):
     from backend.services.auth_service import auth_service
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "subscriptions.view")
     return {"requests": platform_admin_service.list_subscription_requests(company_id=company_id)}
 
 

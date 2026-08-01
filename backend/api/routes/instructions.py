@@ -31,6 +31,7 @@ class ReorderInstructionsRequest(BaseModel):
 @router.get("")
 def list_instructions(current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.view")
     return {"instructions": instruction_service.list_for_company(company_id=company_id)}
 
 
@@ -40,6 +41,7 @@ def create_instruction(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     try:
         return instruction_service.create(
             company_id=company_id, text=payload.text, tags=payload.tags, actor_user_id=current_user.get("id"),
@@ -55,6 +57,7 @@ def update_instruction(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     try:
         return instruction_service.update(company_id=company_id, instruction_id=instruction_id, text=payload.text, tags=payload.tags)
     except KeyError:
@@ -69,6 +72,7 @@ def delete_instruction(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     try:
         instruction_service.delete(company_id=company_id, instruction_id=instruction_id)
     except KeyError:
@@ -82,4 +86,5 @@ def reorder_instructions(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "knowledge.manage")
     return {"instructions": instruction_service.reorder(company_id=company_id, ordered_ids=payload.ordered_ids)}

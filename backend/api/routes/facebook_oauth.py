@@ -18,6 +18,7 @@ def _return_url() -> str:
 @router.get("/oauth/start")
 def start_oauth(current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         url = facebook_oauth_service.build_authorize_url(company_id=company_id)
     except FacebookOAuthError as exc:

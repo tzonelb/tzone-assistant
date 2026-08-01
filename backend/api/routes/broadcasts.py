@@ -18,6 +18,7 @@ def current_context(current_user=Depends(get_current_user)):
 @router.post("")
 def create_broadcast(payload: BroadcastCreateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         return broadcast_service.create_broadcast(
             company_id=company_id,
@@ -40,13 +41,15 @@ def create_broadcast(payload: BroadcastCreateRequest, context=Depends(current_co
 
 @router.get("")
 def list_broadcasts(context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
     return {"items": broadcast_service.list_broadcasts(company_id=company_id)}
 
 
 @router.get("/{broadcast_id}")
 def get_broadcast(broadcast_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
     try:
         return broadcast_service.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)
     except KeyError as exc:
@@ -55,7 +58,8 @@ def get_broadcast(broadcast_id: int, context=Depends(current_context)):
 
 @router.get("/{broadcast_id}/report")
 def get_broadcast_report(broadcast_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
     try:
         return broadcast_service.get_broadcast_report(company_id=company_id, broadcast_id=broadcast_id)
     except KeyError as exc:
@@ -64,7 +68,8 @@ def get_broadcast_report(broadcast_id: int, context=Depends(current_context)):
 
 @router.post("/{broadcast_id}/send")
 def send_broadcast(broadcast_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         return broadcast_service.send_broadcast(company_id=company_id, broadcast_id=broadcast_id)
     except KeyError as exc:
@@ -75,7 +80,8 @@ def send_broadcast(broadcast_id: int, context=Depends(current_context)):
 
 @router.delete("/{broadcast_id}")
 def delete_broadcast(broadcast_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         broadcast_service.delete_broadcast(company_id=company_id, broadcast_id=broadcast_id)
     except KeyError as exc:

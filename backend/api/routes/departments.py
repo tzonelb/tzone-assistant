@@ -26,6 +26,7 @@ def create_department(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "users.manage")
     try:
         departments = department_service.create(company_id=company_id, name=payload.name)
     except ValueError as exc:
@@ -39,6 +40,7 @@ def delete_department(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "users.manage")
     try:
         departments = department_service.delete(company_id=company_id, name=name)
     except KeyError:

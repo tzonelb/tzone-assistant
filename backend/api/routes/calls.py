@@ -16,13 +16,14 @@ def current_context(current_user=Depends(get_current_user)):
 
 
 @router.get("/options")
-def call_options():
+def call_options(current_user=Depends(get_current_user)):
     return {"directions": DIRECTIONS, "statuses": STATUSES}
 
 
 @router.post("")
 def create_call_log(payload: CallLogCreateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "conversations.reply")
     try:
         return call_log_service.create_call_log(
             company_id=company_id,
@@ -47,7 +48,8 @@ def list_call_logs(
     status: str | None = Query(default=None),
     context=Depends(current_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "conversations.view")
     return call_log_service.list_call_logs(
         company_id=company_id, customer_id=customer_id, direction=direction, status=status,
     )
@@ -55,7 +57,8 @@ def list_call_logs(
 
 @router.delete("/{call_id}")
 def delete_call_log(call_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "settings.manage")
     try:
         call_log_service.delete_call_log(company_id=company_id, call_id=call_id)
     except KeyError as exc:

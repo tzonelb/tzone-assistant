@@ -1501,3 +1501,24 @@ body[data-ui-density="compact"] .app-content {
 [data-theme="dark"] .workflow-settings-footer button {
   color: #fff;
 }
+
+.permission-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.permission-group {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-group-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tz-text-muted);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--tz-border);
+}

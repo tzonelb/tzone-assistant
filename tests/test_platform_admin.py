@@ -90,8 +90,16 @@ def test_company_can_request_a_plan_change(client_and_db):
             "VALUES (4, 'req@request-co.test', 'Requester', 'active', 0)"
         )
         conn.execute(
-            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 4, 'active')",
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (?, 'Owner', 'owner', 'Full access', 1)",
             (company_id,),
+        )
+        owner_role_id = conn.execute(
+            "SELECT id FROM roles WHERE company_id = ? AND code = 'owner'", (company_id,)
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (?, 4, ?, 'active')",
+            (company_id, owner_role_id),
         )
         conn.commit()
 
@@ -119,8 +127,16 @@ def test_super_admin_can_approve_a_subscription_request(client_and_db):
             "VALUES (5, 'req2@approve-co.test', 'Requester', 'active', 0)"
         )
         conn.execute(
-            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 5, 'active')",
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (?, 'Owner', 'owner', 'Full access', 1)",
             (company_id,),
+        )
+        owner_role_id = conn.execute(
+            "SELECT id FROM roles WHERE company_id = ? AND code = 'owner'", (company_id,)
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (?, 5, ?, 'active')",
+            (company_id, owner_role_id),
         )
         conn.commit()
 
@@ -150,8 +166,16 @@ def test_reviewing_an_already_reviewed_request_is_rejected(client_and_db):
             "VALUES (6, 'req3@twice-co.test', 'Requester', 'active', 0)"
         )
         conn.execute(
-            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 6, 'active')",
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (?, 'Owner', 'owner', 'Full access', 1)",
             (company_id,),
+        )
+        owner_role_id = conn.execute(
+            "SELECT id FROM roles WHERE company_id = ? AND code = 'owner'", (company_id,)
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (?, 6, ?, 'active')",
+            (company_id, owner_role_id),
         )
         conn.commit()
 

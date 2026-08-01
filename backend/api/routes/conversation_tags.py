@@ -34,6 +34,7 @@ def create_conversation_tag(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "settings.manage")
     try:
         item = conversation_control_service.create_tag(
             company_id=company_id,
@@ -53,6 +54,7 @@ def update_conversation_tag(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "settings.manage")
     try:
         item = conversation_control_service.update_tag(
             company_id=company_id,

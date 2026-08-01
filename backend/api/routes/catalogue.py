@@ -20,7 +20,8 @@ def catalogue_options(context=Depends(current_context)):
     """Reference data for the Catalogue UI — the fixed status pipeline
     plus the company's currently-used categories (for the filter/autocomplete).
     Mirrors tasks.py's /options endpoint exactly."""
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     return {
         "statuses": STATUSES,
         "categories": catalogue_service.list_categories(company_id=company_id),
@@ -30,6 +31,7 @@ def catalogue_options(context=Depends(current_context)):
 @router.post("")
 def create_product(payload: ProductCreateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     try:
         return catalogue_service.create_product(
             company_id=company_id,
@@ -53,7 +55,8 @@ def list_products(
     status: str | None = Query(default=None),
     context=Depends(current_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     return catalogue_service.list_products(
         company_id=company_id,
         search=search,
@@ -64,7 +67,8 @@ def list_products(
 
 @router.get("/{product_id}")
 def get_product(product_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     try:
         return catalogue_service.get_product(company_id=company_id, product_id=product_id)
     except KeyError as exc:
@@ -74,6 +78,7 @@ def get_product(product_id: int, context=Depends(current_context)):
 @router.put("/{product_id}")
 def update_product(product_id: int, payload: ProductUpdateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     try:
         return catalogue_service.update_product(
             company_id=company_id,
@@ -90,6 +95,7 @@ def update_product(product_id: int, payload: ProductUpdateRequest, context=Depen
 @router.post("/import/csv")
 async def import_csv(file: UploadFile, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     content = await file.read()
     try:
         return catalogue_service.import_from_csv(
@@ -102,6 +108,7 @@ async def import_csv(file: UploadFile, context=Depends(current_context)):
 @router.post("/import/whatsapp")
 def import_whatsapp_catalog(payload: WhatsAppCatalogImportRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     try:
         return catalogue_service.import_from_whatsapp_catalog(
             company_id=company_id, catalog_id=payload.catalog_id,
@@ -113,7 +120,8 @@ def import_whatsapp_catalog(payload: WhatsAppCatalogImportRequest, context=Depen
 
 @router.delete("/{product_id}")
 def delete_product(product_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.catalogue")
     try:
         catalogue_service.delete_product(company_id=company_id, product_id=product_id)
     except KeyError as exc:

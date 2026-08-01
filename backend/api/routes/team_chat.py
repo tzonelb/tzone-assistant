@@ -18,7 +18,8 @@ def current_context(current_user=Depends(get_current_user)):
 
 @router.get("/options")
 def team_chat_options(context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.team_chat")
     return {"employees": _company_employees(company_id)}
 
 
@@ -28,13 +29,15 @@ def list_messages(
     limit: int = Query(default=50),
     context=Depends(current_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.team_chat")
     return team_chat_service.list_messages(company_id=company_id, before_id=before_id, limit=limit)
 
 
 @router.post("")
 def send_message(payload: TeamMessageCreateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.team_chat")
     try:
         return team_chat_service.send_message(
             company_id=company_id,
@@ -49,6 +52,7 @@ def send_message(payload: TeamMessageCreateRequest, context=Depends(current_cont
 @router.delete("/{message_id}")
 def delete_message(message_id: int, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.team_chat")
     try:
         team_chat_service.delete_message(
             company_id=company_id, message_id=message_id, actor_user_id=current_user.get("id"),

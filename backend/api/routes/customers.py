@@ -80,6 +80,7 @@ def create_customer(payload: CustomerCreateRequest, context=Depends(current_cont
 @router.post("/bulk-update")
 def bulk_update_customers(payload: CustomerBulkUpdateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "settings.manage")
     try:
         return customer_service.bulk_update_customers(
             company_id=company_id,
@@ -152,7 +153,8 @@ def create_segment(payload: SegmentCreateRequest, context=Depends(current_contex
 
 @segments_router.delete("/{segment_id}")
 def delete_segment(segment_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "settings.manage")
     try:
         customer_service.delete_segment(company_id=company_id, segment_id=segment_id)
     except KeyError as exc:

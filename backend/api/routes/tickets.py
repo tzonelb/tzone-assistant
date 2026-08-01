@@ -1,11 +1,17 @@
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Optional
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+
+from backend.services.auth_service import auth_service, get_current_user
 from database.database import db
 
 
 router = APIRouter(prefix="/tickets", tags=["Tickets"])
+
+
+def _company_id(current_user: dict[str, Any]) -> int:
+    return auth_service.resolve_company_id(current_user)
 
 
 class TicketCreate(BaseModel):
@@ -20,16 +26,18 @@ class TicketCreate(BaseModel):
 
 
 @router.get("/")
-def list_tickets():
+def list_tickets(current_user: dict[str, Any] = Depends(get_current_user)):
     db.create_tables()
-    return db.get_tickets()
+    return db.get_tickets(company_id=_company_id(current_user))
 
 
 @router.post("/")
-def create_ticket(ticket: TicketCreate):
+def create_ticket(ticket: TicketCreate, current_user: dict[str, Any] = Depends(get_current_user)):
     db.create_tables()
 
-    ticket_id = db.create_ticket(ticket.model_dump())
+    payload = ticket.model_dump()
+    payload["company_id"] = _company_id(current_user)
+    ticket_id = db.create_ticket(payload)
 
     return {
         "message": "Ticket created",
@@ -38,12 +46,12 @@ def create_ticket(ticket: TicketCreate):
 
 
 @router.get("/{ticket_id}")
-def get_ticket(ticket_id: int):
+def get_ticket(ticket_id: int, current_user: dict[str, Any] = Depends(get_current_user)):
     db.create_tables()
 
     ticket = db.get_ticket(ticket_id)
 
-    if not ticket:
+    if not ticket or ticket.get("company_id") != _company_id(current_user):
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     return ticket

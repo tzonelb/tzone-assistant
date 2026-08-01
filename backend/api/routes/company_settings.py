@@ -38,6 +38,7 @@ def update_company_setting_section(
     payload: CompanySettingsUpdate,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
+    auth_service.require_permission(current_user, _company_id(current_user), "settings.manage")
     try:
         return company_settings_service.update_section(
             company_id=_company_id(current_user),

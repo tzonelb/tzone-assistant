@@ -189,6 +189,7 @@ def send_manual_conversation_reply(
             current_user
         )
     )
+    auth_service.require_permission(current_user, company_id, "conversations.reply")
 
     conversation = (
         conversation_control_service.get_state(

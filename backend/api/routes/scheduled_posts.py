@@ -18,7 +18,8 @@ def current_context(current_user=Depends(get_current_user)):
 
 @router.get("/options")
 def scheduled_post_options(context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
     accounts = channel_account_service.list_for_company(company_id=company_id)
     postable = [account for account in accounts if account["channel"] in POST_CHANNELS]
     return {"statuses": STATUSES, "channel_accounts": postable, "post_types": POST_TYPES}
@@ -27,6 +28,7 @@ def scheduled_post_options(context=Depends(current_context)):
 @router.post("")
 def create_post(payload: ScheduledPostCreateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         return scheduled_post_service.create_post(
             company_id=company_id,
@@ -48,13 +50,15 @@ def create_post(payload: ScheduledPostCreateRequest, context=Depends(current_con
 
 @router.get("")
 def list_posts(status: str | None = Query(default=None), context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
     return scheduled_post_service.list_posts(company_id=company_id, status=status)
 
 
 @router.get("/{post_id}")
 def get_post(post_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
     try:
         return scheduled_post_service.get_post(company_id=company_id, post_id=post_id)
     except KeyError as exc:
@@ -63,7 +67,8 @@ def get_post(post_id: int, context=Depends(current_context)):
 
 @router.put("/{post_id}")
 def update_post(post_id: int, payload: ScheduledPostUpdateRequest, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         return scheduled_post_service.update_post(
             company_id=company_id, post_id=post_id, values=payload.model_dump(exclude_unset=True),
@@ -76,7 +81,8 @@ def update_post(post_id: int, payload: ScheduledPostUpdateRequest, context=Depen
 
 @router.post("/{post_id}/publish-now")
 def publish_now(post_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         return scheduled_post_service.publish_post(company_id=company_id, post_id=post_id)
     except KeyError as exc:
@@ -85,7 +91,8 @@ def publish_now(post_id: int, context=Depends(current_context)):
 
 @router.delete("/{post_id}")
 def delete_post(post_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         scheduled_post_service.delete_post(company_id=company_id, post_id=post_id)
     except KeyError as exc:

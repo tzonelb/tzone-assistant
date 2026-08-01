@@ -42,7 +42,13 @@ def client_and_db():
         )
         conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (1, 'Test Co', 'test-co', 1)")
         conn.execute(
-            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 1, 'active')"
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (1, 'Owner', 'owner', 'Full access', 1)"
+        )
+        owner_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'").fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 1, ?, 'active')",
+            (owner_role_id,),
         )
         conn.commit()
 

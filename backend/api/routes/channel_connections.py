@@ -66,6 +66,7 @@ def connect_telegram(
 ):
     _require_elevated(current_user, x_elevated_token)
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         account = channel_account_service.connect_telegram(
             company_id=company_id, bot_token=payload.bot_token, name=payload.name,
@@ -95,6 +96,7 @@ def connect_whatsapp(
 ):
     _require_elevated(current_user, x_elevated_token)
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         account = channel_account_service.connect_whatsapp(
             company_id=company_id,
@@ -120,6 +122,7 @@ def connect_instagram(
 ):
     _require_elevated(current_user, x_elevated_token)
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         account = channel_account_service.connect_instagram(
             company_id=company_id,
@@ -145,6 +148,7 @@ async def disconnect_channel(
 ):
     _require_elevated(current_user, x_elevated_token)
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "channels.manage")
     try:
         account = channel_account_service.disconnect(company_id=company_id, account_id=account_id)
     except KeyError:
