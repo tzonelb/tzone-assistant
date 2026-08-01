@@ -1,11 +1,56 @@
+import logging
+
 from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from config.settings import config
+from channels.whatsapp.media import download_whatsapp_media
 from channels.whatsapp.processor import process_whatsapp_message
 from backend.services.channel_account_service import channel_account_service
+from core.stt_service import stt_service
+from core.vision_service import vision_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook/whatsapp", tags=["WhatsApp"])
+
+
+def _resolve_media_company_id(phone_number_id: str) -> int | None:
+    account_match = channel_account_service.resolve_meta_account(recipient_id=phone_number_id, channel="whatsapp")
+    return account_match["company_id"] if account_match else None
+
+
+def _transcribe_whatsapp_voice_note(media_id: str, phone_number_id: str) -> str | None:
+    """Downloads a customer's voice note and turns it into text so it
+    flows through the exact same reply pipeline as a typed message.
+    Returns None (never raises) on any failure — an unreadable voice
+    note is skipped rather than crashing the webhook."""
+    downloaded = download_whatsapp_media(media_id, _resolve_media_company_id(phone_number_id))
+    if not downloaded:
+        return None
+    audio_bytes, _mime_type = downloaded
+    try:
+        return stt_service.transcribe(audio_bytes, filename="voice.ogg")
+    except Exception:
+        logger.exception("WhatsApp voice note transcription failed")
+        return None
+
+
+def _describe_whatsapp_image(media_id: str, phone_number_id: str, caption: str) -> str | None:
+    """Downloads a customer's image and turns it into a text description
+    so the AI can 'read' it through the same reply pipeline as a typed
+    message. Returns None (never raises) on any failure."""
+    downloaded = download_whatsapp_media(media_id, _resolve_media_company_id(phone_number_id))
+    if not downloaded:
+        return None
+    image_bytes, mime_type = downloaded
+    try:
+        description = vision_service.describe_image(image_bytes, mime_type=mime_type or "image/jpeg")
+    except Exception:
+        logger.exception("WhatsApp image description failed")
+        return None
+    text = f"[Customer sent an image — what's in it: {description}]"
+    return f"{text}\nCustomer's caption: {caption}" if caption else text
 
 
 @router.get("/")
@@ -78,12 +123,20 @@ async def receive_message(request: Request):
             return {"status": "ignored", "reason": "no_messages"}
 
         msg = messages[0]
-
-        if msg.get("type") != "text":
-            return {"status": "ignored", "reason": "non_text_message"}
-
+        msg_type = msg.get("type")
         user_id = msg.get("from")
-        text = msg.get("text", {}).get("body", "").strip()
+
+        if msg_type == "text":
+            text = msg.get("text", {}).get("body", "").strip()
+        elif msg_type == "audio":
+            media_id = msg.get("audio", {}).get("id")
+            text = _transcribe_whatsapp_voice_note(media_id, incoming_phone_number_id) if media_id else None
+        elif msg_type == "image":
+            media_id = msg.get("image", {}).get("id")
+            caption = msg.get("image", {}).get("caption", "")
+            text = _describe_whatsapp_image(media_id, incoming_phone_number_id, caption) if media_id else None
+        else:
+            return {"status": "ignored", "reason": "unsupported_message_type"}
 
         if not user_id or not text:
             return {"status": "unsupported"}
@@ -96,6 +149,7 @@ async def receive_message(request: Request):
             text=text,
             recipient_phone_number_id=incoming_phone_number_id,
             customer_name=customer_name,
+            source_type=msg_type,
         )
 
         return {

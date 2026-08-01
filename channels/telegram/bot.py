@@ -5,6 +5,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 
 from config.settings import config
 from channels.telegram.processor import process_telegram_message
+from core.stt_service import stt_service
+from core.vision_service import vision_service
 
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,56 @@ def make_message_handler(company_id: int):
     return handle_message
 
 
+def make_voice_handler(company_id: int):
+    async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        voice = update.message.voice if update.message else None
+        if not voice:
+            return
+        try:
+            file = await context.bot.get_file(voice.file_id)
+            audio_bytes = bytes(await file.download_as_bytearray())
+            text = stt_service.transcribe(audio_bytes, filename="voice.ogg")
+        except Exception:
+            logger.exception("Telegram voice note transcription failed")
+            return
+        process_telegram_message(
+            user_id=str(update.effective_user.id),
+            text=text,
+            customer_name=update.effective_user.full_name,
+            username=update.effective_user.username,
+            company_id=company_id,
+            source_type="voice",
+        )
+    return handle_voice
+
+
+def make_photo_handler(company_id: int):
+    async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        photos = update.message.photo if update.message else None
+        if not photos:
+            return
+        try:
+            file = await context.bot.get_file(photos[-1].file_id)
+            image_bytes = bytes(await file.download_as_bytearray())
+            description = vision_service.describe_image(image_bytes, mime_type="image/jpeg")
+        except Exception:
+            logger.exception("Telegram image description failed")
+            return
+        caption = (update.message.caption or "").strip()
+        text = f"[Customer sent an image — what's in it: {description}]"
+        if caption:
+            text += f"\nCustomer's caption: {caption}"
+        process_telegram_message(
+            user_id=str(update.effective_user.id),
+            text=text,
+            customer_name=update.effective_user.full_name,
+            username=update.effective_user.username,
+            company_id=company_id,
+            source_type="image",
+        )
+    return handle_photo
+
+
 def make_contact_handler(company_id: int):
     async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
         contact = update.message.contact if update.message else None
@@ -103,6 +155,8 @@ def build_telegram_application(bot_token: str | None = None, company_id: int | N
 
     app.add_handler(CommandHandler("start", make_start_handler(resolved_company_id)))
     app.add_handler(MessageHandler(filters.CONTACT, make_contact_handler(resolved_company_id)))
+    app.add_handler(MessageHandler(filters.VOICE, make_voice_handler(resolved_company_id)))
+    app.add_handler(MessageHandler(filters.PHOTO, make_photo_handler(resolved_company_id)))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, make_message_handler(resolved_company_id)))
     app.add_error_handler(error_handler)
 

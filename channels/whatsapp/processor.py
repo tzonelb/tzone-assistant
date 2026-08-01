@@ -15,6 +15,7 @@ def process_whatsapp_message(
     text: str,
     recipient_phone_number_id: str,
     customer_name: str | None = None,
+    source_type: str = "text",
 ) -> dict[str, Any]:
     """Handle one incoming WhatsApp message.
 
@@ -47,6 +48,7 @@ def process_whatsapp_message(
             "source": "whatsapp",
             "sender_type": "customer",
             "customer_name": customer_name,
+            "source_type": source_type,
         },
     )
 

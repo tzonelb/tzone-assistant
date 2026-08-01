@@ -173,6 +173,21 @@ class AppConfig:
         "alloy",
     )
 
+    OPENAI_STT_API_URL: str = os.getenv(
+        "OPENAI_STT_API_URL",
+        "https://api.openai.com/v1/audio/transcriptions",
+    )
+
+    OPENAI_STT_MODEL: str = os.getenv(
+        "OPENAI_STT_MODEL",
+        "whisper-1",
+    )
+
+    OPENAI_VISION_MODEL: str = os.getenv(
+        "OPENAI_VISION_MODEL",
+        "gpt-4.1-mini",
+    )
+
     UPLOAD_PATH: str = os.getenv(
         "UPLOAD_PATH",
         str(BASE_DIR / "data" / "uploads"),

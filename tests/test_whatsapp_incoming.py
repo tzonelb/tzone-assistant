@@ -157,3 +157,78 @@ def test_whatsapp_webhook_accepts_legacy_configured_number(fresh_env):
             })
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "received"
+
+
+def test_whatsapp_webhook_transcribes_voice_notes(fresh_env):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    with patch("channels.whatsapp.processor.schedule_smart_reply", return_value={"queued": True}), \
+         patch("channels.whatsapp.webhook.download_whatsapp_media", return_value=(b"fake-audio", "audio/ogg")), \
+         patch("channels.whatsapp.webhook.stt_service") as mock_stt:
+        mock_stt.transcribe.return_value = "I need help with my order"
+        with TestClient(app) as client:
+            resp = client.post("/webhook/whatsapp/", json={
+                "entry": [{"changes": [{"value": {
+                    "metadata": {"phone_number_id": LEGACY_PHONE_NUMBER_ID},
+                    "messages": [{"type": "audio", "from": CUSTOMER_ID, "audio": {"id": "media-1"}}],
+                }}]}]
+            })
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "received"
+    assert body["text"] == "I need help with my order"
+
+
+def test_whatsapp_webhook_describes_images(fresh_env):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    with patch("channels.whatsapp.processor.schedule_smart_reply", return_value={"queued": True}), \
+         patch("channels.whatsapp.webhook.download_whatsapp_media", return_value=(b"fake-image", "image/jpeg")), \
+         patch("channels.whatsapp.webhook.vision_service") as mock_vision:
+        mock_vision.describe_image.return_value = "A cracked phone screen"
+        with TestClient(app) as client:
+            resp = client.post("/webhook/whatsapp/", json={
+                "entry": [{"changes": [{"value": {
+                    "metadata": {"phone_number_id": LEGACY_PHONE_NUMBER_ID},
+                    "messages": [{"type": "image", "from": CUSTOMER_ID, "image": {"id": "media-2", "caption": "my phone"}}],
+                }}]}]
+            })
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "received"
+    assert "A cracked phone screen" in body["text"]
+    assert "my phone" in body["text"]
+
+
+def test_whatsapp_webhook_handles_failed_media_download(fresh_env):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    with patch("channels.whatsapp.webhook.download_whatsapp_media", return_value=None):
+        with TestClient(app) as client:
+            resp = client.post("/webhook/whatsapp/", json={
+                "entry": [{"changes": [{"value": {
+                    "metadata": {"phone_number_id": LEGACY_PHONE_NUMBER_ID},
+                    "messages": [{"type": "audio", "from": CUSTOMER_ID, "audio": {"id": "media-3"}}],
+                }}]}]
+            })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "unsupported"
+
+
+def test_whatsapp_webhook_ignores_unsupported_message_types(fresh_env):
+    from fastapi.testclient import TestClient
+    from main import app
+
+    with TestClient(app) as client:
+        resp = client.post("/webhook/whatsapp/", json={
+            "entry": [{"changes": [{"value": {
+                "metadata": {"phone_number_id": LEGACY_PHONE_NUMBER_ID},
+                "messages": [{"type": "sticker", "from": CUSTOMER_ID, "sticker": {"id": "s1"}}],
+            }}]}]
+        })
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "ignored"
+    assert resp.json()["reason"] == "unsupported_message_type"

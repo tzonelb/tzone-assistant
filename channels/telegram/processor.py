@@ -16,6 +16,7 @@ def process_telegram_message(
     username: str | None = None,
     phone: str | None = None,
     company_id: int | None = None,
+    source_type: str = "text",
 ) -> dict[str, Any]:
     """Handle one incoming Telegram message.
 
@@ -44,6 +45,7 @@ def process_telegram_message(
             "sender_type": "customer",
             "customer_name": customer_name,
             "username": username,
+            "source_type": source_type,
         },
     )
 
