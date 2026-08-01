@@ -69,6 +69,55 @@
   font-size: 12px;
 }
 
+.reply-flow-view-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  border-bottom: 1px solid var(--tz-border);
+  flex: 0 0 auto;
+}
+
+.reply-flow-view-tabs button {
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--tz-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.reply-flow-view-tabs button.is-active {
+  color: var(--tz-primary);
+  border-bottom-color: var(--tz-primary);
+}
+
+.reply-flow-outline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+  margin-top: 16px;
+}
+
+.reply-flow-outline-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-outline-textarea {
+  padding: 12px 14px;
+  border: 1px solid var(--tz-border);
+  border-radius: 10px;
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
 .reply-flow-canvas-row {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);

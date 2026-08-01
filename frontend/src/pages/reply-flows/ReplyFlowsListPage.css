@@ -75,3 +75,42 @@
   color: var(--tz-primary);
   border-color: var(--tz-primary);
 }
+
+.reply-flow-build-mode-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.reply-flow-build-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1.5px solid var(--tz-border);
+  border-radius: 10px;
+  background: var(--tz-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reply-flow-build-mode-card strong {
+  font-size: 13px;
+  color: var(--tz-text-primary);
+}
+
+.reply-flow-build-mode-card span {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-build-mode-card.is-selected {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 12%);
+}
+
+.reply-flow-build-mode-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

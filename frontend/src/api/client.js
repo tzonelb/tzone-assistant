@@ -615,6 +615,10 @@ export async function duplicateReplyFlowRequest(id) {
   return apiRequest(`/api/reply-flows/${id}/duplicate`, { method: "POST" });
 }
 
+export async function generateReplyFlowFromTextRequest(id, text) {
+  return apiRequest(`/api/reply-flows/${id}/generate-from-text`, { method: "POST", body: { text } });
+}
+
 export async function deleteSavedReplyRequest(id) {
   return apiRequest(`/api/saved-replies/${id}`, { method: "DELETE" });
 }

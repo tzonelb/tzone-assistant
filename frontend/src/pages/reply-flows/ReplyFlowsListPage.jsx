@@ -19,6 +19,15 @@ export const CHANNEL_OPTIONS = [
   { value: "telegram", label: "Telegram" },
 ];
 const CHANNEL_LABELS = CHANNEL_OPTIONS.reduce((map, option) => ({ ...map, [option.value]: option.label }), {});
+
+export const REPLY_MODE_OPTIONS = [
+  { value: "ai_direct", label: "AI — Direct" },
+  { value: "ai_knowledge_only", label: "AI — Knowledge Only" },
+  { value: "ai_knowledge_plus", label: "AI + Knowledge" },
+  { value: "canned_reply", label: "Canned Reply" },
+  { value: "human_handoff", label: "Human Handoff" },
+];
+const REPLY_MODE_LABELS = REPLY_MODE_OPTIONS.reduce((map, option) => ({ ...map, [option.value]: option.label }), {});
 const STATUS_TONE = { draft: "neutral", active: "success", archived: "danger" };
 
 function formatDateTime(value) {
@@ -37,13 +46,15 @@ function NewFlowDialog({ open, departments, saving, error, onCancel, onCreate })
   const [name, setName] = useState("");
   const [channels, setChannels] = useState([]);
   const [selectedDepartments, setSelectedDepartments] = useState([]);
+  const [replyModes, setReplyModes] = useState([]);
+  const [buildMode, setBuildMode] = useState("draw");
 
   if (!open) return null;
 
   function submit(event) {
     event.preventDefault();
     if (!name.trim()) return;
-    onCreate({ name: name.trim(), channels, departments: selectedDepartments });
+    onCreate({ name: name.trim(), channels, departments: selectedDepartments, reply_modes: replyModes, buildMode });
   }
 
   const departmentOptions = departments.filter((name) => name !== "Unassigned").map((name) => ({ value: name, label: name }));
@@ -70,6 +81,33 @@ function NewFlowDialog({ open, departments, saving, error, onCancel, onCreate })
               disabled={saving}
               emptyHint="No departments set up yet — add some in Company Settings → Departments first."
             />
+          </label>
+          <label className="ai-teaching-field">
+            Reply mode <span className="reply-flow-field-hint">(leave empty to decide per-step inside the flow)</span>
+            <MultiSelectChips options={REPLY_MODE_OPTIONS} value={replyModes} onChange={setReplyModes} disabled={saving} />
+          </label>
+          <label className="ai-teaching-field">
+            How do you want to build it?
+            <div className="reply-flow-build-mode-choice">
+              <button
+                type="button"
+                className={`reply-flow-build-mode-card ${buildMode === "draw" ? "is-selected" : ""}`}
+                disabled={saving}
+                onClick={() => setBuildMode("draw")}
+              >
+                <strong>Draw it</strong>
+                <span>Drag steps onto a visual canvas and connect them.</span>
+              </button>
+              <button
+                type="button"
+                className={`reply-flow-build-mode-card ${buildMode === "write" ? "is-selected" : ""}`}
+                disabled={saving}
+                onClick={() => setBuildMode("write")}
+              >
+                <strong>Write it</strong>
+                <span>Describe the flow in your own words — the AI builds the steps for you.</span>
+              </button>
+            </div>
           </label>
           {error ? <p className="customer-segment-error">{error}</p> : null}
         </div>
@@ -113,13 +151,13 @@ export default function ReplyFlowsListPage() {
     listDepartmentsRequest().then((result) => setDepartments(result?.departments || [])).catch(() => {});
   }, []);
 
-  async function createFlow(values) {
+  async function createFlow({ buildMode, ...values }) {
     setSaving(true);
     setSaveError("");
     try {
       const flow = await createReplyFlowRequest(values);
       setDialogOpen(false);
-      navigate(`/reply-flows/${flow.id}`);
+      navigate(`/reply-flows/${flow.id}?view=${buildMode === "write" ? "outline" : "canvas"}`);
     } catch (requestError) {
       setSaveError(requestError.message || "Could not create this flow.");
     } finally {
@@ -162,6 +200,7 @@ export default function ReplyFlowsListPage() {
     },
     { key: "channels", label: "Channels", render: (value) => summarizeList(value, CHANNEL_LABELS, "All channels") },
     { key: "departments", label: "Departments", render: (value) => summarizeList(value, null, "All departments") },
+    { key: "reply_modes", label: "Reply mode", render: (value) => summarizeList(value, REPLY_MODE_LABELS, "Per-step") },
     { key: "status", label: "Status", render: (value) => <StatusBadge status={value} tone={STATUS_TONE[value]} label={value} /> },
     { key: "updated_at", label: "Updated", render: (value) => formatDateTime(value) },
     {

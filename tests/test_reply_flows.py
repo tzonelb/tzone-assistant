@@ -101,6 +101,56 @@ def test_create_rejects_unregistered_department(client_and_db):
     assert resp.status_code == 400
 
 
+def test_reply_modes_saved_and_validated(client_and_db):
+    client = client_and_db
+    resp = client.post("/api/reply-flows", json={"name": "Flow", "reply_modes": ["ai_direct", "human_handoff"]})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["reply_modes"] == ["ai_direct", "human_handoff"]
+
+    bad = client.post("/api/reply-flows", json={"name": "Flow 2", "reply_modes": ["not_a_mode"]})
+    assert bad.status_code == 400
+
+
+def test_generate_from_text_builds_real_graph(client_and_db):
+    from unittest.mock import patch, MagicMock
+
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "AI Written Flow"}).json()
+
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+    fake_response.json.return_value = {
+        "output_text": (
+            '{"nodes": ['
+            '{"id": "a", "nodeType": "greeting", "label": "Say hi", "config": {"text": "Hi there!"}},'
+            '{"id": "b", "nodeType": "ai_direct", "label": "Answer", "config": {"instructions": "Help them out"}}'
+            '], "edges": [{"source": "a", "target": "b"}]}'
+        )
+    }
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value.post.return_value = fake_response
+
+    with patch("backend.services.reply_flow_service.config.OPENAI_API_KEY", "fake-key"), \
+         patch("backend.services.reply_flow_service.httpx.Client", return_value=mock_client):
+        resp = client.post(f"/api/reply-flows/{flow['id']}/generate-from-text", json={"text": "Greet the customer then let AI answer."})
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert len(body["nodes"]) == 2
+    assert body["nodes"][0]["data"]["nodeType"] == "greeting"
+    assert body["nodes"][0]["data"]["config"]["text"] == "Hi there!"
+    assert len(body["edges"]) == 1
+    assert body["edges"][0]["source"] == body["nodes"][0]["id"]
+    assert body["edges"][0]["target"] == body["nodes"][1]["id"]
+
+
+def test_generate_from_text_requires_text(client_and_db):
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "Flow"}).json()
+    resp = client.post(f"/api/reply-flows/{flow['id']}/generate-from-text", json={"text": "  "})
+    assert resp.status_code == 400
+
+
 def test_create_requires_name(client_and_db):
     resp = client_and_db.post("/api/reply-flows", json={"name": "  "})
     assert resp.status_code == 400

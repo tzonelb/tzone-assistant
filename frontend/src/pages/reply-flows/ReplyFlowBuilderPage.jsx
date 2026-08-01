@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ReactFlow, ReactFlowProvider, Background, Controls, MiniMap,
   addEdge, useNodesState, useEdgesState, useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { ArrowBackOutlined, CloseOutlined, SaveOutlined } from "@mui/icons-material";
-import { getReplyFlowRequest, updateReplyFlowRequest, listDepartmentsRequest } from "../../api/client";
+import { ArrowBackOutlined, CloseOutlined, SaveOutlined, AutoAwesomeOutlined } from "@mui/icons-material";
+import { getReplyFlowRequest, updateReplyFlowRequest, listDepartmentsRequest, generateReplyFlowFromTextRequest } from "../../api/client";
 import { AppButton, LoadingState, ErrorState } from "../../components/common";
 import FlowStepNode from "./FlowStepNode";
 import { NODE_GROUPS, NODE_TYPE_CONFIG } from "./nodeTypesConfig";
-import { NODE_FIELDS } from "./nodeFieldsConfig";
+import { NODE_FIELDS, previewText } from "./nodeFieldsConfig";
 import MultiSelectPopover from "./MultiSelectPopover";
-import { CHANNEL_OPTIONS } from "./ReplyFlowsListPage";
+import { CHANNEL_OPTIONS, REPLY_MODE_OPTIONS } from "./ReplyFlowsListPage";
 import "./ReplyFlowBuilderPage.css";
 
 const REACT_FLOW_NODE_TYPES = { step: FlowStepNode };
@@ -196,9 +196,62 @@ function BuilderCanvas({ nodes, edges, setNodes, setEdges, onNodesChange, onEdge
   );
 }
 
+function buildOutlineText(nodes) {
+  if (!nodes.length) return "";
+  return nodes
+    .map((node, index) => {
+      const config = NODE_TYPE_CONFIG[node.data.nodeType];
+      const preview = previewText(node.data.nodeType, node.data.config);
+      const title = `${config?.label || node.data.nodeType}${node.data.label && node.data.label !== config?.label ? ` — ${node.data.label}` : ""}`;
+      return preview ? `${index + 1}. ${title}: ${preview}` : `${index + 1}. ${title}`;
+    })
+    .join("\n");
+}
+
+function OutlinePanel({ id, nodes, onGenerated }) {
+  const [text, setText] = useState(() => buildOutlineText(nodes));
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState("");
+
+  async function generate() {
+    if (!text.trim()) return;
+    setGenerating(true);
+    setGenerateError("");
+    try {
+      const updated = await generateReplyFlowFromTextRequest(id, text);
+      onGenerated(updated);
+    } catch (requestError) {
+      setGenerateError(requestError.message || "Could not generate a flow from this text.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <div className="reply-flow-outline">
+      <p className="reply-flow-outline-hint">
+        Write the flow out in your own words — one step per line works well. The AI turns it into real steps
+        (existing steps drawn on the canvas are replaced when you generate).
+      </p>
+      <textarea
+        className="reply-flow-outline-textarea"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        placeholder={"1. Greet the customer\n2. Ask what they need\n3. Let the AI answer using our knowledge base\n4. If they ask for a human, hand off"}
+        rows={16}
+      />
+      {generateError ? <p className="customer-segment-error">{generateError}</p> : null}
+      <AppButton variant="primary" icon={<AutoAwesomeOutlined fontSize="small" />} loading={generating} onClick={generate} disabled={!text.trim()}>
+        Generate flow with AI
+      </AppButton>
+    </div>
+  );
+}
+
 export default function ReplyFlowBuilderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [flow, setFlow] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -208,8 +261,11 @@ export default function ReplyFlowBuilderPage() {
   const [name, setName] = useState("");
   const [channels, setChannels] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [replyModes, setReplyModes] = useState([]);
   const [allDepartments, setAllDepartments] = useState([]);
   const [status, setStatus] = useState("draft");
+  const [view, setView] = useState(searchParams.get("view") === "outline" ? "outline" : "canvas");
+  const [graphVersion, setGraphVersion] = useState(0);
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -221,9 +277,11 @@ export default function ReplyFlowBuilderPage() {
         setName(result.name);
         setChannels(result.channels || []);
         setDepartments(result.departments || []);
+        setReplyModes(result.reply_modes || []);
         setStatus(result.status);
         setNodes(result.nodes || []);
         setEdges(result.edges || []);
+        setGraphVersion((v) => v + 1);
       })
       .catch((requestError) => setError(requestError.message || "Could not load this flow."))
       .finally(() => setLoading(false));
@@ -231,11 +289,24 @@ export default function ReplyFlowBuilderPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  function switchView(next) {
+    setView(next);
+    setSearchParams((params) => { params.set("view", next); return params; }, { replace: true });
+  }
+
+  function onOutlineGenerated(updatedFlow) {
+    setNodes(updatedFlow.nodes || []);
+    setEdges(updatedFlow.edges || []);
+    setGraphVersion((v) => v + 1);
+    setDirty(false);
+    switchView("canvas");
+  }
+
   async function save() {
     setSaving(true);
     setSaveError("");
     try {
-      await updateReplyFlowRequest(id, { name, channels, departments, status, nodes, edges });
+      await updateReplyFlowRequest(id, { name, channels, departments, reply_modes: replyModes, status, nodes, edges });
       setDirty(false);
     } catch (requestError) {
       setSaveError(requestError.message || "Could not save this flow.");
@@ -275,6 +346,13 @@ export default function ReplyFlowBuilderPage() {
             allLabel="All departments"
             emptyHint="No departments set up yet — add some in Company Settings → Departments first."
           />
+          <MultiSelectPopover
+            label="Reply mode"
+            options={REPLY_MODE_OPTIONS}
+            value={replyModes}
+            onChange={(next) => { setReplyModes(next); setDirty(true); }}
+            allLabel="Per-step"
+          />
           <select className="tz-select" value={status} onChange={(event) => { setStatus(event.target.value); setDirty(true); }}>
             <option value="draft">Draft</option>
             <option value="active">Active</option>
@@ -287,17 +365,26 @@ export default function ReplyFlowBuilderPage() {
         </div>
       </header>
 
-      <ReactFlowProvider>
-        <BuilderCanvas
-          nodes={nodes}
-          edges={edges}
-          setNodes={setNodes}
-          setEdges={setEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onDirty={() => setDirty(true)}
-        />
-      </ReactFlowProvider>
+      <div className="reply-flow-view-tabs">
+        <button type="button" className={view === "canvas" ? "is-active" : ""} onClick={() => switchView("canvas")}>Canvas</button>
+        <button type="button" className={view === "outline" ? "is-active" : ""} onClick={() => switchView("outline")}>Outline</button>
+      </div>
+
+      {view === "canvas" ? (
+        <ReactFlowProvider>
+          <BuilderCanvas
+            nodes={nodes}
+            edges={edges}
+            setNodes={setNodes}
+            setEdges={setEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onDirty={() => setDirty(true)}
+          />
+        </ReactFlowProvider>
+      ) : (
+        <OutlinePanel key={graphVersion} id={id} nodes={nodes} onGenerated={onOutlineGenerated} />
+      )}
     </section>
   );
 }

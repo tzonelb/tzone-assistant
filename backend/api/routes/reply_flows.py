@@ -29,15 +29,21 @@ class CreateFlowRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     channels: list[str] = Field(default_factory=list)
     departments: list[str] = Field(default_factory=list)
+    reply_modes: list[str] = Field(default_factory=list)
 
 
 class UpdateFlowRequest(BaseModel):
     name: str | None = None
     channels: list[str] | None = None
     departments: list[str] | None = None
+    reply_modes: list[str] | None = None
     status: str | None = None
     nodes: list[dict] | None = None
     edges: list[dict] | None = None
+
+
+class GenerateFromTextRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
 
 
 @router.get("")
@@ -64,7 +70,8 @@ def create_flow(payload: CreateFlowRequest, current_user: dict[str, Any] = Depen
     try:
         return reply_flow_service.create(
             company_id=company_id, name=payload.name, channels=payload.channels,
-            departments=payload.departments, actor_user_id=current_user.get("id"),
+            departments=payload.departments, reply_modes=payload.reply_modes,
+            actor_user_id=current_user.get("id"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -77,8 +84,21 @@ def update_flow(flow_id: int, payload: UpdateFlowRequest, current_user: dict[str
     try:
         return reply_flow_service.update(
             company_id=company_id, flow_id=flow_id, name=payload.name, channels=payload.channels,
-            departments=payload.departments, status=payload.status, nodes=payload.nodes, edges=payload.edges,
+            departments=payload.departments, reply_modes=payload.reply_modes,
+            status=payload.status, nodes=payload.nodes, edges=payload.edges,
         )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Reply flow not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/{flow_id}/generate-from-text")
+def generate_from_text(flow_id: int, payload: GenerateFromTextRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    company_id = _company_id(current_user)
+    _require_manage(current_user, company_id)
+    try:
+        return reply_flow_service.generate_from_text(company_id=company_id, flow_id=flow_id, text=payload.text)
     except KeyError:
         raise HTTPException(status_code=404, detail="Reply flow not found")
     except ValueError as exc:
