@@ -87,6 +87,11 @@
   margin-bottom: 8px;
 }
 
+.channels-directory-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
 .channels-directory-card-body {
   display: flex;
   flex-direction: column;

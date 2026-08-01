@@ -1,10 +1,26 @@
+import hashlib
 import re
+import secrets
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.services.auth_service import auth_service
+from backend.services.email_service import send_email
+from backend.services.license_key_service import license_key_service
 from backend.services.platform_admin_service import platform_admin_service
 from config.settings import config
 from database.database import db
+
+
+CODE_TTL_MINUTES = 10
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _hash_code(value: str) -> str:
+    return hashlib.sha256(value.strip().encode("utf-8")).hexdigest()
 
 
 def _slugify(value: str) -> str:
@@ -24,6 +40,84 @@ class SignupService:
     calling auth_service.assign_user_to_company (which looks the role up by
     company_id + code and raises ValueError when missing).
     """
+
+    def ensure_schema(self) -> None:
+        with db.connect() as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS signup_email_verifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    email TEXT NOT NULL,
+                    code_hash TEXT NOT NULL,
+                    expires_at TEXT NOT NULL,
+                    consumed_at TEXT,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.commit()
+
+    def send_verification_code(self, email: str) -> tuple[bool, str]:
+        """Emails a 6-digit code to confirm this is a real, reachable
+        address BEFORE creating an account with it. No user row exists yet
+        at this point, so verification is keyed by the email itself."""
+        email = (email or "").strip()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+            raise ValueError("Please enter a valid email address.")
+
+        normalized = auth_service.normalize_email(email)
+        with db.connect() as conn:
+            existing_user = conn.execute(
+                "SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1", (normalized,),
+            ).fetchone()
+            if existing_user:
+                raise ValueError("A user with this email already exists.")
+
+        code = f"{secrets.randbelow(1000000):06d}"
+        now = _utc_now()
+        with db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO signup_email_verifications (email, code_hash, expires_at, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (normalized, _hash_code(code), (now + timedelta(minutes=CODE_TTL_MINUTES)).isoformat(), now.isoformat()),
+            )
+            conn.commit()
+
+        return send_email(
+            to_email=email,
+            subject="Confirm your email for T-ZONE",
+            body=(
+                f"Your T-ZONE sign-up verification code is: {code}\n\n"
+                f"It expires in {CODE_TTL_MINUTES} minutes. "
+                f"If you didn't request this, you can ignore this email."
+            ),
+        )
+
+    def _consume_verification_code(self, *, email: str, code: str) -> None:
+        normalized = auth_service.normalize_email(email)
+        now = _utc_now()
+        with db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, code_hash, expires_at FROM signup_email_verifications
+                WHERE email = ? AND consumed_at IS NULL
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (normalized,),
+            ).fetchone()
+            if not row:
+                raise ValueError("No verification code was requested for this email. Please request one first.")
+            if row["code_hash"] != _hash_code(code or ""):
+                raise ValueError("Incorrect verification code.")
+            if datetime.fromisoformat(row["expires_at"]) < now:
+                raise ValueError("This verification code has expired. Please request a new one.")
+            conn.execute(
+                "UPDATE signup_email_verifications SET consumed_at = ? WHERE id = ?",
+                (now.isoformat(), row["id"]),
+            )
+            conn.commit()
 
     def _unique_slug(self, conn, base: str) -> str:
         base = base or "company"
@@ -62,14 +156,18 @@ class SignupService:
         owner_full_name: str,
         owner_email: str,
         password: str,
+        confirm_password: str | None = None,
         slug: str | None = None,
         plan_id: int | None = None,
+        license_key: str | None = None,
+        email_code: str | None = None,
         country: str | None = None,
         phone: str | None = None,
     ) -> dict[str, Any]:
         company_name = (company_name or "").strip()
         owner_full_name = (owner_full_name or "").strip()
         owner_email = (owner_email or "").strip()
+        license_key = (license_key or "").strip() or None
 
         if not company_name:
             raise ValueError("Company name is required.")
@@ -81,21 +179,33 @@ class SignupService:
             raise ValueError("Please enter a valid email address.")
         if len(password or "") < 8:
             raise ValueError("Password must contain at least 8 characters.")
+        if confirm_password is not None and password != confirm_password:
+            raise ValueError("Passwords do not match.")
 
         normalized_email = auth_service.normalize_email(owner_email)
-
-        # Resolve the plan (validates it exists / is active, or picks a default).
-        resolved_plan_id = self._default_plan_id(plan_id)
-
-        # Pre-flight checks + slug resolution on a single connection.
         with db.connect() as conn:
             existing_user = conn.execute(
-                "SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1",
-                (normalized_email,),
+                "SELECT id FROM users WHERE LOWER(email) = ? LIMIT 1", (normalized_email,),
             ).fetchone()
             if existing_user:
                 raise ValueError("A user with this email already exists.")
 
+        # Confirm this is a real, reachable address before creating anything
+        # else — checked after the duplicate-email check above so a doomed
+        # request doesn't burn a valid, still-usable verification code.
+        self._consume_verification_code(email=owner_email, code=email_code or "")
+
+        # A license key (already purchased, e.g. through a reseller) carries
+        # its own plan and overrides whatever the plan grid had selected.
+        # Redeeming it happens AFTER the company is created, once we have a
+        # company_id to attach it to; here we only validate + peek the plan.
+        if license_key:
+            resolved_plan_id = license_key_service.peek_plan_id(license_key)
+        else:
+            resolved_plan_id = self._default_plan_id(plan_id)
+
+        # Slug resolution (duplicate-email already checked above).
+        with db.connect() as conn:
             base_slug = _slugify(slug) or _slugify(company_name)
             resolved_slug = self._unique_slug(conn, base_slug)
 
@@ -110,6 +220,12 @@ class SignupService:
             contact_phone=phone,
         )
         company_id = int(company["id"])
+
+        if license_key:
+            # Re-check-and-redeem atomically-enough for this scale: the peek
+            # above already validated it was unused; redeem() re-checks the
+            # status itself so a double-submit can't redeem the same key twice.
+            license_key_service.redeem(code=license_key, company_id=company_id)
 
         # 2) Seed the 'owner' role for the brand-new company (mirrors the
         #    company_id=1 seed in database.database).

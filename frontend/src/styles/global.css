@@ -45,13 +45,14 @@ a {
 }
 
 .login-page {
-  min-height: 100vh;
+  height: 100%;
+  overflow-y: auto;
   display: grid;
   grid-template-columns:
     minmax(0, 1.25fr)
     minmax(380px, 520px);
   gap: 60px;
-  align-items: center;
+  align-items: safe center;
   padding: 60px max(5vw, 30px);
   background:
     radial-gradient(
@@ -254,6 +255,45 @@ a {
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 10px;
   margin-top: 4px;
+}
+
+.signup-email-row {
+  display: flex;
+  gap: 8px;
+}
+
+.signup-email-row input {
+  flex: 1;
+}
+
+.signup-email-row button {
+  flex: 0 0 auto;
+  padding: 0 16px;
+  border: 1px solid #dbe2ec;
+  border-radius: 14px;
+  background: white;
+  color: #1689e8;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.signup-email-row button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.signup-license-toggle {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+
+.signup-license-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
 }
 
 .signup-plan-card {

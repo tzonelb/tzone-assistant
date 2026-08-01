@@ -5,9 +5,9 @@
 // integration is planned but not wired yet — shown honestly, never as a
 // fake-connectable button.
 //
-// `icon` is a @mui/icons-material export name (resolved in channelIcons.js).
-// Real brand icons are used where MUI ships one; everything else gets a
-// clearly-labeled generic icon rather than a wrong or fake logo.
+// `icon` names a real brand mark resolved in channelIcons.js (MUI's own
+// brand icons, or the genuine Simple Icons glyph via react-icons for brands
+// MUI doesn't ship). No hand-drawn or generic stand-ins for a real company.
 //
 // key: matches the `channel` value stored in channel_accounts where one exists.
 
@@ -23,17 +23,17 @@ export const CHANNEL_CATEGORIES = [
         note: "Connected together with your Facebook Page." },
       { key: "telegram", name: "Telegram", availability: "available", connect: "telegram", icon: "Telegram", color: "#229ED9",
         note: "Paste your bot token from @BotFather." },
-      { key: "viber", name: "Viber", availability: "soon", icon: "ChatBubble", color: "#7360F2" },
-      { key: "line", name: "LINE", availability: "soon", icon: "ChatBubble", color: "#06C755" },
-      { key: "wechat", name: "WeChat", availability: "soon", icon: "ChatBubble", color: "#07C160" },
-      { key: "signal", name: "Signal", availability: "soon", icon: "ChatBubble", color: "#3A76F0" },
+      { key: "viber", name: "Viber", availability: "soon", icon: "Viber", color: "#7360F2" },
+      { key: "line", name: "LINE", availability: "soon", icon: "Line", color: "#06C755" },
+      { key: "wechat", name: "WeChat", availability: "soon", icon: "WeChat", color: "#07C160" },
+      { key: "signal", name: "Signal", availability: "soon", icon: "Signal", color: "#3A76F0" },
     ],
   },
   {
     title: "Social",
     channels: [
-      { key: "tiktok", name: "TikTok", availability: "soon", icon: "MusicNote", color: "#010101" },
-      { key: "twitter", name: "X (Twitter)", availability: "soon", icon: "Twitter", color: "#000000" },
+      { key: "tiktok", name: "TikTok", availability: "soon", icon: "TikTok", color: "#010101" },
+      { key: "twitter", name: "X (Twitter)", availability: "soon", icon: "X", color: "#000000" },
       { key: "linkedin", name: "LinkedIn", availability: "soon", icon: "LinkedIn", color: "#0A66C2" },
       { key: "youtube", name: "YouTube", availability: "soon", icon: "YouTube", color: "#FF0000" },
     ],
@@ -53,8 +53,8 @@ export const CHANNEL_CATEGORIES = [
   {
     title: "Team & collaboration",
     channels: [
-      { key: "slack", name: "Slack", availability: "soon", icon: "Tag", color: "#4A154B" },
-      { key: "discord", name: "Discord", availability: "soon", icon: "Forum", color: "#5865F2" },
+      { key: "slack", name: "Slack", availability: "soon", icon: "Slack", color: "#4A154B" },
+      { key: "discord", name: "Discord", availability: "soon", icon: "Discord", color: "#5865F2" },
       { key: "google_chat", name: "Google Chat", availability: "soon", icon: "Google", color: "#34A853" },
     ],
   },

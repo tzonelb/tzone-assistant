@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.services.auth_service import get_current_user
+from backend.services.license_key_service import license_key_service
 from backend.services.platform_admin_service import platform_admin_service
 
 
@@ -339,3 +340,27 @@ def my_subscription(
             "product_connector": bool(limits["product_connector_enabled"]),
         },
     }
+
+
+class IssueLicenseKeyRequest(BaseModel):
+    plan_id: int
+    note: str | None = Field(default=None, max_length=200)
+
+
+@router.get("/license-keys")
+def list_license_keys(current_user: dict[str, Any] = Depends(get_current_user)):
+    """SUPER-ADMIN ONLY — pre-issued keys a customer can redeem at signup
+    in place of picking a plan (e.g. sold offline / through a reseller)."""
+    _require_super_admin(current_user)
+    return {"license_keys": license_key_service.list_all()}
+
+
+@router.post("/license-keys")
+def issue_license_key(payload: IssueLicenseKeyRequest, current_user: dict[str, Any] = Depends(get_current_user)):
+    _require_super_admin(current_user)
+    try:
+        return license_key_service.issue(
+            plan_id=payload.plan_id, note=payload.note, issued_by_user_id=current_user.get("id"),
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Plan not found")

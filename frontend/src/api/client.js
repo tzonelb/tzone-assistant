@@ -193,6 +193,14 @@ export async function signupPlansRequest() {
   return apiRequest("/api/signup/plans", { authenticated: false });
 }
 
+export async function sendSignupCodeRequest(email) {
+  return apiRequest("/api/signup/send-code", {
+    method: "POST",
+    authenticated: false,
+    body: { email },
+  });
+}
+
 export async function signupRequest(payload) {
   return apiRequest("/api/signup", {
     method: "POST",
