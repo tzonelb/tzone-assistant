@@ -365,6 +365,52 @@ def test_flow_scoped_to_other_channel_is_ignored(flow_env):
     assert response is None
 
 
+def test_exit_when_keeps_customer_on_same_ai_node_until_satisfied(flow_env):
+    from core.reply_flow_engine import reply_flow_engine
+
+    _create_flow(
+        nodes=[
+            _node("n1", "ai_direct", {"instructions": "Collect the customer's address.", "exit_when": "the customer has given a full address"}),
+            _node("n2", "canned_reply", {"text": "Thanks, address noted."}),
+            _node("n3", "end"),
+        ],
+        edges=[_edge("n1", "n2"), _edge("n2", "n3")],
+    )
+
+    with patch("core.reply_flow_engine.ai_router") as mock_router, \
+            patch.object(reply_flow_engine, "_check_exit_condition") as mock_check:
+        mock_router.route.return_value = {"reply": "What's your address?"}
+
+        mock_check.return_value = False
+        first = reply_flow_engine.maybe_handle(_make_request("hi, I need delivery"))
+        assert first.text == "What's your address?"
+
+        from database.database import db
+        with db.connect() as conn:
+            row = conn.execute("SELECT current_node_id, status FROM reply_flow_sessions WHERE company_id=? AND channel=? AND external_user_id=?", (COMPANY_ID, CHANNEL, USER_ID)).fetchone()
+        assert row["current_node_id"] == "n1"
+        assert row["status"] == "active"
+
+        mock_router.route.return_value = {"reply": "Thanks, that's a valid address."}
+        mock_check.return_value = True
+        second = reply_flow_engine.maybe_handle(_make_request("123 Main St, Beirut"))
+        assert second is not None
+        assert second.text == "Thanks, that's a valid address."
+
+        with db.connect() as conn:
+            row = conn.execute("SELECT current_node_id, status FROM reply_flow_sessions WHERE company_id=? AND channel=? AND external_user_id=?", (COMPANY_ID, CHANNEL, USER_ID)).fetchone()
+        assert row["current_node_id"] == "n1"
+        assert row["status"] == "active"
+
+        # exit condition was satisfied last turn -> this next customer
+        # message advances past the AI node into the rest of the flow.
+        third = reply_flow_engine.maybe_handle(_make_request("ok thanks"))
+
+    assert third is not None
+    assert third.text == "Thanks, address noted."
+    assert mock_router.route.call_count == 2
+
+
 def test_end_to_end_real_conversation_is_actually_controlled_by_the_flow(flow_env):
     """The point of the whole engine: prove a saved flow changes what a
     REAL customer conversation receives, through the exact same pipeline

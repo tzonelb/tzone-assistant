@@ -13,7 +13,6 @@ import {
   NotificationsOutlined,
   QuickreplyOutlined,
   QueryStatsOutlined,
-  AccountTreeOutlined,
   SettingsOutlined,
   TaskAltOutlined,
   TuneOutlined,
@@ -39,14 +38,14 @@ const navigationItems = [
   ["/analytics", "Analytics", QueryStatsOutlined],
   ["/team-chat", "Team Chat", EventNoteOutlined],
   ["/settings", "Settings", SettingsOutlined],
+  // Reply Flows and Roles & Permissions are admin-only and live inside
+  // Company Settings, not as standalone nav links.
   ["/company-settings", "Company Settings", TuneOutlined],
-  ["/roles", "Roles & Permissions", AdminPanelSettingsOutlined],
 ];
 
 export default function Sidebar({ open, collapsed, companyName, onClose, onToggleCollapsed }) {
   const [hovered, setHovered] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
-  const [isCompanyAdmin, setIsCompanyAdmin] = useState(false);
   const expanded = !collapsed || hovered;
 
   useEffect(() => {
@@ -55,10 +54,6 @@ export default function Sidebar({ open, collapsed, companyName, onClose, onToggl
       .then((response) => {
         if (cancelled) return;
         setIsSuperAdmin(Boolean(response?.user?.is_super_admin));
-        const activeCompanyId = response?.user?.active_company_id;
-        const companies = Array.isArray(response?.companies) ? response.companies : [];
-        const active = companies.find((company) => company.id === activeCompanyId) || companies[0];
-        setIsCompanyAdmin(active?.role_code === "owner");
       })
       .catch(() => {
         // Not fatal — the API already enforces this server-side either way.
@@ -66,13 +61,7 @@ export default function Sidebar({ open, collapsed, companyName, onClose, onToggl
     return () => { cancelled = true; };
   }, []);
 
-  // Reply Flows controls how the AI behaves company-wide — admin-only,
-  // not shown to regular employees even as a nav link.
   let items = [...navigationItems];
-  if (isSuperAdmin || isCompanyAdmin) {
-    const savedRepliesIndex = items.findIndex(([path]) => path === "/saved-replies");
-    items.splice(savedRepliesIndex + 1, 0, ["/reply-flows", "Reply Flows", AccountTreeOutlined]);
-  }
   if (isSuperAdmin) {
     items = [...items, ["/platform-admin", "Platform Admin", AdminPanelSettingsOutlined]];
   }

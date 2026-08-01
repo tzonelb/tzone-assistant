@@ -52,6 +52,48 @@ def test_stt_service_rejects_empty_audio():
         pass
 
 
+def test_stt_service_rejects_oversized_audio():
+    from core.stt_service import stt_service, MAX_AUDIO_BYTES
+
+    with patch("core.stt_service.config.OPENAI_API_KEY", "fake-key"):
+        try:
+            stt_service.transcribe(b"x" * (MAX_AUDIO_BYTES + 1))
+            assert False, "expected ValueError"
+        except ValueError:
+            pass
+
+
+def test_vision_service_rejects_oversized_image():
+    from core.vision_service import vision_service, MAX_IMAGE_BYTES
+
+    with patch("core.vision_service.config.OPENAI_API_KEY", "fake-key"):
+        try:
+            vision_service.describe_image(b"x" * (MAX_IMAGE_BYTES + 1))
+            assert False, "expected ValueError"
+        except ValueError:
+            pass
+
+
+def test_download_whatsapp_media_rejects_oversized_by_reported_file_size():
+    from channels.whatsapp.media import download_whatsapp_media, MAX_MEDIA_BYTES
+
+    lookup_response = MagicMock()
+    lookup_response.status_code = 200
+    lookup_response.json.return_value = {
+        "url": "https://lookaside.example/file", "mime_type": "audio/ogg", "file_size": MAX_MEDIA_BYTES + 1,
+    }
+
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value.get.side_effect = [lookup_response]
+
+    with patch("channels.whatsapp.media._resolve_whatsapp_credentials", return_value=("phone-id", "tok")), \
+         patch("channels.whatsapp.media.httpx.Client", return_value=mock_client):
+        result = download_whatsapp_media("media-1", company_id=1)
+
+    assert result is None
+    mock_client.__enter__.return_value.get.assert_called_once()  # never attempted the actual download
+
+
 def test_vision_service_describes_image():
     from core.vision_service import vision_service
 
@@ -125,6 +167,7 @@ def _fake_telegram_update(*, voice=None, photo=None, caption=None):
     update.message.voice = voice
     update.message.photo = photo
     update.message.caption = caption
+    update.message.reply_text = AsyncMock()
     update.effective_user.id = 555
     update.effective_user.full_name = "Test Customer"
     update.effective_user.username = "testcustomer"
@@ -176,3 +219,55 @@ def test_telegram_photo_handler_describes_and_forwards_text():
     assert "A broken router" in call_kwargs["text"]
     assert "check this out" in call_kwargs["text"]
     assert call_kwargs["source_type"] == "image"
+
+
+def test_telegram_voice_handler_notifies_customer_on_transcription_failure():
+    """A voice note we can't transcribe must not vanish silently - the
+    customer should hear back that they need to type instead, and the
+    failure should be visible for monitoring."""
+    from channels.telegram.bot import make_voice_handler
+
+    voice = MagicMock()
+    voice.file_id = "file-1"
+    update = _fake_telegram_update(voice=voice)
+
+    file_obj = MagicMock()
+    file_obj.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake-audio"))
+    context = MagicMock()
+    context.bot.get_file = AsyncMock(return_value=file_obj)
+
+    with patch("channels.telegram.bot.stt_service") as mock_stt, \
+         patch("channels.telegram.bot.process_telegram_message") as mock_process, \
+         patch("channels.telegram.bot.diagnostics_service") as mock_diagnostics:
+        mock_stt.transcribe.side_effect = RuntimeError("openai down")
+        asyncio.run(make_voice_handler(company_id=1)(update, context))
+
+    mock_process.assert_not_called()
+    update.message.reply_text.assert_called_once()
+    mock_diagnostics.record.assert_called_once()
+    assert mock_diagnostics.record.call_args.kwargs["event_type"] == "attachment_processing_failed"
+    assert mock_diagnostics.record.call_args.kwargs["data"]["attachment_type"] == "audio"
+
+
+def test_telegram_photo_handler_notifies_customer_on_description_failure():
+    from channels.telegram.bot import make_photo_handler
+
+    photo = MagicMock()
+    photo.file_id = "file-2"
+    update = _fake_telegram_update(photo=[photo])
+
+    file_obj = MagicMock()
+    file_obj.download_as_bytearray = AsyncMock(return_value=bytearray(b"fake-image"))
+    context = MagicMock()
+    context.bot.get_file = AsyncMock(return_value=file_obj)
+
+    with patch("channels.telegram.bot.vision_service") as mock_vision, \
+         patch("channels.telegram.bot.process_telegram_message") as mock_process, \
+         patch("channels.telegram.bot.diagnostics_service") as mock_diagnostics:
+        mock_vision.describe_image.side_effect = RuntimeError("openai down")
+        asyncio.run(make_photo_handler(company_id=1)(update, context))
+
+    mock_process.assert_not_called()
+    update.message.reply_text.assert_called_once()
+    mock_diagnostics.record.assert_called_once()
+    assert mock_diagnostics.record.call_args.kwargs["data"]["attachment_type"] == "image"

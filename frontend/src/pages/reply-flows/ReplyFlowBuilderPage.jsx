@@ -303,10 +303,13 @@ export default function ReplyFlowBuilderPage() {
   }
 
   function onOutlineGenerated(updatedFlow) {
+    // The AI-generate call only persists nodes/edges server-side — any
+    // pending edits to name/channels/departments/reply_modes/status made
+    // before switching to the Outline tab are still unsaved, so this must
+    // not clear a dirty flag it didn't set.
     setNodes(updatedFlow.nodes || []);
     setEdges(updatedFlow.edges || []);
     setGraphVersion((v) => v + 1);
-    setDirty(false);
     switchView("canvas");
   }
 

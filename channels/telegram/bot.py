@@ -4,12 +4,32 @@ from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 from config.settings import config
+from backend.services.diagnostics_service import diagnostics_service
 from channels.telegram.processor import process_telegram_message
 from core.stt_service import stt_service
 from core.vision_service import vision_service
 
 
 logger = logging.getLogger(__name__)
+
+ATTACHMENT_FALLBACK_TEXT = "Sorry, I couldn't understand that — could you type your message instead?"
+
+
+async def _notify_attachment_failure(update: Update, company_id: int, attachment_type: str) -> None:
+    """A voice note/image we couldn't transcribe or describe would
+    otherwise vanish silently. Records it for monitoring and lets the
+    customer know to retry as text instead of being left hanging."""
+    diagnostics_service.record(
+        event_type="attachment_processing_failed",
+        company_id=company_id,
+        channel="telegram",
+        external_user_id=str(update.effective_user.id) if update.effective_user else None,
+        severity="warning",
+        status="failed",
+        data={"attachment_type": attachment_type},
+    )
+    if update.message:
+        await update.message.reply_text(ATTACHMENT_FALLBACK_TEXT)
 
 
 def keyboard(buttons):
@@ -71,6 +91,7 @@ def make_voice_handler(company_id: int):
             text = stt_service.transcribe(audio_bytes, filename="voice.ogg")
         except Exception:
             logger.exception("Telegram voice note transcription failed")
+            await _notify_attachment_failure(update, company_id, "audio")
             return
         process_telegram_message(
             user_id=str(update.effective_user.id),
@@ -94,6 +115,7 @@ def make_photo_handler(company_id: int):
             description = vision_service.describe_image(image_bytes, mime_type="image/jpeg")
         except Exception:
             logger.exception("Telegram image description failed")
+            await _notify_attachment_failure(update, company_id, "image")
             return
         caption = (update.message.caption or "").strip()
         text = f"[Customer sent an image — what's in it: {description}]"

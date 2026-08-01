@@ -12,6 +12,8 @@ import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, 
 import MultiSelectChips from "./MultiSelectChips";
 import "./ReplyFlowsListPage.css";
 
+// Kept in sync by hand with backend/services/reply_flow_service.py's
+// CHANNEL_OPTIONS constant.
 export const CHANNEL_OPTIONS = [
   { value: "whatsapp", label: "WhatsApp" },
   { value: "messenger", label: "Messenger" },
@@ -20,6 +22,8 @@ export const CHANNEL_OPTIONS = [
 ];
 const CHANNEL_LABELS = CHANNEL_OPTIONS.reduce((map, option) => ({ ...map, [option.value]: option.label }), {});
 
+// Kept in sync by hand with backend/services/reply_flow_service.py's
+// REPLY_MODE_OPTIONS constant.
 export const REPLY_MODE_OPTIONS = [
   { value: "ai_direct", label: "AI — Direct" },
   { value: "ai_knowledge_only", label: "AI — Knowledge Only" },

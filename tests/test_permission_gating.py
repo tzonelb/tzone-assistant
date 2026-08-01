@@ -208,6 +208,37 @@ def test_custom_role_with_settings_manage_can_update_company_settings(env):
 
 
 # ===========================================================================
+# GET /api/auth/me exposes real permission_codes per company (not just
+# role_code) - the frontend nav/UI gates on this instead of a
+# role_code == "owner" heuristic that misses custom roles entirely.
+# ===========================================================================
+
+def test_me_exposes_granted_permission_codes_for_custom_role(env):
+    role_id = _grant_permission("analytics_viewer", "Analytics Viewer", "analytics.view")
+    _assign_role(EMPLOYEE_ID, role_id)
+    client = env(EMPLOYEE_ID)
+    resp = client.get("/api/auth/me")
+    assert resp.status_code == 200, resp.text
+    company = next(c for c in resp.json()["companies"] if c["id"] == COMPANY_ID)
+    assert company["permission_codes"] == ["analytics.view"]
+
+
+def test_me_permission_codes_empty_for_zero_permission_employee(env):
+    client = env(EMPLOYEE_ID)
+    resp = client.get("/api/auth/me")
+    company = next(c for c in resp.json()["companies"] if c["id"] == COMPANY_ID)
+    assert company["permission_codes"] == []
+
+
+def test_me_permission_codes_empty_for_owner_since_owner_bypasses_by_role_code(env):
+    client = env(OWNER_ID)
+    resp = client.get("/api/auth/me")
+    company = next(c for c in resp.json()["companies"] if c["id"] == COMPANY_ID)
+    assert company["role_code"] == "owner"
+    assert company["permission_codes"] == []
+
+
+# ===========================================================================
 # channels.manage - POST /api/channels/telegram/connect (elevated-token
 # gate is bypassed via mock so we isolate the NEW permission check)
 # ===========================================================================

@@ -7,6 +7,8 @@ from config.settings import config
 
 logger = logging.getLogger(__name__)
 
+MAX_IMAGE_BYTES = 20 * 1024 * 1024  # OpenAI's vision input caps around here; also keeps the base64 payload sane
+
 DESCRIBE_PROMPT = (
     "A customer sent this image in a support chat. Describe what's in it, briefly and factually, "
     "in plain language a support agent would find useful (e.g. a product photo, a screenshot of an "
@@ -24,6 +26,8 @@ class VisionService:
     def describe_image(self, image_bytes: bytes, *, mime_type: str = "image/jpeg") -> str:
         if not image_bytes:
             raise ValueError("No image to describe.")
+        if len(image_bytes) > MAX_IMAGE_BYTES:
+            raise ValueError(f"Image too large to describe ({len(image_bytes)} bytes, max {MAX_IMAGE_BYTES}).")
         if not config.OPENAI_API_KEY:
             raise ValueError("AI is not configured on this server (missing OPENAI_API_KEY).")
 

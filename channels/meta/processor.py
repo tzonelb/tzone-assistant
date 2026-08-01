@@ -1,3 +1,5 @@
+import logging
+
 from backend.services.channel_account_service import channel_account_service
 from backend.services.company_settings_service import company_settings_service
 from backend.services.conversation_control_service import conversation_control_service
@@ -5,10 +7,36 @@ from backend.services.customer_service import customer_service
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.notification_service import notification_service
 from channels.meta.logger import log_meta_event
+from channels.meta.media import download_meta_attachment
 from channels.meta.parser import parse_meta_text_message
 from channels.meta.profile import resolve_meta_profile
+from channels.meta.sender import send_meta_text
 from channels.meta.smart_reply import schedule_smart_reply
 from core.conversation_store import save_conversation_message
+from core.stt_service import stt_service
+from core.vision_service import vision_service
+
+logger = logging.getLogger(__name__)
+
+ATTACHMENT_FALLBACK_TEXT = "Sorry, I couldn't understand that — could you type your message instead?"
+
+
+def _resolve_attachment_text(attachment_type: str, attachment_url: str) -> str | None:
+    """Downloads a customer's voice note or image and turns it into text
+    so it flows through the exact same reply pipeline as a typed message.
+    Returns None (never raises) on any failure — an unreadable attachment
+    is skipped rather than crashing the webhook."""
+    content = download_meta_attachment(attachment_url)
+    if not content:
+        return None
+    try:
+        if attachment_type == "audio":
+            return stt_service.transcribe(content, filename="voice.ogg")
+        description = vision_service.describe_image(content, mime_type="image/jpeg")
+        return f"[Customer sent an image — what's in it: {description}]"
+    except Exception:
+        logger.exception("Meta attachment transcription/description failed")
+        return None
 
 
 def process_meta_payload(payload: dict):
@@ -29,8 +57,8 @@ def process_meta_payload(payload: dict):
 
     channel = parsed["channel"]
     user_id = parsed["user_id"]
+    source_type = "text"
     text = parsed["text"]
-    official_profile = resolve_meta_profile(user_id=user_id, channel=channel)
 
     # Multi-tenant resolution: which company's connected page/IG account
     # received this? Falls back to the platform default company if no
@@ -43,6 +71,24 @@ def process_meta_payload(payload: dict):
         account_match["company_id"] if account_match
         else conversation_control_service.resolve_default_company_id()
     )
+
+    if not text and parsed.get("attachment_type"):
+        source_type = parsed["attachment_type"]
+        text = _resolve_attachment_text(parsed["attachment_type"], parsed["attachment_url"])
+        if not text:
+            log_meta_event("ignored", {"reason": "unreadable_attachment", "channel": channel, "user_id": user_id})
+            diagnostics_service.record(
+                event_type="attachment_processing_failed",
+                company_id=company_id,
+                channel=channel,
+                external_user_id=user_id,
+                severity="warning",
+                status="failed",
+                data={"attachment_type": source_type},
+            )
+            send_meta_text(user_id, ATTACHMENT_FALLBACK_TEXT, channel=channel, company_id=company_id)
+            return {"status": "unsupported", "channel": channel, "user_id": user_id}
+    official_profile = resolve_meta_profile(user_id=user_id, channel=channel)
 
     customer = customer_service.upsert_from_channel(
         company_id=company_id,
@@ -92,6 +138,7 @@ def process_meta_payload(payload: dict):
             "customer_name": effective_customer_name,
             "customer_profile_picture": effective_profile_picture,
             "customer_id": customer.get("id"),
+            "source_type": source_type,
         },
     )
 

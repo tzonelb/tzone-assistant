@@ -206,7 +206,9 @@ def test_whatsapp_webhook_handles_failed_media_download(fresh_env):
     from fastapi.testclient import TestClient
     from main import app
 
-    with patch("channels.whatsapp.webhook.download_whatsapp_media", return_value=None):
+    with patch("channels.whatsapp.webhook.download_whatsapp_media", return_value=None), \
+            patch("channels.whatsapp.webhook.send_whatsapp_text", return_value={"sent": True}) as mock_send, \
+            patch("channels.whatsapp.webhook.diagnostics_service") as mock_diagnostics:
         with TestClient(app) as client:
             resp = client.post("/webhook/whatsapp/", json={
                 "entry": [{"changes": [{"value": {
@@ -216,6 +218,12 @@ def test_whatsapp_webhook_handles_failed_media_download(fresh_env):
             })
     assert resp.status_code == 200, resp.text
     assert resp.json()["status"] == "unsupported"
+    # The customer isn't left hanging with total silence, and the
+    # failure is visible for monitoring instead of vanishing silently.
+    mock_send.assert_called_once()
+    assert mock_send.call_args.args[0] == CUSTOMER_ID
+    mock_diagnostics.record.assert_called_once()
+    assert mock_diagnostics.record.call_args.kwargs["event_type"] == "attachment_processing_failed"
 
 
 def test_whatsapp_webhook_ignores_unsupported_message_types(fresh_env):

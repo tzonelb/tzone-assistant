@@ -6,6 +6,8 @@ from config.settings import config
 
 logger = logging.getLogger(__name__)
 
+MAX_AUDIO_BYTES = 25 * 1024 * 1024  # OpenAI's Whisper endpoint hard-rejects anything larger
+
 
 class STTService:
     """Speech-to-text via OpenAI's Whisper transcription endpoint — lets
@@ -16,6 +18,8 @@ class STTService:
     def transcribe(self, audio_bytes: bytes, *, filename: str = "voice.ogg") -> str:
         if not audio_bytes:
             raise ValueError("No audio to transcribe.")
+        if len(audio_bytes) > MAX_AUDIO_BYTES:
+            raise ValueError(f"Audio file too large to transcribe ({len(audio_bytes)} bytes, max {MAX_AUDIO_BYTES}).")
         if not config.OPENAI_API_KEY:
             raise ValueError("AI is not configured on this server (missing OPENAI_API_KEY).")
 

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
 import { useNavigate } from "react-router-dom";
-import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest } from "../../api/client";
+import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest, getCurrentUserRequest } from "../../api/client";
 import SecureChannelsPanel from "./SecureChannelsPanel";
 
 const SECTIONS = [
   ["profile", "Company Profile", "Identity, contact information, branches, timezone, business details and branding.", ["Company name", "Workspace code", "Timezone", "Default language", "Logo"]],
   ["departments", "Departments", "Your own departments — set these up first, before Chatbot Control, since routing and knowledge scoping depend on them.", []],
   ["ai", "Chatbot Control", "One place for all bot behaviour — greeting, who replies first, human takeover workflow and saved replies.", []],
-  ["flow", "Reply Flow & Saved Replies", "Order of welcome, language, intent, knowledge, escalation — plus reusable replies employees can insert from any conversation.", []],
+  ["flow", "Reply Flow & Saved Replies", "Design the real step-by-step conversation flow per channel and department, plus reusable replies employees can insert from any conversation. Admins only.", [], "users.manage"],
+  ["roles", "Roles & Permissions", "Manage employee roles and exactly what each one is allowed to do. Admins only.", [], "users.manage"],
   ["channels", "Channels", "Messenger, WhatsApp, Instagram, Telegram, email and website.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
   ["api", "API & Webhooks", "Callbacks, access keys and integration health.", ["Webhook URL", "Verify token", "API access", "Delivery logs"]],
   ["security", "Security", "Tenant isolation, sessions and audit controls.", ["Encryption status", "Session policy", "Audit retention", "IP restrictions"]],
@@ -547,10 +548,28 @@ function ReplyFlowLink() {
           <br />
           <span style={{ fontWeight: 400, color: "#6b7280" }}>
             Design the real step-by-step conversation flow — greeting, AI reply mode, appointments, task
-            creation, human handoff — per channel and department, on its own drag-and-drop canvas. Admins only.
+            creation, human handoff — per channel and department, on its own drag-and-drop canvas.
           </span>
         </div>
         <button type="button" onClick={() => navigate("/reply-flows")}>Open Reply Flows</button>
+      </div>
+    </div>
+  );
+}
+
+function RolesPermissionsLink() {
+  const navigate = useNavigate();
+  return (
+    <div className="workflow-settings-card">
+      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+        <div>
+          <strong>Roles &amp; Permissions</strong>
+          <br />
+          <span style={{ fontWeight: 400, color: "#6b7280" }}>
+            Create roles, grant exactly the permissions each one needs, and assign employees to them.
+          </span>
+        </div>
+        <button type="button" onClick={() => navigate("/roles")}>Open Roles &amp; Permissions</button>
       </div>
     </div>
   );
@@ -696,7 +715,28 @@ function SecurityStatusView() {
 
 export default function CompanySettingsPage() {
   const navigate = useNavigate(); const [active, setActive] = useState("profile"); const [query, setQuery] = useState("");
-  const visible = useMemo(() => SECTIONS.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [query]);
-  const selected = SECTIONS.find(([id]) => id === active) || visible[0] || SECTIONS[0];
-  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowAndSavedReplies /> : active === "security" ? <SecurityStatusView /> : active === "departments" ? <DepartmentsManager /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentUserRequest()
+      .then((response) => {
+        if (cancelled) return;
+        if (response?.user?.is_super_admin) { setIsAdmin(true); return; }
+        const activeCompanyId = response?.user?.active_company_id;
+        const companies = Array.isArray(response?.companies) ? response.companies : [];
+        const activeCompany = companies.find((company) => company.id === activeCompanyId) || companies[0];
+        const permissionCodes = activeCompany?.permission_codes || [];
+        setIsAdmin(activeCompany?.role_code === "owner" || permissionCodes.includes("users.manage"));
+      })
+      .catch(() => {
+        // Not fatal — the destination routes already enforce this server-side either way.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const allowedSections = useMemo(() => SECTIONS.filter(([, , , , requiredPermission]) => !requiredPermission || isAdmin), [isAdmin]);
+  const visible = useMemo(() => allowedSections.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [allowedSections, query]);
+  const selected = allowedSections.find(([id]) => id === active) || visible[0] || allowedSections[0];
+  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowAndSavedReplies /> : active === "roles" ? <RolesPermissionsLink /> : active === "security" ? <SecurityStatusView /> : active === "departments" ? <DepartmentsManager /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
 }

@@ -28,8 +28,11 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
+
+import httpx
 
 from backend.services.catalogue_service import catalogue_service
 from backend.services.conversation_control_service import conversation_control_service
@@ -37,6 +40,7 @@ from backend.services.diagnostics_service import diagnostics_service
 from backend.services.notification_service import notification_service
 from backend.services.reply_flow_service import reply_flow_service
 from backend.services.task_service import task_service
+from config.settings import config
 from core.ai_router import ai_router
 from core.instruction_service import instruction_service
 from core.knowledge_manager import knowledge_manager
@@ -44,6 +48,28 @@ from core.response import Response
 from database.database import db
 
 logger = logging.getLogger(__name__)
+
+# Guards the get-session -> advance -> save-progress critical section per
+# conversation. smart_reply.py's own _LOCK only serializes the message
+# BUFFER (it's released before the slow AI call runs), so two overlapping
+# calls to maybe_handle() for the same conversation (e.g. a customer
+# message arriving while the previous AI turn is still in flight) could
+# otherwise race on reply_flow_sessions — losing an ask_question answer or
+# double-firing a create_task/appointment node, even with no loop in the
+# flow at all. A lock per (company, channel, external_user_id) key fixes
+# this without slowing down unrelated conversations.
+_SESSION_LOCKS: dict[str, threading.Lock] = {}
+_SESSION_LOCKS_GUARD = threading.Lock()
+
+
+def _session_lock(company_id: int, channel: str, external_user_id: str) -> threading.Lock:
+    key = f"{company_id}:{channel}:{external_user_id}"
+    with _SESSION_LOCKS_GUARD:
+        lock = _SESSION_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _SESSION_LOCKS[key] = lock
+        return lock
 
 AI_NODE_TYPES = {"ai_direct", "ai_knowledge_only", "ai_knowledge_plus"}
 PASSTHROUGH_TEXT_TYPES = {"greeting", "company_intro", "canned_reply"}
@@ -168,7 +194,14 @@ class ReplyFlowEngine:
         formatted = formatted.replace("{{customer_name}}", str(variables.get("customer_name") or ""))
         return formatted.strip()
 
-    def _run_ai_step(self, request: Any, node: dict[str, Any], department: str | None) -> str:
+    def _run_ai_step(self, request: Any, node: dict[str, Any], department: str | None, variables: dict[str, Any]) -> tuple[str, bool]:
+        """Returns (reply_text, should_exit). should_exit defaults to True
+        (advance after one exchange) when the node has no exit_when
+        configured — the original, backward-compatible behavior. When
+        exit_when IS configured, a real classification call decides
+        whether to advance or keep the customer on this same AI step for
+        another exchange; any failure fails OPEN (advances) so a flaky
+        classification call can never strand a conversation forever."""
         config = node["data"].get("config") or {}
         context_tags = [request.channel]
         if department:
@@ -190,9 +223,57 @@ class ReplyFlowEngine:
             knowledge=knowledge,
             instructions=instructions,
         )
-        if not ai_result:
-            return ""
-        return ai_result.get("reply") or ""
+        reply = ai_result.get("reply") if ai_result else ""
+        reply = reply or ""
+
+        exit_when = (config.get("exit_when") or "").strip()
+        should_exit = True
+        if exit_when:
+            should_exit = self._check_exit_condition(request, exit_when=exit_when, reply=reply, variables=variables)
+        return reply, should_exit
+
+    def _check_exit_condition(self, request: Any, *, exit_when: str, reply: str, variables: dict[str, Any]) -> bool:
+        if not config.OPENAI_API_KEY:
+            return True
+        try:
+            payload = {
+                "model": config.OPENAI_MODEL,
+                "input": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You judge whether a conversation step is finished. Given the exit condition below, "
+                            "the customer's latest message, the AI's reply, and any information already collected, "
+                            'reply with exactly one word: "YES" if the exit condition is satisfied and the '
+                            'conversation should move to the next step, or "NO" if it should continue this step.\n\n'
+                            f"Exit condition: {exit_when}"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"customer_message": request.message, "ai_reply": reply, "collected_info": variables},
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+            }
+            headers = {"Authorization": f"Bearer {config.OPENAI_API_KEY}", "Content-Type": "application/json"}
+            with httpx.Client(timeout=20) as client:
+                response = client.post(config.OPENAI_API_URL, headers=headers, json=payload)
+            if response.status_code >= 400:
+                return True
+            data = response.json()
+            output_text = data.get("output_text") or ""
+            if not output_text:
+                for output_item in data.get("output", []):
+                    for content in output_item.get("content", []):
+                        if content.get("type") in ("output_text", "text"):
+                            output_text = content.get("text") or ""
+            return output_text.strip().upper().startswith("Y")
+        except Exception:
+            logger.exception("Reply flow exit_when check failed; defaulting to advance")
+            return True
 
     def _handle_human_handoff(self, request: Any, node: dict[str, Any]) -> None:
         note = (node["data"].get("config") or {}).get("note") or ""
@@ -308,6 +389,11 @@ class ReplyFlowEngine:
     # -- entry point ------------------------------------------------------
 
     def maybe_handle(self, request: Any) -> Response | None:
+        lock = _session_lock(request.company_id, request.channel, request.user_id)
+        with lock:
+            return self._maybe_handle_locked(request)
+
+    def _maybe_handle_locked(self, request: Any) -> Response | None:
         try:
             state = conversation_control_service.get_state(
                 company_id=request.company_id, channel=request.channel, external_user_id=request.user_id,
@@ -358,7 +444,13 @@ class ReplyFlowEngine:
                 save_as = (current_node["data"].get("config") or {}).get("save_as")
                 if save_as:
                     variables[save_as] = request.message
-            current_node_id = self._next_node_id(flow, current_node_id)
+                current_node_id = self._next_node_id(flow, current_node_id)
+            elif node_type in AI_NODE_TYPES and variables.pop("__stay_at__", None) == current_node_id:
+                # exit_when said "not yet" last time — re-run this same AI
+                # step with the customer's new message instead of advancing.
+                pass
+            else:
+                current_node_id = self._next_node_id(flow, current_node_id)
 
         reply_parts: list[str] = []
         visited = set()
@@ -386,9 +478,11 @@ class ReplyFlowEngine:
                 return Response("\n\n".join(reply_parts)) if reply_parts else None
 
             if node_type in AI_NODE_TYPES:
-                ai_text = self._run_ai_step(request, node, department)
+                ai_text, should_exit = self._run_ai_step(request, node, department, variables)
                 if ai_text:
                     reply_parts.append(ai_text)
+                if not should_exit:
+                    variables["__stay_at__"] = current_node_id
                 self._save_progress(session_row, current_node_id=current_node_id, variables=variables)
                 return Response("\n\n".join(reply_parts)) if reply_parts else None
 

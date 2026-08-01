@@ -6,7 +6,10 @@ from fastapi.responses import PlainTextResponse
 from config.settings import config
 from channels.whatsapp.media import download_whatsapp_media
 from channels.whatsapp.processor import process_whatsapp_message
+from channels.whatsapp.sender import send_whatsapp_text
 from backend.services.channel_account_service import channel_account_service
+from backend.services.conversation_control_service import conversation_control_service
+from backend.services.diagnostics_service import diagnostics_service
 from core.stt_service import stt_service
 from core.vision_service import vision_service
 
@@ -14,10 +17,32 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook/whatsapp", tags=["WhatsApp"])
 
+ATTACHMENT_FALLBACK_TEXT = "Sorry, I couldn't understand that — could you type your message instead?"
+
 
 def _resolve_media_company_id(phone_number_id: str) -> int | None:
     account_match = channel_account_service.resolve_meta_account(recipient_id=phone_number_id, channel="whatsapp")
     return account_match["company_id"] if account_match else None
+
+
+def _notify_attachment_failure(user_id: str, msg_type: str, phone_number_id: str) -> None:
+    """A voice note/image we couldn't transcribe or describe would
+    otherwise vanish silently (customer sends it, nothing ever comes
+    back). Records it for monitoring and lets the customer know to
+    retry as text instead of being left hanging."""
+    account_match = channel_account_service.resolve_meta_account(recipient_id=phone_number_id, channel="whatsapp")
+    company_id = account_match["company_id"] if account_match else conversation_control_service.resolve_default_company_id()
+    diagnostics_service.record(
+        event_type="attachment_processing_failed",
+        company_id=company_id,
+        channel="whatsapp",
+        external_user_id=user_id,
+        severity="warning",
+        status="failed",
+        data={"attachment_type": msg_type},
+    )
+    if user_id:
+        send_whatsapp_text(user_id, ATTACHMENT_FALLBACK_TEXT, company_id=company_id)
 
 
 def _transcribe_whatsapp_voice_note(media_id: str, phone_number_id: str) -> str | None:
@@ -139,6 +164,8 @@ async def receive_message(request: Request):
             return {"status": "ignored", "reason": "unsupported_message_type"}
 
         if not user_id or not text:
+            if user_id and msg_type in ("audio", "image"):
+                _notify_attachment_failure(user_id, msg_type, incoming_phone_number_id)
             return {"status": "unsupported"}
 
         contacts = value.get("contacts", [])

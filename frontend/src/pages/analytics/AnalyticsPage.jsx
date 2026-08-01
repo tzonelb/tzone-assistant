@@ -167,8 +167,7 @@ function LifecycleFunnelChart({ items }) {
     ...items.map((item) => item.stage).filter((stage) => !LIFECYCLE_STAGE_ORDER.includes(stage)),
   ];
   const data = orderedStages
-    .map((stage) => ({ stage, name: humanize(stage), value: countByStage.get(stage) || 0 }))
-    .sort((a, b) => b.value - a.value);
+    .map((stage) => ({ stage, name: humanize(stage), value: countByStage.get(stage) || 0 }));
   const funnelColors = ["var(--tz-primary)", "var(--tz-secondary)", "var(--tz-success)", "var(--tz-warning)", "var(--tz-danger)"];
 
   return (

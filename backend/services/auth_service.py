@@ -478,6 +478,10 @@ class AuthService:
         self,
         user_id: int,
     ) -> list[dict[str, Any]]:
+        """Includes each company's real granted permission_codes (not just
+        role_code) so the frontend can gate admin-only nav/UI on the actual
+        permission a custom role was given, instead of a role_code ==
+        "owner" heuristic that misses everyone else."""
         with db.connect() as conn:
             rows = conn.execute("""
                 SELECT
@@ -493,7 +497,13 @@ class AuthService:
                     company_users.branch_id,
                     company_users.role_id,
                     roles.name AS role_name,
-                    roles.code AS role_code
+                    roles.code AS role_code,
+                    (
+                        SELECT GROUP_CONCAT(permissions.code)
+                        FROM role_permissions
+                        JOIN permissions ON permissions.id = role_permissions.permission_id
+                        WHERE role_permissions.role_id = company_users.role_id
+                    ) AS permission_codes_raw
                 FROM company_users
                 JOIN companies
                     ON companies.id = company_users.company_id
@@ -505,10 +515,13 @@ class AuthService:
                 ORDER BY companies.id ASC
             """, (user_id,)).fetchall()
 
-            return [
-                dict(row)
-                for row in rows
-            ]
+            companies = []
+            for row in rows:
+                company = dict(row)
+                raw = company.pop("permission_codes_raw", None)
+                company["permission_codes"] = raw.split(",") if raw else []
+                companies.append(company)
+            return companies
 
     def resolve_company_id(
         self,

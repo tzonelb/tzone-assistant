@@ -908,6 +908,7 @@ class Database:
             ("settings.manage", "Manage Settings"),
             ("subscriptions.view", "View Subscription"),
             ("subscriptions.manage", "Manage Subscription"),
+            ("analytics.view", "View Analytics"),
             ("modules.appointments", "Use Appointments Module"),
             ("modules.scheduler", "Use Scheduler Module"),
             ("modules.catalogue", "Use Catalogue Module"),

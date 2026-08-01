@@ -180,6 +180,17 @@ def test_update_rejects_invalid_node_type(client_and_db):
     assert resp.status_code == 400
 
 
+def test_update_rejects_node_with_missing_node_type(client_and_db):
+    """A node with no data.nodeType at all (not just an invalid one) must
+    still be rejected at save time — otherwise it silently reaches the
+    execution engine as an unrecognized node type."""
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "Flow"}).json()
+    bad_nodes = [{"id": "n1", "position": {"x": 0, "y": 0}, "data": {"label": "No type set"}}]
+    resp = client.patch(f"/api/reply-flows/{flow['id']}", json={"nodes": bad_nodes})
+    assert resp.status_code == 400
+
+
 def test_update_status_transitions(client_and_db):
     client = client_and_db
     flow = client.post("/api/reply-flows", json={"name": "Flow"}).json()

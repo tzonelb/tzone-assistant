@@ -13,6 +13,21 @@ def detect_meta_channel(payload: dict[str, Any]) -> str:
     return "messenger"
 
 
+_TRANSCRIBABLE_ATTACHMENT_TYPES = {"audio": "audio", "image": "image"}
+
+
+def _first_attachment(message: dict[str, Any]) -> dict[str, Any] | None:
+    attachments = message.get("attachments") or []
+    if not attachments:
+        return None
+    first = attachments[0]
+    attachment_type = _TRANSCRIBABLE_ATTACHMENT_TYPES.get(first.get("type"))
+    url = (first.get("payload") or {}).get("url")
+    if not attachment_type or not url:
+        return None
+    return {"attachment_type": attachment_type, "attachment_url": url}
+
+
 def parse_from_messaging(payload: dict[str, Any]) -> dict[str, Any] | None:
     entries = payload.get("entry", [])
     if not entries:
@@ -44,6 +59,17 @@ def parse_from_messaging(payload: dict[str, Any]) -> dict[str, Any] | None:
     text = message.get("text") or postback.get("title") or postback.get("payload")
 
     if not text:
+        attachment = _first_attachment(message)
+        if attachment:
+            return {
+                "ignored": False,
+                "channel": channel,
+                "user_id": sender_id,
+                "recipient_id": recipient_id,
+                "text": None,
+                "raw_event": event,
+                **attachment,
+            }
         return {
             "ignored": True,
             "reason": "non_text_message",
@@ -94,6 +120,17 @@ def parse_from_changes(payload: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     if not text:
+        attachment = _first_attachment(message)
+        if attachment:
+            return {
+                "ignored": False,
+                "channel": channel,
+                "user_id": sender_id,
+                "recipient_id": recipient_id,
+                "text": None,
+                "raw_event": change,
+                **attachment,
+            }
         return {
             "ignored": True,
             "reason": "non_text_change",

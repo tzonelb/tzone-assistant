@@ -232,8 +232,8 @@ class ReplyFlowService:
             cleaned["status"] = status
         if nodes is not None:
             for node in nodes:
-                node_type = node.get("data", {}).get("nodeType") or node.get("type")
-                if node_type and node_type not in NODE_TYPES:
+                node_type = node.get("data", {}).get("nodeType")
+                if node_type not in NODE_TYPES:
                     raise ValueError(f'"{node_type}" is not a valid node type.')
             cleaned["nodes_json"] = json.dumps(nodes)
         if edges is not None:
