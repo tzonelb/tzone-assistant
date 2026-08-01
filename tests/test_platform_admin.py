@@ -487,3 +487,137 @@ def test_company_cannot_add_users_beyond_plan_limit(client_and_db):
     )
     assert resp.status_code == 400
     assert "Tiny" in resp.json()["detail"]
+
+
+# ---- Audit log viewer -------------------------------------------------
+
+
+def test_super_admin_can_list_audit_logs(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    create_resp = client.post("/api/platform/companies", json={"name": "Audit Co", "slug": "audit-co"})
+    company_id = create_resp.json()["id"]
+    client.patch(f"/api/platform/companies/{company_id}/status", json={"status": "suspended"})
+
+    resp = client.get("/api/platform/audit-logs")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] >= 2
+    actions = [item["action"] for item in body["items"] if item["company_id"] == company_id]
+    assert "company_created" in actions
+    assert "company_status_set_suspended" in actions
+    # newest first
+    created_ats = [item["created_at"] for item in body["items"]]
+    assert created_ats == sorted(created_ats, reverse=True)
+    audited_row = next(item for item in body["items"] if item["action"] == "company_created" and item["company_id"] == company_id)
+    assert audited_row["company_name"] == "Audit Co"
+
+
+def test_audit_logs_filter_by_company_and_action(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    co1 = client.post("/api/platform/companies", json={"name": "Filter Co One", "slug": "filter-co-one"}).json()["id"]
+    co2 = client.post("/api/platform/companies", json={"name": "Filter Co Two", "slug": "filter-co-two"}).json()["id"]
+    client.patch(f"/api/platform/companies/{co1}/status", json={"status": "suspended"})
+
+    by_company = client.get(f"/api/platform/audit-logs?company_id={co1}").json()
+    assert all(item["company_id"] == co1 for item in by_company["items"])
+    assert not any(item["company_id"] == co2 for item in by_company["items"])
+
+    by_action = client.get("/api/platform/audit-logs?action=status_set").json()
+    assert by_action["items"]
+    assert all("status_set" in item["action"] for item in by_action["items"])
+
+
+def test_non_super_admin_cannot_view_audit_logs(client_and_db):
+    client = client_and_db(2, is_super_admin=False)
+    resp = client.get("/api/platform/audit-logs")
+    assert resp.status_code == 403
+
+
+# ---- Revenue / MRR summary -------------------------------------------------
+
+
+def test_super_admin_can_view_revenue_summary(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    all_plans = client.get("/api/platform/plans?active_only=false").json()["plans"]
+    starter_price = next(p["price_monthly"] for p in all_plans if p["code"] == "starter")
+    client.post("/api/platform/companies", json={"name": "Revenue Co", "slug": "revenue-co", "plan_id": 1})
+
+    resp = client.get("/api/platform/revenue")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total_mrr"] >= starter_price
+    assert body["trial_count"] >= 1
+    starter_row = next(row for row in body["by_plan"] if row["plan_code"] == "starter")
+    assert starter_row["active_subscriptions"] >= 1
+    assert starter_row["mrr"] >= starter_price
+
+
+def test_revenue_summary_only_counts_active_and_trialing(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    from database.database import db
+
+    create_resp = client.post("/api/platform/companies", json={"name": "Cancel Co", "slug": "cancel-co", "plan_id": 1})
+    company_id = create_resp.json()["id"]
+
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET status = 'cancelled' WHERE company_id = ?", (company_id,),
+        )
+        conn.commit()
+
+    resp = client.get("/api/platform/revenue")
+    body = resp.json()
+    assert not any(row["plan_code"] == "starter" for row in body["by_plan"])
+
+
+def test_non_super_admin_cannot_view_revenue(client_and_db):
+    client = client_and_db(2, is_super_admin=False)
+    resp = client.get("/api/platform/revenue")
+    assert resp.status_code == 403
+
+
+# ---- Plan-change history -------------------------------------------------
+
+
+def test_subscription_history_lists_all_plan_changes(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    from database.database import db
+
+    with db.connect() as conn:
+        cursor = conn.execute(
+            "INSERT INTO plans (name, code, price_monthly, max_users) VALUES ('History Pro', 'history-pro', 49.0, 10)"
+        )
+        pro_plan_id = cursor.lastrowid
+        conn.commit()
+
+    create_resp = client.post(
+        "/api/platform/companies",
+        json={"name": "History Co", "slug": "history-co", "plan_id": 1},
+    )
+    company_id = create_resp.json()["id"]
+    client.post(f"/api/platform/companies/{company_id}/plan", json={"plan_id": pro_plan_id, "duration_days": 30})
+
+    resp = client.get(f"/api/platform/companies/{company_id}/subscription-history")
+    assert resp.status_code == 200, resp.text
+    history = resp.json()["history"]
+    assert len(history) == 2
+    assert history[0]["plan_code"] == "history-pro"
+    assert history[0]["status"] == "active"
+    assert history[1]["plan_code"] == "starter"
+    assert history[1]["status"] == "cancelled"
+
+
+def test_subscription_history_404_for_missing_company(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    resp = client.get("/api/platform/companies/999999/subscription-history")
+    assert resp.status_code == 404
+
+
+def test_non_super_admin_cannot_view_subscription_history(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    create_resp = client.post("/api/platform/companies", json={"name": "Hist Locked Co", "slug": "hist-locked-co"})
+    company_id = create_resp.json()["id"]
+
+    regular_client = client_and_db(2, is_super_admin=False)
+    resp = regular_client.get(f"/api/platform/companies/{company_id}/subscription-history")
+    assert resp.status_code == 403

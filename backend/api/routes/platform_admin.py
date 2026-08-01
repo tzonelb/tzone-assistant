@@ -366,3 +366,42 @@ def issue_license_key(payload: IssueLicenseKeyRequest, current_user: dict[str, A
         )
     except KeyError:
         raise HTTPException(status_code=404, detail="Plan not found")
+
+
+@router.get("/audit-logs")
+def list_audit_logs(
+    company_id: int | None = None,
+    action: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """SUPER-ADMIN ONLY — reads back the audit_logs rows already written by
+    every mutating super-admin action (company create, status change,
+    module toggle, plan change)."""
+    _require_super_admin(current_user)
+    return platform_admin_service.list_audit_logs(
+        company_id=company_id, action=action, limit=limit, offset=offset,
+    )
+
+
+@router.get("/revenue")
+def platform_revenue(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """SUPER-ADMIN ONLY — real MRR and plan breakdown computed from the
+    subscriptions/plans tables, no estimation."""
+    _require_super_admin(current_user)
+    return platform_admin_service.revenue_summary()
+
+
+@router.get("/companies/{company_id}/subscription-history")
+def company_subscription_history(
+    company_id: int,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    _require_super_admin(current_user)
+    try:
+        return {"history": platform_admin_service.list_subscription_history(company_id=company_id)}
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Company not found")

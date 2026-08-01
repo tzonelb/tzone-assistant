@@ -12,6 +12,9 @@ import {
   listSubscriptionRequestsRequest,
   reviewSubscriptionRequestRequest,
   getPlatformUsageRequest,
+  getPlatformRevenueRequest,
+  listPlatformAuditLogsRequest,
+  getCompanySubscriptionHistoryRequest,
 } from "../../api/client";
 
 const FEATURE_FIELDS = [
@@ -41,6 +44,7 @@ export default function PlatformAdminPage() {
   const [companies, setCompanies] = useState([]);
   const [plans, setPlans] = useState([]);
   const [usage, setUsage] = useState(null);
+  const [revenue, setRevenue] = useState(null);
   const [subscriptionRequests, setSubscriptionRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -53,21 +57,29 @@ export default function PlatformAdminPage() {
   });
   const [planTarget, setPlanTarget] = useState(null);
   const [modulesTarget, setModulesTarget] = useState(null);
+  const [historyTarget, setHistoryTarget] = useState(null); // { companyId, companyName, items, loading }
 
   const [planModal, setPlanModal] = useState(null); // { mode: "create" | "edit", form, planId }
+
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditFilters, setAuditFilters] = useState({ companyId: "", action: "" });
+  const [auditLoading, setAuditLoading] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const [companiesResult, plansResult, usageResult, requestsResult] = await Promise.all([
+      const [companiesResult, plansResult, usageResult, requestsResult, revenueResult] = await Promise.all([
         listPlatformCompaniesRequest(),
         listPlatformPlansRequest(false),
         getPlatformUsageRequest(),
         listSubscriptionRequestsRequest(),
+        getPlatformRevenueRequest(),
       ]);
       setCompanies(companiesResult.companies || []);
       setPlans(plansResult.plans || []);
       setUsage(usageResult);
+      setRevenue(revenueResult);
       setSubscriptionRequests(requestsResult.requests || []);
       setError("");
     } catch (e) {
@@ -78,6 +90,40 @@ export default function PlatformAdminPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  async function loadAuditLogs() {
+    setAuditLoading(true);
+    try {
+      const result = await listPlatformAuditLogsRequest({
+        companyId: auditFilters.companyId || undefined,
+        action: auditFilters.action || undefined,
+        limit: 100,
+      });
+      setAuditLogs(result.items || []);
+      setAuditTotal(result.total || 0);
+      setError("");
+    } catch (e) {
+      setError(e.message || "Unable to load audit logs.");
+    } finally {
+      setAuditLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "audit") loadAuditLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  async function openHistory(company) {
+    setHistoryTarget({ companyId: company.id, companyName: company.name, items: [], loading: true });
+    try {
+      const result = await getCompanySubscriptionHistoryRequest(company.id);
+      setHistoryTarget({ companyId: company.id, companyName: company.name, items: result.history || [], loading: false });
+    } catch (e) {
+      setError(e.message || "Unable to load subscription history.");
+      setHistoryTarget(null);
+    }
+  }
 
   async function createCompany(e) {
     e.preventDefault();
@@ -208,7 +254,7 @@ export default function PlatformAdminPage() {
       </header>
 
       <nav style={styles.tabBar}>
-        {[["companies", "Companies"], ["plans", "Plans & Features"], ["requests", "Subscription Requests"], ["usage", "Usage"]].map(([key, label]) => (
+        {[["companies", "Companies"], ["plans", "Plans & Features"], ["requests", "Subscription Requests"], ["usage", "Usage"], ["audit", "Audit Log"]].map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -309,6 +355,11 @@ export default function PlatformAdminPage() {
                             })}
                           >
                             Modules
+                          </button>
+                        </div>
+                        <div>
+                          <button type="button" style={styles.linkButton} onClick={() => openHistory(company)}>
+                            History
                           </button>
                         </div>
                       </td>
@@ -418,7 +469,41 @@ export default function PlatformAdminPage() {
 
         {!loading && tab === "usage" ? (
           <section>
-            <h2 style={styles.sectionTitle}>Platform usage (this month)</h2>
+            <h2 style={styles.sectionTitle}>Revenue</h2>
+            <p style={styles.sectionSubtitle}>Computed from active/trialing subscription rows — real numbers only.</p>
+            <div style={styles.usageGrid}>
+              <div style={styles.usageCard}>
+                <div style={styles.muted}>Total MRR</div>
+                <strong style={styles.usageNumber}>${(revenue?.total_mrr ?? 0).toFixed(2)}</strong>
+                <div style={styles.muted}>{revenue?.paid_count ?? 0} paid · {revenue?.trial_count ?? 0} trialing</div>
+              </div>
+            </div>
+
+            <div style={{ ...styles.tableWrap, marginTop: 16 }}>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.tableHeadRow}>
+                    <th style={styles.th}>Plan</th>
+                    <th style={styles.th}>Active subscriptions</th>
+                    <th style={styles.th}>MRR contribution</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(revenue?.by_plan || []).map((row) => (
+                    <tr key={row.plan_id} style={styles.tableRow}>
+                      <td style={styles.td}>{row.plan_name}</td>
+                      <td style={styles.td}>{row.active_subscriptions}</td>
+                      <td style={styles.td}>${row.mrr?.toFixed?.(2) ?? row.mrr}</td>
+                    </tr>
+                  ))}
+                  {!revenue?.by_plan?.length ? (
+                    <tr><td style={styles.td} colSpan={3}>No active or trialing subscriptions yet.</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+
+            <h2 style={{ ...styles.sectionTitle, marginTop: 28 }}>Platform usage (this month)</h2>
             <div style={styles.usageGrid}>
               {(usage?.usage_this_month || []).map((row) => (
                 <div key={row.usage_type} style={styles.usageCard}>
@@ -428,6 +513,80 @@ export default function PlatformAdminPage() {
                 </div>
               ))}
               {!usage?.usage_this_month?.length ? <div style={styles.muted}>No usage recorded yet this month.</div> : null}
+            </div>
+          </section>
+        ) : null}
+
+        {!loading && tab === "audit" ? (
+          <section>
+            <div style={styles.sectionHeader}>
+              <div>
+                <h2 style={styles.sectionTitle}>Audit Log</h2>
+                <p style={styles.sectionSubtitle}>{auditTotal} total events · every super-admin mutation, newest first.</p>
+              </div>
+            </div>
+
+            <form
+              style={{ display: "flex", gap: 12, alignItems: "flex-end", marginBottom: 16, flexWrap: "wrap" }}
+              onSubmit={(e) => { e.preventDefault(); loadAuditLogs(); }}
+            >
+              <label style={styles.label}>
+                Company
+                <select
+                  style={styles.input}
+                  value={auditFilters.companyId}
+                  onChange={(e) => setAuditFilters({ ...auditFilters, companyId: e.target.value })}
+                >
+                  <option value="">All companies</option>
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={styles.label}>
+                Action contains
+                <input
+                  style={styles.input}
+                  value={auditFilters.action}
+                  onChange={(e) => setAuditFilters({ ...auditFilters, action: e.target.value })}
+                  placeholder="e.g. company_status"
+                />
+              </label>
+              <button type="submit" style={styles.primaryButton} disabled={auditLoading}>
+                {auditLoading ? "Filtering…" : "Filter"}
+              </button>
+            </form>
+
+            <div style={styles.tableWrap}>
+              <table style={styles.table}>
+                <thead>
+                  <tr style={styles.tableHeadRow}>
+                    <th style={styles.th}>Time</th>
+                    <th style={styles.th}>Company</th>
+                    <th style={styles.th}>Actor</th>
+                    <th style={styles.th}>Action</th>
+                    <th style={styles.th}>Entity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log) => (
+                    <tr key={log.id} style={styles.tableRow}>
+                      <td style={styles.td}>{log.created_at ? String(log.created_at).replace("T", " ").slice(0, 19) : "—"}</td>
+                      <td style={styles.td}>{log.company_name || "—"}</td>
+                      <td style={styles.td}>
+                        {log.user_email || log.user_full_name
+                          ? `${log.user_full_name || ""}${log.user_email ? ` (${log.user_email})` : ""}`.trim()
+                          : "System"}
+                      </td>
+                      <td style={styles.td}>{log.action}</td>
+                      <td style={styles.td}>{log.entity_type ? `${log.entity_type}${log.entity_id ? ` #${log.entity_id}` : ""}` : "—"}</td>
+                    </tr>
+                  ))}
+                  {!auditLogs.length ? (
+                    <tr><td style={styles.td} colSpan={5}>{auditLoading ? "Loading…" : "No audit log events match these filters."}</td></tr>
+                  ) : null}
+                </tbody>
+              </table>
             </div>
           </section>
         ) : null}
@@ -588,6 +747,52 @@ export default function PlatformAdminPage() {
               {saving ? "Saving…" : planModal.mode === "create" ? "Create plan" : "Save changes"}
             </button>
           </form>
+        </div>
+      ) : null}
+
+      {historyTarget ? (
+        <div style={styles.modalBackdrop} onMouseDown={() => setHistoryTarget(null)}>
+          <div style={{ ...styles.modal, width: 560 }} onMouseDown={(e) => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h2 style={styles.sectionTitle}>Subscription history — {historyTarget.companyName}</h2>
+              <button type="button" style={styles.closeButton} onClick={() => setHistoryTarget(null)}>×</button>
+            </div>
+            {historyTarget.loading ? (
+              <div style={styles.loading}>Loading…</div>
+            ) : (
+              <div style={styles.tableWrap}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr style={styles.tableHeadRow}>
+                      <th style={styles.th}>Plan</th>
+                      <th style={styles.th}>Status</th>
+                      <th style={styles.th}>Starts</th>
+                      <th style={styles.th}>Expires</th>
+                      <th style={styles.th}>Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyTarget.items.map((row) => (
+                      <tr key={row.id} style={styles.tableRow}>
+                        <td style={styles.td}>{row.plan_name}{row.price_monthly != null ? ` ($${row.price_monthly}/mo)` : ""}</td>
+                        <td style={styles.td}>
+                          <span style={{ ...styles.statusPill, ...(row.status === "active" || row.status === "trialing" ? styles.statusActive : styles.statusInactive) }}>
+                            {row.status}
+                          </span>
+                        </td>
+                        <td style={styles.td}>{row.starts_at ? String(row.starts_at).slice(0, 10) : "—"}</td>
+                        <td style={styles.td}>{row.expires_at ? String(row.expires_at).slice(0, 10) : "—"}</td>
+                        <td style={styles.td}>{row.created_at ? String(row.created_at).slice(0, 10) : "—"}</td>
+                      </tr>
+                    ))}
+                    {!historyTarget.items.length ? (
+                      <tr><td style={styles.td} colSpan={5}>No subscription history for this company.</td></tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       ) : null}
     </div>

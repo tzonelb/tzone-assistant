@@ -47,6 +47,26 @@
   font-size: 11px;
 }
 
+.analytics-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tz-space-4);
+}
+
+.analytics-chart-card h3 {
+  margin: 0 0 var(--tz-space-4);
+  color: var(--tz-text-primary);
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.analytics-chart-note {
+  margin: var(--tz-space-3) 0 0;
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .analytics-breakdown-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -109,6 +129,10 @@
 
 @media (max-width: 900px) {
   .analytics-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-charts-grid {
     grid-template-columns: 1fr;
   }
 

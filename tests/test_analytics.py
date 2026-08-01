@@ -77,13 +77,23 @@ def _make_contact(company_id=COMPANY_ID, *, channel="telegram", external_user_id
     )
 
 
-def _make_conversation(*, company_id=COMPANY_ID, channel="telegram", external_user_id="u1", customer_id=None, ai_enabled=1):
+def _make_conversation(
+    *,
+    company_id=COMPANY_ID,
+    channel="telegram",
+    external_user_id="u1",
+    customer_id=None,
+    ai_enabled=1,
+    needs_human=0,
+    created_at=None,
+):
     from database.database import db
     with db.connect() as conn:
         conn.execute(
-            "INSERT INTO conversations (company_id, channel, external_user_id, customer_id, status, ai_enabled, created_at) "
-            "VALUES (?, ?, ?, ?, 'open', ?, datetime('now'))",
-            (company_id, channel, external_user_id, customer_id, ai_enabled),
+            "INSERT INTO conversations "
+            "(company_id, channel, external_user_id, customer_id, status, ai_enabled, needs_human, created_at) "
+            "VALUES (?, ?, ?, ?, 'open', ?, ?, COALESCE(?, datetime('now')))",
+            (company_id, channel, external_user_id, customer_id, ai_enabled, needs_human, created_at),
         )
         conn.commit()
 
@@ -101,7 +111,11 @@ def test_summary_returns_200_with_expected_top_level_keys(client_and_db):
         "ai_vs_human",
         "contacts_by_lifecycle_stage",
         "top_tags",
+        "conversation_volume_trend",
+        "ai_vs_human_trend",
     }
+    assert set(body["conversation_volume_trend"].keys()) >= {"days", "series"}
+    assert set(body["ai_vs_human_trend"].keys()) >= {"days", "series", "note"}
 
 
 def test_summary_is_empty_shaped_with_no_data(client_and_db):
@@ -116,6 +130,9 @@ def test_summary_is_empty_shaped_with_no_data(client_and_db):
     assert body["ai_vs_human"] == {"ai_enabled": 0, "human": 0}
     assert body["contacts_by_lifecycle_stage"] == []
     assert body["top_tags"] == []
+    assert body["conversation_volume_trend"] == {"days": 30, "series": []}
+    assert body["ai_vs_human_trend"]["days"] == 30
+    assert body["ai_vs_human_trend"]["series"] == []
 
 
 def test_counts_are_correct_after_creating_known_contacts_and_conversations(client_and_db):
@@ -201,3 +218,81 @@ def test_company_isolation_data_does_not_leak(client_and_db):
     assert channel_counts == {"telegram": 1}
     top_tags = {item["tag"] for item in body["top_tags"]}
     assert top_tags == {"own-co-tag"}
+
+
+def _days_ago_iso(days):
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+
+def test_conversation_volume_trend_buckets_by_real_creation_day(client_and_db):
+    client = client_and_db
+    a = _make_contact(external_user_id="a", display_name="A")
+
+    today = _days_ago_iso(0)
+    yesterday = _days_ago_iso(1)
+    _make_conversation(external_user_id="a1", customer_id=a["id"], created_at=today)
+    _make_conversation(external_user_id="a2", customer_id=a["id"], created_at=today)
+    _make_conversation(external_user_id="a3", customer_id=a["id"], created_at=yesterday)
+
+    resp = client.get("/api/analytics")
+    assert resp.status_code == 200, resp.text
+    trend = resp.json()["conversation_volume_trend"]
+    assert trend["days"] == 30
+
+    counts_by_day = {point["date"]: point["count"] for point in trend["series"]}
+    assert counts_by_day[today[:10]] == 2
+    assert counts_by_day[yesterday[:10]] == 1
+    # No interpolated/fabricated days — only real buckets are present.
+    assert sum(counts_by_day.values()) == 3
+
+
+def test_conversation_volume_trend_excludes_conversations_older_than_window(client_and_db):
+    client = client_and_db
+    a = _make_contact(external_user_id="a", display_name="A")
+
+    _make_conversation(external_user_id="recent", customer_id=a["id"], created_at=_days_ago_iso(1))
+    _make_conversation(external_user_id="old", customer_id=a["id"], created_at=_days_ago_iso(90))
+
+    resp = client.get("/api/analytics?days=30")
+    assert resp.status_code == 200, resp.text
+    trend = resp.json()["conversation_volume_trend"]
+    assert sum(point["count"] for point in trend["series"]) == 1
+
+
+def test_ai_vs_human_trend_splits_by_creation_time_snapshot_fields(client_and_db):
+    client = client_and_db
+    a = _make_contact(external_user_id="a", display_name="A")
+
+    today = _days_ago_iso(0)
+    _make_conversation(external_user_id="a1", customer_id=a["id"], ai_enabled=1, needs_human=0, created_at=today)
+    _make_conversation(external_user_id="a2", customer_id=a["id"], ai_enabled=0, needs_human=1, created_at=today)
+    _make_conversation(external_user_id="a3", customer_id=a["id"], ai_enabled=1, needs_human=1, created_at=today)
+
+    resp = client.get("/api/analytics")
+    assert resp.status_code == 200, resp.text
+    trend = resp.json()["ai_vs_human_trend"]
+    assert trend["note"]  # non-empty honesty disclaimer about snapshot vs resolution
+
+    day = next(point for point in trend["series"] if point["date"] == today[:10])
+    assert day["ai_enabled_count"] == 2
+    assert day["human_count"] == 1
+    assert day["needs_human_count"] == 2
+
+
+def test_trend_endpoints_respect_company_isolation(client_and_db):
+    client = client_and_db
+    with __import__("database.database", fromlist=["db"]).db.connect() as conn:
+        conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (2, 'Other Co', 'other-co', 1)")
+        conn.commit()
+
+    a = _make_contact(company_id=COMPANY_ID, external_user_id="a", display_name="A")
+    _make_conversation(company_id=COMPANY_ID, external_user_id="a", customer_id=a["id"], created_at=_days_ago_iso(0))
+
+    other = _make_contact(company_id=2, external_user_id="other-a", display_name="Other A")
+    _make_conversation(company_id=2, external_user_id="other-a", customer_id=other["id"], created_at=_days_ago_iso(0))
+
+    resp = client.get("/api/analytics")
+    assert resp.status_code == 200, resp.text
+    trend = resp.json()["conversation_volume_trend"]
+    assert sum(point["count"] for point in trend["series"]) == 1

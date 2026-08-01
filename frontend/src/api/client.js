@@ -555,8 +555,8 @@ export async function importWhatsAppCatalogueRequest(catalogId) {
   return apiRequest("/api/catalogue/import/whatsapp", { method: "POST", body: { catalog_id: catalogId } });
 }
 
-export async function getAnalyticsSummaryRequest() {
-  return apiRequest("/api/analytics");
+export async function getAnalyticsSummaryRequest(days) {
+  return apiRequest(`/api/analytics${createQueryString({ days })}`);
 }
 
 export async function listKnowledgeEntriesRequest() {
@@ -726,6 +726,19 @@ export async function changePlatformCompanyPlanRequest(companyId, planId, durati
 
 export async function getPlatformUsageRequest() {
   return apiRequest("/api/platform/usage");
+}
+
+export async function getPlatformRevenueRequest() {
+  return apiRequest("/api/platform/revenue");
+}
+
+export async function listPlatformAuditLogsRequest({ companyId, action, limit = 100, offset = 0 } = {}) {
+  const query = createQueryString({ company_id: companyId, action, limit, offset });
+  return apiRequest(`/api/platform/audit-logs${query}`);
+}
+
+export async function getCompanySubscriptionHistoryRequest(companyId) {
+  return apiRequest(`/api/platform/companies/${companyId}/subscription-history`);
 }
 
 export async function createAccessRoleRequest(payload) {

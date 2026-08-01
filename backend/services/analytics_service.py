@@ -113,5 +113,77 @@ class AnalyticsService:
             ],
         }
 
+    def get_conversation_volume_trend(self, company_id: int, days: int = 30) -> dict[str, Any]:
+        """Real daily conversation counts for the last `days` days, bucketed
+        by the calendar date (UTC) of conversations.created_at. Days with
+        zero conversations are simply absent from `series` — nothing here
+        is interpolated or estimated."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        with db.connect() as conn:
+            rows = conn.execute(
+                "SELECT created_at FROM conversations WHERE company_id = ?",
+                (company_id,),
+            ).fetchall()
+
+        daily_counts: Counter[str] = Counter()
+        for row in rows:
+            created = _parse_datetime(row["created_at"])
+            if created is None or created < cutoff:
+                continue
+            daily_counts[created.date().isoformat()] += 1
+
+        return {
+            "days": days,
+            "series": [
+                {"date": day, "count": count}
+                for day, count in sorted(daily_counts.items())
+            ],
+        }
+
+    def get_ai_vs_human_trend(self, company_id: int, days: int = 30) -> dict[str, Any]:
+        """Daily breakdown of conversations.ai_enabled / needs_human for the
+        last `days` days, bucketed by the calendar date (UTC) of
+        conversations.created_at.
+
+        IMPORTANT: ai_enabled and needs_human are snapshot fields captured
+        at conversation-creation time (see conversation_control_service.py)
+        — they describe how the conversation *started*, not how it was
+        ultimately resolved. This is NOT an AI-resolution-rate metric."""
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        with db.connect() as conn:
+            rows = conn.execute(
+                "SELECT created_at, ai_enabled, needs_human FROM conversations WHERE company_id = ?",
+                (company_id,),
+            ).fetchall()
+
+        daily: dict[str, dict[str, int]] = {}
+        for row in rows:
+            created = _parse_datetime(row["created_at"])
+            if created is None or created < cutoff:
+                continue
+            day = created.date().isoformat()
+            bucket = daily.setdefault(day, {"ai_enabled_count": 0, "human_count": 0, "needs_human_count": 0})
+            if int(row["ai_enabled"] or 0) == 1:
+                bucket["ai_enabled_count"] += 1
+            else:
+                bucket["human_count"] += 1
+            if int(row["needs_human"] or 0) == 1:
+                bucket["needs_human_count"] += 1
+
+        return {
+            "days": days,
+            "note": (
+                "ai_enabled/needs_human reflect each conversation's state at "
+                "creation time, not a resolved outcome — this is not an "
+                "AI-resolution-rate metric."
+            ),
+            "series": [
+                {"date": day, **counts}
+                for day, counts in sorted(daily.items())
+            ],
+        }
+
 
 analytics_service = AnalyticsService()

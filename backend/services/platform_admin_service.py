@@ -547,5 +547,105 @@ class PlatformAdminService:
 
         return self.get_subscription_request(request_id=request_id)
 
+    # ---- Audit log -------------------------------------------------
+
+    def list_audit_logs(
+        self,
+        *,
+        company_id: int | None = None,
+        action: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        where = []
+        params: list[Any] = []
+        if company_id is not None:
+            where.append("al.company_id = ?")
+            params.append(company_id)
+        if action:
+            where.append("al.action LIKE ?")
+            params.append(f"%{action}%")
+        where_sql = f" WHERE {' AND '.join(where)}" if where else ""
+
+        query = f"""
+            SELECT
+                al.id, al.workspace_id, al.company_id, al.user_id,
+                al.action, al.entity_type, al.entity_id,
+                al.old_values_json, al.new_values_json, al.ip_address, al.created_at,
+                c.name AS company_name,
+                u.email AS user_email, u.full_name AS user_full_name
+            FROM audit_logs al
+            LEFT JOIN companies c ON c.id = al.company_id
+            LEFT JOIN users u ON u.id = al.user_id
+            {where_sql}
+            ORDER BY al.created_at DESC, al.id DESC
+            LIMIT ? OFFSET ?
+        """
+        count_query = f"SELECT COUNT(*) AS total FROM audit_logs al{where_sql}"
+
+        with db.connect() as conn:
+            total = conn.execute(count_query, params).fetchone()["total"]
+            rows = conn.execute(query, params + [limit, offset]).fetchall()
+
+        return {"items": [dict(row) for row in rows], "total": total}
+
+    # ---- Revenue / MRR -------------------------------------------------
+
+    def revenue_summary(self) -> dict[str, Any]:
+        """MRR and plan breakdown computed only from real subscriptions rows
+        currently in 'active' or 'trialing' status — no estimation."""
+        with db.connect() as conn:
+            by_plan_rows = conn.execute(
+                """
+                SELECT p.id AS plan_id, p.name AS plan_name, p.code AS plan_code,
+                       p.price_monthly,
+                       COUNT(*) AS active_subscriptions,
+                       SUM(p.price_monthly) AS mrr
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.status IN ('active', 'trialing')
+                GROUP BY p.id, p.name, p.code, p.price_monthly
+                ORDER BY mrr DESC
+                """
+            ).fetchall()
+            status_rows = conn.execute(
+                """
+                SELECT status, COUNT(*) AS total
+                FROM subscriptions
+                WHERE status IN ('active', 'trialing')
+                GROUP BY status
+                """
+            ).fetchall()
+
+        by_plan = [dict(row) for row in by_plan_rows]
+        total_mrr = sum(row["mrr"] or 0 for row in by_plan)
+        status_counts = {row["status"]: row["total"] for row in status_rows}
+
+        return {
+            "total_mrr": total_mrr,
+            "by_plan": by_plan,
+            "trial_count": status_counts.get("trialing", 0),
+            "paid_count": status_counts.get("active", 0),
+        }
+
+    # ---- Plan-change history -------------------------------------------------
+
+    def list_subscription_history(self, *, company_id: int) -> list[dict[str, Any]]:
+        with db.connect() as conn:
+            existing = conn.execute("SELECT id FROM companies WHERE id = ?", (company_id,)).fetchone()
+            if not existing:
+                raise KeyError("Company not found")
+            rows = conn.execute(
+                """
+                SELECT s.*, p.name AS plan_name, p.code AS plan_code
+                FROM subscriptions s
+                JOIN plans p ON p.id = s.plan_id
+                WHERE s.company_id = ?
+                ORDER BY s.created_at DESC, s.id DESC
+                """,
+                (company_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
 
 platform_admin_service = PlatformAdminService()
