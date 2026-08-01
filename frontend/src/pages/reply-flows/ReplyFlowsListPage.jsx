@@ -6,11 +6,19 @@ import {
   createReplyFlowRequest,
   deleteReplyFlowRequest,
   duplicateReplyFlowRequest,
+  listDepartmentsRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import MultiSelectChips from "./MultiSelectChips";
 import "./ReplyFlowsListPage.css";
 
-const CHANNEL_LABELS = { all: "All channels", whatsapp: "WhatsApp", messenger: "Messenger", instagram: "Instagram", telegram: "Telegram" };
+export const CHANNEL_OPTIONS = [
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "messenger", label: "Messenger" },
+  { value: "instagram", label: "Instagram" },
+  { value: "telegram", label: "Telegram" },
+];
+const CHANNEL_LABELS = CHANNEL_OPTIONS.reduce((map, option) => ({ ...map, [option.value]: option.label }), {});
 const STATUS_TONE = { draft: "neutral", active: "success", archived: "danger" };
 
 function formatDateTime(value) {
@@ -20,18 +28,25 @@ function formatDateTime(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString();
 }
 
-function NewFlowDialog({ open, saving, error, onCancel, onCreate }) {
+function summarizeList(values, labelMap, allLabel) {
+  if (!values || values.length === 0) return allLabel;
+  return values.map((value) => labelMap?.[value] || value).join(", ");
+}
+
+function NewFlowDialog({ open, departments, saving, error, onCancel, onCreate }) {
   const [name, setName] = useState("");
-  const [channel, setChannel] = useState("all");
-  const [department, setDepartment] = useState("");
+  const [channels, setChannels] = useState([]);
+  const [selectedDepartments, setSelectedDepartments] = useState([]);
 
   if (!open) return null;
 
   function submit(event) {
     event.preventDefault();
     if (!name.trim()) return;
-    onCreate({ name: name.trim(), channel, department: department.trim() });
+    onCreate({ name: name.trim(), channels, departments: selectedDepartments });
   }
+
+  const departmentOptions = departments.filter((name) => name !== "Unassigned").map((name) => ({ value: name, label: name }));
 
   return (
     <div className="tz-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel(); }}>
@@ -43,14 +58,18 @@ function NewFlowDialog({ open, saving, error, onCancel, onCreate }) {
             <input value={name} disabled={saving} onChange={(event) => setName(event.target.value)} placeholder="e.g. WhatsApp Sales" required autoFocus />
           </label>
           <label className="ai-teaching-field">
-            Channel
-            <select className="tz-select" value={channel} disabled={saving} onChange={(event) => setChannel(event.target.value)}>
-              {Object.entries(CHANNEL_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-            </select>
+            Channels <span className="reply-flow-field-hint">(leave empty for all channels)</span>
+            <MultiSelectChips options={CHANNEL_OPTIONS} value={channels} onChange={setChannels} disabled={saving} />
           </label>
           <label className="ai-teaching-field">
-            Department (optional)
-            <input value={department} disabled={saving} onChange={(event) => setDepartment(event.target.value)} placeholder="e.g. Sales" />
+            Departments <span className="reply-flow-field-hint">(leave empty for all departments)</span>
+            <MultiSelectChips
+              options={departmentOptions}
+              value={selectedDepartments}
+              onChange={setSelectedDepartments}
+              disabled={saving}
+              emptyHint="No departments set up yet — add some in Company Settings → Departments first."
+            />
           </label>
           {error ? <p className="customer-segment-error">{error}</p> : null}
         </div>
@@ -66,6 +85,7 @@ function NewFlowDialog({ open, saving, error, onCancel, onCreate }) {
 export default function ReplyFlowsListPage() {
   const navigate = useNavigate();
   const [flows, setFlows] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -88,7 +108,10 @@ export default function ReplyFlowsListPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    listDepartmentsRequest().then((result) => setDepartments(result?.departments || [])).catch(() => {});
+  }, []);
 
   async function createFlow(values) {
     setSaving(true);
@@ -137,8 +160,8 @@ export default function ReplyFlowsListPage() {
         </button>
       ),
     },
-    { key: "channel", label: "Channel", render: (value) => CHANNEL_LABELS[value] || value },
-    { key: "department", label: "Department", render: (value) => value || "All departments" },
+    { key: "channels", label: "Channels", render: (value) => summarizeList(value, CHANNEL_LABELS, "All channels") },
+    { key: "departments", label: "Departments", render: (value) => summarizeList(value, null, "All departments") },
     { key: "status", label: "Status", render: (value) => <StatusBadge status={value} tone={STATUS_TONE[value]} label={value} /> },
     { key: "updated_at", label: "Updated", render: (value) => formatDateTime(value) },
     {
@@ -177,7 +200,7 @@ export default function ReplyFlowsListPage() {
         <AppTable columns={columns} rows={flows} emptyTitle="No reply flows" emptyDescription="Create your first flow." />
       )}
 
-      <NewFlowDialog open={dialogOpen} saving={saving} error={saveError} onCancel={() => setDialogOpen(false)} onCreate={createFlow} />
+      <NewFlowDialog open={dialogOpen} departments={departments} saving={saving} error={saveError} onCancel={() => setDialogOpen(false)} onCreate={createFlow} />
       <ConfirmDialog
         open={Boolean(toDelete)}
         title="Delete reply flow"

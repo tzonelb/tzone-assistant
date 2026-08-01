@@ -3,11 +3,12 @@ builder. Replaces the old decorative `reply_flow.steps` reorder-list (which
 the engine never actually read) with a real node-graph a company designs
 visually (drag-and-drop) and the engine can execute.
 
-Each flow is scoped to a channel + optional department, so a company can
-have a distinct flow per channel/department combination (e.g. WhatsApp
-Sales vs Telegram Support), matching the plug-and-play "every company
-designs it their own way" requirement — nothing here is hardcoded to any
-one company's business.
+Each flow can be scoped to MULTIPLE channels and MULTIPLE departments at
+once (multi-select, not a single dropdown) — e.g. one flow for
+WhatsApp+Telegram Sales. Departments are never free-typed: they must be
+real department names already registered via department_service (Company
+Settings > Departments), so a flow can never reference a department that
+doesn't exist. Nothing here is hardcoded to any one company's business.
 
 v1 scope: full CRUD + graph storage (nodes/edges as JSON) + a company-scoped
 list. Execution wiring into core/engine.py is a deliberately separate next
@@ -19,6 +20,7 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.services.department_service import department_service
 from database.database import db
 
 
@@ -32,6 +34,8 @@ NODE_TYPES = [
     "product_suggest", "condition", "timeout_followup", "close_chat", "end",
 ]
 
+CHANNEL_OPTIONS = ["whatsapp", "messenger", "instagram", "telegram"]
+
 
 class ReplyFlowService:
     def ensure_schema(self) -> None:
@@ -42,8 +46,8 @@ class ReplyFlowService:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     company_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
-                    channel TEXT NOT NULL DEFAULT 'all',
-                    department TEXT NOT NULL DEFAULT '',
+                    channels_json TEXT NOT NULL DEFAULT '[]',
+                    departments_json TEXT NOT NULL DEFAULT '[]',
                     status TEXT NOT NULL DEFAULT 'draft',
                     nodes_json TEXT NOT NULL DEFAULT '[]',
                     edges_json TEXT NOT NULL DEFAULT '[]',
@@ -55,26 +59,59 @@ class ReplyFlowService:
                 )
                 """
             )
+            existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(reply_flows)")}
+            if "channels_json" not in existing_columns:
+                conn.execute("ALTER TABLE reply_flows ADD COLUMN channels_json TEXT NOT NULL DEFAULT '[]'")
+            if "departments_json" not in existing_columns:
+                conn.execute("ALTER TABLE reply_flows ADD COLUMN departments_json TEXT NOT NULL DEFAULT '[]'")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_reply_flows_company ON reply_flows(company_id)"
             )
             conn.commit()
 
+    def _clean_channels(self, channels: list[str] | None) -> list[str]:
+        if not channels:
+            return []
+        cleaned = []
+        for channel in channels:
+            channel = (channel or "").strip().lower()
+            if channel and channel not in CHANNEL_OPTIONS:
+                raise ValueError(f'"{channel}" is not a valid channel. Choose from: {", ".join(CHANNEL_OPTIONS)}.')
+            if channel and channel not in cleaned:
+                cleaned.append(channel)
+        return cleaned
+
+    def _clean_departments(self, *, company_id: int, departments: list[str] | None) -> list[str]:
+        if not departments:
+            return []
+        real_departments = set(department_service.list_for_company(company_id=company_id))
+        cleaned = []
+        for department in departments:
+            department = (department or "").strip()
+            if not department:
+                continue
+            if department not in real_departments:
+                raise ValueError(
+                    f'"{department}" is not a registered department. '
+                    f"Add it first in Company Settings → Departments."
+                )
+            if department not in cleaned:
+                cleaned.append(department)
+        return cleaned
+
     def list_for_company(self, *, company_id: int) -> list[dict[str, Any]]:
         with db.connect() as conn:
             rows = conn.execute(
-                "SELECT id, company_id, name, channel, department, status, is_default, "
-                "created_at, updated_at FROM reply_flows WHERE company_id = ? ORDER BY updated_at DESC",
+                "SELECT id, company_id, name, channels_json, departments_json, status, is_default, "
+                "nodes_json, created_at, updated_at FROM reply_flows WHERE company_id = ? ORDER BY updated_at DESC",
                 (company_id,),
             ).fetchall()
         items = []
         for row in rows:
             item = dict(row)
-            with db.connect() as conn:
-                counts = conn.execute(
-                    "SELECT nodes_json FROM reply_flows WHERE id = ?", (item["id"],),
-                ).fetchone()
-            item["node_count"] = len(json.loads(counts["nodes_json"] or "[]")) if counts else 0
+            item["channels"] = json.loads(item.pop("channels_json") or "[]")
+            item["departments"] = json.loads(item.pop("departments_json") or "[]")
+            item["node_count"] = len(json.loads(item.pop("nodes_json") or "[]"))
             items.append(item)
         return items
 
@@ -92,25 +129,29 @@ class ReplyFlowService:
         item = dict(row)
         item["nodes"] = json.loads(item.pop("nodes_json") or "[]")
         item["edges"] = json.loads(item.pop("edges_json") or "[]")
+        item["channels"] = json.loads(item.pop("channels_json") or "[]")
+        item["departments"] = json.loads(item.pop("departments_json") or "[]")
         return item
 
     def create(
-        self, *, company_id: int, name: str, channel: str = "all", department: str = "",
-        actor_user_id: int | None = None,
+        self, *, company_id: int, name: str, channels: list[str] | None = None,
+        departments: list[str] | None = None, actor_user_id: int | None = None,
     ) -> dict[str, Any]:
         name = (name or "").strip()
         if not name:
             raise ValueError("A flow name is required.")
+        cleaned_channels = self._clean_channels(channels)
+        cleaned_departments = self._clean_departments(company_id=company_id, departments=departments)
         now = utc_now_iso()
         with db.connect() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO reply_flows (
-                    company_id, name, channel, department, status, nodes_json, edges_json,
+                    company_id, name, channels_json, departments_json, status, nodes_json, edges_json,
                     created_by_user_id, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, 'draft', '[]', '[]', ?, ?, ?)
                 """,
-                (company_id, name, channel or "all", department or "", actor_user_id, now, now),
+                (company_id, name, json.dumps(cleaned_channels), json.dumps(cleaned_departments), actor_user_id, now, now),
             )
             flow_id = int(cursor.lastrowid)
             conn.commit()
@@ -118,7 +159,7 @@ class ReplyFlowService:
 
     def update(
         self, *, company_id: int, flow_id: int,
-        name: str | None = None, channel: str | None = None, department: str | None = None,
+        name: str | None = None, channels: list[str] | None = None, departments: list[str] | None = None,
         status: str | None = None, nodes: list[dict] | None = None, edges: list[dict] | None = None,
     ) -> dict[str, Any]:
         existing = self.get(company_id=company_id, flow_id=flow_id)
@@ -128,10 +169,10 @@ class ReplyFlowService:
             if not name:
                 raise ValueError("A flow name is required.")
             cleaned["name"] = name
-        if channel is not None:
-            cleaned["channel"] = channel or "all"
-        if department is not None:
-            cleaned["department"] = department or ""
+        if channels is not None:
+            cleaned["channels_json"] = json.dumps(self._clean_channels(channels))
+        if departments is not None:
+            cleaned["departments_json"] = json.dumps(self._clean_departments(company_id=company_id, departments=departments))
         if status is not None:
             if status not in ("draft", "active", "archived"):
                 raise ValueError('Status must be "draft", "active", or "archived".')
@@ -174,12 +215,13 @@ class ReplyFlowService:
             cursor = conn.execute(
                 """
                 INSERT INTO reply_flows (
-                    company_id, name, channel, department, status, nodes_json, edges_json,
+                    company_id, name, channels_json, departments_json, status, nodes_json, edges_json,
                     created_by_user_id, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)
                 """,
                 (
-                    company_id, f"{source['name']} (copy)", source["channel"], source["department"],
+                    company_id, f"{source['name']} (copy)",
+                    json.dumps(source["channels"]), json.dumps(source["departments"]),
                     json.dumps(source["nodes"]), json.dumps(source["edges"]),
                     actor_user_id, now, now,
                 ),

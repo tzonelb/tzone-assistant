@@ -6,14 +6,15 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ArrowBackOutlined, CloseOutlined, SaveOutlined } from "@mui/icons-material";
-import { getReplyFlowRequest, updateReplyFlowRequest } from "../../api/client";
+import { getReplyFlowRequest, updateReplyFlowRequest, listDepartmentsRequest } from "../../api/client";
 import { AppButton, LoadingState, ErrorState } from "../../components/common";
 import FlowStepNode from "./FlowStepNode";
 import { NODE_GROUPS, NODE_TYPE_CONFIG } from "./nodeTypesConfig";
+import MultiSelectPopover from "./MultiSelectPopover";
+import { CHANNEL_OPTIONS } from "./ReplyFlowsListPage";
 import "./ReplyFlowBuilderPage.css";
 
 const REACT_FLOW_NODE_TYPES = { step: FlowStepNode };
-const CHANNEL_LABELS = { all: "All channels", whatsapp: "WhatsApp", messenger: "Messenger", instagram: "Instagram", telegram: "Telegram" };
 
 let nodeIdCounter = 0;
 function nextNodeId() {
@@ -152,8 +153,9 @@ export default function ReplyFlowBuilderPage() {
   const [saveError, setSaveError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [name, setName] = useState("");
-  const [channel, setChannel] = useState("all");
-  const [department, setDepartment] = useState("");
+  const [channels, setChannels] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [allDepartments, setAllDepartments] = useState([]);
   const [status, setStatus] = useState("draft");
 
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -164,14 +166,15 @@ export default function ReplyFlowBuilderPage() {
       .then((result) => {
         setFlow(result);
         setName(result.name);
-        setChannel(result.channel);
-        setDepartment(result.department || "");
+        setChannels(result.channels || []);
+        setDepartments(result.departments || []);
         setStatus(result.status);
         setNodes(result.nodes || []);
         setEdges(result.edges || []);
       })
       .catch((requestError) => setError(requestError.message || "Could not load this flow."))
       .finally(() => setLoading(false));
+    listDepartmentsRequest().then((result) => setAllDepartments((result?.departments || []).filter((name) => name !== "Unassigned"))).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -179,7 +182,7 @@ export default function ReplyFlowBuilderPage() {
     setSaving(true);
     setSaveError("");
     try {
-      await updateReplyFlowRequest(id, { name, channel, department, status, nodes, edges });
+      await updateReplyFlowRequest(id, { name, channels, departments, status, nodes, edges });
       setDirty(false);
     } catch (requestError) {
       setSaveError(requestError.message || "Could not save this flow.");
@@ -204,14 +207,20 @@ export default function ReplyFlowBuilderPage() {
           onChange={(event) => { setName(event.target.value); setDirty(true); }}
         />
         <div className="reply-flow-builder-controls">
-          <select className="tz-select" value={channel} onChange={(event) => { setChannel(event.target.value); setDirty(true); }}>
-            {Object.entries(CHANNEL_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}
-          </select>
-          <input
-            className="reply-flow-department-input"
-            value={department}
-            placeholder="All departments"
-            onChange={(event) => { setDepartment(event.target.value); setDirty(true); }}
+          <MultiSelectPopover
+            label="Channels"
+            options={CHANNEL_OPTIONS}
+            value={channels}
+            onChange={(next) => { setChannels(next); setDirty(true); }}
+            allLabel="All channels"
+          />
+          <MultiSelectPopover
+            label="Departments"
+            options={allDepartments.map((name) => ({ value: name, label: name }))}
+            value={departments}
+            onChange={(next) => { setDepartments(next); setDirty(true); }}
+            allLabel="All departments"
+            emptyHint="No departments set up yet — add some in Company Settings → Departments first."
           />
           <select className="tz-select" value={status} onChange={(event) => { setStatus(event.target.value); setDirty(true); }}>
             <option value="draft">Draft</option>

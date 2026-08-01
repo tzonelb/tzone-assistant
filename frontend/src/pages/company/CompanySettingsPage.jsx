@@ -531,57 +531,21 @@ function ProfileSettings() {
   );
 }
 
-const FLOW_STEP_LABELS = {
-  welcome: "Welcome message",
-  language_detection: "Language detection",
-  intent_detection: "Intent detection",
-  knowledge_lookup: "Knowledge lookup",
-  answer: "Answer",
-  escalation: "Escalation to human",
-};
-
-function ReplyFlowSettings() {
-  const [steps, setSteps] = useState([]);
-  const [locked, setLocked] = useState([]);
-  const [status, setStatus] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    getCompanySettingSectionRequest("reply_flow")
-      .then((result) => { setSteps(result?.values?.steps || []); setLocked(result?.locked_keys || []); })
-      .catch((error) => setStatus(error.message || "Settings could not load."));
-  }, []);
-
-  function moveStep(index, direction) {
-    const next = [...steps];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    setSteps(next);
-  }
-
-  async function save() {
-    setSaving(true); setStatus("");
-    try {
-      const result = await updateCompanySettingSectionRequest("reply_flow", { steps });
-      setSteps(result?.values?.steps || steps);
-      setStatus("Reply flow order saved.");
-    } catch (error) { setStatus(error.message || "Settings could not save."); }
-    finally { setSaving(false); }
-  }
-
+function ReplyFlowLink() {
+  const navigate = useNavigate();
   return (
     <div className="workflow-settings-card">
-      {steps.map((step, index) => (
-        <div className="workflow-setting-row" key={step}>
-          <div><strong>{index + 1}. {FLOW_STEP_LABELS[step] || step}</strong></div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" disabled={locked.includes("steps") || index === 0} onClick={() => moveStep(index, -1)}>↑</button>
-            <button type="button" disabled={locked.includes("steps") || index === steps.length - 1} onClick={() => moveStep(index, 1)}>↓</button>
-          </div>
+      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
+        <div>
+          <strong>Reply Flow</strong>
+          <br />
+          <span style={{ fontWeight: 400, color: "#6b7280" }}>
+            Design the real step-by-step conversation flow — greeting, AI reply mode, appointments, task
+            creation, human handoff — per channel and department, on its own drag-and-drop canvas. Admins only.
+          </span>
         </div>
-      ))}
-      <div className="workflow-settings-footer"><span>{status}</span><button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save order"}</button></div>
+        <button type="button" onClick={() => navigate("/reply-flows")}>Open Reply Flows</button>
+      </div>
     </div>
   );
 }
@@ -686,8 +650,8 @@ function SavedRepliesLink() {
 function ReplyFlowAndSavedReplies() {
   return (
     <div>
-      <ReplyFlowSettings />
-      <SavedRepliesLink />
+      <ReplyFlowLink />
+      <div style={{ marginTop: 20 }}><SavedRepliesLink /></div>
     </div>
   );
 }

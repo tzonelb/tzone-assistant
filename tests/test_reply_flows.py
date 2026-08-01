@@ -17,6 +17,7 @@ def client_and_db():
     from database.database import db
     from backend.services.auth_service import auth_service
     from backend.services.reply_flow_service import reply_flow_service
+    from backend.services.department_service import department_service
 
     tmp_db_path = tempfile.mktemp(suffix=".db")
     original_db_path = db.db_path
@@ -24,6 +25,7 @@ def client_and_db():
 
     db.create_tables()
     auth_service.create_tables()
+    department_service.ensure_schema()
     reply_flow_service.ensure_schema()
 
     with db.connect() as conn:
@@ -65,17 +67,38 @@ def client_and_db():
             time.sleep(0.1)
 
 
+def _add_department(name="Sales"):
+    from backend.services.department_service import department_service
+    department_service.create(company_id=COMPANY_ID, name=name)
+
+
 def test_create_and_list_flow(client_and_db):
     client = client_and_db
-    resp = client.post("/api/reply-flows", json={"name": "Sales WhatsApp", "channel": "whatsapp", "department": "Sales"})
+    _add_department("Sales")
+    resp = client.post(
+        "/api/reply-flows",
+        json={"name": "Sales WhatsApp", "channels": ["whatsapp"], "departments": ["Sales"]},
+    )
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["status"] == "draft"
     assert body["nodes"] == []
+    assert body["channels"] == ["whatsapp"]
+    assert body["departments"] == ["Sales"]
 
     list_resp = client.get("/api/reply-flows")
     names = [f["name"] for f in list_resp.json()["flows"]]
     assert "Sales WhatsApp" in names
+
+
+def test_create_rejects_invalid_channel(client_and_db):
+    resp = client_and_db.post("/api/reply-flows", json={"name": "Flow", "channels": ["fax"]})
+    assert resp.status_code == 400
+
+
+def test_create_rejects_unregistered_department(client_and_db):
+    resp = client_and_db.post("/api/reply-flows", json={"name": "Flow", "departments": ["Ghost Dept"]})
+    assert resp.status_code == 400
 
 
 def test_create_requires_name(client_and_db):
@@ -178,9 +201,9 @@ def test_plain_employee_cannot_manage_flows(client_and_db):
     try:
         resp = client.post("/api/reply-flows", json={"name": "Nope"})
         assert resp.status_code == 403
-        # But listing/viewing (read-only) stays open to any company member.
+        # Reply Flows are admin-only end-to-end — even listing/viewing is blocked.
         list_resp = client.get("/api/reply-flows")
-        assert list_resp.status_code == 200
+        assert list_resp.status_code == 403
     finally:
         async def _override_owner():
             return {"id": 1, "email": "agent@test.local", "is_super_admin": False, "active_company_id": COMPANY_ID}
