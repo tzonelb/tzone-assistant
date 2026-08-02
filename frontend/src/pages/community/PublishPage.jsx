@@ -251,9 +251,9 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                   {mediaError ? <span className="broadcast-field-note broadcast-media-error">{mediaError}</span> : null}
                 </div>
                 <div className="bp-toolbar">
-                  <button type="button"><AddOutlined fontSize="small" /></button>
-                  <button type="button"><InsertEmoticonOutlined fontSize="small" /></button>
-                  <button type="button"><TagOutlined fontSize="small" /></button>
+                  <button type="button" disabled title="Not built yet"><AddOutlined fontSize="small" /></button>
+                  <button type="button" disabled title="Not built yet"><InsertEmoticonOutlined fontSize="small" /></button>
+                  <button type="button" disabled title="Not built yet"><TagOutlined fontSize="small" /></button>
                 </div>
               </div>
             ) : (
@@ -375,7 +375,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
             Create Another
           </label>
           <div className="bp-footer-right">
-            <button type="button" className="bp-next-available"><EventOutlined fontSize="small" /> Next Available</button>
+            <button type="button" className="bp-next-available" disabled title="Not built yet — pick a date & time above instead"><EventOutlined fontSize="small" /> Next Available</button>
             {!customizeMode ? (
               <AppButton
                 type="button"

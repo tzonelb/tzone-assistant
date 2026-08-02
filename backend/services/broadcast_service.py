@@ -360,10 +360,19 @@ class BroadcastService:
         # request that atomically flips draft -> sending proceeds: a
         # simple "read status, then send, then write status" would let
         # two overlapping requests both read 'draft' and both send.
+        #
+        # 'sending' is also accepted here as a starting status - this is
+        # what makes a broadcast RESUMABLE. If the original request was
+        # interrupted (client/proxy timeout, server restart) partway
+        # through a large recipient list, the row is left in 'sending'
+        # forever with the old code, since only 'draft' could start a
+        # send and 'sending' is never re-finalized to 'sent' by anything
+        # else. Calling this again on a 'sending' broadcast now resumes
+        # it instead of being a permanent dead end.
         self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)
         with db.connect() as conn:
             cursor = conn.execute(
-                "UPDATE broadcasts SET status = 'sending' WHERE id = ? AND company_id = ? AND status = 'draft'",
+                "UPDATE broadcasts SET status = 'sending' WHERE id = ? AND company_id = ? AND status IN ('draft', 'sending')",
                 (broadcast_id, company_id),
             )
             conn.commit()
@@ -388,8 +397,24 @@ class BroadcastService:
                 tag=broadcast["tag"],
             )
 
-        sent_count = 0
-        failed_count = 0
+        # Resuming: skip anyone already confirmed sent, and clear out
+        # stale 'failed' rows for anyone we're about to retry so this
+        # attempt's outcome (not the earlier failed one) is what counts.
+        with db.connect() as conn:
+            already_sent = {
+                row["external_user_id"]
+                for row in conn.execute(
+                    "SELECT external_user_id FROM broadcast_recipients WHERE broadcast_id = ? AND send_status = 'sent'",
+                    (broadcast_id,),
+                ).fetchall()
+            }
+            conn.execute(
+                "DELETE FROM broadcast_recipients WHERE broadcast_id = ? AND send_status = 'failed'",
+                (broadcast_id,),
+            )
+            conn.commit()
+        recipients = [r for r in recipients if r["external_user_id"] not in already_sent]
+
         for recipient in recipients:
             error_message: str | None = None
             raw_result: dict[str, Any] = {}
@@ -406,12 +431,8 @@ class BroadcastService:
                 success = False
                 error_message = str(exc)
 
-            if success:
-                sent_count += 1
-            else:
-                failed_count += 1
-                if error_message is None:
-                    error_message = self._extract_error(raw_result=raw_result)
+            if not success and error_message is None:
+                error_message = self._extract_error(raw_result=raw_result)
 
             provider_message_id = None
             if success:
@@ -451,13 +472,21 @@ class BroadcastService:
 
         now = utc_now_iso()
         with db.connect() as conn:
+            # Totals reflect every attempt across the original send plus
+            # any resume(s), not just this call's batch.
+            totals = conn.execute(
+                "SELECT send_status, COUNT(*) AS total FROM broadcast_recipients "
+                "WHERE broadcast_id = ? GROUP BY send_status",
+                (broadcast_id,),
+            ).fetchall()
+            totals_by_status = {row["send_status"]: row["total"] for row in totals}
             conn.execute(
                 """
                 UPDATE broadcasts
                 SET status = 'sent', sent_count = ?, failed_count = ?, sent_at = ?
                 WHERE id = ? AND company_id = ?
                 """,
-                (sent_count, failed_count, now, broadcast_id, company_id),
+                (totals_by_status.get("sent", 0), totals_by_status.get("failed", 0), now, broadcast_id, company_id),
             )
             conn.commit()
         return self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)

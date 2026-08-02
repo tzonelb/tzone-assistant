@@ -178,6 +178,51 @@ def test_send_counts_a_failed_send_without_crashing_the_whole_send(client_and_db
     assert body["failed_count"] == 1
 
 
+def test_stuck_sending_broadcast_can_be_resumed_without_double_sending(client_and_db):
+    """Before this fix, a broadcast interrupted mid-send (e.g. a request
+    timeout on a large recipient list) was stuck in 'sending' forever -
+    only 'draft' could start a send, and nothing ever finalized it.
+    Calling send again on a 'sending' broadcast must now resume: skip
+    whoever's already confirmed sent, and only dispatch to the rest."""
+    from database.database import db
+
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+    _make_contact(external_user_id="b", display_name="B")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Interrupted Broadcast", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast_id = create_resp.json()["id"]
+
+    # Simulate an interrupted first attempt: status stuck at 'sending',
+    # with only recipient "a" recorded as actually sent.
+    with db.connect() as conn:
+        conn.execute("UPDATE broadcasts SET status = 'sending' WHERE id = ?", (broadcast_id,))
+        conn.execute(
+            "INSERT INTO broadcast_recipients (broadcast_id, channel, external_user_id, send_status, created_at) "
+            "VALUES (?, 'telegram', 'a', 'sent', datetime('now'))",
+            (broadcast_id,),
+        )
+        conn.commit()
+
+    with patch(
+        "backend.services.broadcast_service.send_telegram_text",
+        return_value={"ok": True},
+    ) as mock_send:
+        resume_resp = client.post(f"/api/broadcasts/{broadcast_id}/send")
+
+    assert resume_resp.status_code == 200, resume_resp.text
+    body = resume_resp.json()
+    assert body["status"] == "sent"
+    assert body["sent_count"] == 2  # the earlier "a" plus this call's "b"
+    assert body["failed_count"] == 0
+    # Only "b" (the not-yet-sent recipient) was actually dispatched.
+    assert mock_send.call_count == 1
+    assert mock_send.call_args.kwargs["recipient_id"] == "b"
+
+
 def test_send_returns_400_on_already_sent_broadcast(client_and_db):
     client = client_and_db
     _make_contact(external_user_id="a", display_name="A")

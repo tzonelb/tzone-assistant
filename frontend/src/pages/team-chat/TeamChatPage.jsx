@@ -90,7 +90,7 @@ export default function TeamChatPage() {
   function insertMention(employee) {
     const cursor = textareaRef.current ? textareaRef.current.selectionStart : draft.length;
     const upToCursor = draft.slice(0, cursor);
-    const replaced = upToCursor.replace(/@([^\s@]*)$/, `@${employee.full_name} `);
+    const replaced = upToCursor.replace(/@([^\s@]*)$/, `@${employee.display_name} `);
     const nextDraft = `${replaced}${draft.slice(cursor)}`;
     setDraft(nextDraft);
     setMentionQuery(null);

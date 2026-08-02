@@ -360,6 +360,13 @@ export default function BroadcastPage() {
               <AppButton size="small" variant="danger" onClick={() => openDeleteConfirm(row)}>Delete</AppButton>
             </>
           ) : null}
+          {row.status === "sending" ? (
+            // A broadcast stuck here means an earlier send was interrupted
+            // partway through (e.g. a request/proxy timeout on a large
+            // recipient list) - resuming picks up with whoever hasn't
+            // been sent to yet instead of leaving it as a dead end.
+            <AppButton size="small" variant="primary" onClick={() => openSendConfirm(row)}>Resume send</AppButton>
+          ) : null}
         </div>
       ),
     },
