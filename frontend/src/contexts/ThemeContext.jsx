@@ -52,18 +52,29 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     let cancelled = false;
-    getPlatformUiConfigRequest()
-      .then((resolved) => {
-        if (!cancelled && resolved) setConfig(resolved);
-      })
-      .catch(() => {
-        // Backend unreachable or the caller isn't authenticated yet —
-        // platformDefaults (already applied below) keeps the UI usable.
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
+    function fetchConfig() {
+      getPlatformUiConfigRequest()
+        .then((resolved) => {
+          if (!cancelled && resolved) setConfig(resolved);
+        })
+        .catch(() => {
+          // Backend unreachable or the caller isn't authenticated yet —
+          // platformDefaults (already applied below) keeps the UI usable.
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }
+    fetchConfig();
+    // Re-fetch once the user actually logs in: the initial mount often
+    // happens on the login page before a token exists, so that first
+    // request 401s and falls back to platformDefaults — without this a
+    // freshly-published theme wouldn't show until a manual page reload.
+    window.addEventListener("tzone:auth-changed", fetchConfig);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("tzone:auth-changed", fetchConfig);
+    };
   }, []);
 
   useEffect(() => {

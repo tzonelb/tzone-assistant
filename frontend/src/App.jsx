@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { isUiV2Enabled } from "./config/featureFlags";
 import CommunityHubPage from "./pages/community/CommunityHubPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
+import DashboardPageV2 from "./pages/dashboard/DashboardPageV2";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import CataloguePage from "./pages/catalogue/CataloguePage";
@@ -30,15 +31,23 @@ import BroadcastDetailPage from "./pages/broadcast/BroadcastDetailPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
-function ConversationsRoute() {
-  const [uiV2, setUiV2] = useState(isUiV2Enabled);
-  useEffect(() => {
-    function handleFlagChange() { setUiV2(isUiV2Enabled()); }
-    window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
-    return () => window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
-  }, []);
-  return uiV2 ? <ConversationsPageV2 /> : <ConversationsPage />;
+// Renders V2Component when the ui_v2 flag is on, V1Component otherwise —
+// same switch AppLayout.jsx uses for Sidebar/Topbar, generalized here
+// for any route that has gotten its own v2 rebuild.
+function v2Route(V1Component, V2Component) {
+  return function V2Route() {
+    const [uiV2, setUiV2] = useState(isUiV2Enabled);
+    useEffect(() => {
+      function handleFlagChange() { setUiV2(isUiV2Enabled()); }
+      window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
+      return () => window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
+    }, []);
+    return uiV2 ? <V2Component /> : <V1Component />;
+  };
 }
+
+const ConversationsRoute = v2Route(ConversationsPage, ConversationsPageV2);
+const DashboardRoute = v2Route(DashboardPage, DashboardPageV2);
 
 export default function App() {
   return (
@@ -52,7 +61,7 @@ export default function App() {
       <Route path="/ai-teaching/*" element={<ProtectedRoute><AITeachingHubPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><UISettingsPage /></ProtectedRoute>} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboard" element={<DashboardRoute />} />
         <Route path="/notifications" element={<NotificationsPage />} />
         <Route path="/conversations" element={<ConversationsRoute />} />
         <Route path="/conversations/:channel/:userId" element={<ConversationsRoute />} />

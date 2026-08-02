@@ -75,6 +75,12 @@ export function AuthProvider({ children }) {
     setUser(currentUser?.user || result?.user || null);
     setCompanies(currentUser?.companies || []);
 
+    // ThemeProvider fetches /api/platform-ui/config once on initial mount,
+    // which usually happens before the user is authenticated (the config
+    // endpoint requires auth) — without this, a freshly-logged-in user
+    // keeps seeing the unauthenticated fallback theme until a full reload.
+    window.dispatchEvent(new CustomEvent("tzone:auth-changed"));
+
     return result;
   }, []);
 
