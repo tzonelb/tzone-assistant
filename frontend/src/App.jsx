@@ -6,6 +6,9 @@ import RolesPermissionsPage from "./pages/admin/RolesPermissionsPage";
 import PlatformAdminPage from "./pages/admin/PlatformAdminPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
 import ConversationsPage from "./pages/conversations/ConversationsPage";
+import ConversationsPageV2 from "./pages/conversations/ConversationsPageV2";
+import { useEffect, useState } from "react";
+import { isUiV2Enabled } from "./config/featureFlags";
 import CommunityHubPage from "./pages/community/CommunityHubPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
@@ -27,6 +30,16 @@ import BroadcastDetailPage from "./pages/broadcast/BroadcastDetailPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
+function ConversationsRoute() {
+  const [uiV2, setUiV2] = useState(isUiV2Enabled);
+  useEffect(() => {
+    function handleFlagChange() { setUiV2(isUiV2Enabled()); }
+    window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
+    return () => window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
+  }, []);
+  return uiV2 ? <ConversationsPageV2 /> : <ConversationsPage />;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -41,8 +54,8 @@ export default function App() {
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/notifications" element={<NotificationsPage />} />
-        <Route path="/conversations" element={<ConversationsPage />} />
-        <Route path="/conversations/:channel/:userId" element={<ConversationsPage />} />
+        <Route path="/conversations" element={<ConversationsRoute />} />
+        <Route path="/conversations/:channel/:userId" element={<ConversationsRoute />} />
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
         <Route path="/broadcast" element={<BroadcastPage />} />
