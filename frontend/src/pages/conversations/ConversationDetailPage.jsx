@@ -591,7 +591,13 @@ export default function ConversationDetailPage({
       return [];
     }
 
-    return employees;
+    // An employee with no department memberships yet hasn't been scoped
+    // by an owner — keep them assignable everywhere instead of hiding
+    // unassigned staff from every department's queue.
+    return employees.filter((employee) => {
+      const employeeDepartments = employee.departments || [];
+      return employeeDepartments.length === 0 || employeeDepartments.includes(selectedDepartment);
+    });
   }, [employees, selectedDepartment]);
 
 
