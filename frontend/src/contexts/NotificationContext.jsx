@@ -17,6 +17,7 @@ import {
   markNotificationUnreadRequest,
 } from "../api/client";
 import { useAuth } from "./AuthContext";
+import { readNotificationPreferences } from "../utils/notificationPreferences";
 
 function playNotificationSound() {
   try {
@@ -87,7 +88,7 @@ function itemTouchesIds(item, targetIds) {
 }
 
 export function NotificationProvider({ children }) {
-  const { authenticated } = useAuth();
+  const { authenticated, user } = useAuth();
   const [items, setItems] = useState([]);
   const [summary, setSummary] = useState({ unread: 0, total: 0, read: 0 });
   const [loading, setLoading] = useState(false);
@@ -96,21 +97,39 @@ export function NotificationProvider({ children }) {
 
   const seenIdsRef = useRef(null);
 
+  // Same preferences the desktop-popup path (AppLayout.jsx) already
+  // respects - the bell used to poll and play a sound completely
+  // unfiltered, ignoring a user's own "mute this channel" / "no sound"
+  // settings.
+  const [preferences, setPreferences] = useState(() => readNotificationPreferences(user));
+  useEffect(() => {
+    setPreferences(readNotificationPreferences(user));
+    const handleSettingsChanged = (event) => setPreferences(event?.detail || readNotificationPreferences(user));
+    window.addEventListener("tzone:notification-settings-changed", handleSettingsChanged);
+    return () => window.removeEventListener("tzone:notification-settings-changed", handleSettingsChanged);
+  }, [user]);
+  const preferencesRef = useRef(preferences);
+  preferencesRef.current = preferences;
+
   const refresh = useCallback(async ({ silent = false, filters = {} } = {}) => {
     if (!authenticated || inFlightRef.current) return;
     inFlightRef.current = true;
     if (!silent) setLoading(true);
     try {
-      const [nextItems, summaryPayload] = await Promise.all([
+      const [rawItems, summaryPayload] = await Promise.all([
         getNotificationsRequest({ pageSize: 100, ...filters }),
         getNotificationSummaryRequest(),
       ]);
-      const normalizedItems = Array.isArray(nextItems) ? nextItems : [];
+      const prefs = preferencesRef.current;
+      const normalizedItems = (Array.isArray(rawItems) ? rawItems : []).filter((item) => {
+        const channel = String(item?.channel || "").toLowerCase();
+        return !channel || prefs.channels?.[channel] !== false;
+      });
 
       const currentUnreadIds = new Set(
         normalizedItems.filter((item) => !item?.is_read).map(notificationIdentity),
       );
-      if (seenIdsRef.current !== null) {
+      if (seenIdsRef.current !== null && prefs.enabled && prefs.sound) {
         const hasNewUnread = [...currentUnreadIds].some(
           (id) => !seenIdsRef.current.has(id),
         );

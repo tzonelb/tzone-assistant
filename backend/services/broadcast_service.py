@@ -132,6 +132,35 @@ class BroadcastService:
             where.append("c.tags_json LIKE ?")
             params.append(f'%"{str(tag_value).strip()}"%')
 
+        # A segment can also be saved with an assigned_user_id/search/channel
+        # filter (see customer_service.py's _SEGMENT_FILTER_KEYS) - these
+        # were previously silently dropped here, so e.g. a segment built as
+        # "my own Telegram leads" (assigned_user_id=self, channel=telegram)
+        # would broadcast to every company contact on the chosen channel
+        # instead of the rep's actual hand-picked list.
+        assigned_value = filters.get("assigned_user_id")
+        if assigned_value:
+            where.append("c.assigned_user_id = ?")
+            params.append(int(assigned_value))
+
+        search_value = filters.get("search")
+        if search_value and str(search_value).strip():
+            pattern = f"%{str(search_value).strip()}%"
+            where.append(
+                "(c.display_name LIKE ? OR c.internal_name LIKE ? OR c.phone LIKE ? OR c.email LIKE ?)"
+            )
+            params.extend([pattern] * 4)
+
+        # A segment's saved channel filter means "must also be reachable on
+        # this channel" - checked as an extra identity, on top of (not
+        # instead of) the broadcast's own channel from the `channel` param.
+        segment_channel = filters.get("channel")
+        if segment_channel:
+            where.append(
+                "EXISTS (SELECT 1 FROM customer_identities sci WHERE sci.customer_id = c.id AND sci.channel = ?)"
+            )
+            params.append(str(segment_channel).strip().lower())
+
         clause = " AND ".join(where)
         with db.connect() as conn:
             rows = conn.execute(

@@ -8,6 +8,7 @@ import {
   listCustomersRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { useAuth } from "../../contexts/AuthContext";
 import "../customers/CustomersPage.css";
 import "./CallsPage.css";
 
@@ -145,6 +146,12 @@ function NewCallDialog({ open, directions, statuses, saving, error, onCancel, on
 }
 
 export default function CallsPage() {
+  const { user, companies } = useAuth();
+  const canManageSettings = useMemo(() => {
+    if (user?.is_super_admin) return true;
+    const activeCompany = companies.find((company) => company.id === user?.active_company_id) || companies[0];
+    return activeCompany?.role_code === "owner" || (activeCompany?.permission_codes || []).includes("settings.manage");
+  }, [user, companies]);
   const [rows, setRows] = useState([]);
   const [directions, setDirections] = useState([]);
   const [statuses, setStatuses] = useState([]);
@@ -158,6 +165,7 @@ export default function CallsPage() {
   const [saveError, setSaveError] = useState("");
   const [toDelete, setToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   async function load() {
     setLoading(true);
@@ -200,12 +208,13 @@ export default function CallsPage() {
   async function confirmDelete() {
     if (!toDelete) return;
     setDeleting(true);
+    setDeleteError("");
     try {
       await deleteCallLogRequest(toDelete.id);
       setToDelete(null);
       await load();
     } catch (requestError) {
-      setError(requestError.message || "Could not delete this call.");
+      setDeleteError(requestError.message || "Could not delete this call.");
     } finally {
       setDeleting(false);
     }
@@ -233,11 +242,11 @@ export default function CallsPage() {
     { key: "notes", label: "Notes", render: (value) => value || "—" },
     { key: "called_by_name", label: "Logged by", render: (value) => value || "—" },
     { key: "created_at", label: "When", render: (value) => formatDateTime(value) },
-    {
+    ...(canManageSettings ? [{
       key: "_actions", label: "", align: "right",
       render: (_value, row) => <AppButton variant="danger" size="small" onClick={() => setToDelete(row)}>Delete</AppButton>,
-    },
-  ], []);
+    }] : []),
+  ], [canManageSettings]);
 
   if (loading) return <LoadingState title="Loading calls..." />;
   if (error) return <ErrorState title="Could not load calls" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
@@ -273,11 +282,12 @@ export default function CallsPage() {
         open={Boolean(toDelete)}
         title="Delete call log"
         message="Delete this call record? This can't be undone."
+        error={deleteError}
         confirmLabel="Delete"
         confirmVariant="danger"
         loading={deleting}
         onConfirm={confirmDelete}
-        onCancel={() => setToDelete(null)}
+        onCancel={() => { setToDelete(null); setDeleteError(""); }}
       />
     </section>
   );

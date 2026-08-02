@@ -7,6 +7,7 @@ export default function ConfirmDialog({
   open,
   title = "Confirm action",
   message,
+  error,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
   confirmVariant = "danger",
@@ -51,6 +52,7 @@ export default function ConfirmDialog({
 
         <div className="tz-dialog-body">
           {message}
+          {error ? <p className="customer-segment-error">{error}</p> : null}
         </div>
 
         <footer className="tz-dialog-actions">

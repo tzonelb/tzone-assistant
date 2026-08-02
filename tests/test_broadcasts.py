@@ -88,6 +88,43 @@ def _make_contact(*, company_id=COMPANY_ID, channel="telegram", external_user_id
     )
 
 
+def test_segment_targeting_respects_assigned_user_id_and_channel_filters(client_and_db):
+    """Before this fix, _resolve_recipients only read lifecycle_stage/tag
+    out of a segment's saved filters - a segment built as "my own
+    Telegram leads" (assigned_user_id + channel) would silently broadcast
+    to every company contact on the chosen channel instead of the rep's
+    actual hand-picked list. This is the highest-severity finding from
+    today's platform audit - a real risk of an unintended mass send."""
+    client = client_and_db
+    from backend.services.customer_service import customer_service
+
+    mine = _make_contact(external_user_id="mine", display_name="Mine")
+    _make_contact(external_user_id="not-mine", display_name="Not mine")
+    customer_service.update_customer(
+        company_id=COMPANY_ID, customer_id=mine["id"], values={"assigned_user_id": 1}, actor_user_id=1,
+    )
+
+    segment_resp = client.post(
+        "/api/customer-segments",
+        json={"name": "My Telegram Leads", "filters": {"assigned_user_id": 1}},
+    )
+    assert segment_resp.status_code == 200, segment_resp.text
+    segment_id = segment_resp.json()["id"]
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Targeted", "message_text": "Hi!", "channel": "telegram", "segment_id": segment_id},
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    assert create_resp.json()["recipient_count"] == 1
+
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}) as mock_send:
+        send_resp = client.post(f"/api/broadcasts/{create_resp.json()['id']}/send")
+    assert send_resp.status_code == 200, send_resp.text
+    assert mock_send.call_count == 1
+    assert mock_send.call_args.kwargs["recipient_id"] == "mine"
+
+
 def test_create_computes_recipient_count_for_channel_and_lifecycle_stage(client_and_db):
     client = client_and_db
     a = _make_contact(external_user_id="a", display_name="A")

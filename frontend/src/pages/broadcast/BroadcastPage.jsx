@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AddOutlined,
@@ -18,6 +18,7 @@ import {
   uploadMediaRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, StatusBadge } from "../../components/common";
+import { useAuth } from "../../contexts/AuthContext";
 import "./BroadcastPage.css";
 import "../analytics/AnalyticsPage.css";
 
@@ -93,6 +94,16 @@ function parseNumbersInput(rawText) {
 
 export default function BroadcastPage() {
   const navigate = useNavigate();
+  const { user, companies } = useAuth();
+  // Mirrors backend: create/send/delete all require channels.manage
+  // (backend/api/routes/broadcasts.py) - channels.view only gets you the
+  // list/report. Without this, a view-only user sees fully clickable
+  // Create/Send/Delete controls that always 403.
+  const canManageChannels = useMemo(() => {
+    if (user?.is_super_admin) return true;
+    const activeCompany = companies.find((company) => company.id === user?.active_company_id) || companies[0];
+    return activeCompany?.role_code === "owner" || (activeCompany?.permission_codes || []).includes("channels.manage");
+  }, [user, companies]);
 
   const [broadcasts, setBroadcasts] = useState([]);
   const [listLoading, setListLoading] = useState(true);
@@ -354,13 +365,13 @@ export default function BroadcastPage() {
       render: (_value, row) => (
         <div className="broadcast-row-actions">
           <AppButton size="small" variant="secondary" onClick={() => navigate(`/broadcast/${row.id}`)}>View report</AppButton>
-          {row.status === "draft" ? (
+          {canManageChannels && row.status === "draft" ? (
             <>
               <AppButton size="small" variant="primary" onClick={() => openSendConfirm(row)}>Send</AppButton>
               <AppButton size="small" variant="danger" onClick={() => openDeleteConfirm(row)}>Delete</AppButton>
             </>
           ) : null}
-          {row.status === "sending" ? (
+          {canManageChannels && row.status === "sending" ? (
             // A broadcast stuck here means an earlier send was interrupted
             // partway through (e.g. a request/proxy timeout on a large
             // recipient list) - resuming picks up with whoever hasn't
@@ -376,9 +387,11 @@ export default function BroadcastPage() {
     <section className="broadcast-page">
       <PageHeader
         actions={
-          <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openCompose}>
-            Create Broadcast
-          </AppButton>
+          canManageChannels ? (
+            <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openCompose}>
+              Create Broadcast
+            </AppButton>
+          ) : null
         }
       />
 

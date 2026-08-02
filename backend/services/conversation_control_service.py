@@ -692,12 +692,12 @@ class ConversationControlService:
                     continue
 
                 conn.execute(
-                    """
+                    f"""
                     UPDATE conversations
                     SET
                         handled_by_ai = 1,
                         ai_enabled = 1,
-                        status = 'ai_handling',
+                        status = {_status_preserving_manual('ai_handling')},
                         workflow_state =
                             CASE
                                 WHEN unread_count > 0 THEN 'waiting_ai'
@@ -1110,11 +1110,11 @@ class ConversationControlService:
 
             if handled_by_ai:
                 conn.execute(
-                    """
+                    f"""
                     UPDATE conversations
                     SET handled_by_ai = 1,
                         ai_enabled = 1,
-                        status = 'ai_handling',
+                        status = {_status_preserving_manual('ai_handling')},
                         workflow_state = CASE
                             WHEN unread_count > 0 THEN 'waiting_ai'
                             ELSE 'ai_active'
@@ -1129,11 +1129,11 @@ class ConversationControlService:
                 )
             else:
                 cursor = conn.execute(
-                    """
+                    f"""
                     UPDATE conversations
                     SET handled_by_ai = 0,
                         ai_enabled = 0,
-                        status = 'human_handling',
+                        status = {_status_preserving_manual('human_handling')},
                         workflow_state = 'human_active',
                         needs_human = 1,
                         assigned_user_id = ?,
@@ -1467,9 +1467,9 @@ class ConversationControlService:
         with db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
-                """
+                f"""
                 UPDATE conversations
-                SET status = 'human_handling',
+                SET status = {_status_preserving_manual('human_handling')},
                     workflow_state = 'human_active',
                     needs_human = 1,
                     human_last_reply_at = ?,
@@ -1573,9 +1573,9 @@ class ConversationControlService:
         )
         with db.connect() as conn:
             conn.execute(
-                """
+                f"""
                 UPDATE conversations
-                SET status = 'ai_handling',
+                SET status = {_status_preserving_manual('ai_handling')},
                     workflow_state = 'ai_active',
                     last_message_at = ?,
                     updated_at = ?
@@ -1781,12 +1781,12 @@ class ConversationControlService:
                         + timedelta(minutes=_takeover_timeout_minutes(company_id))
                     ).isoformat()
                     conn.execute(
-                        """
+                        f"""
                         UPDATE conversations
                         SET assigned_user_id = ?,
                             handled_by_ai = 0,
                             ai_enabled = 0,
-                            status = 'human_handling',
+                            status = {_status_preserving_manual('human_handling')},
                             workflow_state = 'human_active',
                             needs_human = 1,
                             takeover_expires_at = ?,
