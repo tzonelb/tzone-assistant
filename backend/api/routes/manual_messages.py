@@ -310,16 +310,16 @@ def send_manual_conversation_reply(
     payload: ManualReplyRequest,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
+    normalized_channel, normalized_user_id, company_id, _conversation = _prepare_reply(
+        channel=channel, user_id=user_id, current_user=current_user,
+    )
+
     message_text = payload.text.strip()
     if not message_text:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Message cannot be empty.",
         )
-
-    normalized_channel, normalized_user_id, company_id, _conversation = _prepare_reply(
-        channel=channel, user_id=user_id, current_user=current_user,
-    )
 
     if normalized_channel == "telegram":
         send_result = send_telegram_text(

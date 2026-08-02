@@ -57,6 +57,16 @@ export function AuthProvider({ children }) {
     loadCurrentUser();
   }, [loadCurrentUser]);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearAccessToken();
+      setUser(null);
+      setCompanies([]);
+    };
+    window.addEventListener("tzone:session-expired", handleSessionExpired);
+    return () => window.removeEventListener("tzone:session-expired", handleSessionExpired);
+  }, []);
+
   const completeLogin = useCallback(async (result) => {
     saveAccessToken(result.access_token);
 

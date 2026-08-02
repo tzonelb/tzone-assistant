@@ -41,6 +41,8 @@ export default function UISettingsPage() {
   const [notifications, setNotifications] = useState(() => readNotificationPreferences(user));
   const [categoryPrefs, setCategoryPrefs] = useState(DEFAULT_CATEGORY_PREFERENCES);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [twoFactorEnroll, setTwoFactorEnroll] = useState(null); // { secret, otpauth_uri }
@@ -127,15 +129,23 @@ export default function UISettingsPage() {
   }, [fontFamily, fontSize, density, theme]);
 
   const visibleSections = useMemo(() => SECTIONS.filter(([, label]) => label.toLowerCase().includes(query.toLowerCase())), [query]);
-  function saveAll() {
-    saveNotificationPreferences(user, notifications);
-    updateNotificationPreferencesRequest(categoryPrefs).catch(() => {});
-    localStorage.setItem("tzone_ui_language", language);
-    localStorage.setItem("tzone_ui_timezone", timezone);
-    localStorage.setItem("tzone_auto_logout", autoLogout);
-    window.dispatchEvent(new CustomEvent("tzone:notification-settings-changed", { detail: notifications }));
-    window.dispatchEvent(new CustomEvent("tzone:timezone-changed", { detail: timezone }));
-    setSaved(true);
+  async function saveAll() {
+    setSaving(true);
+    setSaveError("");
+    try {
+      await updateNotificationPreferencesRequest(categoryPrefs);
+      saveNotificationPreferences(user, notifications);
+      localStorage.setItem("tzone_ui_language", language);
+      localStorage.setItem("tzone_ui_timezone", timezone);
+      localStorage.setItem("tzone_auto_logout", autoLogout);
+      window.dispatchEvent(new CustomEvent("tzone:notification-settings-changed", { detail: notifications }));
+      window.dispatchEvent(new CustomEvent("tzone:timezone-changed", { detail: timezone }));
+      setSaved(true);
+    } catch (requestError) {
+      setSaveError(requestError.message || "Could not save settings.");
+    } finally {
+      setSaving(false);
+    }
   }
   async function requestBrowserPermission() { if ("Notification" in window) await Notification.requestPermission(); }
   const notificationRows = [
@@ -165,9 +175,9 @@ export default function UISettingsPage() {
 
           {active === "notifications" ? <section className="settings-section-card"><h3>Notifications & sound</h3><p>Choose which notifications appear and how they are delivered.</p><div className="settings-notification-list">{notificationRows.map(([key, title, description]) => <div className="settings-notification-row" key={key}><div><strong>{title}</strong><span>{description}</span></div><Toggle checked={notifications[key]} onChange={(value) => { setNotifications((current) => ({ ...current, [key]: value })); setSaved(false); }} /></div>)}</div><h3>Channels</h3><div className="settings-notification-list">{Object.entries({ messenger: "Messenger", whatsapp: "WhatsApp", instagram: "Instagram", telegram: "Telegram", website: "Website" }).map(([key, label]) => <div className="settings-notification-row" key={key}><div><strong>{label}</strong><span>Receive notifications from this channel.</span></div><Toggle checked={notifications.channels?.[key] !== false} onChange={(value) => { setNotifications((current) => ({ ...current, channels: { ...(current.channels || {}), [key]: value } })); setSaved(false); }} /></div>)}</div><h3>Notify me about</h3><p>Choose which activity creates a notification for your account. Everyone on the team can tune this to their own taste.</p><div className="settings-notification-list"><div className="settings-notification-row"><div><strong>New customer messages</strong><span>Get pinged while the AI is handling a conversation, or turn it off.</span></div><select value={categoryPrefs.notify_new_message} onChange={(e) => { setCategoryPrefs((current) => ({ ...current, notify_new_message: e.target.value })); setSaved(false); }}><option value="all">Every conversation</option><option value="none">Off</option></select></div>{[["notify_ai_escalation", "AI asked for human help", "The AI couldn't resolve something and handed off to a person."], ["notify_mentions", "Mentions in notes", "A teammate @mentioned you on a conversation note."], ["notify_tasks", "Tasks", "Task assignments and reminders."]].map(([key, title, description]) => <div className="settings-notification-row" key={key}><div><strong>{title}</strong><span>{description}</span></div><Toggle checked={categoryPrefs[key] !== false} onChange={(value) => { setCategoryPrefs((current) => ({ ...current, [key]: value })); setSaved(false); }} /></div>)}</div><button type="button" className="secondary-action" onClick={requestBrowserPermission}>Enable browser permission</button></section> : null}
 
-          {active === "language" ? <section className="settings-section-card"><h3>Language & region</h3><p>The selected timezone controls all conversation, notification and timeline timestamps.</p><div className="settings-form-grid"><label><strong>Language</strong><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="en">English</option><option value="ar">Arabic</option><option value="tr">Turkish</option></select></label><label><strong>Timezone</strong><select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}><option value="Asia/Beirut">Beirut</option><option value="Asia/Qatar">Qatar</option><option value="UTC">UTC</option></select></label></div></section> : null}
+          {active === "language" ? <section className="settings-section-card"><h3>Language & region</h3><p>The selected timezone controls all conversation, notification and timeline timestamps. The dashboard's own screens (buttons, labels) stay in English regardless of this setting — only the AI's replies to customers already adapt to their language automatically.</p><div className="settings-form-grid"><label><strong>Language</strong><select value={language} onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}><option value="en">English</option><option value="ar">Arabic</option><option value="tr">Turkish</option></select></label><label><strong>Timezone</strong><select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}><option value="Asia/Beirut">Beirut</option><option value="Asia/Qatar">Qatar</option><option value="UTC">UTC</option></select></label></div></section> : null}
 
-          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => setAutoLogout(e.target.value)}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><button type="button" className="secondary-action" disabled title="Not built yet - contact T-ZONE support to reset your password">Change password (coming soon)</button><button type="button" className="secondary-action" disabled title="Not built yet">View active sessions (coming soon)</button></div>
+          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => { setAutoLogout(e.target.value); setSaved(false); }}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><button type="button" className="secondary-action" disabled title="Not built yet - contact T-ZONE support to reset your password">Change password (coming soon)</button><button type="button" className="secondary-action" disabled title="Not built yet">View active sessions (coming soon)</button></div>
             <div className="settings-2fa" style={{ marginTop: "1.5rem", borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: "1.25rem" }}>
               <h3>Two-factor authentication</h3>
               <p>Add a one-time code from an authenticator app (Google Authenticator, Authy, 1Password) to every sign-in.</p>
@@ -209,7 +219,10 @@ export default function UISettingsPage() {
             </div>
             </section> : null}
 
-          <div className="settings-save-bar"><button type="button" className="primary-action" onClick={saveAll}>{saved ? "Settings saved" : "Save settings"}</button></div>
+          <div className="settings-save-bar">
+            {saveError ? <span style={{ color: "#c0392b", marginRight: 12 }}>{saveError}</span> : null}
+            <button type="button" className="primary-action" disabled={saving} onClick={saveAll}>{saving ? "Saving..." : saved ? "Settings saved" : "Save settings"}</button>
+          </div>
         </div>
       </main>
     </section>

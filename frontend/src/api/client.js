@@ -104,6 +104,19 @@ export async function apiRequest(
   if (!response.ok) {
     const message = resolveApiErrorMessage(data, response.status);
 
+    // A 401 on a request that was sent with a token (not a login/2FA
+    // attempt, which pass authenticated:false and expect 401 on wrong
+    // credentials) means the session itself died - expired token,
+    // server restart invalidating it, etc. Previously only the initial
+    // page-load fetch cleared the session on 401; every other call just
+    // threw a local error the calling component may or may not surface,
+    // leaving a dead token in localStorage and the user stuck on a page
+    // that silently breaks feature by feature instead of being sent
+    // back to /login.
+    if (authenticated && response.status === 401) {
+      window.dispatchEvent(new CustomEvent("tzone:session-expired"));
+    }
+
     const error = new Error(message);
     error.status = response.status;
     error.data = data;
@@ -218,7 +231,9 @@ export async function verifyCodeRequest(purpose, code) {
 }
 
 export async function getSessionChangesRequest(purpose, token) {
-  return apiRequest(`/api/security/changes?purpose=${encodeURIComponent(purpose)}&token=${encodeURIComponent(token)}`);
+  return apiRequest(`/api/security/changes?purpose=${encodeURIComponent(purpose)}`, {
+    headers: { "X-Elevated-Token": token },
+  });
 }
 
 export async function getPlansCatalogRequest() {

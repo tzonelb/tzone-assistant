@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.services.auth_service import get_current_user
@@ -52,9 +52,10 @@ def verify_code(
 @router.get("/changes")
 def get_changes(
     purpose: str,
-    token: str,
     current_user: dict[str, Any] = Depends(get_current_user),
+    x_elevated_token: str | None = Header(default=None),
 ):
+    token = x_elevated_token or ""
     if not security_verification_service.check_elevated(user_id=current_user["id"], token=token, purpose=purpose):
         raise HTTPException(status_code=401, detail="Verification session expired.")
     return {"changes": security_verification_service.get_recent_changes(

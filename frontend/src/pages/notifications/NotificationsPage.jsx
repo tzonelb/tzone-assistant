@@ -1,5 +1,5 @@
 import { DoneAllOutlined, ExpandLessOutlined, ExpandMoreOutlined, NotificationsNoneOutlined, RefreshOutlined } from "@mui/icons-material";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "../../contexts/NotificationContext";
 import { formatPlatformDateTime, platformTimestamp } from "../../utils/dateTime";
@@ -19,6 +19,13 @@ export default function NotificationsPage() {
 
   useEffect(() => { refresh({ filters: { status: statusFilter, type: typeFilter, channel: channelFilter, date: dateFilter } }); }, [statusFilter, typeFilter, channelFilter, dateFilter, refresh]);
 
+  // The type dropdown's own option list must not depend on `items`,
+  // since `items` is already server-filtered by the active type/channel/
+  // date filters - once any category is picked, `items` would only ever
+  // contain that one category, collapsing the dropdown's other options
+  // and making it impossible to switch straight to a different one
+  // without first resetting to "All categories".
+  const seenTypesRef = useRef(new Map());
   const counts = useMemo(() => {
     const channel = Object.fromEntries(CHANNELS.map((name) => [name, 0]));
     const type = {};
@@ -27,8 +34,13 @@ export default function NotificationsPage() {
       if (item.channel) channel[item.channel] = (channel[item.channel] || 0) + amount;
       if (item.notification_type) type[item.notification_type] = (type[item.notification_type] || 0) + amount;
     });
-    return { channel, type };
-  }, [items]);
+    if (!typeFilter) {
+      seenTypesRef.current = new Map(Object.entries(type));
+    } else {
+      Object.keys(type).forEach((key) => seenTypesRef.current.set(key, type[key]));
+    }
+    return { channel, type: Object.fromEntries(seenTypesRef.current) };
+  }, [items, typeFilter]);
 
   async function openConversation(item) {
     if (isUnread(item)) await markRead(item);
