@@ -63,6 +63,11 @@
   max-width: 220px;
 }
 
+.reply-flow-multiselect-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .reply-flow-multiselect-trigger-label {
   color: var(--tz-text-muted);
   font-weight: 700;

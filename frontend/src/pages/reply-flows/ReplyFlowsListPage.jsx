@@ -9,7 +9,7 @@ import {
   listDepartmentsRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
-import MultiSelectChips from "./MultiSelectChips";
+import MultiSelectChips from "../../components/common/MultiSelectChips";
 import "./ReplyFlowsListPage.css";
 
 // Kept in sync by hand with backend/services/reply_flow_service.py's

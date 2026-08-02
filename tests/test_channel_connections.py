@@ -180,8 +180,7 @@ def test_change_log_records_what_happened_during_the_session(client_and_db):
         with patch("channels.telegram.manager.start_bot"):
             client.post("/api/channels/telegram/connect", json={"bot_token": "123:ABC"}, headers=headers)
 
-    token = headers["X-Elevated-Token"]
-    resp = client.get(f"/api/security/changes?purpose=channels_access&token={token}")
+    resp = client.get("/api/security/changes?purpose=channels_access", headers=headers)
     assert resp.status_code == 200
     changes = resp.json()["changes"]
     assert len(changes) == 1

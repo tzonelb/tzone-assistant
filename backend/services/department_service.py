@@ -59,6 +59,26 @@ class DepartmentService:
             conn.commit()
         return self.list_for_company(company_id=company_id)
 
+    def clean_selection(self, *, company_id: int, departments: list[str] | None) -> list[str]:
+        """Validates and de-duplicates a list of department names against
+        this company's real departments (including the implicit
+        "Unassigned"). Shared by every feature that lets an owner
+        multi-assign departments to something — e.g. employee department
+        membership in Roles & Permissions."""
+        if not departments:
+            return []
+        real_departments = set(self.list_for_company(company_id=company_id))
+        cleaned = []
+        for department in departments:
+            department = (department or "").strip()
+            if not department:
+                continue
+            if department not in real_departments:
+                raise ValueError(f'"{department}" is not a registered department.')
+            if department not in cleaned:
+                cleaned.append(department)
+        return cleaned
+
     def delete(self, *, company_id: int, name: str) -> list[str]:
         with db.connect() as conn:
             cursor = conn.execute(

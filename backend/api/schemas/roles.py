@@ -21,9 +21,11 @@ class UserCreateRequest(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     role_id: int
     branch_id: int | None = None
+    departments: list[str] = []
 
 
 class UserAssignmentRequest(BaseModel):
     role_id: int
     branch_id: int | None = None
     status: str = Field(default="active", pattern=r"^(active|disabled)$")
+    departments: list[str] = []

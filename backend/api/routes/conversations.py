@@ -231,6 +231,8 @@ def _user_name(
 
 def _company_employees(
     company_id: int,
+    *,
+    department: str | None = None,
 ) -> list[dict[str, Any]]:
     from database.database import db
 
@@ -244,7 +246,8 @@ def _company_employees(
                 users.phone,
                 roles.name AS role_name,
                 roles.code AS role_code,
-                company_users.branch_id
+                company_users.branch_id,
+                company_users.departments_json
             FROM company_users
             JOIN users
                 ON users.id =
@@ -262,17 +265,24 @@ def _company_employees(
             (company_id,),
         ).fetchall()
 
-    return [
-        {
-            **dict(row),
-            "display_name": (
-                row["full_name"]
-                or row["email"]
-                or f"User {row['id']}"
-            ),
-        }
-        for row in rows
-    ]
+    normalized_department = (department or "").strip()
+    employees = []
+    for row in rows:
+        item = dict(row)
+        item["departments"] = json.loads(item.pop("departments_json") or "[]")
+        item["display_name"] = (
+            row["full_name"]
+            or row["email"]
+            or f"User {row['id']}"
+        )
+        # An employee with no department memberships hasn't been scoped
+        # yet — keep them visible to every department's pickers rather
+        # than silently hiding unassigned staff.
+        if normalized_department and item["departments"] and normalized_department not in item["departments"]:
+            continue
+        employees.append(item)
+
+    return employees
 
 
 def _is_conversation_admin(

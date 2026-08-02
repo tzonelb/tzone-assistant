@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.api.schemas.roles import (
@@ -7,6 +9,7 @@ from backend.api.schemas.roles import (
     UserCreateRequest,
 )
 from backend.services.auth_service import auth_service, get_current_user
+from backend.services.department_service import department_service
 from backend.services.platform_admin_service import platform_admin_service
 from database.database import db
 
@@ -70,6 +73,7 @@ def overview(current_user: dict = Depends(get_current_user)):
                 users.last_login_at,
                 company_users.status AS membership_status,
                 company_users.branch_id,
+                company_users.departments_json,
                 roles.id AS role_id,
                 roles.name AS role_name,
                 roles.code AS role_code,
@@ -81,6 +85,8 @@ def overview(current_user: dict = Depends(get_current_user)):
             WHERE company_users.company_id = ?
             ORDER BY users.full_name, users.email
         """, (company_id,)).fetchall()]
+        for user in users:
+            user["departments"] = json.loads(user.pop("departments_json") or "[]")
 
         branches = [dict(row) for row in conn.execute("""
             SELECT id, name, code
@@ -101,6 +107,7 @@ def overview(current_user: dict = Depends(get_current_user)):
         "roles": roles,
         "users": users,
         "branches": branches,
+        "departments": department_service.list_for_company(company_id=company_id),
     }
 
 
@@ -183,6 +190,12 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+
+    try:
+        cleaned_departments = department_service.clean_selection(company_id=company_id, departments=payload.departments)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     try:
         user_id = auth_service.create_user(
             email=payload.email,
@@ -195,9 +208,9 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
 
     with db.connect() as conn:
         conn.execute("""
-            INSERT INTO company_users (company_id, user_id, role_id, branch_id, status)
-            VALUES (?, ?, ?, ?, 'active')
-        """, (company_id, user_id, payload.role_id, payload.branch_id))
+            INSERT INTO company_users (company_id, user_id, role_id, branch_id, status, departments_json)
+            VALUES (?, ?, ?, ?, 'active', ?)
+        """, (company_id, user_id, payload.role_id, payload.branch_id, json.dumps(cleaned_departments)))
         conn.commit()
     return {"success": True, "user_id": user_id}
 
@@ -208,15 +221,21 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
     _require_access_admin(current_user, company_id)
     if user_id == current_user["id"] and payload.status != "active":
         raise HTTPException(status_code=400, detail="You cannot disable your own membership.")
+
+    try:
+        cleaned_departments = department_service.clean_selection(company_id=company_id, departments=payload.departments)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     with db.connect() as conn:
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
         cursor = conn.execute("""
             UPDATE company_users
-            SET role_id = ?, branch_id = ?, status = ?
+            SET role_id = ?, branch_id = ?, status = ?, departments_json = ?
             WHERE company_id = ? AND user_id = ?
-        """, (payload.role_id, payload.branch_id, payload.status, company_id, user_id))
+        """, (payload.role_id, payload.branch_id, payload.status, json.dumps(cleaned_departments), company_id, user_id))
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Company user not found.")
         conn.commit()

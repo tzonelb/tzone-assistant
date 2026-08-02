@@ -697,6 +697,17 @@ class Database:
             ON conversation_events(conversation_id, created_at DESC)
         """)
 
+        # An employee can belong to more than one department (e.g. both
+        # "Sales" and "Support"), so this is a JSON array of department
+        # names, not a single column — matches the multi-select pattern
+        # already used for reply_flows.departments_json.
+        self._ensure_column(
+            cursor,
+            "company_users",
+            "departments_json",
+            "TEXT",
+        )
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS conversation_notes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

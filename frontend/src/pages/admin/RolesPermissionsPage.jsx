@@ -6,6 +6,7 @@ import {
   updateAccessRoleRequest,
   updateCompanyUserRequest,
 } from "../../api/client";
+import MultiSelectPopover from "../../components/common/MultiSelectPopover";
 
 // Permission codes are "area.action" (e.g. "conversations.view"). Grouping
 // them by area turns a flat 19-item checkbox list into something an owner
@@ -33,7 +34,9 @@ function groupPermissions(permissions) {
   return Array.from(groups.entries());
 }
 
-function RoleUsersTable({ users, roles, branches, saving, onUpdateUser }) {
+function RoleUsersTable({ users, roles, branches, departments, saving, onUpdateUser }) {
+  const departmentOptions = departments.filter((name) => name !== "Unassigned").map((name) => ({ value: name, label: name }));
+
   return (
     <div className="admin-access-card users-card">
       <div className="users-card-header">
@@ -48,6 +51,7 @@ function RoleUsersTable({ users, roles, branches, saving, onUpdateUser }) {
             <tr>
               <th>User</th>
               <th>Role</th>
+              <th>Departments</th>
               <th>Branch</th>
               <th>Status</th>
               <th>Last login</th>
@@ -68,6 +72,16 @@ function RoleUsersTable({ users, roles, branches, saving, onUpdateUser }) {
                   >
                     {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
                   </select>
+                </td>
+                <td>
+                  <MultiSelectPopover
+                    options={departmentOptions}
+                    value={user.departments || []}
+                    disabled={saving}
+                    allLabel="All departments"
+                    emptyHint="Add departments in Company Settings first."
+                    onChange={(next) => onUpdateUser(user, { departments: next })}
+                  />
                 </td>
                 <td>
                   <select
@@ -135,7 +149,9 @@ function RolePermissionEditor({ role, groupedPermissions, saving, onTogglePermis
   );
 }
 
-function AddUserForm({ newUser, setNewUser, roles, branches }) {
+function AddUserForm({ newUser, setNewUser, roles, branches, departments }) {
+  const departmentOptions = departments.filter((name) => name !== "Unassigned").map((name) => ({ value: name, label: name }));
+
   return (
     <>
       <label>Full name<input value={newUser.full_name} onChange={(event) => setNewUser({ ...newUser, full_name: event.target.value })} required /></label>
@@ -155,6 +171,16 @@ function AddUserForm({ newUser, setNewUser, roles, branches }) {
           <option value="">All branches</option>
           {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
         </select>
+      </label>
+      <label>
+        Departments
+        <MultiSelectPopover
+          options={departmentOptions}
+          value={newUser.departments}
+          allLabel="All departments"
+          emptyHint="Add departments in Company Settings first."
+          onChange={(next) => setNewUser({ ...newUser, departments: next })}
+        />
       </label>
     </>
   );
@@ -193,7 +219,7 @@ export default function RolesPermissionsPage() {
   const [mode, setMode] = useState(null);
   const [selectedRoleId, setSelectedRoleId] = useState(null);
   const [newRole, setNewRole] = useState({ name: "", code: "", description: "", permission_codes: [] });
-  const [newUser, setNewUser] = useState({ full_name: "", email: "", password: "", phone: "", role_id: "", branch_id: "" });
+  const [newUser, setNewUser] = useState({ full_name: "", email: "", password: "", phone: "", role_id: "", branch_id: "", departments: [] });
 
   async function load() {
     setLoading(true);
@@ -246,7 +272,7 @@ export default function RolesPermissionsPage() {
         role_id: Number(newUser.role_id),
         branch_id: newUser.branch_id ? Number(newUser.branch_id) : null,
       });
-      setNewUser({ full_name: "", email: "", password: "", phone: "", role_id: "", branch_id: "" });
+      setNewUser({ full_name: "", email: "", password: "", phone: "", role_id: "", branch_id: "", departments: [] });
       setMode(null);
       await load();
     } catch (requestError) {
@@ -263,6 +289,7 @@ export default function RolesPermissionsPage() {
         role_id: updates.role_id ?? user.role_id,
         branch_id: updates.branch_id !== undefined ? updates.branch_id : user.branch_id,
         status: updates.status ?? user.membership_status,
+        departments: updates.departments ?? user.departments ?? [],
       });
       await load();
     } catch (requestError) {
@@ -309,6 +336,7 @@ export default function RolesPermissionsPage() {
         users={data?.users}
         roles={data?.roles || []}
         branches={data?.branches || []}
+        departments={data?.departments || []}
         saving={saving}
         onUpdateUser={updateUser}
       />
@@ -347,7 +375,7 @@ export default function RolesPermissionsPage() {
               <button type="button" onClick={() => setMode(null)}>×</button>
             </div>
             {mode === "user" ? (
-              <AddUserForm newUser={newUser} setNewUser={setNewUser} roles={data?.roles || []} branches={data?.branches || []} />
+              <AddUserForm newUser={newUser} setNewUser={setNewUser} roles={data?.roles || []} branches={data?.branches || []} departments={data?.departments || []} />
             ) : (
               <AddRoleForm newRole={newRole} setNewRole={setNewRole} groupedPermissions={groupedPermissions} onToggle={toggleNewRolePermission} />
             )}

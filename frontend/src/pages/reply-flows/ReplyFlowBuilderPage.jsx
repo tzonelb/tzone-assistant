@@ -11,7 +11,7 @@ import { AppButton, LoadingState, ErrorState } from "../../components/common";
 import FlowStepNode from "./FlowStepNode";
 import { NODE_GROUPS, NODE_TYPE_CONFIG } from "./nodeTypesConfig";
 import { NODE_FIELDS, previewText } from "./nodeFieldsConfig";
-import MultiSelectPopover from "./MultiSelectPopover";
+import MultiSelectPopover from "../../components/common/MultiSelectPopover";
 import { CHANNEL_OPTIONS, REPLY_MODE_OPTIONS } from "./ReplyFlowsListPage";
 import "./ReplyFlowBuilderPage.css";
 

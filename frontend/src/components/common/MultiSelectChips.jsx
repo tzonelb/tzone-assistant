@@ -1,9 +1,10 @@
 import "./MultiSelect.css";
 
 // Reusable multi-select for a small, fixed list of options — chips you
-// toggle on/off. Used for Channel and Department everywhere in Reply
-// Flows per the standing rule: never a single-select when more than one
-// value can legitimately apply at once.
+// toggle on/off. Used wherever more than one value can legitimately
+// apply at once (Reply Flow channels/departments, employee department
+// membership, etc.) per the standing rule: never a single-select when
+// multi-select is the honest model.
 export default function MultiSelectChips({ options, value, onChange, disabled, emptyHint }) {
   function toggle(optionValue) {
     if (disabled) return;
