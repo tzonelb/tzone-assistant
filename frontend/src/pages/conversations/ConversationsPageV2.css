@@ -1,53 +1,14 @@
 /* Conversations v2 — thread list + filter row rebuilt per
-   CLAUDE_CODE_UI_IMPLEMENTATION.md §3. Scoped under .tzv2-conv-page so
-   its .btn/.tag utility classes (borrowed from the mockup's own naming)
-   never leak into the rest of the app — v1's Conversations screen and
-   every other page keep using their existing classes untouched. */
+   CLAUDE_CODE_UI_IMPLEMENTATION.md §3. .btn/.tag come from the shared
+   frontend/src/styles/v2-components.css (loaded globally, scoped under
+   .tzv2 — AppLayout.jsx puts that class on .app-layout-v2, so every v2
+   screen rendered inside it inherits the same button/tag/card system
+   instead of each page re-declaring its own). */
 .tzv2-conv-page {
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-
-.tzv2-conv-page .btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--tz-border);
-  border-radius: var(--tz-radius-sm);
-  background: var(--tz-surface);
-  color: var(--tz-text-primary);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.tzv2-conv-page .btn-primary {
-  border-color: var(--color-accent, var(--tz-primary));
-  background: var(--color-accent, var(--tz-primary));
-  color: #fff;
-}
-
-.tzv2-conv-page .tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
-  border: 1px solid var(--tz-border);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--tz-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.tzv2-conv-page .tag-outline {
-  border-color: var(--color-accent, var(--tz-primary));
-  color: var(--color-accent, var(--tz-primary));
 }
 
 .tzv2-conv-filterbar {

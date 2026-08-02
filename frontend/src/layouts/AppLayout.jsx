@@ -606,7 +606,7 @@ export default function AppLayout() {
     <div
       className={
         uiV2
-          ? "app-layout-v2"
+          ? "tzv2 app-layout-v2"
           : `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
               sidebarCollapsed ? "app-layout-sidebar-collapsed" : ""
             }`

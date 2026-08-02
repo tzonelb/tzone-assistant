@@ -16,6 +16,11 @@ import "./styles/global.css";
 import "./styles/ui-kit.css";
 import "./styles/table.css";
 import "./styles/chat.css";
+import "./styles/v2-components.css";
+
+import { initAndroidShell } from "./native/androidShell";
+
+initAndroidShell();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
