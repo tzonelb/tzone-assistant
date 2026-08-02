@@ -576,6 +576,32 @@ def test_owner_can_send_manual_reply(env):
     assert resp.status_code == 200, resp.text
 
 
+def test_control_endpoint_can_reply_reflects_real_permission(env):
+    """Before this fix, GET .../control's can_reply flag was computed
+    purely from ownership (assigned_user_id == current user), never
+    checking conversations.reply - so an owning employee without that
+    permission saw a composer that looked enabled and then 403'd on
+    send. Owning the conversation must no longer be sufficient on its
+    own; the permission has to actually be granted too."""
+    from backend.services.conversation_control_service import conversation_control_service
+
+    conversation_control_service.set_ai_mode(
+        company_id=COMPANY_ID, channel="telegram", external_user_id="no-reply-perm-user",
+        handled_by_ai=False, actor_user_id=EMPLOYEE_ID,
+    )
+    client = env(EMPLOYEE_ID)
+    resp = client.get("/conversations/telegram/no-reply-perm-user/control")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["permissions"]["can_reply"] is False
+
+    # Grant conversations.reply via a custom role -> now it flips true
+    # for the same ownership state.
+    role_id = _grant_permission("repliers", "Repliers", "conversations.reply")
+    _assign_role(EMPLOYEE_ID, role_id)
+    resp = client.get("/conversations/telegram/no-reply-perm-user/control")
+    assert resp.json()["permissions"]["can_reply"] is True
+
+
 # ===========================================================================
 # calls - conversations.reply (create), conversations.view (list),
 # settings.manage (delete)

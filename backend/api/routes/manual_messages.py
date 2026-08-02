@@ -19,6 +19,7 @@ from backend.services.conversation_control_service import (
 from backend.services.message_status_service import message_status_service
 from channels.meta.sender import send_meta_text
 from channels.telegram.sender import send_telegram_text
+from channels.whatsapp.sender import send_whatsapp_text
 from core.conversation_store import (
     save_conversation_message,
 )
@@ -35,7 +36,7 @@ SUPPORTED_META_CHANNELS = {
     "instagram",
 }
 
-SUPPORTED_CHANNELS = SUPPORTED_META_CHANNELS | {"telegram"}
+SUPPORTED_CHANNELS = SUPPORTED_META_CHANNELS | {"telegram", "whatsapp"}
 
 
 class ManualReplyRequest(BaseModel):
@@ -71,7 +72,8 @@ def _validate_channel(
             detail=(
                 "Manual sending currently "
                 "supports only Messenger, "
-                "Instagram, and Telegram."
+                "Instagram, WhatsApp, and "
+                "Telegram."
             ),
         )
 
@@ -261,6 +263,21 @@ def send_manual_conversation_reply(
             recipient_id=normalized_user_id,
             text=message_text,
         )
+    elif normalized_channel == "whatsapp":
+        whatsapp_result = send_whatsapp_text(
+            normalized_user_id,
+            message_text,
+            company_id=company_id,
+        )
+        # Normalize to the {"ok": ..., "response": ...} shape the rest of
+        # this handler (including _extract_meta_error, which already
+        # understands the Graph API error shape WhatsApp Cloud shares
+        # with Messenger/Instagram) expects from every sender.
+        send_result = {
+            "ok": whatsapp_result.get("sent", False),
+            "response": whatsapp_result.get("response", {}),
+            "reason": whatsapp_result.get("reason"),
+        }
     else:
         send_result = send_meta_text(
             recipient_id=normalized_user_id,
@@ -292,6 +309,14 @@ def send_manual_conversation_reply(
         response_payload = send_result.get("response", {})
         provider_message_id = (
             response_payload.get("result", {}).get("message_id")
+            if isinstance(response_payload, dict)
+            else None
+        )
+    elif normalized_channel == "whatsapp":
+        provider_name = "whatsapp"
+        response_payload = send_result.get("response", {})
+        provider_message_id = (
+            (response_payload.get("messages") or [{}])[0].get("id")
             if isinstance(response_payload, dict)
             else None
         )

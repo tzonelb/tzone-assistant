@@ -292,10 +292,14 @@ export default function ConversationDetailPage({
         // Load messages first: the backend records the owner opening the chat
         // and clears unread before the control state is fetched. This avoids
         // a race where the unread badge remained visible until the next poll.
+        // Silent background polls don't mark-read - otherwise clicking
+        // "mark as unread" while still viewing the conversation would get
+        // silently undone by the very next 3-second refresh tick.
         const messagesResult = await getConversationMessagesRequest(
           channel,
           userId,
           300,
+          !silent,
         );
         const controlResult = await getConversationControlRequest(
           channel,
@@ -1200,20 +1204,29 @@ export default function ConversationDetailPage({
 
           {toolsMenuOpen ? (
             <div style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 16, width: 210, background: "#fff", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", borderRadius: 10, zIndex: 30, overflow: "hidden", border: "1px solid #e5e7eb" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", fontSize: 14 }} onClick={() => setToolsMenuOpen(false)}>
-                <AttachFileOutlined fontSize="small" /> Attachment
-                <input type="file" hidden />
-              </label>
-              <label style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", cursor: "pointer", fontSize: 14, borderTop: "1px solid #f1f3f5" }} onClick={() => setToolsMenuOpen(false)}>
-                <ImageOutlined fontSize="small" /> Image
-                <input type="file" accept="image/*" hidden />
-              </label>
               <button
                 type="button"
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "pointer", textAlign: "left" }}
-                onClick={() => { setToolsMenuOpen(false); }}
+                disabled
+                title="Sending attachments from the dashboard isn't built yet"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", cursor: "not-allowed", textAlign: "left", opacity: 0.5 }}
               >
-                <MicNoneOutlined fontSize="small" /> Voice note
+                <AttachFileOutlined fontSize="small" /> Attachment (coming soon)
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Sending images from the dashboard isn't built yet"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "not-allowed", textAlign: "left", opacity: 0.5 }}
+              >
+                <ImageOutlined fontSize="small" /> Image (coming soon)
+              </button>
+              <button
+                type="button"
+                disabled
+                title="Recording voice notes from the dashboard isn't built yet"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "not-allowed", textAlign: "left", opacity: 0.5 }}
+              >
+                <MicNoneOutlined fontSize="small" /> Voice note (coming soon)
               </button>
               <button
                 type="button"

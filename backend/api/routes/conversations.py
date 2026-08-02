@@ -989,6 +989,7 @@ def read_conversation(
         ge=1,
         le=500,
     ),
+    mark_read: bool = Query(default=True),
     current_user: dict[
         str,
         Any,
@@ -1011,12 +1012,17 @@ def read_conversation(
         )
 
     company_id = auth_service.resolve_company_id(current_user)
-    conversation_control_service.record_opened(
-        company_id=company_id,
-        channel=channel,
-        external_user_id=user_id,
-        actor_user_id=int(current_user["id"]),
-    )
+    # Background polling of an already-open conversation passes
+    # mark_read=false - otherwise an explicit "mark as unread" click gets
+    # silently undone by the next 3-second refresh tick, since every read
+    # of this endpoint would otherwise re-clear unread_count.
+    if mark_read:
+        conversation_control_service.record_opened(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            actor_user_id=int(current_user["id"]),
+        )
 
     outbound_ids = [
         str(m["metadata"]["provider_message_id"])
@@ -1100,8 +1106,12 @@ def read_control(
     )
     result["current_user_id"] = current_user_id
     result["current_user_is_admin"] = is_admin
+    has_reply_permission = auth_service.has_permission(
+        user_id=current_user_id, company_id=company_id,
+        permission_code="conversations.reply", is_super_admin=bool(current_user.get("is_super_admin")),
+    )
     result["permissions"] = {
-        "can_reply": bool(is_owner and not conversation.get("handled_by_ai", True)),
+        "can_reply": bool(is_owner and has_reply_permission and not conversation.get("handled_by_ai", True)),
         "can_manage": bool(is_admin or is_owner),
         "can_mark_read": bool(is_admin or is_owner),
         "can_take_over": bool(

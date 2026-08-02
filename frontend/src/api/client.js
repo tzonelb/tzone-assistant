@@ -807,8 +807,9 @@ export async function getConversationMessagesRequest(
   channel,
   userId,
   limit = 200,
+  markRead = true,
 ) {
-  const query = createQueryString({ limit });
+  const query = createQueryString({ limit, mark_read: markRead });
   return apiRequest(
     `${conversationPath(channel, userId)}${query}`,
   );
