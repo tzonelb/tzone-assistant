@@ -195,6 +195,29 @@ def test_create_and_apply_segment(client_and_db):
     assert items[0]["id"] == a["id"]
 
 
+def test_segment_can_filter_by_assigned_employee(client_and_db):
+    """Before this fix, SegmentFilters had no assigned_user_id field at
+    all, so 'Save as segment' silently dropped the employee filter and
+    selecting the segment back never restored it."""
+    client = client_and_db
+    mine = _make_contact(client, external_user_id="c", display_name="Mine")
+    _make_contact(client, external_user_id="d", display_name="Not mine")
+    client.put(f"/api/customers/{mine['id']}", json={"assigned_user_id": 1})
+
+    create_resp = client.post(
+        "/api/customer-segments",
+        json={"name": "My Contacts", "filters": {"assigned_user_id": 1}},
+    )
+    assert create_resp.status_code == 200, create_resp.text
+    segment = create_resp.json()
+    assert segment["filters"]["assigned_user_id"] == "1"
+
+    apply_resp = client.get("/api/customers", params={"segment_id": segment["id"]})
+    items = apply_resp.json()["items"]
+    assert len(items) == 1
+    assert items[0]["id"] == mine["id"]
+
+
 def test_cannot_create_duplicate_segment_name(client_and_db):
     client = client_and_db
     client.post("/api/customer-segments", json={"name": "Leads", "filters": {}})

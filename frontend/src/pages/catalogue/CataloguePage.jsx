@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, UploadFileOutlined } from "@mui/icons-material";
+import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, EditOutlined, UploadFileOutlined } from "@mui/icons-material";
 import {
   catalogueOptionsRequest,
   createProductRequest,
@@ -118,7 +118,7 @@ function ImportDialog({ open, onCancel, onImported }) {
           {result ? (
             <p className="product-import-result">
               {result.created} created, {result.updated} updated
-              {result.errors?.length ? `, ${result.errors.length} row(s) skipped: ${result.errors.join(" ")}` : "."}
+              {result.errors?.length ? `. ${result.errors.length} row(s) had a problem: ${result.errors.join(" ")}` : "."}
             </p>
           ) : null}
         </div>
@@ -146,6 +146,7 @@ export default function CataloguePage() {
   const [deleting, setDeleting] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -188,35 +189,57 @@ export default function CataloguePage() {
   useEffect(() => { loadOptions(); }, [loadOptions]);
 
   function openDialog() {
+    setEditingProduct(null);
     setForm(EMPTY_FORM);
+    setFormError("");
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(row) {
+    setEditingProduct(row);
+    setForm({
+      name: row.name || "",
+      sku: row.sku || "",
+      category: row.category || "",
+      price: row.price_cents ? (Number(row.price_cents) / 100).toFixed(2) : "",
+      stockQuantity: row.stock_quantity != null ? String(row.stock_quantity) : "",
+      description: row.description || "",
+      imageUrl: row.image_url || "",
+    });
     setFormError("");
     setDialogOpen(true);
   }
 
   function closeDialog() {
     setDialogOpen(false);
+    setEditingProduct(null);
   }
 
-  async function saveNewProduct(event) {
+  async function saveProduct(event) {
     event.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
     setFormError("");
+    const values = {
+      name: form.name.trim(),
+      sku: form.sku.trim() || undefined,
+      category: form.category.trim() || undefined,
+      price_cents: form.price ? Math.round(parseFloat(form.price) * 100) : 0,
+      stock_quantity: form.stockQuantity ? parseInt(form.stockQuantity, 10) : 0,
+      description: form.description.trim() || undefined,
+      image_url: form.imageUrl.trim() || undefined,
+    };
     try {
-      await createProductRequest({
-        name: form.name.trim(),
-        sku: form.sku.trim() || undefined,
-        category: form.category.trim() || undefined,
-        price_cents: form.price ? Math.round(parseFloat(form.price) * 100) : 0,
-        stock_quantity: form.stockQuantity ? parseInt(form.stockQuantity, 10) : 0,
-        description: form.description.trim() || undefined,
-        image_url: form.imageUrl.trim() || undefined,
-      });
+      if (editingProduct) {
+        await updateProductRequest(editingProduct.id, values);
+      } else {
+        await createProductRequest(values);
+      }
       closeDialog();
       await loadOptions();
       await load();
     } catch (requestError) {
-      setFormError(requestError.message || "Could not create the product.");
+      setFormError(requestError.message || (editingProduct ? "Could not update the product." : "Could not create the product."));
     } finally {
       setSaving(false);
     }
@@ -293,16 +316,26 @@ export default function CataloguePage() {
     {
       key: "_actions",
       label: "",
-      width: 44,
+      width: 76,
       render: (_value, row) => (
-        <button
-          type="button"
-          className="product-delete-button"
-          aria-label={`Delete product ${row.name}`}
-          onClick={() => setProductToDelete(row)}
-        >
-          <DeleteOutlineOutlined fontSize="small" />
-        </button>
+        <div className="product-row-actions">
+          <button
+            type="button"
+            className="product-edit-button"
+            aria-label={`Edit product ${row.name}`}
+            onClick={() => openEditDialog(row)}
+          >
+            <EditOutlined fontSize="small" />
+          </button>
+          <button
+            type="button"
+            className="product-delete-button"
+            aria-label={`Delete product ${row.name}`}
+            onClick={() => setProductToDelete(row)}
+          >
+            <DeleteOutlineOutlined fontSize="small" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -358,9 +391,9 @@ export default function CataloguePage() {
           role="presentation"
           onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}
         >
-          <form className="tz-dialog" onSubmit={saveNewProduct}>
+          <form className="tz-dialog" onSubmit={saveProduct}>
             <header className="tz-dialog-header">
-              <h3>New product</h3>
+              <h3>{editingProduct ? "Edit product" : "New product"}</h3>
               <button type="button" className="tz-dialog-close" onClick={closeDialog}>
                 <CloseOutlined fontSize="small" />
               </button>
@@ -449,7 +482,7 @@ export default function CataloguePage() {
             </div>
             <footer className="tz-dialog-actions">
               <AppButton type="button" variant="secondary" disabled={saving} onClick={closeDialog}>Cancel</AppButton>
-              <AppButton type="submit" variant="primary" loading={saving}>Create product</AppButton>
+              <AppButton type="submit" variant="primary" loading={saving}>{editingProduct ? "Save changes" : "Create product"}</AppButton>
             </footer>
           </form>
         </div>
@@ -469,7 +502,7 @@ export default function CataloguePage() {
       <ImportDialog
         open={importDialogOpen}
         onCancel={() => setImportDialogOpen(false)}
-        onImported={load}
+        onImported={() => { load(); loadOptions(); }}
       />
     </section>
   );

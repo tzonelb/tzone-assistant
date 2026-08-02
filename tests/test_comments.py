@@ -33,7 +33,15 @@ def client_and_db():
             "VALUES (1, 'agent@test.local', 'Agent', 'active', 0)"
         )
         conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (1, 'Test Co', 'test-co', 1)")
-        conn.execute("INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 1, 'active')")
+        conn.execute(
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (1, 'Owner', 'owner', 'Full access', 1)"
+        )
+        owner_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'").fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 1, ?, 'active')",
+            (owner_role_id,),
+        )
         # A connected Facebook Page and an Instagram account.
         conn.execute(
             "INSERT INTO channel_accounts (id, company_id, channel, name, page_id, access_token_encrypted, status) "
@@ -199,6 +207,39 @@ def test_reply_instagram_uses_replies_endpoint(client_and_db):
         mock_post.return_value.json.return_value = {"id": "r2"}
         client_and_db.post(f"/api/comments/{cid}/reply", json={"text": "shukran"})
     assert "/ig_cmt_9/replies" in mock_post.call_args.args[0]
+
+
+def test_employee_without_modules_comments_permission_cannot_reply(client_and_db):
+    """Before this fix, comments.py had zero permission checks - any
+    authenticated company member could post a real, public reply to a
+    Facebook/Instagram comment regardless of role."""
+    from database.database import db
+    from backend.services.auth_service import auth_service, get_current_user
+    from backend.services.comment_service import comment_service
+    from main import app
+
+    comment_service.ingest_webhook(_fb_comment_payload())
+    comment_id = comment_service.list_comments(company_id=COMPANY_ID, post_external_id="POST_1")[0]["id"]
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (2, 'employee@test.local', 'Employee', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 2, NULL, 'active')"
+        )
+        conn.commit()
+
+    async def _override():
+        return {"id": 2, "email": "employee@test.local", "is_super_admin": False, "active_company_id": COMPANY_ID}
+    app.dependency_overrides[get_current_user] = _override
+
+    resp = client_and_db.post(f"/api/comments/{comment_id}/reply", json={"text": "Unauthorized reply"})
+    assert resp.status_code == 403
+
+    resp = client_and_db.get("/api/comments/posts")
+    assert resp.status_code == 403
 
 
 def test_comments_isolated_per_company(client_and_db):

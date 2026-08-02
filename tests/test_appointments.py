@@ -46,13 +46,31 @@ def client_and_db():
         owner_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'").fetchone()["id"]
         # Default fixture user (id=1) is the OWNER — sees every employee's
         # appointments — matching every pre-existing test's assumption.
-        # A separate plain-employee user (id=2, no role) is used by the
-        # dedicated per-employee-visibility tests below.
+        # A separate plain-employee role (granted only modules.appointments,
+        # not users.manage) is used by the dedicated per-employee-visibility
+        # tests below — real employees are always assigned SOME role with
+        # the module permission granted, never a bare company_users row
+        # with no role at all.
         conn.execute(
             "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 1, ?, 'active')",
             (owner_role_id,),
         )
-        conn.execute("INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 2, 'active')")
+        conn.execute(
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (1, 'Employee', 'employee', 'Regular employee', 0)"
+        )
+        employee_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'employee'").fetchone()["id"]
+        appointments_permission_id = conn.execute(
+            "SELECT id FROM permissions WHERE code = 'modules.appointments'"
+        ).fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
+            (employee_role_id, appointments_permission_id),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 2, ?, 'active')",
+            (employee_role_id,),
+        )
         conn.commit()
 
     from main import app
@@ -77,6 +95,30 @@ def client_and_db():
             break
         except PermissionError:
             time.sleep(0.1)
+
+
+def test_user_without_appointments_module_permission_is_blocked(client_and_db):
+    """The 'Use Appointments Module' toggle in Roles & Permissions must
+    actually be enforced - before this fix, appointments.py had zero
+    require_permission calls, so unchecking it did nothing."""
+    from database.database import db
+
+    client, state = client_and_db
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (3, 'noaccess@test.local', 'No Access', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 3, NULL, 'active')"
+        )
+        conn.commit()
+
+    state["user_id"] = 3
+    resp = client.get("/api/appointments")
+    assert resp.status_code == 403
+    resp = client.post("/api/appointments", json={"title": "Nope", "scheduled_at": "2026-08-01T10:00:00Z"})
+    assert resp.status_code == 403
 
 
 def test_create_appointment_defaults(client_and_db):

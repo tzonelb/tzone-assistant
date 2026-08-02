@@ -52,6 +52,12 @@
   font-weight: 700;
 }
 
+.product-row-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.product-edit-button,
 .product-delete-button {
   display: grid;
   place-items: center;
@@ -62,6 +68,11 @@
   color: var(--tz-text-muted);
   background: transparent;
   cursor: pointer;
+}
+
+.product-edit-button:hover {
+  color: var(--tz-primary);
+  background: var(--tz-primary-soft);
 }
 
 .product-delete-button:hover {

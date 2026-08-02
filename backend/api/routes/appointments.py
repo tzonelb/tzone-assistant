@@ -31,7 +31,8 @@ def _can_view_all(current_user, company_id: int) -> bool:
 
 @router.get("/options")
 def appointment_options(context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.appointments")
     return {
         "statuses": STATUSES,
         "employees": _company_employees(company_id),
@@ -41,6 +42,7 @@ def appointment_options(context=Depends(current_context)):
 @router.post("")
 def create_appointment(payload: AppointmentCreateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.appointments")
     try:
         return appointment_service.create_appointment(
             company_id=company_id,
@@ -69,6 +71,7 @@ def list_appointments(
     context=Depends(current_context),
 ):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.appointments")
     if not _can_view_all(current_user, company_id):
         employee_user_id = current_user.get("id")
     return appointment_service.list_appointments(
@@ -84,6 +87,7 @@ def list_appointments(
 @router.get("/{appointment_id}")
 def get_appointment(appointment_id: int, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.appointments")
     try:
         appointment = appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
     except KeyError as exc:
@@ -96,6 +100,7 @@ def get_appointment(appointment_id: int, context=Depends(current_context)):
 @router.put("/{appointment_id}")
 def update_appointment(appointment_id: int, payload: AppointmentUpdateRequest, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.appointments")
     try:
         existing = appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
     except KeyError as exc:
@@ -117,6 +122,7 @@ def update_appointment(appointment_id: int, payload: AppointmentUpdateRequest, c
 @router.delete("/{appointment_id}")
 def delete_appointment(appointment_id: int, context=Depends(current_context)):
     current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "modules.appointments")
     try:
         existing = appointment_service.get_appointment(company_id=company_id, appointment_id=appointment_id)
     except KeyError as exc:

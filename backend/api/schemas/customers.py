@@ -34,6 +34,7 @@ class SegmentFilters(BaseModel):
     lifecycle_stage: str | None = Field(default=None, max_length=40)
     tag: str | None = Field(default=None, max_length=80)
     channel: str | None = Field(default=None, max_length=40)
+    assigned_user_id: int | None = None
 
 
 class SegmentCreateRequest(BaseModel):

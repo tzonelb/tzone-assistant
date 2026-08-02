@@ -692,6 +692,19 @@ def test_owner_can_delete_customer_segment(env):
     assert resp.status_code == 200, resp.text
 
 
+def test_employee_can_delete_their_own_customer_segment(env):
+    """An employee with zero permissions can still save AND delete their
+    own segment - only deleting someone else's requires settings.manage.
+    Before this fix, delete always required settings.manage, so an
+    employee's own '×' button on their own segment always 403'd."""
+    client = env(EMPLOYEE_ID)
+    created = client.post(
+        "/api/customer-segments", json={"name": "My Own Segment", "filters": {}}
+    ).json()
+    resp = client.delete(f"/api/customer-segments/{created['id']}")
+    assert resp.status_code == 200, resp.text
+
+
 def test_employee_with_zero_permissions_can_still_do_basic_customer_crud(env):
     """Confirms day-to-day CRM work (list/create/update contacts) was NOT
     accidentally gated behind settings.manage."""

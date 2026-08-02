@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AddOutlined, CloseOutlined } from "@mui/icons-material";
 import {
@@ -12,6 +12,7 @@ import {
   updateCustomerRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, SearchBar } from "../../components/common";
+import { useAuth } from "../../contexts/AuthContext";
 import "./CustomersPage.css";
 
 const PAGE_SIZE = 25;
@@ -59,6 +60,12 @@ function TagEditor({ tags, disabled, onAdd, onRemove }) {
 
 export default function CustomersPage() {
   const navigate = useNavigate();
+  const { user, companies } = useAuth();
+  const canManageSettings = useMemo(() => {
+    if (user?.is_super_admin) return true;
+    const activeCompany = companies.find((company) => company.id === user?.active_company_id) || companies[0];
+    return activeCompany?.role_code === "owner" || (activeCompany?.permission_codes || []).includes("settings.manage");
+  }, [user, companies]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [lifecycleStages, setLifecycleStages] = useState([]);
@@ -146,10 +153,19 @@ export default function CustomersPage() {
     return () => window.clearTimeout(timeout);
   }, [searchInput]);
 
-  const availableTags = useMemo(() => {
-    const values = new Set();
-    rows.forEach((row) => (row.tags || []).forEach((item) => values.add(item)));
-    return [...values].sort();
+  // Accumulates every tag ever seen across loads instead of being
+  // recomputed from just the current (possibly tag-filtered) page - a
+  // plain useMemo off `rows` would make the dropdown's own option list
+  // collapse to just the active tag the moment it's used, since `rows`
+  // only ever contains matching results once a tag filter is applied.
+  const seenTagsRef = useRef(new Set());
+  const [availableTags, setAvailableTags] = useState([]);
+  useEffect(() => {
+    let changed = false;
+    rows.forEach((row) => (row.tags || []).forEach((item) => {
+      if (!seenTagsRef.current.has(item)) { seenTagsRef.current.add(item); changed = true; }
+    }));
+    if (changed) setAvailableTags([...seenTagsRef.current].sort());
   }, [rows]);
 
   function applyStageFilter(value) {
@@ -168,7 +184,14 @@ export default function CustomersPage() {
   }
 
   function applySegment(segment) {
-    setSegmentId((current) => (current === segment.id ? null : segment.id));
+    const next = segmentId === segment.id ? null : segment.id;
+    const filters = next ? segment.filters || {} : {};
+    setSegmentId(next);
+    setSearchInput(filters.search || "");
+    setSearch(filters.search || "");
+    setStageFilter(filters.lifecycle_stage || "");
+    setTagFilter(filters.tag || "");
+    setAssigneeFilter(filters.assigned_user_id ? String(filters.assigned_user_id) : "");
     setPage(1);
   }
 
@@ -221,7 +244,7 @@ export default function CustomersPage() {
     }
   }
 
-  const activeFilters = Boolean(search || stageFilter || tagFilter);
+  const activeFilters = Boolean(search || stageFilter || tagFilter || assigneeFilter);
 
   function toggleRowSelected(rowId) {
     setSelectedIds((current) => {
@@ -309,6 +332,7 @@ export default function CustomersPage() {
         search: search || undefined,
         lifecycle_stage: stageFilter || undefined,
         tag: tagFilter || undefined,
+        assigned_user_id: assigneeFilter ? Number(assigneeFilter) : undefined,
       });
       setSegmentDialogOpen(false);
       setSegmentName("");
@@ -338,7 +362,9 @@ export default function CustomersPage() {
   const allOnPageSelected = rows.length > 0 && rows.every((row) => selectedIds.has(row.id));
 
   const columns = [
-    {
+    // Bulk actions require settings.manage server-side - selection
+    // checkboxes are pointless (and misleading) to show otherwise.
+    ...(canManageSettings ? [{
       key: "_select",
       label: (
         <input
@@ -359,7 +385,7 @@ export default function CustomersPage() {
           onChange={() => toggleRowSelected(row.id)}
         />
       ),
-    },
+    }] : []),
     {
       key: "display_name",
       label: "Contact",
@@ -445,19 +471,24 @@ export default function CustomersPage() {
     <section className="customers-page">
       {segments.length ? (
         <div className="customer-segment-chips">
-          {segments.map((segment) => (
-            <span className={`customer-segment-chip ${segmentId === segment.id ? "is-active" : ""}`} key={segment.id}>
-              <button type="button" onClick={() => applySegment(segment)}>{segment.name}</button>
-              <button
-                type="button"
-                className="customer-segment-chip-remove"
-                aria-label={`Delete segment ${segment.name}`}
-                onClick={() => setSegmentToDelete(segment)}
-              >
-                <CloseOutlined fontSize="inherit" />
-              </button>
-            </span>
-          ))}
+          {segments.map((segment) => {
+            const canDeleteSegment = canManageSettings || segment.created_by_user_id === user?.id;
+            return (
+              <span className={`customer-segment-chip ${segmentId === segment.id ? "is-active" : ""}`} key={segment.id}>
+                <button type="button" onClick={() => applySegment(segment)}>{segment.name}</button>
+                {canDeleteSegment ? (
+                  <button
+                    type="button"
+                    className="customer-segment-chip-remove"
+                    aria-label={`Delete segment ${segment.name}`}
+                    onClick={() => setSegmentToDelete(segment)}
+                  >
+                    <CloseOutlined fontSize="inherit" />
+                  </button>
+                ) : null}
+              </span>
+            );
+          })}
         </div>
       ) : null}
 

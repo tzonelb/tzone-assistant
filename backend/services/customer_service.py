@@ -572,9 +572,10 @@ class CustomerService:
             where.append("c.tags_json LIKE ?")
             params.append(f'%"{str(tag_value).strip()}"%')
 
-        if assigned_user_id is not None:
+        effective_assigned_user_id = assigned_user_id if assigned_user_id is not None else filters.get("assigned_user_id")
+        if effective_assigned_user_id is not None:
             where.append("c.assigned_user_id = ?")
-            params.append(assigned_user_id)
+            params.append(int(effective_assigned_user_id))
 
         channel_value = filters.get("channel")
         if channel_value:
@@ -692,7 +693,7 @@ class CustomerService:
     # Broadcast/Reports. Filters are stored as opaque JSON so new
     # filter dimensions can be added without a schema migration.
     # ---------------------------------------------------------------
-    _SEGMENT_FILTER_KEYS = {"search", "lifecycle_stage", "tag", "channel"}
+    _SEGMENT_FILTER_KEYS = {"search", "lifecycle_stage", "tag", "channel", "assigned_user_id"}
 
     def _normalize_filters(self, filters: dict[str, Any] | None) -> dict[str, Any]:
         filters = filters or {}

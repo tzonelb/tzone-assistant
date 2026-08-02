@@ -25,6 +25,7 @@ def list_posts(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "modules.comments")
     posts = comment_service.list_posts(company_id=company_id, channel_account_id=channel_account_id)
     accounts = {a["id"]: a for a in channel_account_service.list_for_company(company_id=company_id)}
     for post in posts:
@@ -39,12 +40,14 @@ def list_posts(
 @router.get("/posts/{post_external_id}/comments")
 def list_comments(post_external_id: str, current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "modules.comments")
     return {"comments": comment_service.list_comments(company_id=company_id, post_external_id=post_external_id)}
 
 
 @router.post("/{comment_id}/reply")
 def reply(comment_id: int, payload: ReplyRequest, current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "modules.comments")
     try:
         return comment_service.reply_to_comment(
             company_id=company_id, comment_id=comment_id, text=payload.text,

@@ -154,7 +154,16 @@ def create_segment(payload: SegmentCreateRequest, context=Depends(current_contex
 @segments_router.delete("/{segment_id}")
 def delete_segment(segment_id: int, context=Depends(current_context)):
     current_user, company_id = context
-    auth_service.require_permission(current_user, company_id, "settings.manage")
+    try:
+        segment = customer_service.get_segment(company_id=company_id, segment_id=segment_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    # Anyone can delete a segment they created themselves; deleting one
+    # created by someone else needs settings.manage - otherwise every
+    # employee who saves their own segment immediately hits a 403 the
+    # moment they try to remove it.
+    if segment.get("created_by_user_id") != current_user.get("id"):
+        auth_service.require_permission(current_user, company_id, "settings.manage")
     try:
         customer_service.delete_segment(company_id=company_id, segment_id=segment_id)
     except KeyError as exc:

@@ -9,6 +9,7 @@ import {
   updateAppointmentRequest,
 } from "../../api/client";
 import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { useAuth } from "../../contexts/AuthContext";
 import "../customers/CustomersPage.css";
 import "./AppointmentsPage.css";
 
@@ -138,6 +139,19 @@ function NewAppointmentDialog({ open, statuses, employees, saving, error, onCanc
 }
 
 export default function AppointmentsPage() {
+  const { user, companies } = useAuth();
+  // Mirrors backend appointments.py's _can_view_all: only an owner,
+  // super admin, or a role granted users.manage can see appointments
+  // belonging to other employees. Showing the "All employees" picker to
+  // anyone else is misleading - the backend silently forces
+  // employee_user_id back to the viewer's own id regardless of what's
+  // picked, so a coworker's name would always look like they have zero
+  // appointments instead of "you can't see this."
+  const canViewAllEmployees = useMemo(() => {
+    if (user?.is_super_admin) return true;
+    const activeCompany = companies.find((company) => company.id === user?.active_company_id) || companies[0];
+    return activeCompany?.role_code === "owner" || (activeCompany?.permission_codes || []).includes("users.manage");
+  }, [user, companies]);
   const [rows, setRows] = useState([]);
   const [statuses, setStatuses] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -272,10 +286,12 @@ export default function AppointmentsPage() {
             <option value="">All statuses</option>
             {statuses.map((value) => <option value={value} key={value}>{humanize(value)}</option>)}
           </select>
-          <select className="tz-select" value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)}>
-            <option value="">All employees</option>
-            {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
-          </select>
+          {canViewAllEmployees ? (
+            <select className="tz-select" value={employeeFilter} onChange={(event) => setEmployeeFilter(event.target.value)}>
+              <option value="">All employees</option>
+              {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
+            </select>
+          ) : null}
           <AppButton variant="secondary" onClick={() => setDialogOpen(true)}>+ New appointment</AppButton>
         </div>
       </AppCard>
