@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "T-ZONE",
+    "slug": "tzone",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#F7F7FC",
+    "splash": {
+      "backgroundColor": "#4F63F0",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tzone.app"
+    },
+    "android": {
+      "package": "com.tzone.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#4F63F0",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
