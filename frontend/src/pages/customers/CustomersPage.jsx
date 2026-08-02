@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { AddOutlined, CloseOutlined } from "@mui/icons-material";
 import {
   bulkUpdateCustomersRequest,
@@ -74,8 +74,12 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  // Deep-link support for the topbar quick-search ("/customers?q=...") —
+  // e.g. Theme Studio v2's global search lands here with a prefilled term.
+  const initialQuery = searchParams.get("q") || "";
+  const [searchInput, setSearchInput] = useState(initialQuery);
+  const [search, setSearch] = useState(initialQuery);
   const [stageFilter, setStageFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [assigneeFilter, setAssigneeFilter] = useState("");

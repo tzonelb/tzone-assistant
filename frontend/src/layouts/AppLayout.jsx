@@ -20,8 +20,12 @@ import {
 
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import SidebarV2 from "../components/layout/SidebarV2";
+import TopbarV2 from "../components/layout/TopbarV2";
 import { useAuth } from "../contexts/AuthContext";
+import { isUiV2Enabled } from "../config/featureFlags";
 import { readNotificationPreferences } from "../utils/notificationPreferences";
+import "./AppLayoutV2.css";
 
 import {
   getConversationsRequest,
@@ -196,6 +200,17 @@ export default function AppLayout() {
       media.removeEventListener?.("change", applyAppearance);
     };
   }, []);
+  const [uiV2, setUiV2] = useState(isUiV2Enabled);
+  useEffect(() => {
+    function handleFlagChange() { setUiV2(isUiV2Enabled()); }
+    window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
+    window.addEventListener("storage", handleFlagChange);
+    return () => {
+      window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
+      window.removeEventListener("storage", handleFlagChange);
+    };
+  }, []);
+
   const [
     sidebarOpen,
     setSidebarOpen,
@@ -584,18 +599,20 @@ export default function AppLayout() {
 
   const companySettingsMode = location.pathname.startsWith("/company-settings");
   const standaloneSettingsMode = companySettingsMode || location.pathname === "/settings";
+  const SidebarComponent = uiV2 ? SidebarV2 : Sidebar;
+  const TopbarComponent = uiV2 ? TopbarV2 : Topbar;
 
   return (
     <div
       className={
-        `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
-          sidebarCollapsed
-            ? "app-layout-sidebar-collapsed"
-            : ""
-        }`
+        uiV2
+          ? "app-layout-v2"
+          : `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
+              sidebarCollapsed ? "app-layout-sidebar-collapsed" : ""
+            }`
       }
     >
-      {!standaloneSettingsMode ? <Sidebar
+      {!standaloneSettingsMode ? <SidebarComponent
         open={sidebarOpen}
         collapsed={sidebarCollapsed}
         companyName={companyName}
@@ -607,8 +624,8 @@ export default function AppLayout() {
         }
       /> : null}
 
-      <div className="app-main">
-        {!standaloneSettingsMode ? <Topbar
+      <div className={uiV2 ? "app-main-v2" : "app-main"}>
+        {!standaloneSettingsMode ? <TopbarComponent
           title={pageTitle}
           sidebarCollapsed={
             sidebarCollapsed
@@ -797,7 +814,10 @@ export default function AppLayout() {
           </div>
         ) : null}
 
-        <main className={`app-content ${location.pathname.startsWith("/conversations") || location.pathname.startsWith("/comments") ? "app-content-workspace" : "app-content-scroll"}`}>
+        <main className={uiV2
+          ? `app-content-v2 ${location.pathname.startsWith("/conversations") || location.pathname.startsWith("/comments") ? "app-content-workspace-v2" : ""}`
+          : `app-content ${location.pathname.startsWith("/conversations") || location.pathname.startsWith("/comments") ? "app-content-workspace" : "app-content-scroll"}`
+        }>
           <Outlet />
         </main>
       </div>

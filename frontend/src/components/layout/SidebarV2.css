@@ -1,0 +1,170 @@
+/* App shell rail (CLAUDE_CODE_UI_IMPLEMENTATION.md §2). Scoped --tzv2-*
+   variables instead of reusing --tz-sidebar/--tz-sidebar-hover on
+   purpose — those still drive the live v1 rail (light background) and
+   this rail is a deliberately different dark "paper" tone, only ever
+   rendered when ui_v2 is on. */
+.sidebar-v2 {
+  --tzv2-rail-bg: #111922;
+  --tzv2-rail-text: #f3f5f7;
+  flex: none;
+  width: var(--tz-rail-width, 236px);
+  display: flex;
+  flex-direction: column;
+  background: var(--tzv2-rail-bg);
+  color: var(--tzv2-rail-text);
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: width var(--tz-transition-fast, 140ms) ease;
+  z-index: 40;
+}
+
+.sidebar-v2-collapsed {
+  width: 58px;
+}
+
+.sidebar-v2-collapsed:hover {
+  width: var(--tz-rail-width, 236px);
+}
+
+.sidebar-v2-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 14px;
+  flex: none;
+}
+
+.sidebar-v2-collapse-toggle {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sidebar-v2-collapse-toggle:hover {
+  background: color-mix(in srgb, var(--tzv2-rail-text) 8%, transparent);
+}
+
+.sidebar-v2-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
+.sidebar-v2-brand-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.sidebar-v2-brand-copy strong {
+  font-family: var(--font-heading);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tzv2-rail-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-v2-kicker {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--tzv2-rail-text) 55%, transparent);
+}
+
+.sidebar-v2-nav {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-bottom: 8px;
+}
+
+.sidebar-v2-group {
+  padding: 6px 0;
+}
+
+.sidebar-v2-group-label {
+  padding: 8px 16px 4px;
+}
+
+.sidebar-v2-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 14px 7px 17px;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--tzv2-rail-text) 82%, transparent);
+  font-family: var(--font-body);
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sidebar-v2-link:hover {
+  color: var(--tzv2-rail-text);
+  background: color-mix(in srgb, var(--tzv2-rail-text) 6%, transparent);
+}
+
+.sidebar-v2-link svg {
+  flex: none;
+  opacity: 0.85;
+}
+
+.sidebar-v2-link-active {
+  color: var(--tzv2-rail-text);
+  background: color-mix(in srgb, var(--tzv2-rail-text) 10%, transparent);
+}
+
+.sidebar-v2-link-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--color-accent);
+}
+
+.sidebar-v2-badge {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-accent2, #3fb552);
+}
+
+.sidebar-v2-footer {
+  flex: none;
+  padding: 12px 16px;
+  border-top: 1px solid color-mix(in srgb, var(--tzv2-rail-text) 14%, transparent);
+}
+
+.sidebar-v2-mobile-open {
+  position: fixed;
+  inset: 0 auto 0 0;
+}
+
+@media (max-width: 900px) {
+  .sidebar-v2 {
+    position: fixed;
+    inset: 0 auto 0 0;
+    transform: translateX(-100%);
+    transition: transform var(--tz-transition-fast, 140ms) ease;
+  }
+  .sidebar-v2-mobile-open {
+    transform: translateX(0);
+  }
+}
