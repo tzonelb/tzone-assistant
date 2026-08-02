@@ -363,6 +363,76 @@ def test_change_plan_replaces_active_subscription(client_and_db):
     assert body["subscription"]["status"] == "active"
 
 
+def test_change_plan_extends_from_remaining_time_not_from_now(client_and_db):
+    """Before this fix, change_plan always set expires_at = now +
+    duration_days, discarding any time still remaining on the current
+    subscription. Renewing 20 days early with duration_days=30 must
+    land around 50 days out, not a flat 30."""
+    from datetime import datetime, timedelta, timezone
+    from database.database import db
+
+    client = client_and_db(1, is_super_admin=True)
+
+    create_resp = client.post(
+        "/api/platform/companies",
+        json={"name": "Early Renewer Co", "slug": "early-renewer-co", "plan_id": 1},
+    )
+    company_id = create_resp.json()["id"]
+
+    future_expiry = datetime.now(timezone.utc) + timedelta(days=20)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET expires_at = ? WHERE company_id = ? AND status IN ('active', 'trialing')",
+            (future_expiry.isoformat(), company_id),
+        )
+        conn.commit()
+
+    resp = client.post(
+        f"/api/platform/companies/{company_id}/plan",
+        json={"plan_id": 1, "duration_days": 30},
+    )
+    assert resp.status_code == 200, resp.text
+    new_expires_at = datetime.fromisoformat(resp.json()["subscription"]["expires_at"])
+    if new_expires_at.tzinfo is None:
+        new_expires_at = new_expires_at.replace(tzinfo=timezone.utc)
+
+    days_from_now = (new_expires_at - datetime.now(timezone.utc)).days
+    assert 45 <= days_from_now <= 50, f"expected ~50 days remaining, got {days_from_now}"
+
+
+def test_change_plan_after_expiry_starts_from_now(client_and_db):
+    """A lapsed subscription can't be extended from a past date - renewal
+    after expiry falls back to now + duration_days like before."""
+    from datetime import datetime, timedelta, timezone
+    from database.database import db
+
+    client = client_and_db(1, is_super_admin=True)
+
+    create_resp = client.post(
+        "/api/platform/companies",
+        json={"name": "Lapsed Co", "slug": "lapsed-co", "plan_id": 1},
+    )
+    company_id = create_resp.json()["id"]
+
+    past_expiry = datetime.now(timezone.utc) - timedelta(days=5)
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE subscriptions SET expires_at = ? WHERE company_id = ? AND status IN ('active', 'trialing')",
+            (past_expiry.isoformat(), company_id),
+        )
+        conn.commit()
+
+    resp = client.post(
+        f"/api/platform/companies/{company_id}/plan",
+        json={"plan_id": 1, "duration_days": 30},
+    )
+    new_expires_at = datetime.fromisoformat(resp.json()["subscription"]["expires_at"])
+    if new_expires_at.tzinfo is None:
+        new_expires_at = new_expires_at.replace(tzinfo=timezone.utc)
+    days_from_now = (new_expires_at - datetime.now(timezone.utc)).days
+    assert 28 <= days_from_now <= 30, f"expected ~30 days remaining, got {days_from_now}"
+
+
 def test_usage_summary_accessible_to_super_admin(client_and_db):
     client = client_and_db(1, is_super_admin=True)
     resp = client.get("/api/platform/usage")
@@ -398,9 +468,48 @@ def test_company_user_can_see_own_subscription_readonly(client_and_db):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["has_subscription"] is True
+    assert body["plan_id"] == 1
     assert body["plan_name"] == "Starter"
     assert "used" in body["users"]
     assert "max" in body["users"]
+
+
+def test_own_subscription_exposes_plan_id_even_when_plan_later_retired(client_and_db):
+    """Before this fix, the frontend derived currentPlanId by matching
+    plan_code against the (active-only) plans catalog, so a company whose
+    current plan was retired could never renew again - the Renew button
+    stayed permanently disabled with no explanation. Exposing plan_id
+    directly from the subscription lets the frontend renew regardless of
+    whether the plan still shows up in the active catalog."""
+    from database.database import db
+
+    admin_client = client_and_db(1, is_super_admin=True)
+    admin_client.post("/api/platform/companies", json={"name": "Retire Plan Co", "slug": "retire-plan-co", "plan_id": 1})
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (7, 'member@retire-plan-co.test', 'Member', 'active', 0)"
+        )
+        company_row = conn.execute("SELECT id FROM companies WHERE slug = 'retire-plan-co'").fetchone()
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (?, 7, 'active')",
+            (company_row["id"],),
+        )
+        conn.commit()
+
+    # Super admin retires the Starter plan.
+    archive_resp = admin_client.patch("/api/platform/plans/1", json={"status": "retired"})
+    assert archive_resp.status_code == 200, archive_resp.text
+
+    member_client = client_and_db(7, is_super_admin=False)
+    resp = member_client.get("/api/platform/my-subscription")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["plan_id"] == 1
+
+    plans_resp = member_client.get("/api/platform/plans-catalog")
+    plan_codes = [p["code"] for p in plans_resp.json()["plans"]]
+    assert "starter" not in plan_codes  # confirms the retired-plan scenario is real
 
 
 def test_super_admin_can_create_a_plan(client_and_db):

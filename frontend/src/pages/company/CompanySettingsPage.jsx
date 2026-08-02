@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest, getCurrentUserRequest } from "../../api/client";
 import SecureChannelsPanel from "./SecureChannelsPanel";
 
@@ -125,8 +125,12 @@ function BillingView() {
   if (!data || !modules) return <p>Loading…</p>;
 
   const pendingPlanIds = new Set(myRequests.filter((r) => r.status === "pending").map((r) => r.plan_id));
-  const currentPlan = data.has_subscription ? plans.find((p) => p.code === data.plan_code) : null;
-  const currentPlanId = currentPlan?.id || null;
+  // Uses data.plan_id straight from the subscription itself, not a match
+  // against `plans` (which the backend restricts to active plans only) -
+  // otherwise a company whose current plan was later retired could never
+  // renew again: currentPlan would never be found, so the button stayed
+  // disabled with no explanation.
+  const currentPlanId = data.has_subscription ? data.plan_id || null : null;
   const renewalPending = currentPlanId != null && pendingPlanIds.has(currentPlanId);
 
   return (
@@ -714,7 +718,13 @@ function SecurityStatusView() {
 }
 
 export default function CompanySettingsPage() {
-  const navigate = useNavigate(); const [active, setActive] = useState("profile"); const [query, setQuery] = useState("");
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedSection = searchParams.get("section");
+  const [active, setActive] = useState(
+    requestedSection && SECTIONS.some(([id]) => id === requestedSection) ? requestedSection : "profile",
+  );
+  const [query, setQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {

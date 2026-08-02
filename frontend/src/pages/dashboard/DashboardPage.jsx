@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   AddOutlined,
   ChatOutlined,
@@ -49,6 +50,7 @@ function StatCard({
 
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -124,13 +126,6 @@ export default function DashboardPage() {
               onClick={loadSummary}
             >
               Refresh
-            </AppButton>
-
-            <AppButton
-              variant="primary"
-              icon={<AddOutlined fontSize="small" />}
-            >
-              Quick action
             </AppButton>
           </>
         }
@@ -222,6 +217,7 @@ export default function DashboardPage() {
             <AppButton
               variant="ghost"
               size="small"
+              onClick={() => navigate("/conversations")}
             >
               View all
             </AppButton>
@@ -348,6 +344,7 @@ export default function DashboardPage() {
             variant="secondary"
             size="small"
             icon={<AddOutlined fontSize="small" />}
+            onClick={() => navigate("/company-settings?section=channels")}
           >
             Add channel
           </AppButton>

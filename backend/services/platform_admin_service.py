@@ -416,6 +416,7 @@ class PlatformAdminService:
         self, *, company_id: int, plan_id: int, duration_days: int = 30,
     ) -> dict[str, Any]:
         now = utc_now_iso()
+        now_dt = datetime.now(timezone.utc)
         with db.connect() as conn:
             company = conn.execute("SELECT id FROM companies WHERE id = ?", (company_id,)).fetchone()
             if not company:
@@ -424,13 +425,34 @@ class PlatformAdminService:
             if not plan:
                 raise KeyError("Plan not found")
 
+            # A renewal/plan-change must never discard time the company
+            # already paid for. If the current subscription hasn't expired
+            # yet, the new period extends from its expiry instead of from
+            # "now" - otherwise renewing 10 days early would reset the
+            # clock to a flat 30 days and silently lose those 10 days.
+            current = conn.execute(
+                "SELECT expires_at FROM subscriptions WHERE company_id = ? AND status IN ('active', 'trialing', 'past_due') "
+                "ORDER BY expires_at DESC LIMIT 1",
+                (company_id,),
+            ).fetchone()
+            base_dt = now_dt
+            if current and current["expires_at"]:
+                try:
+                    current_expiry = datetime.fromisoformat(current["expires_at"])
+                    if current_expiry.tzinfo is None:
+                        current_expiry = current_expiry.replace(tzinfo=timezone.utc)
+                    if current_expiry > base_dt:
+                        base_dt = current_expiry
+                except ValueError:
+                    pass
+
             conn.execute(
                 "UPDATE subscriptions SET status = 'cancelled', cancelled_at = ?, updated_at = ? "
                 "WHERE company_id = ? AND status IN ('active', 'trialing', 'past_due')",
                 (now, now, company_id),
             )
 
-            expires_at = (datetime.now(timezone.utc) + timedelta(days=duration_days)).isoformat()
+            expires_at = (base_dt + timedelta(days=duration_days)).isoformat()
             conn.execute(
                 """
                 INSERT INTO subscriptions (

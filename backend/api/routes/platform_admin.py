@@ -326,6 +326,7 @@ def my_subscription(
 
     return {
         "has_subscription": True,
+        "plan_id": limits["id"],
         "plan_name": limits["name"],
         "plan_code": limits["code"],
         "price_monthly": limits["price_monthly"],
