@@ -4,6 +4,7 @@ import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
 import RolesPermissionsPage from "./pages/admin/RolesPermissionsPage";
 import PlatformAdminPage from "./pages/admin/PlatformAdminPage";
+import ThemeStudioPage from "./pages/admin/ThemeStudioPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
 import ConversationsPage from "./pages/conversations/ConversationsPage";
 import ConversationsPageV2 from "./pages/conversations/ConversationsPageV2";
@@ -56,6 +57,7 @@ export default function App() {
       <Route path="/signup" element={<SignupPage />} />
       <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ConversationDetailPage standalone /></ProtectedRoute>} />
       <Route path="/platform-admin" element={<ProtectedRoute requireSuperAdmin><PlatformAdminPage /></ProtectedRoute>} />
+      <Route path="/platform-admin/theme-studio" element={<ProtectedRoute requireSuperAdmin><ThemeStudioPage /></ProtectedRoute>} />
       <Route path="/company-settings/*" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
       <Route path="/community/*" element={<ProtectedRoute><CommunityHubPage /></ProtectedRoute>} />
       <Route path="/ai-teaching/*" element={<ProtectedRoute><AITeachingHubPage /></ProtectedRoute>} />

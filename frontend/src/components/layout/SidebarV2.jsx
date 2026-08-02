@@ -11,6 +11,7 @@ import {
   HubOutlined,
   Inventory2Outlined,
   NotificationsOutlined,
+  PaletteOutlined,
   QueryStatsOutlined,
   QuickreplyOutlined,
   SecurityOutlined,
@@ -174,6 +175,10 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
               <NavLink to="/platform-admin" className={({ isActive }) => `sidebar-v2-link ${isActive ? "sidebar-v2-link-active" : ""}`} onClick={onClose}>
                 <AdminPanelSettingsOutlined fontSize="small" />
                 <span>Platform Admin</span>
+              </NavLink>
+              <NavLink to="/platform-admin/theme-studio" className={({ isActive }) => `sidebar-v2-link ${isActive ? "sidebar-v2-link-active" : ""}`} onClick={onClose}>
+                <PaletteOutlined fontSize="small" />
+                <span>Theme Studio</span>
               </NavLink>
             </div>
           ) : null}

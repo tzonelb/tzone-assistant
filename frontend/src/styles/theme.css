@@ -104,11 +104,21 @@
   --tz-transition-normal: 200ms ease;
 }
 
-/* --tz-font-heading/--tz-font-body are NOT applied to body/#root here on
-   purpose: AppLayout.jsx already sets a personal font choice
-   (localStorage "tzone_ui_font") as an inline style on <html>, which a
-   direct body/#root rule would silently override. The v2 shell (Phase 2)
-   applies these deliberately once it reconciles the two settings surfaces. */
+/* The published theme's font now applies platform-wide. A personal
+   choice (Settings -> Appearance -> Font, localStorage "tzone_ui_font")
+   still wins when set: AppLayout.jsx writes it onto the SAME
+   --tz-font-body/--tz-font-heading variables instead of a competing
+   inline style, and ThemeContext.applyTokens skips writing those two
+   variables whenever a personal choice is present — so there's exactly
+   one source of truth per load, never a cascade race between the two. */
+body,
+#root {
+  font-family: var(--tz-font-body);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--tz-font-heading);
+}
 
 /* جاهز للوضع الداكن لاحقًا */
 [data-theme="dark"] {
