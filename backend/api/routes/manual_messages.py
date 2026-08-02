@@ -17,9 +17,9 @@ from backend.services.conversation_control_service import (
     conversation_control_service,
 )
 from backend.services.message_status_service import message_status_service
-from channels.meta.sender import send_meta_text
-from channels.telegram.sender import send_telegram_text
-from channels.whatsapp.sender import send_whatsapp_text
+from channels.meta.sender import send_meta_media, send_meta_text
+from channels.telegram.sender import send_telegram_media, send_telegram_text
+from channels.whatsapp.sender import send_whatsapp_media, send_whatsapp_text
 from core.conversation_store import (
     save_conversation_message,
 )
@@ -38,12 +38,21 @@ SUPPORTED_META_CHANNELS = {
 
 SUPPORTED_CHANNELS = SUPPORTED_META_CHANNELS | {"telegram", "whatsapp"}
 
+MEDIA_TYPES = {"image", "video", "audio", "document"}
+
 
 class ManualReplyRequest(BaseModel):
     text: str = Field(
         min_length=1,
         max_length=2000,
     )
+
+
+class ManualMediaReplyRequest(BaseModel):
+    media_url: str = Field(min_length=1, max_length=2000)
+    media_type: Literal["image", "video", "audio", "document"]
+    caption: str | None = Field(default=None, max_length=2000)
+    filename: str | None = Field(default=None, max_length=255)
 
 
 class ManualReplyResponse(BaseModel):
@@ -78,8 +87,6 @@ def _validate_channel(
         )
 
     return normalized_channel
-
-
 
 
 def _conversation_owner_name(
@@ -146,61 +153,30 @@ def _extract_meta_error(
     )
 
 
-@router.post(
-    "/{channel}/{user_id}/reply",
-    response_model=ManualReplyResponse,
-)
-def send_manual_conversation_reply(
-    channel: str,
-    user_id: str,
-    payload: ManualReplyRequest,
-    current_user: dict[str, Any] = Depends(
-        get_current_user
-    ),
-):
-    normalized_channel = (
-        _validate_channel(channel)
-    )
-
-    normalized_user_id = (
-        user_id.strip()
-    )
-
-    message_text = (
-        payload.text.strip()
-    )
-
+def _prepare_reply(
+    *, channel: str, user_id: str, current_user: dict[str, Any],
+) -> tuple[str, str, int, dict[str, Any]]:
+    """Shared setup for both the text and media manual-reply endpoints:
+    validates the channel/user id, checks the conversations.reply
+    permission, takes/renews the reply lease (raising 409 if another
+    employee owns it), and blocks sending while the AI is still handling
+    the conversation. Returns (normalized_channel, normalized_user_id,
+    company_id, conversation_state)."""
+    normalized_channel = _validate_channel(channel)
+    normalized_user_id = user_id.strip()
     if not normalized_user_id:
         raise HTTPException(
-            status_code=(
-                status.HTTP_400_BAD_REQUEST
-            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Customer ID is required.",
         )
 
-    if not message_text:
-        raise HTTPException(
-            status_code=(
-                status.HTTP_422_UNPROCESSABLE_ENTITY
-            ),
-            detail="Message cannot be empty.",
-        )
-
-    company_id = (
-        auth_service.resolve_company_id(
-            current_user
-        )
-    )
+    company_id = auth_service.resolve_company_id(current_user)
     auth_service.require_permission(current_user, company_id, "conversations.reply")
 
-    conversation = (
-        conversation_control_service.get_state(
-            company_id=company_id,
-            channel=normalized_channel,
-            external_user_id=(
-                normalized_user_id
-            ),
-        )
+    conversation = conversation_control_service.get_state(
+        company_id=company_id,
+        channel=normalized_channel,
+        external_user_id=normalized_user_id,
     )
 
     try:
@@ -211,10 +187,7 @@ def send_manual_conversation_reply(
             actor_user_id=current_user["id"],
         )
     except ConversationOwnershipConflict as exc:
-        owner_name = _conversation_owner_name(
-            company_id,
-            exc.owner_user_id,
-        )
+        owner_name = _conversation_owner_name(company_id, exc.owner_user_id)
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -233,101 +206,54 @@ def send_manual_conversation_reply(
             },
         ) from exc
 
-    handled_by_ai = bool(
-        conversation.get(
-            "handled_by_ai",
-            1,
-        )
-    )
-
-    ai_enabled = bool(
-        conversation.get(
-            "ai_enabled",
-            1,
-        )
-    )
-
+    handled_by_ai = bool(conversation.get("handled_by_ai", 1))
+    ai_enabled = bool(conversation.get("ai_enabled", 1))
     if handled_by_ai or ai_enabled:
         raise HTTPException(
-            status_code=(
-                status.HTTP_409_CONFLICT
-            ),
-            detail=(
-                "Take over the conversation "
-                "before sending a manual reply."
-            ),
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Take over the conversation before sending a manual reply.",
         )
+
+    return normalized_channel, normalized_user_id, company_id, conversation
+
+
+def _normalize_whatsapp_result(whatsapp_result: dict[str, Any]) -> dict[str, Any]:
+    """WhatsApp's senders return {"sent": ..., "response": ...} while
+    Messenger/Instagram/Telegram all return {"ok": ..., ...} — this
+    normalizes so the rest of the handler (including _extract_meta_error,
+    which understands the Graph API error shape WhatsApp Cloud shares
+    with Messenger/Instagram) can treat every channel the same way."""
+    return {
+        "ok": whatsapp_result.get("sent", False),
+        "response": whatsapp_result.get("response", {}),
+        "reason": whatsapp_result.get("reason"),
+    }
+
+
+def _extract_provider_info(
+    normalized_channel: str, send_result: dict[str, Any],
+) -> tuple[str, str | None]:
+    response_payload = send_result.get("response", {})
+    if not isinstance(response_payload, dict):
+        response_payload = {}
 
     if normalized_channel == "telegram":
-        send_result = send_telegram_text(
-            recipient_id=normalized_user_id,
-            text=message_text,
-        )
-    elif normalized_channel == "whatsapp":
-        whatsapp_result = send_whatsapp_text(
-            normalized_user_id,
-            message_text,
-            company_id=company_id,
-        )
-        # Normalize to the {"ok": ..., "response": ...} shape the rest of
-        # this handler (including _extract_meta_error, which already
-        # understands the Graph API error shape WhatsApp Cloud shares
-        # with Messenger/Instagram) expects from every sender.
-        send_result = {
-            "ok": whatsapp_result.get("sent", False),
-            "response": whatsapp_result.get("response", {}),
-            "reason": whatsapp_result.get("reason"),
-        }
-    else:
-        send_result = send_meta_text(
-            recipient_id=normalized_user_id,
-            text=message_text,
-            channel=normalized_channel,
-            company_id=company_id,
-            is_human_agent=True,
-        )
+        return "telegram", response_payload.get("result", {}).get("message_id")
+    if normalized_channel == "whatsapp":
+        return "whatsapp", (response_payload.get("messages") or [{}])[0].get("id")
+    return "meta", response_payload.get("message_id")
 
-    if not send_result.get("ok"):
-        raise HTTPException(
-            status_code=(
-                status.HTTP_502_BAD_GATEWAY
-            ),
-            detail=(
-                "Message was not sent: "
-                f"{_extract_meta_error(send_result)}"
-            ),
-        )
 
-    employee_name = (
-        current_user.get("full_name")
-        or current_user.get("email")
-        or "Employee"
-    )
-
-    if normalized_channel == "telegram":
-        provider_name = "telegram"
-        response_payload = send_result.get("response", {})
-        provider_message_id = (
-            response_payload.get("result", {}).get("message_id")
-            if isinstance(response_payload, dict)
-            else None
-        )
-    elif normalized_channel == "whatsapp":
-        provider_name = "whatsapp"
-        response_payload = send_result.get("response", {})
-        provider_message_id = (
-            (response_payload.get("messages") or [{}])[0].get("id")
-            if isinstance(response_payload, dict)
-            else None
-        )
-    else:
-        provider_name = "meta"
-        response_payload = send_result.get("response", {})
-        provider_message_id = (
-            response_payload.get("message_id")
-            if isinstance(response_payload, dict)
-            else None
-        )
+def _finish_reply(
+    *, normalized_channel: str, normalized_user_id: str, company_id: int,
+    current_user: dict[str, Any], send_result: dict[str, Any], text: str,
+    extra_metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Shared tail for both endpoints once the provider call has
+    succeeded: records delivery status, saves the outbound message, and
+    advances conversation ownership bookkeeping."""
+    employee_name = current_user.get("full_name") or current_user.get("email") or "Employee"
+    provider_name, provider_message_id = _extract_provider_info(normalized_channel, send_result)
 
     if provider_message_id:
         message_status_service.record_sent(
@@ -335,25 +261,20 @@ def send_manual_conversation_reply(
             company_id=company_id, recipient_id=normalized_user_id,
         )
 
-    saved_message = (
-        save_conversation_message(
-            channel=normalized_channel,
-            user_id=normalized_user_id,
-            direction="out",
-            text=message_text,
-            metadata={
-                "source": "dashboard",
-                "sender_type": "employee",
-                "employee_id": (
-                    current_user.get("id")
-                ),
-                "employee_name": (
-                    employee_name
-                ),
-                "provider": provider_name,
-                "provider_message_id": provider_message_id,
-            },
-        )
+    saved_message = save_conversation_message(
+        channel=normalized_channel,
+        user_id=normalized_user_id,
+        direction="out",
+        text=text,
+        metadata={
+            "source": "dashboard",
+            "sender_type": "employee",
+            "employee_id": current_user.get("id"),
+            "employee_name": employee_name,
+            "provider": provider_name,
+            "provider_message_id": provider_message_id,
+            **(extra_metadata or {}),
+        },
     )
 
     try:
@@ -362,9 +283,9 @@ def send_manual_conversation_reply(
             channel=normalized_channel,
             external_user_id=normalized_user_id,
             actor_user_id=int(current_user["id"]),
-            message_preview=message_text,
+            message_preview=text or "[media]",
         )
-    except ConversationOwnershipConflict as exc:
+    except ConversationOwnershipConflict:
         # The provider already accepted the message, so never convert this
         # bookkeeping race into an HTTP 500. The next refresh exposes the
         # current owner and the following reply will be blocked with 409.
@@ -377,3 +298,107 @@ def send_manual_conversation_reply(
         "message": saved_message,
         "provider_result": send_result,
     }
+
+
+@router.post(
+    "/{channel}/{user_id}/reply",
+    response_model=ManualReplyResponse,
+)
+def send_manual_conversation_reply(
+    channel: str,
+    user_id: str,
+    payload: ManualReplyRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    message_text = payload.text.strip()
+    if not message_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Message cannot be empty.",
+        )
+
+    normalized_channel, normalized_user_id, company_id, _conversation = _prepare_reply(
+        channel=channel, user_id=user_id, current_user=current_user,
+    )
+
+    if normalized_channel == "telegram":
+        send_result = send_telegram_text(
+            recipient_id=normalized_user_id,
+            text=message_text,
+        )
+    elif normalized_channel == "whatsapp":
+        send_result = _normalize_whatsapp_result(
+            send_whatsapp_text(normalized_user_id, message_text, company_id=company_id)
+        )
+    else:
+        send_result = send_meta_text(
+            recipient_id=normalized_user_id,
+            text=message_text,
+            channel=normalized_channel,
+            company_id=company_id,
+            is_human_agent=True,
+        )
+
+    if not send_result.get("ok"):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Message was not sent: {_extract_meta_error(send_result)}",
+        )
+
+    return _finish_reply(
+        normalized_channel=normalized_channel, normalized_user_id=normalized_user_id,
+        company_id=company_id, current_user=current_user, send_result=send_result,
+        text=message_text,
+    )
+
+
+@router.post(
+    "/{channel}/{user_id}/reply-media",
+    response_model=ManualReplyResponse,
+)
+def send_manual_conversation_media_reply(
+    channel: str,
+    user_id: str,
+    payload: ManualMediaReplyRequest,
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    normalized_channel, normalized_user_id, company_id, _conversation = _prepare_reply(
+        channel=channel, user_id=user_id, current_user=current_user,
+    )
+    caption = (payload.caption or "").strip() or None
+
+    if normalized_channel == "telegram":
+        send_result = send_telegram_media(
+            recipient_id=normalized_user_id, media_url=payload.media_url,
+            media_type=payload.media_type, caption=caption,
+        )
+    elif normalized_channel == "whatsapp":
+        send_result = _normalize_whatsapp_result(
+            send_whatsapp_media(
+                normalized_user_id, payload.media_url, payload.media_type,
+                caption=caption, company_id=company_id, filename=payload.filename,
+            )
+        )
+    else:
+        send_result = send_meta_media(
+            recipient_id=normalized_user_id, media_url=payload.media_url,
+            media_type=payload.media_type, caption=caption,
+            channel=normalized_channel, company_id=company_id,
+        )
+
+    if not send_result.get("ok"):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Message was not sent: {_extract_meta_error(send_result)}",
+        )
+
+    return _finish_reply(
+        normalized_channel=normalized_channel, normalized_user_id=normalized_user_id,
+        company_id=company_id, current_user=current_user, send_result=send_result,
+        text=caption or "",
+        extra_metadata={
+            "media_url": payload.media_url,
+            "media_type": payload.media_type,
+            "media_filename": payload.filename,
+        },
+    )

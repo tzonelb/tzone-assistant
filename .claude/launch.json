@@ -5,7 +5,20 @@
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
-      "port": 5173
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "backend-smoketest",
+      "runtimeExecutable": "C:\\Users\\T-ZONE~1.006\\AppData\\Local\\Temp\\claude\\C--PROJECTS\\5c9c483c-ee43-4a8a-8aeb-16f94dde0a41\\scratchpad\\run_backend_smoketest.bat",
+      "runtimeArgs": [],
+      "port": 8001
+    },
+    {
+      "name": "frontend-smoketest",
+      "runtimeExecutable": "C:\\Users\\T-ZONE~1.006\\AppData\\Local\\Temp\\claude\\C--PROJECTS\\5c9c483c-ee43-4a8a-8aeb-16f94dde0a41\\scratchpad\\run_frontend_smoketest.bat",
+      "runtimeArgs": [],
+      "port": 5174
     }
   ]
 }

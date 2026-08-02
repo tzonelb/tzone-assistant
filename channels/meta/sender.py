@@ -133,7 +133,9 @@ def send_meta_text(
 # Messenger/Instagram's Send API attachment message has no caption
 # field of its own (unlike WhatsApp/Telegram) — a caption is sent as a
 # separate follow-up text message using the existing send_meta_text.
-_META_ATTACHMENT_TYPE = {"image": "image", "video": "video", "audio": "audio"}
+# "document" maps to Meta's generic "file" attachment type, which covers
+# PDFs/Office docs/archives the same way image/video/audio cover media.
+_META_ATTACHMENT_TYPE = {"image": "image", "video": "video", "audio": "audio", "document": "file"}
 
 
 def send_meta_media(

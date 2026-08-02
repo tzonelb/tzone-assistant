@@ -9,6 +9,7 @@ import {
   disconnectChannelRequest,
   startFacebookOAuthRequest,
   getMySubscriptionRequest,
+  getSessionChangesRequest,
 } from "../../api/client";
 import { CHANNEL_CATEGORIES, CHANNEL_LABELS } from "./channelCatalog";
 import { resolveChannelIcon } from "./channelIcons";
@@ -128,6 +129,9 @@ export default function SecureChannelsPanel() {
   const [code, setCode] = useState("");
   const elevatedTokenRef = useRef(null);
   const pendingActionRef = useRef(null);
+  const [hasVerifiedSession, setHasVerifiedSession] = useState(false);
+  const [sessionChanges, setSessionChanges] = useState(null);
+  const [changesLoading, setChangesLoading] = useState(false);
 
   const sectionRefs = useRef({});
 
@@ -226,6 +230,7 @@ export default function SecureChannelsPanel() {
     try {
       const result = await verifyCodeRequest(PURPOSE, code);
       elevatedTokenRef.current = result.elevated_token;
+      setHasVerifiedSession(true);
       setCode("");
       setVerifyOpen(false);
       const action = pendingActionRef.current;
@@ -253,6 +258,30 @@ export default function SecureChannelsPanel() {
     }
   }
 
+  // The Security tab tells the admin this exists ("see Channels tab,
+  // 'Done — show what changed'") — this is that button. Fetches every
+  // connect/disconnect logged during the current verified session, then
+  // ends the session so the next action asks for a fresh code.
+  async function showSessionChanges() {
+    if (!elevatedTokenRef.current) return;
+    setChangesLoading(true);
+    setError("");
+    try {
+      const result = await getSessionChangesRequest(PURPOSE, elevatedTokenRef.current);
+      setSessionChanges(result.changes || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setChangesLoading(false);
+    }
+  }
+
+  function closeSessionChanges() {
+    setSessionChanges(null);
+    elevatedTokenRef.current = null;
+    setHasVerifiedSession(false);
+  }
+
   const inputStyle = { flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #d5dae5" };
   const formStyle = { display: "flex", gap: 12, padding: "0 0 20px", flexWrap: "wrap" };
 
@@ -264,6 +293,46 @@ export default function SecureChannelsPanel() {
         </p>
       ) : null}
       {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
+
+      {hasVerifiedSession && !verifyOpen ? (
+        <article className="company-setting-field channels-verify-inline">
+          <div>
+            <strong>Verified session active</strong>
+            <span>Connect or disconnect as many channels as you need — no new code required until this session ends.</span>
+          </div>
+          <button type="button" onClick={showSessionChanges} disabled={changesLoading}>
+            {changesLoading ? "Loading…" : "Done — show what changed"}
+          </button>
+        </article>
+      ) : null}
+
+      {sessionChanges !== null ? (
+        <div className="tz-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeSessionChanges(); }}>
+          <div className="tz-dialog">
+            <header className="tz-dialog-header">
+              <h3>What changed this session</h3>
+            </header>
+            <div className="tz-dialog-body">
+              {sessionChanges.length ? (
+                <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {sessionChanges.map((change, index) => (
+                    <li key={index}>
+                      {change.description}
+                      <br />
+                      <span style={{ fontSize: 12, color: "#6b7280" }}>{new Date(change.created_at).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p style={{ color: "#6b7280" }}>No changes were made this session.</p>
+              )}
+            </div>
+            <footer className="tz-dialog-actions">
+              <button type="button" onClick={closeSessionChanges}>Close</button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
 
       {verifyOpen ? (
         <article className="company-setting-field channels-verify-inline">

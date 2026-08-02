@@ -84,17 +84,18 @@ def send_whatsapp_text(to, text, buttons=None, company_id=None):
 
 # WhatsApp Cloud API accepts "image", "video", "audio", and "document"
 # message types, each taking a public HTTPS "link" (no upload step
-# needed on our side). Captions are supported on image/video but not
-# on audio — WhatsApp silently ignores a caption field there, so it's
-# only included for the types that use it.
-def send_whatsapp_media(to, media_url, media_type, caption=None, company_id=None):
+# needed on our side). Captions are supported on image/video/document but
+# not on audio — WhatsApp silently ignores a caption field there, so it's
+# only included for the types that use it. Documents also take an
+# optional "filename" shown in the chat bubble instead of the raw URL.
+def send_whatsapp_media(to, media_url, media_type, caption=None, company_id=None, filename=None):
     phone_number_id, access_token = _resolve_whatsapp_credentials(company_id)
 
     if not access_token or not phone_number_id:
         logger.warning("WhatsApp credentials missing.")
         return {"sent": False, "reason": "missing_credentials"}
 
-    if media_type not in ("image", "video", "audio"):
+    if media_type not in ("image", "video", "audio", "document"):
         return {"sent": False, "reason": f"unsupported_media_type:{media_type}"}
 
     url = (
@@ -104,8 +105,10 @@ def send_whatsapp_media(to, media_url, media_type, caption=None, company_id=None
     )
 
     media_payload = {"link": media_url}
-    if caption and media_type in ("image", "video"):
+    if caption and media_type in ("image", "video", "document"):
         media_payload["caption"] = caption
+    if filename and media_type == "document":
+        media_payload["filename"] = filename
 
     payload = {
         "messaging_product": "whatsapp",

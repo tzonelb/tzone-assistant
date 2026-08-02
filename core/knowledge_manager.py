@@ -201,10 +201,14 @@ class KnowledgeManager:
         if not department and not context_tags:
             return items
 
+        normalized_department = department.strip().lower() if department else None
+
         return [
             item for item in items
             if (effective_context & set(t.lower() for t in item.get("tags", [])))  # shares a tag -> matches
-            or (not item.get("tags") and item.get("department") in [department, "Unassigned"])  # no tags -> fall back to department matching
+            # no tags -> fall back to department matching (case-insensitive:
+            # callers and stored department names don't always agree on case)
+            or (not item.get("tags") and (item.get("department") or "").strip().lower() in [normalized_department, "unassigned"])
         ]
 
 

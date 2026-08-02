@@ -17,6 +17,9 @@ ALLOWED_EXTENSIONS = {
     ".jpg": "image", ".jpeg": "image", ".png": "image", ".webp": "image", ".gif": "image",
     ".mp4": "video", ".mov": "video", ".webm": "video",
     ".mp3": "audio", ".ogg": "audio", ".m4a": "audio", ".wav": "audio",
+    ".pdf": "document", ".doc": "document", ".docx": "document",
+    ".xls": "document", ".xlsx": "document", ".ppt": "document", ".pptx": "document",
+    ".csv": "document", ".txt": "document", ".zip": "document", ".rar": "document",
 }
 
 
@@ -45,6 +48,7 @@ class MediaUploadService:
         return {
             "url": f"{config.PUBLIC_BACKEND_URL.rstrip('/')}{relative_path}",
             "media_type": media_type,
+            "filename": Path(filename or "").name or stored_name,
         }
 
 

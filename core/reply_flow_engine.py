@@ -213,7 +213,7 @@ class ReplyFlowEngine:
 
         knowledge = []
         if node["data"].get("nodeType") != "ai_direct":
-            knowledge = knowledge_manager.list_for_ai(request.company_id, context_tags=context_tags)
+            knowledge = knowledge_manager.list_for_ai(request.company_id, department=department, context_tags=context_tags)
 
         ai_result = ai_router.route(
             message=request.message,

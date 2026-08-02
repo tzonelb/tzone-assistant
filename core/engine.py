@@ -529,7 +529,7 @@ class Engine:
             context_tags.append(current_department)
 
         knowledge_items = knowledge_manager.list_for_ai(
-            request.company_id, context_tags=context_tags
+            request.company_id, department=current_department, context_tags=context_tags
         )
 
         try:

@@ -132,6 +132,73 @@ def test_telegram_reply_sends_via_bot_and_records_correct_provider(client_and_db
     assert called_payload["text"] == "Your IPTV subscription has been renewed."
 
 
+def test_telegram_media_reply_sends_photo_and_saves_media_metadata(client_and_db):
+    client = client_and_db
+
+    fake_telegram_response = MagicMock()
+    fake_telegram_response.json.return_value = {"ok": True, "result": {"message_id": 777}}
+
+    with patch("channels.telegram.sender.config.TELEGRAM_BOT_TOKEN", "fake-token-for-tests"), \
+         patch("channels.telegram.sender.requests.post", return_value=fake_telegram_response) as mock_post:
+        resp = client.post(
+            f"/conversations/{CHANNEL}/{CUSTOMER_ID}/reply-media",
+            json={"media_url": "https://cdn.example/photo.jpg", "media_type": "image", "caption": "Here's the invoice"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "sent"
+    assert body["message"]["metadata"]["provider"] == "telegram"
+    assert body["message"]["metadata"]["media_url"] == "https://cdn.example/photo.jpg"
+    assert body["message"]["metadata"]["media_type"] == "image"
+    assert body["message"]["text"] == "Here's the invoice"
+
+    called_url = mock_post.call_args.args[0]
+    called_payload = mock_post.call_args.kwargs["json"]
+    assert "sendPhoto" in called_url
+    assert called_payload["photo"] == "https://cdn.example/photo.jpg"
+
+
+def test_telegram_media_reply_sends_document(client_and_db):
+    client = client_and_db
+
+    fake_telegram_response = MagicMock()
+    fake_telegram_response.json.return_value = {"ok": True, "result": {"message_id": 778}}
+
+    with patch("channels.telegram.sender.config.TELEGRAM_BOT_TOKEN", "fake-token-for-tests"), \
+         patch("channels.telegram.sender.requests.post", return_value=fake_telegram_response) as mock_post:
+        resp = client.post(
+            f"/conversations/{CHANNEL}/{CUSTOMER_ID}/reply-media",
+            json={"media_url": "https://cdn.example/invoice.pdf", "media_type": "document"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["message"]["metadata"]["media_type"] == "document"
+
+    called_url = mock_post.call_args.args[0]
+    called_payload = mock_post.call_args.kwargs["json"]
+    assert "sendDocument" in called_url
+    assert called_payload["document"] == "https://cdn.example/invoice.pdf"
+
+
+def test_media_reply_requires_ownership_like_text_reply(client_and_db):
+    """The media endpoint must go through the same _prepare_reply gate as
+    text - AI still handling the conversation blocks it with 409."""
+    from backend.services.conversation_control_service import conversation_control_service
+
+    client = client_and_db
+    conversation_control_service.set_ai_mode(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id="ai-still-handling",
+        handled_by_ai=True, actor_user_id=EMPLOYEE_ID,
+    )
+    resp = client.post(
+        f"/conversations/{CHANNEL}/ai-still-handling/reply-media",
+        json={"media_url": "https://cdn.example/photo.jpg", "media_type": "image"},
+    )
+    assert resp.status_code == 409
+
+
 def test_telegram_channel_is_accepted_by_validation(client_and_db):
     """Regression guard: telegram used to be rejected with 400 before
     this integration — SUPPORTED_CHANNELS must include it."""

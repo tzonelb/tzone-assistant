@@ -77,7 +77,7 @@ def test_reply(payload: TestReplyRequest, current_user: dict[str, Any] = Depends
     department = (payload.department or "").strip().lower() or None
     context_tags = [channel] + ([department] if department else [])
 
-    knowledge_items = knowledge_manager.list_for_ai(company_id, context_tags=context_tags)
+    knowledge_items = knowledge_manager.list_for_ai(company_id, department=department, context_tags=context_tags)
     match_result = ai_knowledge_matcher.match(message=payload.message, language=None, items=knowledge_items, context={}, max_results=3)
     selected_knowledge = ai_knowledge_matcher.select_items(match_result, knowledge_items)
     instructions = instruction_service.list_texts_for_ai(company_id, context_tags=context_tags)

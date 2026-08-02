@@ -133,6 +133,64 @@ def test_whatsapp_channel_is_accepted_by_validation(client_and_db):
     assert called_payload["text"]["body"] == "Your order has shipped."
 
 
+def test_whatsapp_media_reply_sends_image_and_saves_media_metadata(client_and_db):
+    client = client_and_db
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+    fake_response.text = '{"messages": [{"id": "wamid.MEDIA1"}]}'
+    fake_response.json.return_value = {"messages": [{"id": "wamid.MEDIA1"}]}
+
+    with patch("channels.whatsapp.sender.config.WHATSAPP_PHONE_NUMBER_ID", "999999999"), \
+         patch("channels.whatsapp.sender.config.WHATSAPP_ACCESS_TOKEN", "fake-token"), \
+         patch("channels.whatsapp.sender.httpx.post", return_value=fake_response) as mock_post:
+        resp = client.post(
+            f"/conversations/{CHANNEL}/{CUSTOMER_ID}/reply-media",
+            json={"media_url": "https://cdn.example/photo.jpg", "media_type": "image", "caption": "Receipt attached"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "sent"
+    assert body["message"]["metadata"]["provider"] == "whatsapp"
+    assert body["message"]["metadata"]["media_url"] == "https://cdn.example/photo.jpg"
+    assert body["message"]["metadata"]["media_type"] == "image"
+
+    called_payload = mock_post.call_args.kwargs["json"]
+    assert called_payload["type"] == "image"
+    assert called_payload["image"]["link"] == "https://cdn.example/photo.jpg"
+    assert called_payload["image"]["caption"] == "Receipt attached"
+
+
+def test_whatsapp_media_reply_sends_document_with_filename(client_and_db):
+    client = client_and_db
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+    fake_response.text = '{"messages": [{"id": "wamid.DOC1"}]}'
+    fake_response.json.return_value = {"messages": [{"id": "wamid.DOC1"}]}
+
+    with patch("channels.whatsapp.sender.config.WHATSAPP_PHONE_NUMBER_ID", "999999999"), \
+         patch("channels.whatsapp.sender.config.WHATSAPP_ACCESS_TOKEN", "fake-token"), \
+         patch("channels.whatsapp.sender.httpx.post", return_value=fake_response) as mock_post:
+        resp = client.post(
+            f"/conversations/{CHANNEL}/{CUSTOMER_ID}/reply-media",
+            json={
+                "media_url": "https://cdn.example/invoice.pdf",
+                "media_type": "document",
+                "filename": "invoice.pdf",
+            },
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["message"]["metadata"]["media_type"] == "document"
+    assert body["message"]["metadata"]["media_filename"] == "invoice.pdf"
+
+    called_payload = mock_post.call_args.kwargs["json"]
+    assert called_payload["type"] == "document"
+    assert called_payload["document"]["link"] == "https://cdn.example/invoice.pdf"
+    assert called_payload["document"]["filename"] == "invoice.pdf"
+
+
 def test_whatsapp_send_failure_returns_502_not_a_silent_success(client_and_db):
     client = client_and_db
     fake_response = MagicMock()

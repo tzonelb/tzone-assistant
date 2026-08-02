@@ -190,6 +190,41 @@ def test_test_reply_runs_real_pipeline_and_persists_nothing(client_and_db):
     assert conv_count == 0
 
 
+def test_test_reply_surfaces_department_scoped_knowledge(client_and_db):
+    """Before this fix, knowledge_manager.list_for_ai's department kwarg
+    was never passed by any real caller (core/engine.py,
+    ai_teaching_chat.py, reply_flow_engine.py), so a knowledge entry
+    scoped to a department (no tags, just the Department field) could
+    never actually be matched - it silently fell back to matching only
+    entries with department in [None, "Unassigned"]. A Sales-scoped
+    entry must now actually be found for a Sales-department test."""
+    from core.knowledge_manager import knowledge_manager
+
+    client, state = client_and_db
+    state["user_id"] = 2
+
+    entry = knowledge_manager.create(
+        company_id=COMPANY_ID, title="Sales pricing", content="Our starter plan is $29/mo.",
+        department="Sales", tags=[],
+    )
+
+    with patch(
+        "core.ai_router.ai_router.call_openai",
+        return_value={"reply": "It's $29/mo.", "department": "sales", "language": "en", "confidence": 0.9},
+    ), patch(
+        "core.ai_knowledge_matcher.ai_knowledge_matcher.match",
+        return_value={"matched": True, "confidence": 0.9, "selected_ids": [str(entry["id"])], "is_follow_up": False, "reason": "price question"},
+    ):
+        resp = client.post(
+            "/api/ai-teaching-chat/test",
+            json={"message": "How much is the starter plan?", "channel": "website", "department": "Sales"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    knowledge_used = resp.json()["knowledge_used"]
+    assert any("Sales pricing" in str(item) for item in knowledge_used), knowledge_used
+
+
 def test_test_reply_returns_502_when_ai_unavailable(client_and_db):
     client, state = client_and_db
     state["user_id"] = 2

@@ -69,11 +69,11 @@ def send_telegram_text(
 
 
 # Telegram's Bot API accepts a public URL directly in place of an
-# uploaded file for sendPhoto/sendVideo/sendAudio — no multipart
-# upload needed on our side. Method name and payload field both
-# depend on media_type.
-_TELEGRAM_MEDIA_METHOD = {"image": "sendPhoto", "video": "sendVideo", "audio": "sendAudio"}
-_TELEGRAM_MEDIA_FIELD = {"image": "photo", "video": "video", "audio": "audio"}
+# uploaded file for sendPhoto/sendVideo/sendAudio/sendDocument — no
+# multipart upload needed on our side. Method name and payload field
+# both depend on media_type.
+_TELEGRAM_MEDIA_METHOD = {"image": "sendPhoto", "video": "sendVideo", "audio": "sendAudio", "document": "sendDocument"}
+_TELEGRAM_MEDIA_FIELD = {"image": "photo", "video": "video", "audio": "audio", "document": "document"}
 
 
 def send_telegram_media(

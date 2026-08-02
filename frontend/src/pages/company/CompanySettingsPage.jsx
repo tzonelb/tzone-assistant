@@ -11,9 +11,9 @@ const SECTIONS = [
   ["flow", "Reply Flow & Saved Replies", "Design the real step-by-step conversation flow per channel and department, plus reusable replies employees can insert from any conversation. Admins only.", [], "users.manage"],
   ["roles", "Roles & Permissions", "Manage employee roles and exactly what each one is allowed to do. Admins only.", [], "users.manage"],
   ["channels", "Channels", "Messenger, WhatsApp, Instagram, Telegram, email and website.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
-  ["api", "API & Webhooks", "Callbacks, access keys and integration health.", ["Webhook URL", "Verify token", "API access", "Delivery logs"]],
-  ["security", "Security", "Tenant isolation, sessions and audit controls.", ["Encryption status", "Session policy", "Audit retention", "IP restrictions"]],
-  ["backup", "Backup", "Backup policy, retention and restoration.", ["Automatic backup", "Retention", "Last backup", "Restore point"]],
+  ["api", "API & Webhooks", "Not built yet — each connected channel already has its own real webhook wired up automatically; a general API-key/webhook-management screen isn't available.", []],
+  ["security", "Security", "How channel credential access is protected — verification, encryption at rest, and the session change log.", []],
+  ["backup", "Backup", "Not built yet — there is no self-service backup/restore control in T-ZONE. Contact support if you need a restore.", []],
   ["billing", "Billing", "Your plan, usage limits, billing history, and plan-change or renewal requests.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
   ["help", "Help", "Frequently asked questions about running your workspace on T-ZONE.", []],
   ["ticketing", "Ticketing", "Open a support or maintenance ticket to the T-ZONE team about platform issues.", []],
@@ -694,13 +694,6 @@ const MODULE_LABELS = {
 };
 
 function SecurityStatusView() {
-  const [changes, setChanges] = useState([]);
-  const [status, setStatus] = useState("Checked, ready to load.");
-
-  useEffect(() => {
-    setStatus("");
-  }, []);
-
   return (
     <div className="company-setting-fields">
       <article className="company-setting-field">
@@ -712,7 +705,6 @@ function SecurityStatusView() {
       <article className="company-setting-field">
         <div><strong>Session change log</strong><span>Every connect/disconnect during a verified session is recorded and shown to you when you finish — see Channels tab, "Done — show what changed".</span></div>
       </article>
-      {status ? <p>{status}</p> : null}
     </div>
   );
 }

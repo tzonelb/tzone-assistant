@@ -339,7 +339,7 @@ export async function deleteTeamMessageRequest(messageId) {
   return apiRequest(`/api/team-chat/${messageId}`, { method: "DELETE" });
 }
 
-export async function uploadMediaRequest(file) {
+async function uploadFileRequest(path, file) {
   const formData = new FormData();
   formData.append("file", file);
 
@@ -349,7 +349,7 @@ export async function uploadMediaRequest(file) {
 
   let response;
   try {
-    response = await fetch(`${API_BASE_URL}/api/media/upload`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       headers,
       body: formData,
@@ -367,6 +367,14 @@ export async function uploadMediaRequest(file) {
     throw error;
   }
   return data;
+}
+
+export async function uploadMediaRequest(file) {
+  return uploadFileRequest("/api/media/upload", file);
+}
+
+export async function uploadVoiceNoteRequest(file) {
+  return uploadFileRequest("/api/media/upload-voice-note", file);
 }
 
 export async function appointmentOptionsRequest() {
@@ -893,6 +901,25 @@ export async function sendConversationReplyRequest(
     {
       method: "POST",
       body: { text },
+    },
+  );
+}
+
+export async function sendConversationMediaReplyRequest(
+  channel,
+  userId,
+  { mediaUrl, mediaType, caption, filename },
+) {
+  return apiRequest(
+    `${conversationPath(channel, userId)}/reply-media`,
+    {
+      method: "POST",
+      body: {
+        media_url: mediaUrl,
+        media_type: mediaType,
+        caption: caption || undefined,
+        filename: filename || undefined,
+      },
     },
   );
 }

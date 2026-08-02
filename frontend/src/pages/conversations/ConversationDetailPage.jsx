@@ -18,13 +18,16 @@ import {
   DownloadOutlined,
   ExpandLessOutlined,
   ExpandMoreOutlined,
+  FiberManualRecordOutlined,
   FormatQuoteOutlined,
   HistoryOutlined,
+  InsertDriveFileOutlined,
   LaunchOutlined,
   NoteAddOutlined,
   PauseCircleOutlineOutlined,
   RefreshOutlined,
   SendOutlined,
+  StopCircleOutlined,
   SupportAgentOutlined,
 } from "@mui/icons-material";
 
@@ -40,10 +43,13 @@ import {
   listSavedRepliesRequest,
   releaseConversationRequest,
   returnConversationToAiRequest,
+  sendConversationMediaReplyRequest,
   sendConversationReplyRequest,
   setConversationReminderRequest,
   takeOverConversationRequest,
   updateConversationControlRequest,
+  uploadMediaRequest,
+  uploadVoiceNoteRequest,
 } from "../../api/client";
 
 import { useConversationLive } from "../../contexts/ConversationLiveContext";
@@ -173,6 +179,47 @@ function getCustomerName(metadata, control) {
 }
 
 
+function MessageMedia({ metadata }) {
+  const mediaUrl = metadata?.media_url;
+  const mediaType = metadata?.media_type;
+  if (!mediaUrl) return null;
+
+  if (mediaType === "image") {
+    return (
+      <a href={mediaUrl} target="_blank" rel="noopener noreferrer">
+        <img src={mediaUrl} alt="" style={{ maxWidth: "100%", maxHeight: 260, borderRadius: 8, display: "block", marginBottom: 6 }} />
+      </a>
+    );
+  }
+
+  if (mediaType === "video") {
+    return (
+      <video controls src={mediaUrl} style={{ maxWidth: "100%", maxHeight: 260, borderRadius: 8, display: "block", marginBottom: 6 }} />
+    );
+  }
+
+  if (mediaType === "audio") {
+    return (
+      <audio controls src={mediaUrl} style={{ display: "block", marginBottom: 6, maxWidth: "100%" }} />
+    );
+  }
+
+  return (
+    <a
+      href={mediaUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "rgba(0,0,0,0.04)", borderRadius: 8, marginBottom: 6, textDecoration: "none", color: "inherit" }}
+    >
+      <AttachFileOutlined fontSize="small" />
+      <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {metadata?.media_filename || "Download file"}
+      </span>
+    </a>
+  );
+}
+
+
 function CollapsiblePanel({
   title,
   subtitle,
@@ -260,6 +307,18 @@ export default function ConversationDetailPage({
   const [savedRepliesOpen, setSavedRepliesOpen] = useState(false);
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
   const [savedReplies, setSavedReplies] = useState([]);
+  const [pendingMedia, setPendingMedia] = useState(null);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [mediaError, setMediaError] = useState("");
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const attachmentInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingStreamRef = useRef(null);
+  const recordingCancelledRef = useRef(false);
+  const recordingIntervalRef = useRef(null);
 
   useEffect(() => {
     listSavedRepliesRequest()
@@ -891,7 +950,11 @@ export default function ConversationDetailPage({
     event.preventDefault();
     const message = draft.trim();
 
-    if (!message || sending) {
+    if (recording || mediaUploading) {
+      return;
+    }
+
+    if (!pendingMedia && (!message || sending)) {
       return;
     }
 
@@ -903,7 +966,17 @@ export default function ConversationDetailPage({
         const acquired = await ensureTakeoverForReply();
         if (!acquired) return;
       }
-      await sendConversationReplyRequest(channel, userId, message);
+      if (pendingMedia) {
+        await sendConversationMediaReplyRequest(channel, userId, {
+          mediaUrl: pendingMedia.url,
+          mediaType: pendingMedia.mediaType,
+          caption: message,
+          filename: pendingMedia.filename,
+        });
+        setPendingMedia(null);
+      } else {
+        await sendConversationReplyRequest(channel, userId, message);
+      }
       setDraft("");
       await loadConversation({ silent: true });
       onConversationChanged?.();
@@ -919,6 +992,175 @@ export default function ConversationDetailPage({
       setSending(false);
     }
   }
+
+
+  const DOCUMENT_ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.zip,.rar";
+
+
+  async function uploadPendingFile(file) {
+    setMediaError("");
+    setMediaUploading(true);
+    try {
+      const result = await uploadMediaRequest(file);
+      setPendingMedia({
+        url: result.url,
+        mediaType: result.media_type,
+        filename: result.filename || file.name,
+      });
+    } catch (requestError) {
+      setMediaError(requestError.message || "Could not upload this file.");
+    } finally {
+      setMediaUploading(false);
+    }
+  }
+
+
+  async function handlePickerChange(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setToolsMenuOpen(false);
+    if (!canReply) {
+      const acquired = await ensureTakeoverForReply();
+      if (!acquired) return;
+    }
+    await uploadPendingFile(file);
+  }
+
+
+  function pickAttachment() {
+    attachmentInputRef.current?.click();
+  }
+
+
+  function pickImage() {
+    imageInputRef.current?.click();
+  }
+
+
+  function removePendingMedia() {
+    setPendingMedia(null);
+    setMediaError("");
+  }
+
+
+  function stopRecordingTimer() {
+    if (recordingIntervalRef.current) {
+      window.clearInterval(recordingIntervalRef.current);
+      recordingIntervalRef.current = null;
+    }
+  }
+
+
+  function stopRecordingStream() {
+    recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    recordingStreamRef.current = null;
+  }
+
+
+  async function startVoiceRecording() {
+    setToolsMenuOpen(false);
+    setMediaError("");
+
+    if (!canReply) {
+      const acquired = await ensureTakeoverForReply();
+      if (!acquired) return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setMediaError("This browser cannot record audio.");
+      return;
+    }
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setMediaError("Microphone permission was denied.");
+      return;
+    }
+
+    const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"]
+      .find((candidate) => window.MediaRecorder?.isTypeSupported?.(candidate));
+
+    let recorder;
+    try {
+      recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    } catch {
+      stream.getTracks().forEach((track) => track.stop());
+      setMediaError("This browser cannot record audio.");
+      return;
+    }
+
+    recordingStreamRef.current = stream;
+    recordedChunksRef.current = [];
+    recordingCancelledRef.current = false;
+
+    recorder.ondataavailable = (event) => {
+      if (event.data && event.data.size > 0) {
+        recordedChunksRef.current.push(event.data);
+      }
+    };
+
+    recorder.onstop = async () => {
+      stopRecordingStream();
+      stopRecordingTimer();
+      setRecording(false);
+
+      if (recordingCancelledRef.current || recordedChunksRef.current.length === 0) {
+        recordedChunksRef.current = [];
+        return;
+      }
+
+      const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      recordedChunksRef.current = [];
+      const extension = recorder.mimeType?.includes("ogg") ? "ogg" : "webm";
+      const file = new File([blob], `voice-note.${extension}`, { type: blob.type });
+
+      setMediaUploading(true);
+      setMediaError("");
+      try {
+        const result = await uploadVoiceNoteRequest(file);
+        setPendingMedia({
+          url: result.url,
+          mediaType: result.media_type,
+          filename: "Voice note",
+        });
+      } catch (requestError) {
+        setMediaError(requestError.message || "Could not process the voice note.");
+      } finally {
+        setMediaUploading(false);
+      }
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setRecording(true);
+    setRecordingSeconds(0);
+    recordingIntervalRef.current = window.setInterval(
+      () => setRecordingSeconds((current) => current + 1),
+      1000,
+    );
+  }
+
+
+  function stopVoiceRecording() {
+    recordingCancelledRef.current = false;
+    mediaRecorderRef.current?.stop();
+  }
+
+
+  function cancelVoiceRecording() {
+    recordingCancelledRef.current = true;
+    mediaRecorderRef.current?.stop();
+  }
+
+
+  useEffect(() => () => {
+    stopRecordingTimer();
+    stopRecordingStream();
+  }, []);
 
 
   if (loading) {
@@ -1116,7 +1358,11 @@ export default function ConversationDetailPage({
                           : "T-ZONE AI"}
                     </strong>
 
-                    <p>{resolveMessageText(message) || "[Unsupported message]"}</p>
+                    <MessageMedia metadata={message?.metadata} />
+
+                    {resolveMessageText(message) || !message?.metadata?.media_url ? (
+                      <p>{resolveMessageText(message) || "[Unsupported message]"}</p>
+                    ) : null}
 
                     <div className="message-footer">
                       <time>{formatDateTime(item.createdAt)}</time>
@@ -1156,6 +1402,62 @@ export default function ConversationDetailPage({
           ) : null}
 
           <div style={{ position: "relative", flex: "0 0 auto" }}>
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            accept={DOCUMENT_ACCEPT}
+            style={{ display: "none" }}
+            onChange={handlePickerChange}
+          />
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handlePickerChange}
+          />
+
+          {mediaError ? (
+            <div className="conversation-action-error" style={{ marginBottom: 6 }}>{mediaError}</div>
+          ) : null}
+
+          {recording ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 6 }}>
+              <FiberManualRecordOutlined style={{ color: "#e53935", fontSize: 16 }} />
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Recording... {formatTimer(recordingSeconds)}</span>
+              <div style={{ flex: 1 }} />
+              <AppButton type="button" variant="secondary" size="small" onClick={cancelVoiceRecording}>
+                Cancel
+              </AppButton>
+              <AppButton type="button" variant="primary" size="small" icon={<StopCircleOutlined fontSize="small" />} onClick={stopVoiceRecording}>
+                Stop
+              </AppButton>
+            </div>
+          ) : pendingMedia ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 6 }}>
+              {pendingMedia.mediaType === "image" ? (
+                <img src={pendingMedia.url} alt="" style={{ width: 32, height: 32, objectFit: "cover", borderRadius: 6 }} />
+              ) : pendingMedia.mediaType === "audio" ? (
+                <MicNoneOutlined fontSize="small" />
+              ) : pendingMedia.mediaType === "video" ? (
+                <ImageOutlined fontSize="small" />
+              ) : (
+                <InsertDriveFileOutlined fontSize="small" />
+              )}
+              <span style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {pendingMedia.filename || humanize(pendingMedia.mediaType)}
+              </span>
+              <div style={{ flex: 1 }} />
+              <button type="button" className="inbox-icon-button" title="Remove" onClick={removePendingMedia}>
+                <CloseOutlined fontSize="small" />
+              </button>
+            </div>
+          ) : mediaUploading ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>Uploading...</span>
+            </div>
+          ) : null}
+
           <form className="conversation-composer conversation-composer-approved" onSubmit={handleSend}>
             <div className="conversation-composer-row conversation-composer-single-row">
               <textarea
@@ -1163,7 +1465,9 @@ export default function ConversationDetailPage({
                 value={draft}
                 placeholder={
                   canReply
-                    ? "Write a reply..."
+                    ? pendingMedia
+                      ? "Add a caption (optional)..."
+                      : "Write a reply..."
                     : isAssignedToOther
                       ? `Assigned to ${control?.assigned_user_name || "another employee"}.`
                       : "Click here to take over and reply..."
@@ -1186,6 +1490,7 @@ export default function ConversationDetailPage({
                 className="composer-tool-button"
                 type="button"
                 title="More options"
+                disabled={recording}
                 onClick={() => setToolsMenuOpen((current) => !current)}
               >
                 +
@@ -1195,7 +1500,7 @@ export default function ConversationDetailPage({
                 type="submit"
                 className="composer-send-circle"
                 aria-label="Send message"
-                disabled={sending || !draft.trim() || !canReply}
+                disabled={sending || recording || mediaUploading || (!pendingMedia && !draft.trim()) || !canReply}
               >
                 <SendOutlined />
               </button>
@@ -1206,27 +1511,27 @@ export default function ConversationDetailPage({
             <div style={{ position: "absolute", bottom: "calc(100% + 8px)", right: 16, width: 210, background: "#fff", boxShadow: "0 6px 20px rgba(0,0,0,0.18)", borderRadius: 10, zIndex: 30, overflow: "hidden", border: "1px solid #e5e7eb" }}>
               <button
                 type="button"
-                disabled
-                title="Sending attachments from the dashboard isn't built yet"
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", cursor: "not-allowed", textAlign: "left", opacity: 0.5 }}
+                title="Send a document, spreadsheet, or archive"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+                onClick={pickAttachment}
               >
-                <AttachFileOutlined fontSize="small" /> Attachment (coming soon)
+                <AttachFileOutlined fontSize="small" /> Attachment
               </button>
               <button
                 type="button"
-                disabled
-                title="Sending images from the dashboard isn't built yet"
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "not-allowed", textAlign: "left", opacity: 0.5 }}
+                title="Send an image"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "pointer", textAlign: "left" }}
+                onClick={pickImage}
               >
-                <ImageOutlined fontSize="small" /> Image (coming soon)
+                <ImageOutlined fontSize="small" /> Image
               </button>
               <button
                 type="button"
-                disabled
-                title="Recording voice notes from the dashboard isn't built yet"
-                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "not-allowed", textAlign: "left", opacity: 0.5 }}
+                title="Record and send a voice note"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", width: "100%", fontSize: 14, background: "none", border: "none", borderTop: "1px solid #f1f3f5", cursor: "pointer", textAlign: "left" }}
+                onClick={startVoiceRecording}
               >
-                <MicNoneOutlined fontSize="small" /> Voice note (coming soon)
+                <MicNoneOutlined fontSize="small" /> Voice note
               </button>
               <button
                 type="button"

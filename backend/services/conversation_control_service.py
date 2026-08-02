@@ -24,6 +24,22 @@ VALID_STATUSES = {
     "archived",
 }
 
+# Business-tracking statuses an employee sets manually to mean "I've
+# dealt with this" (as opposed to "ai_handling"/"human_handling", which
+# just describe who's currently routing the conversation). An AI/human
+# handoff transition must never silently clobber one of these back to
+# "ai_handling" - that would make a conversation an agent just marked
+# resolved impossible to find again by filtering on "Resolved".
+MANUAL_STATUSES_SQL = "('waiting_customer','waiting_agent','pending','resolved','closed','archived')"
+
+
+def _status_preserving_manual(new_status: str) -> str:
+    """SQL fragment for a `status` column assignment: keeps whatever
+    manual business status is already set, otherwise applies new_status.
+    new_status is always one of two hardcoded literals from this module,
+    never user input - safe to inline directly."""
+    return f"CASE WHEN status IN {MANUAL_STATUSES_SQL} THEN status ELSE '{new_status}' END"
+
 VALID_PRIORITIES = {
     "low",
     "normal",
