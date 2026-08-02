@@ -2,7 +2,10 @@ import { useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
+import { getServerUrl, saveServerUrl } from "../../api/client";
 import tzoneLogo from "../../assets/tzone-logo.png";
+
+const IS_DESKTOP = typeof window !== "undefined" && Boolean(window.tzoneDesktop);
 
 
 export default function LoginPage() {
@@ -19,6 +22,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [pendingToken, setPendingToken] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [showServerSettings, setShowServerSettings] = useState(false);
+  const [serverUrl, setServerUrl] = useState(() => getServerUrl());
 
   if (!loading && authenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -57,6 +62,12 @@ export default function LoginPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleSaveServerUrl() {
+    saveServerUrl(serverUrl);
+    // API base URL is read once at app start, so apply it with a reload.
+    window.location.reload();
   }
 
   async function handleTwoFactorSubmit(event) {
@@ -239,6 +250,46 @@ export default function LoginPage() {
           Don&apos;t have an account?{" "}
           <Link to="/signup">Create an account</Link>
         </small>
+
+        {IS_DESKTOP ? (
+          <div className="login-server-settings">
+            <button
+              type="button"
+              className="secondary-action"
+              onClick={() =>
+                setShowServerSettings((current) => !current)
+              }
+            >
+              {showServerSettings
+                ? "Hide server settings"
+                : "Server settings"}
+            </button>
+
+            {showServerSettings ? (
+              <>
+                <label htmlFor="login-server-url">
+                  Server address
+                </label>
+                <input
+                  id="login-server-url"
+                  type="url"
+                  value={serverUrl}
+                  placeholder="http://127.0.0.1:8000"
+                  onChange={(event) =>
+                    setServerUrl(event.target.value)
+                  }
+                />
+                <button
+                  type="button"
+                  className="primary-action"
+                  onClick={handleSaveServerUrl}
+                >
+                  Save and reconnect
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
 
         <small className="login-security-note">
           Protected access · T-ZONE Platform

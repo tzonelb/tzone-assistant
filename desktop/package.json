@@ -1,0 +1,45 @@
+{
+  "name": "tzone-desktop",
+  "productName": "T-ZONE",
+  "version": "1.0.0",
+  "description": "T-ZONE AI Business Platform — Windows desktop app",
+  "main": "main.js",
+  "author": "T-ZONE",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.tzone.desktop",
+    "productName": "T-ZONE",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**",
+      "build/icon.png"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "T-ZONE Setup ${version}.${ext}"
+    }
+  }
+}

@@ -274,6 +274,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.ALLOWED_ORIGINS,
+    # The Windows desktop app serves the bundled frontend from a local
+    # loopback port that can vary between machines, so any loopback origin
+    # must be accepted alongside the fixed list above. Auth uses Bearer
+    # tokens (not cookies), so this does not widen credential exposure.
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=[
         "GET",

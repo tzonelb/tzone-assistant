@@ -1,7 +1,35 @@
 
+// Desktop (Electron) builds let the user point the app at any server at
+// runtime — the value is stored under this key by the Login page. Web and
+// mobile builds never write it, so they keep the build-time behavior.
+const SERVER_URL_KEY = "tzone_server_url";
+
+function readStoredServerUrl() {
+  try {
+    const stored = localStorage.getItem(SERVER_URL_KEY);
+    return stored ? stored.replace(/\/+$/, "") : null;
+  } catch {
+    return null;
+  }
+}
+
 const API_BASE_URL =
+  readStoredServerUrl() ||
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000";
+
+export function getServerUrl() {
+  return API_BASE_URL;
+}
+
+export function saveServerUrl(url) {
+  const cleaned = (url || "").trim().replace(/\/+$/, "");
+  if (cleaned) {
+    localStorage.setItem(SERVER_URL_KEY, cleaned);
+  } else {
+    localStorage.removeItem(SERVER_URL_KEY);
+  }
+}
 
 const TOKEN_KEY = "tzone_access_token";
 

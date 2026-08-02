@@ -40,6 +40,9 @@ frontend/node_modules/
 dist/
 frontend/dist/
 
+# Windows desktop app build output (installer .exe etc.)
+desktop/release/
+
 .vite/
 npm-debug.log*
 yarn-debug.log*
