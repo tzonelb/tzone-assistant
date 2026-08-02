@@ -8,6 +8,7 @@ import App from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { ConversationLiveProvider } from "./contexts/ConversationLiveContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 import "./index.css";
 import "./styles/theme.css";
@@ -19,24 +20,26 @@ import "./styles/chat.css";
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <NotificationProvider>
-          <ConversationLiveProvider>
-            <App />
+      <ThemeProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <ConversationLiveProvider>
+              <App />
 
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                duration: 3500,
-                style: {
-                  borderRadius: "14px",
-                  fontWeight: 700,
-                },
-              }}
-            />
-          </ConversationLiveProvider>
-        </NotificationProvider>
-      </AuthProvider>
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 3500,
+                  style: {
+                    borderRadius: "14px",
+                    fontWeight: 700,
+                  },
+                }}
+              />
+            </ConversationLiveProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>
 );

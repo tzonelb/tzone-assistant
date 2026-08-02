@@ -1,0 +1,2027 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/classical-029b8480-1d0e-4858-a14a-285ec51b17ab/styles.css">
+<script src="_ds/classical-029b8480-1d0e-4858-a14a-285ec51b17ab/_ds_bundle.js"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&family=Cairo:wght@400;600;700&family=Tajawal:wght@400;500;700&display=swap">
+<style>
+/* Classical retuned to the T-ZONE mark: accent = brand blue (#38b8f8 family),
+   accent-2 = brand green. Structure, type and hairlines stay Classical. */
+:root{
+  --color-bg:#f4f5f7; --color-surface:#e9ebef; --color-text:#18202a;
+  --color-accent:#1b9be0; --color-accent-2:#3fb552;
+  --color-divider:color-mix(in srgb,#18202a 15%,transparent);
+  --color-neutral-100:#f6f7f9;--color-neutral-200:#e8eaee;--color-neutral-300:#d5d9df;
+  --color-neutral-400:#b8bec8;--color-neutral-500:#99a1ad;--color-neutral-600:#7b8492;
+  --color-neutral-700:#5f6875;--color-neutral-800:#434b56;--color-neutral-900:#2b323b;
+  --color-accent-100:#e8f6fe;--color-accent-200:#c7e9fc;--color-accent-300:#93d6f9;
+  --color-accent-400:#5cc1f5;--color-accent-500:#2ca7e6;--color-accent-600:#1187c6;
+  --color-accent-700:#0b6c9f;--color-accent-800:#08506f;--color-accent-900:#073a4f;
+  --color-accent-2-100:#e9f9eb;--color-accent-2-200:#c9f0ce;--color-accent-2-300:#97e0a2;
+  --color-accent-2-400:#63cd74;--color-accent-2-500:#3fb552;--color-accent-2-600:#2a9740;
+  --color-accent-2-700:#1d7830;--color-accent-2-800:#145826;--color-accent-2-900:#0f401d;
+  --tz-rail:#111922; --tz-rail-text:#f3f5f7;
+}
+/* Driven live by the Theme Studio (Platform Admin → Theme Studio). */
+body{font-size:var(--tz-base-size,15px);line-height:var(--tz-line-height,1.55);letter-spacing:var(--tz-letter-spacing,0)}
+h1,h2,h3,h4{zoom:var(--tz-heading-scale,1)}
+.tz-kick{text-transform:var(--tz-kick-case,uppercase)}
+.tz-num,.tz-fig{font-feature-settings:var(--tz-tnum,"tnum")}
+.btn{font-size:var(--tz-btn-size,14px);border-width:var(--tz-line,1px);transition:background var(--tz-speed,140ms) ease,color var(--tz-speed,140ms) ease}
+.btn-primary{background:var(--tz-btn-bg,transparent);color:var(--tz-btn-fg,var(--color-accent));border-color:var(--color-accent)}
+.btn-primary:hover{filter:brightness(1.06)}
+.card,.table td,.table th{border-width:var(--tz-line,1px)}
+.card{background:var(--tz-card-bg,transparent)}
+.input{border-width:var(--tz-input-border,1px);border-radius:var(--tz-input-radius,4px)}
+:focus-visible{outline-width:var(--tz-focus,2px)}
+.tz-rail-link,.tz-row{transition:background var(--tz-speed,140ms) ease,color var(--tz-speed,140ms) ease}
+.tz-avatar{border-radius:var(--tz-avatar,50%)}
+.tz-swatch{width:26px;height:26px;border:1px solid var(--color-divider);border-radius:var(--radius-sm);padding:0;cursor:pointer}
+.tz-pal{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--color-divider);border-radius:var(--radius-md);background:transparent;cursor:pointer;text-align:left;font:inherit;color:inherit}
+.tz-pal:hover{background:color-mix(in srgb,var(--color-text) 5%,transparent)}
+.tz-pal-on{border-color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)}
+input[type=range]{accent-color:var(--color-accent);width:100%}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--color-bg)}
+#root,#root>*{height:100%}
+@media (max-width:940px){.tz-conv-list{display:none!important}}
+@media (max-width:1100px){.tz-pane-aux{display:none!important}}
+.tz-fig{font-family:var(--font-heading);font-weight:400;font-feature-settings:"tnum";letter-spacing:-.02em}
+.tz-kick{font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-feature-settings:"tnum"}
+.tz-num{font-feature-settings:"tnum"}
+.tz-rail-link{position:relative;display:flex;align-items:center;gap:10px;width:100%;padding:7px 14px 7px 16px;border:0;background:transparent;color:color-mix(in srgb,var(--tz-rail-text) 82%,transparent);font-family:var(--font-body);font-size:13px;text-align:left;cursor:pointer}
+.tz-rail-link:hover{color:var(--tz-rail-text);background:color-mix(in srgb,var(--tz-rail-text) 6%,transparent)}
+.tz-rail-link svg{flex:none;opacity:.8}
+.tz-mark{position:absolute;inset:0;border-left:2px solid currentColor;background:color-mix(in srgb,currentColor 14%,transparent);pointer-events:none}
+.tz-rail-link:has(.tz-mark){color:var(--tz-rail-text)}
+.tz-rail-link span{white-space:nowrap;transition:opacity var(--tz-speed,140ms) ease}
+.tz-aside{flex:none;width:var(--tz-rail-width,222px);transition:width var(--tz-speed,140ms) ease;overflow-x:hidden;overflow-y:auto}
+.tz-aside.tz-min{width:58px}
+.tz-aside.tz-min:hover{width:var(--tz-rail-width,222px)}
+.tz-aside.tz-min .tz-rail-link span{opacity:0}
+.tz-aside.tz-min:hover .tz-rail-link span{opacity:1}
+.tz-aside.tz-min .tz-kick,.tz-aside.tz-min .tz-hide{display:none}
+.tz-aside.tz-min:hover .tz-kick,.tz-aside.tz-min:hover .tz-hide{display:block}
+.tz-aside.tz-min .tz-rail-link{justify-content:flex-start;padding-left:19px}
+.tz-aside .tz-hide,.tz-aside .tz-kick{transition:opacity var(--tz-speed,140ms) ease}
+.tz-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--color-divider);border-radius:999px;background:transparent;font:inherit;font-size:12.5px;color:inherit;white-space:nowrap;cursor:pointer}
+.tz-chip:hover{background:color-mix(in srgb,var(--color-text) 5%,transparent)}
+.tz-stat{box-shadow:inset 1px 0 var(--color-divider),inset 0 1px var(--color-divider)}
+.tz-hidden{display:none!important}
+.tz-chip-on{border-color:var(--color-accent);color:var(--color-accent-700);background:color-mix(in srgb,var(--color-accent) 8%,transparent)}
+.tz-row:hover{background:color-mix(in srgb,var(--color-text) 4%,transparent)}
+.tag,.btn{white-space:nowrap;flex:none}
+.tz-screen{min-width:0;max-width:var(--tz-max,none);margin:0 auto}
+.tz-screen table.table{min-width:760px}
+.tz-tablewrap{overflow-x:auto;border-radius:var(--radius-md)}
+
+</style>
+</helmet>
+
+<div style="display:flex;flex-direction:column;height:100vh;max-height:100vh;overflow:hidden;background:var(--color-bg);color:var(--color-text);font-family:var(--font-body)" dir="{{ dir }}">
+
+  <header style="display:flex;align-items:center;gap:var(--space-4);flex:none;min-height:var(--tz-topbar,56px);padding:8px var(--space-4);border-bottom:1px solid var(--color-divider);background:var(--color-bg)">
+    <div style="display:flex;align-items:center;gap:10px;width:222px;flex:none">
+      <img src="assets/tzone-logo-transparent.png" alt="T-ZONE" style="height:23px;width:auto;flex:none">
+      <span class="tz-kick" style="color:var(--color-accent-700);border-left:1px solid var(--color-divider);padding-left:10px">Beirut&nbsp;·&nbsp;Main</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex:1;max-width:420px;padding:0 10px;border:1px solid var(--color-divider);border-radius:var(--radius-md);background:transparent">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="opacity:.5"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+      <input class="input" placeholder="Search conversations, contacts, products…" style="border:0;padding:7px 0;font-size:13px">
+      <span class="tz-kick" style="opacity:.45">⌘K</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--space-3);margin-left:auto">
+      <span style="display:inline-flex;align-items:center;gap:7px;font-size:12px;color:color-mix(in srgb,var(--color-text) 62%,transparent)">
+        <span style="width:6px;height:6px;border-radius:50%;background:var(--color-accent-2-500)"></span>Live
+      </span>
+      <span style="width:1px;height:22px;background:var(--color-divider)"></span>
+      <button class="btn btn-ghost" style="position:relative;padding:4px 6px">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        <span class="tz-num" style="position:absolute;top:-2px;right:-2px;min-width:15px;padding:0 3px;border-radius:999px;border:1px solid var(--color-bg);background:var(--color-accent-700);color:var(--color-neutral-100);font-family:var(--font-body);font-size:9px;line-height:14px;text-align:center">7</span>
+      </button>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div style="width:30px;height:30px;display:grid;place-items:center;border:1px solid var(--color-accent);border-radius:var(--tz-avatar,50%);font-family:var(--font-heading);font-size:14px;color:var(--color-accent-700)">R</div>
+        <div style="display:flex;flex-direction:column;line-height:1.25">
+          <strong style="font-family:var(--font-heading);font-weight:600;font-size:13px">Rami Haddad</strong>
+          <span class="tz-kick" style="opacity:.55">Super administrator</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div style="display:flex;flex:1;min-height:0">
+
+    <aside class="{{ asideClass }}" style="display:flex;flex-direction:column;background:var(--tz-rail);color:var(--tz-rail-text);border-right:1px solid var(--color-divider)">
+      <button onClick="{{ toggleRail }}" title="Collapse menu" style="display:flex;align-items:center;gap:10px;flex:none;width:100%;padding:12px 16px 0;border:0;background:transparent;color:inherit;cursor:pointer">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="flex:none"><rect x="3" y="4" width="18" height="16" rx="1"></rect><path d="M9 4v16"></path></svg>
+        <span class="tz-hide tz-kick" style="opacity:.6">{{ railToggleLabel }}</span>
+      </button>
+      <div class="tz-hide" style="padding:var(--space-3) 16px var(--space-2)">
+        <span class="tz-kick" style="color:color-mix(in srgb,var(--tz-rail-text) 62%,transparent)">Workspace</span>
+        <div style="font-family:var(--font-heading);font-weight:400;font-size:20px;color:var(--tz-rail-text);margin-top:3px">T-ZONE Trading</div>
+        <div style="font-size:11px;color:color-mix(in srgb,var(--tz-rail-text) 48%,transparent);margin-top:2px">Growth plan · 14 seats</div>
+      </div>
+      <div style="height:1px;background:color-mix(in srgb,var(--tz-rail-text) 14%,transparent);margin:var(--space-2) 16px var(--space-3)"></div>
+
+      <div class="tz-kick" style="padding:0 16px 6px;color:color-mix(in srgb,var(--tz-rail-text) 58%,transparent)">Desk</div>
+      <button class="tz-rail-link" onClick="{{ goDashboard }}"><sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg><span>Dashboard</span></button>
+      <button class="tz-rail-link" onClick="{{ goConversations }}"><sc-if value="{{ isConversations }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span>Conversations</span><span class="tz-num" style="margin-left:auto;font-size:11px;color:var(--color-accent-300)">37</span></button>
+      <button class="tz-rail-link" onClick="{{ go.notifications }}"><sc-if value="{{ is.notifications }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg><span>Notification Center</span><span class="tz-num" style="margin-left:auto;font-size:11px;color:var(--color-accent-300)">7</span></button>
+      <sc-if value="{{ show.tasks }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.tasks }}"><sc-if value="{{ is.tasks }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m9 11 3 3 8-8"></path><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"></path></svg><span>Tasks</span></button></sc-if>
+      <sc-if value="{{ show.appointments }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.appointments }}"><sc-if value="{{ is.appointments }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="1"></rect><path d="M8 3v4M16 3v4M3 10h18"></path></svg><span>Appointments</span></button></sc-if>
+      <sc-if value="{{ show.teamchat }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.teamchat }}"><sc-if value="{{ is.teamchat }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 9a2 2 0 0 1-2 2H6l-3 3V4a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2z"></path><path d="M18 9h1a2 2 0 0 1 2 2v9l-3-3h-6a2 2 0 0 1-2-2v-1"></path></svg><span>Team Chat</span></button></sc-if>
+
+      <div class="tz-kick" style="padding:var(--space-4) 16px 6px;color:color-mix(in srgb,var(--tz-rail-text) 58%,transparent)">Customers</div>
+      <button class="tz-rail-link" onClick="{{ goCustomers }}"><sc-if value="{{ isCustomers }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"></path><path d="M16 5.3a3.2 3.2 0 0 1 0 5.4M18 14.8c2 .7 3 2.5 3 5.2"></path></svg><span>Customers</span></button>
+      <sc-if value="{{ show.broadcast }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.broadcast }}"><sc-if value="{{ is.broadcast }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 11 15-6v14L3 13z"></path><path d="M7 13v5a2 2 0 0 0 4 0v-3"></path></svg><span>Broadcast</span></button></sc-if>
+      <sc-if value="{{ show.calls }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.calls }}"><sc-if value="{{ is.calls }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 12l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2"></path></svg><span>Calls</span></button></sc-if>
+
+      <div class="tz-kick" style="padding:var(--space-4) 16px 6px;color:color-mix(in srgb,var(--tz-rail-text) 58%,transparent)">Intelligence</div>
+      <button class="tz-rail-link" onClick="{{ goTeaching }}"><sc-if value="{{ isTeaching }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l1.8 4.9L19 9.6l-4.4 3 .6 5.2L12 15.6 8.8 17.8l.6-5.2L5 9.6l5.2-1.7z"></path></svg><span>AI Teaching</span></button>
+      <sc-if value="{{ show.savedreplies }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.savedreplies }}"><sc-if value="{{ is.savedreplies }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 14 4 9l5-5"></path><path d="M4 9h9a7 7 0 0 1 7 7v4"></path></svg><span>Saved Replies</span></button></sc-if>
+      <sc-if value="{{ show.replyflows }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.replyflows }}"><sc-if value="{{ is.replyflows }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="3" width="6" height="5"></rect><rect x="3" y="16" width="6" height="5"></rect><rect x="15" y="16" width="6" height="5"></rect><path d="M12 8v4M6 16v-2h12v2"></path></svg><span>Reply Flows</span></button></sc-if>
+
+      <div class="tz-kick" style="padding:var(--space-4) 16px 6px;color:color-mix(in srgb,var(--tz-rail-text) 58%,transparent)">Growth</div>
+      <button class="tz-rail-link" onClick="{{ goPublish }}"><sc-if value="{{ isPublish }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"></circle><circle cx="5" cy="6" r="2"></circle><circle cx="19" cy="6" r="2"></circle><circle cx="5" cy="18" r="2"></circle><circle cx="19" cy="18" r="2"></circle><path d="m7 7 3 3m4 0 3-3M7 17l3-3m4 0 3 3"></path></svg><span>Community</span></button>
+      <button class="tz-rail-link" onClick="{{ goCatalogue }}"><sc-if value="{{ isCatalogue }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8l9-4 9 4v8l-9 4-9-4z"></path><path d="M3 8l9 4 9-4M12 12v8"></path></svg><span>Master Catalogue</span></button>
+      <sc-if value="{{ show.analytics }}" hint-placeholder-val="{{ true }}"><button class="tz-rail-link" onClick="{{ go.analytics }}"><sc-if value="{{ is.analytics }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path></svg><span>Analytics</span></button></sc-if>
+
+      <div class="tz-kick" style="padding:var(--space-4) 16px 6px;color:color-mix(in srgb,var(--tz-rail-text) 58%,transparent)">Administration</div>
+      <button class="tz-rail-link" onClick="{{ go.company }}"><sc-if value="{{ is.company }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2"></path></svg><span>Company Settings</span></button>
+      <button class="tz-rail-link" onClick="{{ go.roles }}"><sc-if value="{{ is.roles }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3l7 3v6c0 4.2-2.9 7.6-7 9-4.1-1.4-7-4.8-7-9V6z"></path><path d="m9 12 2 2 4-4"></path></svg><span>Roles &amp; Permissions</span></button>
+      <button class="tz-rail-link" onClick="{{ go.settings }}"><sc-if value="{{ is.settings }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"></path></svg><span>Settings</span></button>
+      <button class="tz-rail-link" onClick="{{ go.platform }}"><sc-if value="{{ is.platform }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="7" rx="1"></rect><rect x="3" y="13" width="18" height="7" rx="1"></rect><path d="M7 7.5h.01M7 16.5h.01"></path></svg><span>Platform Admin</span></button>
+      <button class="tz-rail-link" onClick="{{ go.themestudio }}"><sc-if value="{{ is.themestudio }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="13.5" cy="6.5" r="1.5"></circle><circle cx="17.5" cy="10.5" r="1.5"></circle><circle cx="8.5" cy="7.5" r="1.5"></circle><circle cx="6.5" cy="12.5" r="1.5"></circle><path d="M12 2a10 10 0 1 0 0 20c1.4 0 2-1 2-2 0-1.6-1.4-2-1.4-3.2 0-.9.7-1.8 2.4-1.8H17a5 5 0 0 0 5-5c0-4.4-4.5-8-10-8"></path></svg><span>Theme Studio</span></button>
+
+      <div style="margin-top:auto;padding:var(--space-4) 16px;border-top:1px solid color-mix(in srgb,var(--tz-rail-text) 14%,transparent)">
+        <div class="tz-kick" style="color:color-mix(in srgb,var(--tz-rail-text) 38%,transparent)">Audit trail on · v1</div>
+      </div>
+    </aside>
+
+    <main style="flex:1;min-width:0;overflow:auto">
+
+      <sc-if value="{{ isDashboard }}" hint-placeholder-val="{{ true }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div>
+            <span class="tz-kick" style="color:var(--color-accent-700)">Wednesday, 22 July 2026 · 09:12 Beirut</span>
+            <h1 style="font-weight:400;font-size:40px;margin:6px 0 4px">The day, at a glance</h1>
+            <p style="margin:0;max-width:52ch;font-size:13.5px;color:color-mix(in srgb,var(--color-text) 68%,transparent)">Every channel, every open conversation, and the plan you are running against — one sheet, no scrolling for the numbers that matter.</p>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-2);flex:none">
+            <span class="tag tag-outline">Subscription active</span>
+            <button class="btn btn-secondary">Refresh</button>
+            <button class="btn btn-primary">New conversation</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)">
+            <span class="tz-kick" style="opacity:.6">Conversations</span>
+            <div class="tz-fig" style="font-size:38px;line-height:1.05;margin-top:4px">1,284</div>
+            <div style="font-size:11.5px;color:var(--color-accent-700);margin-top:2px">37 open now</div>
+          </div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)">
+            <span class="tz-kick" style="opacity:.6">Customers</span>
+            <div class="tz-fig" style="font-size:38px;line-height:1.05;margin-top:4px">6,910</div>
+            <div style="font-size:11.5px;opacity:.55;margin-top:2px">+48 this week</div>
+          </div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)">
+            <span class="tz-kick" style="opacity:.6">Knowledge</span>
+            <div class="tz-fig" style="font-size:38px;line-height:1.05;margin-top:4px">214</div>
+            <div style="font-size:11.5px;opacity:.55;margin-top:2px">items active</div>
+          </div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)">
+            <span class="tz-kick" style="opacity:.6">Channels</span>
+            <div class="tz-fig" style="font-size:38px;line-height:1.05;margin-top:4px">5</div>
+            <div style="font-size:11.5px;opacity:.55;margin-top:2px">all connected</div>
+          </div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)">
+            <span class="tz-kick" style="opacity:.6">Products</span>
+            <div class="tz-fig" style="font-size:38px;line-height:1.05;margin-top:4px">1,832</div>
+            <div style="font-size:11.5px;opacity:.55;margin-top:2px">14 low stock</div>
+          </div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)">
+            <span class="tz-kick" style="opacity:.6">Open tickets</span>
+            <div class="tz-fig" style="font-size:38px;line-height:1.05;margin-top:4px">12</div>
+            <div style="font-size:11.5px;opacity:.55;margin-top:2px">of 340 total</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:var(--space-6);margin-top:var(--space-6);align-items:start">
+          <section>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--color-divider);padding-bottom:7px">
+              <div style="display:flex;align-items:baseline;gap:10px"><h3 style="margin:0;font-size:21px">Recent conversations</h3><span class="tz-kick" style="opacity:.5">Live feed</span></div>
+              <button class="btn btn-ghost">View all</button>
+            </div>
+            <sc-for list="{{ recent }}" as="c" hint-placeholder-count="5">
+              <div class="tz-row" style="display:grid;grid-template-columns:34px minmax(0,1fr) auto auto;gap:var(--space-3);align-items:center;padding:11px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <div style="width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--color-divider);border-radius:var(--tz-avatar,50%);font-family:var(--font-heading);font-size:14px">{{ c.initial }}</div>
+                <div style="min-width:0">
+                  <strong style="display:block;font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ c.name }}</strong>
+                  <span style="display:block;font-size:12px;color:color-mix(in srgb,var(--color-text) 60%,transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.line }}</span>
+                </div>
+                <span class="tz-kick" style="display:inline-flex;align-items:center;gap:6px;opacity:.8"><span style="width:7px;height:7px;border-radius:2px;background:{{ c.tint }}"></span>{{ c.channel }}</span>
+                <span class="tag tag-neutral tz-num">{{ c.status }}</span>
+              </div>
+            </sc-for>
+          </section>
+
+          <div style="display:flex;flex-direction:column;gap:var(--space-6)">
+            <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+              <span class="tz-kick" style="color:var(--color-accent-700)">Current plan</span>
+              <h3 style="margin:4px 0 var(--space-3);font-size:22px">Growth · annual</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3) var(--space-4)">
+                <div><span class="tz-kick" style="opacity:.55">Users</span><div class="tz-fig tz-num" style="font-size:22px">14 / 25</div></div>
+                <div><span class="tz-kick" style="opacity:.55">Channels</span><div class="tz-fig tz-num" style="font-size:22px">5 / 8</div></div>
+                <div><span class="tz-kick" style="opacity:.55">AI messages</span><div class="tz-fig tz-num" style="font-size:22px">20,000</div></div>
+                <div><span class="tz-kick" style="opacity:.55">Expires</span><div class="tz-fig tz-num" style="font-size:22px">12 Mar 27</div></div>
+              </div>
+              <div class="hr"></div>
+              <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12.5px;opacity:.7">AI answered 68% of first replies</span><button class="btn btn-ghost">Manage plan</button></div>
+              <div style="display:flex;height:6px;margin-top:9px;border:1px solid var(--color-accent);border-radius:2px;overflow:hidden">
+                <span style="width:68%;background:color-mix(in srgb,var(--color-accent) 55%,transparent)"></span>
+              </div>
+            </section>
+
+            <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between">
+                <div><span class="tz-kick" style="color:var(--color-accent-700)">Channel accounts</span><h3 style="margin:4px 0 0;font-size:22px">Connected</h3></div>
+                <button class="btn btn-secondary">Connect</button>
+              </div>
+              <div style="margin-top:var(--space-3)">
+                <sc-for list="{{ channels }}" as="ch" hint-placeholder-count="5">
+                  <div class="tz-row" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--color-divider)">
+                    <span style="width:24px;height:24px;display:grid;place-items:center;border:1px solid var(--color-divider);border-radius:var(--radius-sm);font-size:11px;font-family:var(--font-heading)">{{ ch.initial }}</span>
+                    <div style="flex:1;min-width:0"><strong style="display:block;font-size:13px;font-family:var(--font-heading);font-weight:600">{{ ch.name }}</strong><span class="tz-kick" style="opacity:.5">{{ ch.kind }}</span></div>
+                    <span class="tag tag-accent">{{ ch.status }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="margin:var(--space-3) 0 0;font-size:11.5px;color:color-mix(in srgb,var(--color-text) 55%,transparent)">Connected by OAuth sign-in. No tokens or webhooks are ever entered by hand.</p>
+            </section>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isConversations }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;width:100%;height:100%;min-height:0;min-width:0">
+        <div style="flex:none;display:flex;align-items:center;gap:8px;padding:7px var(--space-4);border-bottom:1px solid var(--color-divider)">
+          <select class="input" style="width:auto;min-height:0;padding:5px 8px;font-size:12.5px">
+            <sc-for list="{{ folderChips }}" as="f" hint-placeholder-count="6"><option>{{ f.label }} · {{ f.count }}</option></sc-for>
+          </select>
+          <select class="input" style="width:auto;min-height:0;padding:5px 8px;font-size:12.5px">
+            <option>All channels · 37</option>
+            <sc-for list="{{ chanChips }}" as="c" hint-placeholder-count="5"><option>{{ c.label }} · {{ c.count }}</option></sc-for>
+          </select>
+          <button class="btn btn-primary" style="margin-left:auto">New conversation</button>
+        </div>
+
+        <div style="position:relative;display:flex;flex:1;min-height:0;min-width:0;overflow:hidden">
+        <div class="tz-conv-list" style="flex:0 1 330px;min-width:230px;max-width:330px;border-right:1px solid var(--color-divider);display:flex;flex-direction:column;min-height:0">
+          <div style="flex:none;padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider);display:flex;flex-direction:column;gap:var(--space-2)">
+            <div style="display:flex;align-items:center;gap:7px;padding:0 8px;border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" style="opacity:.5;flex:none"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+              <input class="input" placeholder="Search name, number, tag…" style="border:0;padding:5px 0;font-size:12.5px">
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span class="tag tag-outline">Open</span><span class="tag tag-neutral">Waiting</span><span class="tag tag-neutral">Snoozed</span>
+            </div>
+          </div>
+          <div style="overflow-y:auto">
+            <sc-for list="{{ threads }}" as="t" hint-placeholder-count="7">
+              <div class="tz-row" style="position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;padding:12px var(--space-4);border-bottom:1px solid var(--color-divider);cursor:pointer">
+                <sc-if value="{{ t.sel }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;inset:0;border-left:2px solid var(--color-accent);background:color-mix(in srgb,var(--color-accent) 7%,transparent);pointer-events:none"></span></sc-if>
+                <div style="width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--color-divider);border-radius:var(--tz-avatar,50%);font-family:var(--font-heading);font-size:13px">{{ t.initial }}</div>
+                <div style="min-width:0;position:relative">
+                  <div style="display:flex;align-items:baseline;gap:8px">
+                    <strong style="font-family:var(--font-heading);font-weight:600;font-size:14px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</strong>
+                    <sc-if value="{{ t.unread }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent)"></span></sc-if>
+                    <span class="tz-num" style="font-size:10.5px;opacity:.5">{{ t.time }}</span>
+                  </div>
+                  <p style="margin:3px 0 0;font-size:12px;line-height:1.45;color:color-mix(in srgb,var(--color-text) 65%,transparent);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">{{ t.preview }}</p>
+                  <div style="display:flex;gap:6px;margin-top:7px;align-items:center;min-width:0">
+                    <span style="width:7px;height:7px;flex:none;border-radius:2px;background:{{ t.tint }}"></span>
+                    <span class="tz-kick" style="opacity:.75;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.channel }}</span>
+                    <span style="width:1px;height:10px;flex:none;background:var(--color-divider)"></span>
+                    <span class="tz-kick" style="opacity:.5;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.owner }}</span>
+                    <span class="tz-kick" style="margin-left:auto;flex:none;white-space:nowrap;color:var(--color-accent-700)">{{ t.sla }}</span>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:1 1 auto;min-width:0;display:flex;flex-direction:column;min-height:0">
+          <sc-if value="{{ noChat }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:grid;place-items:center;padding:var(--space-8)">
+            <div style="max-width:34ch;text-align:center">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent)" stroke-width="1.3" style="opacity:.7"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <h3 style="margin:var(--space-3) 0 6px;font-size:22px">No conversation open</h3>
+              <p style="margin:0 0 var(--space-4);font-size:13px;line-height:1.7;color:color-mix(in srgb,var(--color-text) 62%,transparent)">Pick a conversation from the list. While none is open the assistant keeps handling the queue on its own.</p>
+              <button class="btn btn-primary" onClick="{{ openChat }}">Open Nour Chami</button>
+            </div>
+          </div>
+          </sc-if>
+          <sc-if value="{{ hasChat }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:none;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider);overflow:hidden">
+            <div style="width:36px;height:36px;flex:none;display:grid;place-items:center;border:1px solid var(--color-accent);border-radius:var(--tz-avatar,50%);font-family:var(--font-heading);font-size:15px;color:var(--color-accent-700)">N</div>
+            <div onClick="{{ toggleSide }}" style="flex:1 1 auto;min-width:0;cursor:pointer" title="Open customer profile and controls">
+              <div style="display:flex;align-items:center;gap:7px">
+                <span style="width:8px;height:8px;flex:none;border-radius:50%;background:var(--color-accent-2-500)" title="Online now"></span>
+                <h4 style="margin:0;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Nour Chami</h4>
+              </div>
+              <span class="tz-kick" style="display:block;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Online · WhatsApp · +961 3 •• 41 22 · Sales</span>
+            </div>
+            <span class="tag tag-outline">You own this</span>
+            <button class="btn btn-secondary">Return to AI</button>
+            <button class="btn btn-primary" onClick="{{ exitChat }}">Close chat</button>
+          </div>
+
+          <div style="flex:none;display:flex;align-items:center;gap:10px;padding:9px var(--space-4);border-bottom:1px solid var(--color-divider);background:color-mix(in srgb,var(--color-accent) 7%,transparent)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-700)" stroke-width="1.5"><path d="M12 3l1.8 4.9L19 9.6l-4.4 3 .6 5.2L12 15.6 8.8 17.8l.6-5.2L5 9.6l5.2-1.7z"></path></svg>
+            <span style="font-size:12.5px;color:var(--color-accent-800)">AI is paused — you took control at 09:04. It will not reply while a human owns this conversation.</span>
+            <span class="tz-kick" style="margin-left:auto;color:var(--color-accent-700)">Confidence was 0.42 → escalated</span>
+          </div>
+
+          <div style="flex:1 1 0;min-height:120px;overflow-y:auto;padding:var(--space-4) var(--space-6);display:flex;flex-direction:column;gap:var(--space-4)">
+            <div style="text-align:center"><span class="tz-kick" style="opacity:.45">Today</span></div>
+            <sc-for list="{{ messages }}" as="m" hint-placeholder-count="5">
+              <div style="max-width:68%;align-self:{{ m.align }}">
+                <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px">
+                  <span class="tz-kick" style="color:{{ m.tint }}">{{ m.who }}</span>
+                  <span class="tz-num" style="font-size:10.5px;opacity:.45">{{ m.time }}</span>
+                </div>
+                <div style="padding:11px 13px;border:1px solid var(--color-divider);border-radius:var(--radius-md);font-size:13.5px;line-height:1.6;background:{{ m.bg }}">{{ m.text }}</div>
+              </div>
+            </sc-for>
+            <div style="align-self:flex-end;display:flex;align-items:center;gap:6px">
+              <span class="tz-kick" style="opacity:.45">Delivered · read 09:07</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-accent-2-500)" stroke-width="2"><path d="m2 13 4 4 8-9"></path><path d="m10 15 2 2 9-10"></path></svg>
+            </div>
+            <div style="align-self:flex-start;display:flex;align-items:center;gap:7px;padding:8px 12px;border:1px dashed var(--color-divider);border-radius:var(--radius-md)">
+              <span style="width:5px;height:5px;border-radius:50%;background:var(--color-accent)"></span>
+              <span style="width:5px;height:5px;border-radius:50%;background:color-mix(in srgb,var(--color-accent) 55%,transparent)"></span>
+              <span style="width:5px;height:5px;border-radius:50%;background:color-mix(in srgb,var(--color-accent) 30%,transparent)"></span>
+              <span class="tz-kick" style="opacity:.5">Nour is typing</span>
+            </div>
+          </div>
+
+          <div style="flex:none;display:flex;align-items:flex-end;gap:10px;border-top:1px solid var(--color-divider);padding:var(--space-3) var(--space-4)">
+            <div style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:6px 10px;border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <textarea class="input" placeholder="Write a reply… ⌘↵ to send" style="border:0;padding:0;min-height:36px;resize:none"></textarea>
+              <div style="display:flex;align-items:center;gap:10px;flex:none;color:color-mix(in srgb,var(--color-text) 55%,transparent)">
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="cursor:pointer"><path d="M21 12.5 12.5 21a5 5 0 0 1-7-7l8-8a3.5 3.5 0 0 1 5 5l-8 8a2 2 0 0 1-3-3l7.5-7.5"></path></svg>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="cursor:pointer"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.5"></circle><path d="m4 17 5-5 4 4 3-2 4 4"></path></svg>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="cursor:pointer"><circle cx="12" cy="12" r="9"></circle><path d="M9 10h.01M15 10h.01M8.5 14.5a4.5 4.5 0 0 0 7 0"></path></svg>
+              </div>
+            </div>
+            <button class="btn btn-secondary" style="width:40px;height:40px;flex:none;border-radius:999px;padding:0;display:grid;place-items:center" title="Record a voice note">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg>
+            </button>
+            <button class="btn btn-primary" style="width:40px;height:40px;flex:none;border-radius:999px;padding:0" title="Send reply">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m4 12 16-8-6 16-2.5-6.5z"></path></svg>
+            </button>
+          </div>
+          </sc-if>
+        </div>
+
+        <div class="{{ sideClass }}" style="position:absolute;top:0;right:0;bottom:0;width:320px;max-width:82%;z-index:5;background:var(--color-bg);box-shadow:-8px 0 24px rgba(15,23,32,.10);border-left:1px solid var(--color-divider);display:flex;flex-direction:column;min-height:0">
+          <div style="flex:none;display:flex;align-items:center;gap:8px;padding:10px var(--space-3);border-bottom:1px solid var(--color-divider)">
+            <span class="tz-kick" style="flex:1;color:var(--color-accent-700)">Customer &amp; controls</span>
+            <button class="btn btn-ghost" onClick="{{ toggleSide }}" title="Hide details" style="padding:2px 7px;font-size:15px;line-height:1">✕</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:var(--space-3);display:flex;flex-direction:column;gap:8px">
+            <sc-for list="{{ sideCards }}" as="c" hint-placeholder-count="5">
+              <div style="flex:none;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+                <button onClick="{{ c.toggle }}" style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 11px;border:0;background:transparent;font:inherit;color:inherit;cursor:pointer;text-align:left">
+                  <span class="tz-kick" style="flex:1;color:var(--color-accent-700)">{{ c.title }}</span>
+                  <span class="tz-kick tz-num" style="opacity:.5">{{ c.badge }}</span>
+                  <span style="font-size:11px;opacity:.55">{{ c.caret }}</span>
+                </button>
+                <sc-if value="{{ c.open }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:0 11px 11px">
+                    <sc-if value="{{ c.isTimeline }}" hint-placeholder-val="{{ false }}">
+                      <sc-for list="{{ timeline }}" as="e" hint-placeholder-count="6">
+                        <div style="display:grid;grid-template-columns:9px minmax(0,1fr);gap:9px;padding-bottom:10px">
+                          <div style="display:flex;flex-direction:column;align-items:center;padding-top:4px"><span style="width:7px;height:7px;border-radius:50%;border:1px solid var(--color-accent)"></span><span style="flex:1;width:1px;background:var(--color-divider);margin-top:3px"></span></div>
+                          <div><div style="font-size:12.5px;line-height:1.5">{{ e.text }}</div><span class="tz-kick tz-num" style="opacity:.45">{{ e.meta }}</span></div>
+                        </div>
+                      </sc-for>
+                    </sc-if>
+                    <sc-if value="{{ c.isCustomer }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:12.5px;line-height:1.95">
+                        <div style="display:flex;justify-content:space-between"><span style="opacity:.6">Lifecycle</span><span>Customer</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="opacity:.6">Owner</span><span>Rami Haddad</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="opacity:.6">Orders</span><span class="tz-num">7</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="opacity:.6">Lifetime</span><span class="tz-num">$4,180</span></div>
+                        <div style="display:flex;justify-content:space-between"><span style="opacity:.6">Open repair</span><span>RMA-2291</span></div>
+                      </div>
+                      <button class="btn btn-secondary btn-block">Open full profile</button>
+                    </sc-if>
+                    <sc-if value="{{ c.hasButtons }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;flex-direction:column;gap:6px">
+                        <sc-for list="{{ c.buttons }}" as="b" hint-placeholder-count="4">
+                          <button class="btn btn-secondary btn-block" style="margin:0">{{ b }}</button>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex:none;padding:var(--space-2) var(--space-3);border-top:1px solid var(--color-divider);display:flex;align-items:center;gap:6px">
+            <span class="tz-kick" style="opacity:.5">Audit trail on</span>
+            <span class="tz-kick tz-num" style="margin-left:auto;opacity:.5">#CONV-8412</span>
+          </div>
+        </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isCustomers }}" hint-placeholder-val="{{ true }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div>
+            <span class="tz-kick" style="color:var(--color-accent-700)">Customer register · 6,910 records</span>
+            <h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Customers</h1>
+          </div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">Import</button><button class="btn btn-secondary">New segment</button><button class="btn btn-primary">Add contact</button></div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:var(--space-3);margin-top:var(--space-4);flex-wrap:wrap">
+          <span class="tz-kick" style="opacity:.5">Segments</span>
+          <span class="tag tag-outline">All contacts</span>
+          <span class="tag tag-neutral">VIP · 128</span>
+          <span class="tag tag-neutral">IPTV renewals due · 64</span>
+          <span class="tag tag-neutral">Repair open · 31</span>
+          <span class="tag tag-neutral">Cold leads · 402</span>
+          <div style="margin-left:auto;display:flex;gap:var(--space-2)">
+            <select class="input" style="width:auto;font-size:13px"><option>Stage: any</option></select>
+            <select class="input" style="width:auto;font-size:13px"><option>Owner: any</option></select>
+          </div>
+        </div>
+
+        <div class="tz-tablewrap" style="margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <table class="table">
+            <thead><tr><th style="width:34px"></th><th>Contact</th><th>Channels</th><th>Stage</th><th>Tags</th><th>Owner</th><th style="text-align:right">Lifetime</th><th>Last activity</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ contacts }}" as="p" hint-placeholder-count="8">
+                <tr>
+                  <td><span style="display:block;width:15px;height:15px;border:1px solid var(--color-divider);border-radius:var(--radius-sm)"></span></td>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ p.name }}</strong><div class="tz-num" style="font-size:11.5px;opacity:.55">{{ p.phone }}</div></td>
+                  <td class="tz-kick" style="opacity:.7">{{ p.channels }}</td>
+                  <td><span class="tag tag-outline">{{ p.stage }}</span></td>
+                  <td style="font-size:12px;opacity:.75">{{ p.tags }}</td>
+                  <td style="font-size:13px">{{ p.owner }}</td>
+                  <td class="tz-num" style="text-align:right;font-family:var(--font-heading);font-size:15px">{{ p.value }}</td>
+                  <td class="tz-num" style="font-size:12px;opacity:.6">{{ p.last }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:var(--space-3)">
+          <span class="tz-kick tz-num" style="opacity:.5">Showing 1–8 of 6,910</span>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">Previous</button><button class="btn btn-secondary">Next</button></div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isTeaching }}" hint-placeholder-val="{{ true }}">
+      <div class="tz-screen" style="display:flex;height:100%;min-height:0;min-width:0">
+        <div style="width:210px;flex:none;border-right:1px solid var(--color-divider);padding:var(--space-4)">
+          <span class="tz-kick" style="color:var(--color-accent-700)">AI Teaching</span>
+          <h4 style="margin:5px 0 var(--space-4);font-size:19px">Teach the assistant</h4>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="padding:7px 9px;border-left:2px solid var(--color-accent);font-size:13px;background:color-mix(in srgb,var(--color-accent) 8%,transparent)">Instructions</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Knowledge · 214</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Train &amp; test</span>
+          </div>
+          <div class="hr"></div>
+          <p style="font-size:11.5px;line-height:1.6;color:color-mix(in srgb,var(--color-text) 55%,transparent)">Instructions are company-wide and admin-only. Employees see the result, never the switch.</p>
+        </div>
+        <div style="flex:1;min-width:0;overflow-y:auto;padding:var(--space-6) var(--space-8)">
+          <div style="max-width:760px">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Instructions · Sales department</span>
+            <h1 style="font-weight:400;font-size:34px;margin:6px 0 var(--space-4)">How the assistant should behave</h1>
+            <div class="field" style="margin-bottom:var(--space-4)">
+              <label>Persona and tone</label>
+              <textarea class="input" style="min-height:104px;line-height:1.7">You are T-ZONE's assistant. Reply in the customer's own language — Lebanese Arabic, Modern Standard Arabic, or English. Be short, warm and factual. Quote prices only from the master catalogue. Never promise a delivery date.</textarea>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+              <div class="field"><label>Escalate below confidence</label><div style="display:flex;align-items:center;gap:var(--space-3)"><div style="flex:1;height:6px;border:1px solid var(--color-accent);border-radius:2px;overflow:hidden"><span style="display:block;width:55%;height:100%;background:color-mix(in srgb,var(--color-accent) 55%,transparent)"></span></div><span class="tz-fig tz-num" style="font-size:19px">0.55</span></div></div>
+              <div class="field"><label>Route to department</label><select class="input"><option>Detect from intent (recommended)</option></select></div>
+              <div class="field"><label>Handover trigger words</label><input class="input" value="مدير, complaint, refund, لاغي"></div>
+              <div class="field"><label>Reply window</label><select class="input"><option>Working hours only · 09:00–19:00</option></select></div>
+            </div>
+            <div class="hr" style="margin:var(--space-6) 0 var(--space-4)"></div>
+            <div style="display:flex;align-items:baseline;justify-content:space-between">
+              <h3 style="margin:0;font-size:22px">Knowledge used here</h3>
+              <button class="btn btn-primary">Add knowledge</button>
+            </div>
+            <sc-for list="{{ knowledge }}" as="k" hint-placeholder-count="4">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--space-4);align-items:center;padding:12px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <div><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ k.title }}</strong><div style="font-size:12px;opacity:.6">{{ k.meta }}</div></div>
+                <span class="tag tag-neutral">{{ k.kind }}</span>
+                <span class="tz-kick tz-num" style="opacity:.5">{{ k.used }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div class="tz-pane-aux" style="width:290px;flex:none;border-left:1px solid var(--color-divider);display:flex;flex-direction:column;min-height:0">
+          <div style="padding:var(--space-4);border-bottom:1px solid var(--color-divider)"><span class="tz-kick" style="color:var(--color-accent-700)">Test bench</span><h4 style="margin:4px 0 0;font-size:18px">Ask as a customer</h4></div>
+          <div style="flex:1;overflow-y:auto;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-3)">
+            <div style="align-self:flex-end;max-width:88%;padding:9px 11px;border:1px solid var(--color-divider);border-radius:var(--radius-md);font-size:13px">بكم سعر شاشة سامسونغ ٥٥ إنش؟</div>
+            <div style="max-width:92%">
+              <span class="tz-kick" style="color:var(--color-accent-700)">Assistant · 0.91</span>
+              <div style="margin-top:4px;padding:9px 11px;border:1px solid var(--color-accent-200);border-radius:var(--radius-md);font-size:13px;line-height:1.6;background:color-mix(in srgb,var(--color-accent) 6%,transparent)">شاشة Samsung 55" 4K سعرها 449$ مع ضمانة سنة. فيك تمرق عالفرع أو نبعتلك ديليفري.</div>
+              <div class="tz-kick" style="margin-top:6px;opacity:.5">Sources: Price list · TV &amp; screens</div>
+            </div>
+          </div>
+          <div style="padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-divider);display:flex;gap:8px"><input class="input" placeholder="Type a test question…"><button class="btn btn-primary">Run</button></div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isPublish }}" hint-placeholder-val="{{ true }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div>
+            <span class="tz-kick" style="color:var(--color-accent-700)">Community · publishing week 30</span>
+            <h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Publish</h1>
+          </div>
+          <div style="display:flex;align-items:center;gap:var(--space-2)">
+            <div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Queue</span><span class="seg-opt">Drafts</span><span class="seg-opt">Sent</span><span class="seg-opt">Failed</span></div>
+            <button class="btn btn-primary">New post</button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+          <sc-for list="{{ week }}" as="d" hint-placeholder-count="7">
+            <div style="min-height:340px;padding:var(--space-3) var(--space-2);border-left:1px solid var(--color-divider)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;padding:0 4px var(--space-2)">
+                <span class="tz-kick" style="opacity:.6">{{ d.day }}</span>
+                <span class="tz-fig tz-num" style="font-size:17px">{{ d.date }}</span>
+              </div>
+              <sc-for list="{{ d.posts }}" as="p" hint-placeholder-count="1">
+                <div class="tz-row" style="margin:0 2px 8px;padding:9px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer">
+                  <div style="display:flex;align-items:center;gap:5px"><span class="tz-kick" style="color:var(--color-accent-700)">{{ p.at }}</span><span class="tz-kick" style="opacity:.5">{{ p.net }}</span></div>
+                  <p style="margin:5px 0 0;font-size:11.5px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">{{ p.text }}</p>
+                  <span class="tag tag-neutral" style="margin-top:7px">{{ p.kind }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:var(--space-6);margin-top:var(--space-6);align-items:start">
+          <section>
+            <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--color-divider);padding-bottom:7px"><h3 style="margin:0;font-size:21px">Comment inbox</h3><span class="tz-kick" style="opacity:.5">18 unanswered</span></div>
+            <sc-for list="{{ comments }}" as="c" hint-placeholder-count="4">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:11px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <div><strong style="font-family:var(--font-heading);font-weight:600;font-size:14px">{{ c.who }}</strong><p style="margin:3px 0 0;font-size:12.5px;opacity:.7">{{ c.text }}</p></div>
+                <div style="display:flex;gap:6px;align-items:center"><span class="tz-kick" style="color:var(--color-accent-700)">{{ c.net }}</span><button class="btn btn-secondary">Reply</button></div>
+              </div>
+            </sc-for>
+          </section>
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">This week</span>
+            <h3 style="margin:4px 0 var(--space-3);font-size:22px">Reach</h3>
+            <div style="display:flex;align-items:flex-end;gap:6px;height:96px;padding-bottom:6px;border-bottom:1px solid var(--color-divider)">
+              <span style="flex:1;height:38%;border:1px solid var(--color-accent);border-bottom:0"></span>
+              <span style="flex:1;height:54%;border:1px solid var(--color-accent);border-bottom:0"></span>
+              <span style="flex:1;height:47%;border:1px solid var(--color-accent);border-bottom:0"></span>
+              <span style="flex:1;height:72%;border:1px solid var(--color-accent);border-bottom:0;background:color-mix(in srgb,var(--color-accent) 18%,transparent)"></span>
+              <span style="flex:1;height:61%;border:1px solid var(--color-accent);border-bottom:0"></span>
+              <span style="flex:1;height:88%;border:1px solid var(--color-accent);border-bottom:0"></span>
+              <span style="flex:1;height:44%;border:1px solid var(--color-accent);border-bottom:0"></span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-top:var(--space-3)">
+              <div><span class="tz-kick" style="opacity:.55">Impressions</span><div class="tz-fig tz-num" style="font-size:22px">41.2k</div></div>
+              <div><span class="tz-kick" style="opacity:.55">Engagement</span><div class="tz-fig tz-num" style="font-size:22px">3.8%</div></div>
+            </div>
+          </section>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isCatalogue }}" hint-placeholder-val="{{ true }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">Master catalogue · 1,832 products</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Catalogue &amp; stock</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">Import sheet</button><button class="btn btn-primary">Add product</button></div>
+        </div>
+        <div style="display:flex;gap:var(--space-3);margin-top:var(--space-4);flex-wrap:wrap">
+          <span class="tag tag-outline">All</span><span class="tag tag-neutral">Screens · 214</span><span class="tag tag-neutral">Mobiles · 486</span><span class="tag tag-neutral">Accessories · 903</span><span class="tag tag-neutral">IPTV · 12</span><span class="tag tag-accent">Low stock · 14</span>
+        </div>
+        <div class="tz-tablewrap" style="margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <table class="table">
+            <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th style="text-align:right">Cost</th><th style="text-align:right">Price</th><th style="text-align:right">Stock</th><th>Status</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ products }}" as="p" hint-placeholder-count="8">
+                <tr>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ p.name }}</strong></td>
+                  <td class="tz-num" style="font-size:12px;opacity:.6">{{ p.sku }}</td>
+                  <td style="font-size:13px">{{ p.cat }}</td>
+                  <td class="tz-num" style="text-align:right">{{ p.cost }}</td>
+                  <td class="tz-num" style="text-align:right;font-family:var(--font-heading);font-size:15px">{{ p.price }}</td>
+                  <td class="tz-num" style="text-align:right">{{ p.stock }}</td>
+                  <td><span class="tag tag-neutral">{{ p.status }}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.notifications }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">7 unread · 41 this week</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Notification Center</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">Mark all read</button><button class="btn btn-secondary">Preferences</button></div>
+        </div>
+        <div style="display:flex;gap:var(--space-2);margin-top:var(--space-4);flex-wrap:wrap">
+          <span class="tag tag-outline">All</span><span class="tag tag-neutral">Assigned to me</span><span class="tag tag-neutral">Escalations</span><span class="tag tag-neutral">Tasks</span><span class="tag tag-neutral">Broadcasts</span><span class="tag tag-neutral">System</span>
+        </div>
+        <div style="max-width:940px;margin-top:var(--space-4)">
+          <sc-for list="{{ notifs }}" as="n" hint-placeholder-count="6">
+            <div class="tz-row" style="display:grid;grid-template-columns:8px minmax(0,1fr) auto auto;gap:var(--space-4);align-items:center;padding:13px var(--space-2);border-bottom:1px solid var(--color-divider);cursor:pointer">
+              <sc-if value="{{ n.unread }}" hint-placeholder-val="{{ true }}"><span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent)"></span></sc-if>
+              <div><strong style="font-family:var(--font-heading);font-weight:600;font-size:15px">{{ n.title }}</strong><div class="tz-num" style="font-size:12px;opacity:.6">{{ n.meta }}</div></div>
+              <span class="tag tag-neutral">{{ n.kind }}</span>
+              <button class="btn btn-ghost">Open</button>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin-top:var(--space-4);font-size:11.5px;color:color-mix(in srgb,var(--color-text) 55%,transparent)">AI replies are recorded in the conversation timeline and never raise a bell notification.</p>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.tasks }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">18 open · 3 overdue · 6 due today</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Tasks</h1></div>
+          <div style="display:flex;gap:var(--space-2)">
+            <div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Open</span><span class="seg-opt">In progress</span><span class="seg-opt">Done</span></div>
+            <button class="btn btn-primary">New task</button>
+          </div>
+        </div>
+        <div class="tz-tablewrap" style="margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <table class="table">
+            <thead><tr><th style="width:34px"></th><th>Task</th><th>Type</th><th>Priority</th><th>Assigned</th><th>Due</th><th>Status</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="6">
+                <tr>
+                  <td><span style="display:block;width:15px;height:15px;border:1px solid var(--color-divider);border-radius:var(--radius-sm)"></span></td>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ t.title }}</strong></td>
+                  <td style="font-size:12.5px;opacity:.7">{{ t.type }}</td>
+                  <td><span class="tag tag-outline">{{ t.pri }}</span></td>
+                  <td style="font-size:13px">{{ t.who }}</td>
+                  <td class="tz-num" style="font-size:12.5px">{{ t.due }}</td>
+                  <td><span class="tag tag-neutral">{{ t.state }}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.appointments }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">Wednesday, 22 July · 5 appointments</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Appointments</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Day</span><span class="seg-opt">Week</span><span class="seg-opt">List</span></div><button class="btn btn-primary">New appointment</button></div>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:var(--space-6);margin-top:var(--space-4);align-items:start">
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+            <sc-for list="{{ agenda }}" as="a" hint-placeholder-count="5">
+              <div class="tz-row" style="display:grid;grid-template-columns:78px minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:14px var(--space-4);border-bottom:1px solid var(--color-divider)">
+                <div><div class="tz-fig tz-num" style="font-size:20px">{{ a.time }}</div><span class="tz-kick" style="opacity:.5">{{ a.len }}</span></div>
+                <div style="border-left:2px solid var(--color-accent);padding-left:var(--space-3)">
+                  <strong style="font-family:var(--font-heading);font-weight:600;font-size:15px">{{ a.title }}</strong>
+                  <div style="font-size:12.5px;opacity:.65">{{ a.who }} · staff: {{ a.staff }}</div>
+                </div>
+                <span class="tag tag-neutral">{{ a.state }}</span>
+              </div>
+            </sc-for>
+          </section>
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Free slots today</span>
+            <h3 style="margin:4px 0 var(--space-3);font-size:21px">Beirut branch</h3>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+              <sc-for list="{{ hours }}" as="h" hint-placeholder-count="10">
+                <span class="tz-num" style="padding:7px 0;text-align:center;font-size:12.5px;border:1px solid var(--color-divider);border-radius:var(--radius-md)">{{ h }}</span>
+              </sc-for>
+            </div>
+            <div class="hr"></div>
+            <p style="margin:0;font-size:12px;line-height:1.6;color:color-mix(in srgb,var(--color-text) 60%,transparent)">Booking an appointment from a conversation links it to the customer profile and writes to the timeline.</p>
+          </section>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.teamchat }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="display:flex;height:100%;min-height:0;min-width:0">
+        <div style="flex:0 1 260px;min-width:190px;max-width:260px;border-right:1px solid var(--color-divider);display:flex;flex-direction:column">
+          <div style="padding:var(--space-4);border-bottom:1px solid var(--color-divider)"><span class="tz-kick" style="color:var(--color-accent-700)">Internal only</span><h4 style="margin:4px 0 0;font-size:19px">Team Chat</h4></div>
+          <div style="overflow-y:auto;flex:1">
+            <sc-for list="{{ chatRooms }}" as="r" hint-placeholder-count="5">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:11px var(--space-4);border-bottom:1px solid var(--color-divider);cursor:pointer">
+                <div style="min-width:0"><strong style="display:block;font-family:var(--font-heading);font-weight:600;font-size:14px">{{ r.name }}</strong><span style="display:block;font-size:12px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.meta }}</span></div>
+                <span class="tz-num" style="font-size:11px;color:var(--color-accent-700)">{{ r.unread }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-divider)"><button class="btn btn-secondary btn-block" style="margin:0">New channel</button></div>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+          <div style="flex:none;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider)">
+            <div style="flex:1;min-width:0"><h4 style="margin:0;font-size:19px">​# sales-floor</h4><span class="tz-kick" style="display:block;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">6 members · Rami, Maya, Ali, Nadia, Ziad, Owner</span></div>
+            <button class="btn btn-secondary">Members</button>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:var(--space-6) var(--space-8);display:flex;flex-direction:column;gap:var(--space-4)">
+            <sc-for list="{{ chatMsgs }}" as="m" hint-placeholder-count="4">
+              <div style="max-width:62%;align-self:{{ m.align }}">
+                <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px"><span class="tz-kick" style="color:var(--color-accent-700)">{{ m.who }}</span><span class="tz-num" style="font-size:10.5px;opacity:.45">{{ m.time }}</span></div>
+                <div style="padding:11px 13px;border:1px solid var(--color-divider);border-radius:var(--radius-md);font-size:13.5px;line-height:1.6;background:{{ m.bg }}">{{ m.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:none;display:flex;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-divider)">
+            <input class="input" placeholder="Message #sales-floor — @mention a colleague">
+            <button class="btn btn-primary">Send</button>
+          </div>
+        </div>
+        <div class="tz-pane-aux" style="width:250px;flex:none;border-left:1px solid var(--color-divider);padding:var(--space-4)">
+          <span class="tz-kick" style="color:var(--color-accent-700)">On shift now</span>
+          <div style="margin-top:var(--space-3);font-size:13px;line-height:2.1">
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent-2-500)"></span>Rami Haddad · 4 open</div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent-2-500)"></span>Maya Sleiman · 6 open</div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent-2-500)"></span>Ali Deeb · 2 open</div>
+            <div style="display:flex;align-items:center;gap:8px"><span style="width:7px;height:7px;border-radius:50%;border:1px solid var(--color-neutral-400)"></span>Nadia Rizk · away</div>
+          </div>
+          <div class="hr"></div>
+          <p style="margin:0;font-size:12px;line-height:1.6;color:color-mix(in srgb,var(--color-text) 60%,transparent)">Team chat is separate from customer conversations — nothing written here reaches a customer.</p>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.broadcast }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">4 campaigns · 2,080 messages sent this month</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Broadcast</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">Drafts</button><button class="btn btn-primary">New broadcast</button></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Delivered</span><div class="tz-fig" style="font-size:32px">2,080</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Read rate</span><div class="tz-fig" style="font-size:32px">74%</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Replies</span><div class="tz-fig" style="font-size:32px">318</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Failed</span><div class="tz-fig" style="font-size:32px">38</div></div>
+        </div>
+        <div class="tz-tablewrap" style="margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <table class="table">
+            <thead><tr><th>Campaign</th><th>Audience</th><th>Channel</th><th style="text-align:right">Sent</th><th>Status</th><th>Date</th><th></th></tr></thead>
+            <tbody>
+              <sc-for list="{{ broadcasts }}" as="b" hint-placeholder-count="4">
+                <tr>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ b.name }}</strong></td>
+                  <td style="font-size:12.5px;opacity:.7">{{ b.audience }}</td>
+                  <td class="tz-kick" style="color:var(--color-accent-700)">{{ b.channel }}</td>
+                  <td class="tz-num" style="text-align:right">{{ b.sent }}</td>
+                  <td><span class="tag tag-neutral">{{ b.state }}</span></td>
+                  <td class="tz-num" style="font-size:12.5px;opacity:.6">{{ b.when }}</td>
+                  <td style="text-align:right"><button class="btn btn-ghost">Open</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:var(--space-3);font-size:11.5px;color:color-mix(in srgb,var(--color-text) 55%,transparent)">Broadcasts respect each channel's messaging window; anything outside it queues instead of failing.</p>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.calls }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">Call log · 5 today · 1 missed</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Calls</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">All</span><span class="seg-opt">Inbound</span><span class="seg-opt">Outbound</span></div><button class="btn btn-primary">Log a call</button></div>
+        </div>
+        <div class="tz-tablewrap" style="margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <table class="table">
+            <thead><tr><th style="width:60px">Way</th><th>Customer</th><th>Number</th><th style="text-align:right">Duration</th><th>Result</th><th>Logged by</th><th>When</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ calls }}" as="c" hint-placeholder-count="5">
+                <tr>
+                  <td class="tz-kick" style="color:var(--color-accent-700)">{{ c.dir }}</td>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ c.who }}</strong></td>
+                  <td class="tz-num" style="font-size:12.5px;opacity:.7">{{ c.num }}</td>
+                  <td class="tz-num" style="text-align:right">{{ c.dur }}</td>
+                  <td><span class="tag tag-neutral">{{ c.state }}</span></td>
+                  <td style="font-size:13px">{{ c.by }}</td>
+                  <td class="tz-num" style="font-size:12.5px;opacity:.6">{{ c.when }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.savedreplies }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">24 replies · typed with “/” in the composer</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Saved Replies</h1></div>
+          <button class="btn btn-primary">New saved reply</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);margin-top:var(--space-4)">
+          <sc-for list="{{ replies }}" as="r" hint-placeholder-count="4">
+            <div class="card">
+              <span class="card-kicker tz-num">{{ r.short }}</span>
+              <div class="card-title">{{ r.title }}</div>
+              <p class="card-body" style="line-height:1.7">{{ r.body }}</p>
+              <div class="card-meta"><span class="tz-num">{{ r.used }} uses</span><span style="margin-left:auto"><button class="btn btn-ghost">Edit</button></span></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.replyflows }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="display:flex;height:100%;min-height:0;min-width:0">
+        <div style="flex:0 1 300px;min-width:200px;max-width:300px;border-right:1px solid var(--color-divider);display:flex;flex-direction:column">
+          <div style="padding:var(--space-4);border-bottom:1px solid var(--color-divider)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Admin only</span>
+            <h4 style="margin:4px 0 var(--space-3);font-size:19px">Reply Flows</h4>
+            <button class="btn btn-primary btn-block" style="margin:0">New flow</button>
+          </div>
+          <div style="overflow-y:auto">
+            <sc-for list="{{ flows }}" as="f" hint-placeholder-count="4">
+              <div class="tz-row" style="padding:12px var(--space-4);border-bottom:1px solid var(--color-divider);cursor:pointer">
+                <div style="display:flex;align-items:baseline;gap:8px"><strong style="flex:1;font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ f.name }}</strong><span class="tag tag-neutral">{{ f.state }}</span></div>
+                <div class="tz-kick" style="margin-top:5px;opacity:.55">{{ f.channels }}</div>
+                <div class="tz-num" style="font-size:11.5px;opacity:.5;margin-top:3px">{{ f.nodes }} nodes · edited {{ f.edited }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+          <div style="flex:none;display:flex;align-items:center;gap:var(--space-3);padding:var(--space-3) var(--space-4);border-bottom:1px solid var(--color-divider)">
+            <div style="flex:1;min-width:0"><h4 style="margin:0;font-size:19px">Default sales flow</h4><span class="tz-kick" style="display:block;opacity:.55">WhatsApp · Messenger · live since 12 Jul</span></div>
+            <button class="btn btn-secondary">Test</button><button class="btn btn-primary">Publish</button>
+          </div>
+          <div style="flex:1;overflow:auto;padding:var(--space-8);background-image:radial-gradient(var(--color-divider) 1px,transparent 1px);background-size:22px 22px">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:0;min-width:420px">
+              <div style="width:300px;padding:var(--space-3);border:1px solid var(--color-accent);border-radius:var(--radius-md);background:var(--color-bg)"><span class="tz-kick" style="color:var(--color-accent-700)">Opening</span><div style="font-family:var(--font-heading);font-weight:600;font-size:15px">Greeting</div><div style="font-size:12px;opacity:.65">أهلا بك في T-ZONE — كيف فينا نساعدك؟</div></div>
+              <span style="width:1px;height:26px;background:var(--color-neutral-400)"></span>
+              <div style="width:300px;padding:var(--space-3);border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-bg)"><span class="tz-kick" style="color:var(--color-accent-700)">Reply mode</span><div style="font-family:var(--font-heading);font-weight:600;font-size:15px">AI — Knowledge Only</div><div style="font-size:12px;opacity:.65">Answers only from the Knowledge Base.</div></div>
+              <span style="width:1px;height:26px;background:var(--color-neutral-400)"></span>
+              <div style="width:300px;padding:var(--space-3);border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-bg)"><span class="tz-kick" style="color:var(--color-accent-700)">Logic</span><div style="font-family:var(--font-heading);font-weight:600;font-size:15px">Condition · confidence &lt; 0.55</div></div>
+              <div style="display:flex;align-items:flex-start;gap:var(--space-8);margin-top:0">
+                <div style="display:flex;flex-direction:column;align-items:center"><span style="width:1px;height:26px;background:var(--color-neutral-400)"></span><span class="tz-kick" style="padding:2px 6px;border:1px solid var(--color-divider);border-radius:var(--radius-sm)">yes</span><span style="width:1px;height:14px;background:var(--color-neutral-400)"></span>
+                  <div style="width:236px;padding:var(--space-3);border:1px solid var(--color-accent);border-radius:var(--radius-md);background:var(--color-bg)"><div style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">Human Handoff</div><div style="font-size:12px;opacity:.65">Stop the AI, notify Sales.</div></div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center"><span style="width:1px;height:26px;background:var(--color-neutral-400)"></span><span class="tz-kick" style="padding:2px 6px;border:1px solid var(--color-divider);border-radius:var(--radius-sm)">no</span><span style="width:1px;height:14px;background:var(--color-neutral-400)"></span>
+                  <div style="width:236px;padding:var(--space-3);border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-bg)"><div style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">Suggest Product</div><div style="font-size:12px;opacity:.65">From the Master Catalogue.</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tz-pane-aux" style="width:250px;flex:none;border-left:1px solid var(--color-divider);padding:var(--space-4);overflow-y:auto">
+          <span class="tz-kick" style="color:var(--color-accent-700)">Node library</span>
+          <h4 style="margin:4px 0 var(--space-3);font-size:18px">Drag onto the canvas</h4>
+          <sc-for list="{{ flowNodes }}" as="n" hint-placeholder-count="5">
+            <div class="tz-row" style="padding:10px;margin-bottom:8px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:grab">
+              <span class="tz-kick" style="opacity:.5">{{ n.group }}</span>
+              <div style="font-family:var(--font-heading);font-weight:600;font-size:14px">{{ n.label }}</div>
+              <div style="font-size:11.5px;opacity:.6;line-height:1.5">{{ n.desc }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.analytics }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">Last 30 days · to 22 July 2026</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Analytics</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><div class="seg"><span class="seg-opt">7d</span><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">30d</span><span class="seg-opt">90d</span></div><button class="btn btn-secondary">Export</button></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Conversations</span><div class="tz-fig" style="font-size:32px">2,947</div><div style="font-size:11.5px;color:var(--color-accent-2-700)">+12% vs last month</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">AI resolved</span><div class="tz-fig" style="font-size:32px">68%</div><div style="font-size:11.5px;opacity:.55">no human needed</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">First reply</span><div class="tz-fig" style="font-size:32px">42s</div><div style="font-size:11.5px;opacity:.55">median</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">New customers</span><div class="tz-fig" style="font-size:32px">318</div><div style="font-size:11.5px;color:var(--color-accent-2-700)">+48 this week</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">AI cost</span><div class="tz-fig" style="font-size:32px">$186</div><div style="font-size:11.5px;opacity:.55">$0.06 / conversation</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:var(--space-6);margin-top:var(--space-6);align-items:start">
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Volume by day</span>
+            <h3 style="margin:4px 0 var(--space-4);font-size:21px">Conversations opened</h3>
+            <div style="display:flex;align-items:flex-end;gap:var(--space-3);height:190px;padding-bottom:6px;border-bottom:1px solid var(--color-divider)">
+              <sc-for list="{{ chartDays }}" as="c" hint-placeholder-count="7">
+                <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
+                  <span style="height:{{ c.h }};border:1px solid var(--color-accent);border-bottom:0;background:color-mix(in srgb,var(--color-accent) 10%,transparent)"></span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:var(--space-3);margin-top:6px">
+              <sc-for list="{{ chartDays }}" as="c" hint-placeholder-count="7"><span class="tz-kick" style="flex:1;text-align:center;opacity:.5">{{ c.d }}</span></sc-for>
+            </div>
+          </section>
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Lifecycle</span>
+            <h3 style="margin:4px 0 var(--space-4);font-size:21px">Customer funnel</h3>
+            <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="5">
+              <div style="margin-bottom:var(--space-3)">
+                <div style="display:flex;justify-content:space-between;font-size:12.5px"><span>{{ f.stage }}</span><span class="tz-num">{{ f.n }}</span></div>
+                <div style="height:8px;margin-top:4px;border:1px solid var(--color-divider);border-radius:2px;overflow:hidden"><span style="display:block;height:100%;width:{{ f.w }};background:color-mix(in srgb,var(--color-accent) 30%,transparent)"></span></div>
+              </div>
+            </sc-for>
+          </section>
+        </div>
+        <section style="margin-top:var(--space-6)">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--color-divider);padding-bottom:7px"><h3 style="margin:0;font-size:21px">Team performance</h3><span class="tz-kick" style="opacity:.5">Includes the assistant as a queue member</span></div>
+          <div class="tz-tablewrap">
+          <table class="table">
+            <thead><tr><th>Who</th><th style="text-align:right">Handled</th><th style="text-align:right">First reply</th><th style="text-align:right">Resolution</th><th style="text-align:right">CSAT</th></tr></thead>
+            <tbody>
+              <sc-for list="{{ agents }}" as="a" hint-placeholder-count="5">
+                <tr>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ a.who }}</strong></td>
+                  <td class="tz-num" style="text-align:right">{{ a.handled }}</td>
+                  <td class="tz-num" style="text-align:right">{{ a.first }}</td>
+                  <td class="tz-num" style="text-align:right">{{ a.res }}</td>
+                  <td class="tz-num" style="text-align:right;font-family:var(--font-heading);font-size:15px">{{ a.csat }}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+          </div>
+        </section>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.company }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="display:flex;height:100%;min-height:0;min-width:0">
+        <div style="width:230px;flex:none;border-right:1px solid var(--color-divider);padding:var(--space-4)">
+          <span class="tz-kick" style="color:var(--color-accent-700)">Company</span>
+          <h4 style="margin:5px 0 var(--space-4);font-size:19px">Settings</h4>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="padding:7px 9px;border-left:2px solid var(--color-accent);font-size:13px;background:color-mix(in srgb,var(--color-accent) 8%,transparent)">Channels</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Company profile</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Branches</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Departments</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Working hours</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Billing &amp; plan</span>
+            <span class="tz-row" style="padding:7px 9px;border-left:2px solid transparent;font-size:13px;cursor:pointer">Audit log</span>
+          </div>
+        </div>
+        <div style="flex:1;min-width:0;overflow-y:auto;padding:var(--space-6) var(--space-8)">
+          <div style="max-width:820px">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Plug and play · connect in under two minutes</span>
+            <h1 style="font-weight:400;font-size:34px;margin:6px 0 var(--space-2)">Channels</h1>
+            <p style="max-width:60ch;font-size:13.5px;color:color-mix(in srgb,var(--color-text) 68%,transparent)">You sign in with the provider — T-ZONE never asks you for a token, an API key or a webhook URL. Disconnecting is one click and stops message intake immediately.</p>
+            <h3 style="margin:var(--space-6) 0 var(--space-2);font-size:21px">Connected</h3>
+            <sc-for list="{{ connected }}" as="c" hint-placeholder-count="4">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--space-4);align-items:center;padding:13px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <div><strong style="font-family:var(--font-heading);font-weight:600;font-size:15px">{{ c.name }}</strong><div style="font-size:12px;opacity:.6">{{ c.who }} · {{ c.note }}</div></div>
+                <span class="tag tag-accent-2">{{ c.state }}</span>
+                <button class="btn btn-secondary">Disconnect</button>
+              </div>
+            </sc-for>
+            <h3 style="margin:var(--space-6) 0 var(--space-2);font-size:21px">Coming soon</h3>
+            <p style="margin:0 0 var(--space-3);font-size:12.5px;color:color-mix(in srgb,var(--color-text) 60%,transparent)">Shown honestly — never as a button that pretends to connect.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <sc-for list="{{ soonChannels }}" as="s" hint-placeholder-count="10">
+                <span class="tag tag-neutral">{{ s.name }} · {{ s.cat }}</span>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.roles }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">14 people · 5 roles · 3 branches</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Roles &amp; Permissions</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">New role</button><button class="btn btn-primary">Invite user</button></div>
+        </div>
+        <div style="display:grid;grid-template-columns:300px minmax(0,1fr);gap:var(--space-6);margin-top:var(--space-4);align-items:start">
+          <section>
+            <h3 style="margin:0 0 var(--space-2);font-size:20px">Roles</h3>
+            <sc-for list="{{ roleRows }}" as="r" hint-placeholder-count="5">
+              <div class="tz-row" style="padding:11px var(--space-2);border-bottom:1px solid var(--color-divider);cursor:pointer">
+                <div style="display:flex;align-items:baseline;gap:8px"><strong style="flex:1;font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ r.role }}</strong><span class="tz-num" style="font-size:11.5px;opacity:.5">{{ r.people }}</span></div>
+                <div style="font-size:12px;opacity:.6;line-height:1.5">{{ r.scope }}</div>
+              </div>
+            </sc-for>
+          </section>
+          <section>
+            <h3 style="margin:0 0 var(--space-2);font-size:20px">Permissions by area</h3>
+            <div class="tz-tablewrap" style="border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <table class="table">
+                <thead><tr><th>Area</th><th>Available</th><th>Agent</th><th>Manager</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ permGroups }}" as="p" hint-placeholder-count="5">
+                    <tr>
+                      <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14px">{{ p.area }}</strong></td>
+                      <td style="font-size:12px;opacity:.65">{{ p.perms }}</td>
+                      <td style="font-size:12.5px">{{ p.agent }}</td>
+                      <td style="font-size:12.5px">{{ p.manager }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <h3 style="margin:var(--space-6) 0 var(--space-2);font-size:20px">People</h3>
+            <div class="tz-tablewrap" style="border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <table class="table">
+                <thead><tr><th>User</th><th>Role</th><th>Branch</th><th>Status</th><th>Last login</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ teamRows }}" as="t" hint-placeholder-count="5">
+                    <tr>
+                      <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ t.who }}</strong><div style="font-size:11.5px;opacity:.55">{{ t.mail }}</div></td>
+                      <td><span class="tag tag-outline">{{ t.role }}</span></td>
+                      <td style="font-size:13px">{{ t.branch }}</td>
+                      <td><span class="tag tag-neutral">{{ t.state }}</span></td>
+                      <td class="tz-num" style="font-size:12.5px;opacity:.6">{{ t.last }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.settings }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <span class="tz-kick" style="color:var(--color-accent-700)">Your workspace only · nothing here affects colleagues</span>
+          <h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Settings</h1>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--space-6);margin-top:var(--space-4);max-width:1080px">
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Appearance</span>
+            <h3 style="margin:4px 0 var(--space-4);font-size:21px">How the interface reads</h3>
+            <div class="field" style="margin-bottom:var(--space-3)"><label>Theme</label><div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Light</span><span class="seg-opt">Dark</span><span class="seg-opt">Auto</span></div></div>
+            <div class="field" style="margin-bottom:var(--space-3)"><label>Density</label><div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">Comfortable</span><span class="seg-opt">Compact</span></div></div>
+            <div class="field" style="margin-bottom:var(--space-3)"><label>Interface language</label><div class="seg"><span class="seg-opt" style="color:var(--color-accent);box-shadow:inset 0 0 0 1px var(--color-accent)">English</span><span class="seg-opt">العربية (RTL)</span></div></div>
+            <div class="field"><label>Text size</label><div style="display:flex;align-items:center;gap:var(--space-3)"><div style="flex:1;height:6px;border:1px solid var(--color-accent);border-radius:2px;overflow:hidden"><span style="display:block;width:45%;height:100%;background:color-mix(in srgb,var(--color-accent) 55%,transparent)"></span></div><span class="tz-fig tz-num" style="font-size:18px">100%</span></div></div>
+          </section>
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Notifications</span>
+            <h3 style="margin:4px 0 var(--space-4);font-size:21px">When we interrupt you</h3>
+            <div style="display:flex;flex-direction:column;gap:var(--space-3);font-size:13.5px">
+              <label class="radio"><input type="checkbox" checked><span class="dot"></span>In-app popup for new customer messages</label>
+              <label class="radio"><input type="checkbox" checked><span class="dot"></span>Sound</label>
+              <label class="radio"><input type="checkbox"><span class="dot"></span>Desktop notifications</label>
+              <label class="radio"><input type="checkbox" checked><span class="dot"></span>Stay quiet on the conversation I'm already reading</label>
+            </div>
+            <div class="hr"></div>
+            <span class="tz-kick" style="opacity:.55">Per channel</span>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"><span class="tag tag-outline">WhatsApp</span><span class="tag tag-outline">Messenger</span><span class="tag tag-outline">Instagram</span><span class="tag tag-neutral">Telegram</span><span class="tag tag-neutral">Website</span></div>
+          </section>
+          <section style="border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:var(--space-4)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Account</span>
+            <h3 style="margin:4px 0 var(--space-4);font-size:21px">Rami Haddad</h3>
+            <div class="field" style="margin-bottom:var(--space-3)"><label>Full name</label><input class="input" value="Rami Haddad"></div>
+            <div class="field" style="margin-bottom:var(--space-3)"><label>Email</label><input class="input" value="rami@tzone.com.lb"></div>
+            <div class="field" style="margin-bottom:var(--space-4)"><label>Signature appended to replies</label><textarea class="input" style="min-height:70px">— Rami, T-ZONE</textarea></div>
+            <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">Change password</button><button class="btn btn-primary">Save</button></div>
+          </section>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.platform }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="padding:var(--space-6) var(--space-8) var(--space-8)">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-6);padding-bottom:var(--space-3);border-bottom:1px solid var(--color-divider)">
+          <div><span class="tz-kick" style="color:var(--color-accent-700)">Super administrator · all tenants</span><h1 style="font-weight:400;font-size:36px;margin:6px 0 0">Platform Admin</h1></div>
+          <div style="display:flex;gap:var(--space-2)"><button class="btn btn-secondary">System health</button><button class="btn btn-primary">New company</button></div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Companies</span><div class="tz-fig" style="font-size:32px">4</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Active users</span><div class="tz-fig" style="font-size:32px">25</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Messages / 24h</span><div class="tz-fig" style="font-size:32px">8,412</div></div>
+          <div class="tz-stat" style="padding:var(--space-3) var(--space-4)"><span class="tz-kick" style="opacity:.6">Webhook errors</span><div class="tz-fig" style="font-size:32px">0</div></div>
+        </div>
+        <div class="tz-tablewrap" style="margin-top:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+          <table class="table">
+            <thead><tr><th>Company</th><th>Plan</th><th style="text-align:right">Users</th><th style="text-align:right">Conversations</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              <sc-for list="{{ tenants }}" as="t" hint-placeholder-count="4">
+                <tr>
+                  <td><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ t.name }}</strong></td>
+                  <td style="font-size:12.5px;opacity:.7">{{ t.plan }}</td>
+                  <td class="tz-num" style="text-align:right">{{ t.users }}</td>
+                  <td class="tz-num" style="text-align:right">{{ t.convos }}</td>
+                  <td><span class="tag tag-neutral">{{ t.state }}</span></td>
+                  <td style="text-align:right"><button class="btn btn-ghost">Impersonate</button></td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:var(--space-4);margin-top:var(--space-6)">
+          <div class="card" style="border-color:var(--color-accent)">
+            <span class="card-kicker">Control plane</span>
+            <div class="card-title">Theme Studio</div>
+            <p class="card-body">Every token the customer interface reads — colour, type, spacing, corners, elevation, rail, module visibility — edited live and published per tenant.</p>
+            <div class="card-meta"><span>v14 live · 4 tenants</span><span style="margin-left:auto"><button class="btn btn-primary" onClick="{{ go.themestudio }}">Open Theme Studio</button></span></div>
+          </div>
+          <div class="card">
+            <span class="card-kicker">Config source</span>
+            <div class="card-title">GET /api/platform-ui/config</div>
+            <p class="card-body">The customer frontend reads navigation, branding, module visibility and layout rules from this endpoint; Theme Studio is what writes it.</p>
+            <div class="card-meta"><span>Last publish 22 Jul 09:02</span></div>
+          </div>
+          <div class="card">
+            <span class="card-kicker">Health</span>
+            <div class="card-title">All webhooks green</div>
+            <p class="card-body">Meta, WhatsApp, Instagram and Telegram intake responding under 400 ms; no retries queued.</p>
+            <div class="card-meta"><span>Checked 40 s ago</span></div>
+          </div>
+        </div>
+        <p style="margin-top:var(--space-3);font-size:11.5px;color:color-mix(in srgb,var(--color-text) 55%,transparent)">Impersonation is written to the audit log with the reason, the operator and the duration.</p>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ is.themestudio }}" hint-placeholder-val="{{ false }}">
+      <div class="tz-screen" style="display:flex;height:100%;min-height:0;min-width:0">
+        <div style="flex:0 1 214px;min-width:170px;max-width:214px;border-right:1px solid var(--color-divider);padding:var(--space-4);overflow-y:auto">
+          <button class="btn btn-ghost" style="padding-inline:0" onClick="{{ go.platform }}">← Platform Admin</button>
+          <span class="tz-kick" style="display:block;margin-top:var(--space-3);color:var(--color-accent-700)">Control plane</span>
+          <h4 style="margin:4px 0 var(--space-4);font-size:19px">Theme Studio</h4>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.brand }}"><sc-if value="{{ secIs.brand }}" hint-placeholder-val="{{ true }}"><span class="tz-mark"></span></sc-if>Palette &amp; brand</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.catalogue }}"><sc-if value="{{ secIs.catalogue }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Theme catalogue</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.type }}"><sc-if value="{{ secIs.type }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Typography</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.shape }}"><sc-if value="{{ secIs.shape }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Shape &amp; elevation</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.layout }}"><sc-if value="{{ secIs.layout }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Layout &amp; density</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.modules }}"><sc-if value="{{ secIs.modules }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Modules &amp; menu</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.delegation }}"><sc-if value="{{ secIs.delegation }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Customer self-service</button>
+            <button class="tz-row" style="position:relative;padding:8px 9px;border:0;border-left:2px solid transparent;background:transparent;font:inherit;font-size:13px;text-align:left;cursor:pointer;color:inherit" onClick="{{ sec.publish }}"><sc-if value="{{ secIs.publish }}" hint-placeholder-val="{{ false }}"><span class="tz-mark"></span></sc-if>Scope &amp; publish</button>
+          </div>
+          <div class="hr"></div>
+          <span class="tz-kick" style="opacity:.55">Presets</span>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+            <button class="btn btn-secondary" onClick="{{ preset.classical }}">Classical</button>
+            <button class="btn btn-secondary" onClick="{{ preset.tzonemodern }}">T-ZONE Modern</button>
+            <button class="btn btn-secondary" onClick="{{ preset.consoledark }}">Console Dark</button>
+            <button class="btn btn-secondary" onClick="{{ preset.arabicfirst }}">Arabic First</button>
+          </div>
+          <p style="margin-top:var(--space-3);font-size:11px;line-height:1.6;color:color-mix(in srgb,var(--color-text) 55%,transparent)">A preset is a starting point, not a lock — every value below stays editable afterwards.</p>
+        </div>
+
+        <div style="flex:1;min-width:0;overflow-y:auto;padding:var(--space-6)">
+          <sc-if value="{{ secIs.brand }}" hint-placeholder-val="{{ true }}">
+          <div style="max-width:760px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Palette &amp; brand</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Colours are chosen as matched sets, never one at a time — accent, status colour, paper tone and rail are tuned together, and the 100–900 ramp is derived from them. Nobody can pick a clashing hex.</p>
+            <div class="hr"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:var(--space-3)">
+              <sc-for list="{{ palettes }}" as="p" hint-placeholder-count="8">
+                <button class="{{ p.cls }}" onClick="{{ p.apply }}">
+                  <div style="display:flex;height:34px;border-radius:var(--radius-sm);overflow:hidden">
+                    <span style="flex:2;background:{{ p.rail }}"></span>
+                    <span style="flex:3;background:{{ p.accent }}"></span>
+                    <span style="flex:1;background:{{ p.accent2 }}"></span>
+                  </div>
+                  <div style="display:flex;align-items:baseline;gap:8px">
+                    <strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ p.name }}</strong>
+                    <span class="tz-kick" style="margin-left:auto;color:var(--color-accent-700)">{{ p.state }}</span>
+                  </div>
+                  <span style="font-size:11.5px;opacity:.6;line-height:1.5">{{ p.note }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <div class="hr"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+              <div class="field"><label>Ground</label><select class="input" value="{{ t.mode }}" onChange="{{ on.mode }}"><option value="light">Light</option><option value="dark">Dark</option></select></div>
+              <div class="field"><label>Side rail</label><select class="input" value="{{ t.rail }}" onChange="{{ on.rail }}"><option value="tinted">Tinted — the palette's own deep tone</option><option value="paper">Paper — light, hairline edge</option><option value="ink">Ink — near-black</option></select></div>
+              <div class="field"><label>Hairline strength · {{ hairlineLabel }}</label><input type="range" min="6" max="30" step="1" value="{{ t.dividerStrength }}" onChange="{{ on.dividerStrength }}"></div>
+              <div class="field"><label>Ramp preview</label>
+                <div style="display:flex;height:26px;border:1px solid var(--color-divider);border-radius:var(--radius-sm);overflow:hidden">
+                  <span style="flex:1;background:var(--color-accent-100)"></span><span style="flex:1;background:var(--color-accent-200)"></span><span style="flex:1;background:var(--color-accent-300)"></span><span style="flex:1;background:var(--color-accent-400)"></span><span style="flex:1;background:var(--color-accent-500)"></span><span style="flex:1;background:var(--color-accent-600)"></span><span style="flex:1;background:var(--color-accent-700)"></span><span style="flex:1;background:var(--color-accent-800)"></span><span style="flex:1;background:var(--color-accent-900)"></span>
+                </div>
+              </div>
+            </div>
+            <div class="hr"></div>
+            <div style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-3);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <img src="assets/tzone-logo-transparent.png" alt="T-ZONE" style="height:26px;width:auto">
+              <div style="flex:1;min-width:0">
+                <strong style="display:block;font-family:var(--font-heading);font-weight:600;font-size:14px">Brand identity is locked</strong>
+                <span style="font-size:12px;opacity:.65">Logo, company name and the mark's own colours are fixed platform-side and cannot be edited here or by a tenant.</span>
+              </div>
+              <span class="tag tag-neutral">Locked</span>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.catalogue }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:760px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Theme catalogue</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">A complete look — palette, fonts, corners, buttons, elevation and density in one click. Apply it platform-wide, or publish it to the catalogue so a customer can choose it for their own workspace.</p>
+            <div class="hr"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:var(--space-4)">
+              <sc-for list="{{ themeCards }}" as="c" hint-placeholder-count="6">
+                <div class="card">
+                  <div style="display:flex;height:56px;border-radius:var(--radius-sm);overflow:hidden">
+                    <span style="flex:1;background:{{ c.rail }}"></span>
+                    <span style="flex:2;display:flex;flex-direction:column;justify-content:center;gap:5px;padding:0 9px;background:color-mix(in srgb,{{ c.accent }} 6%,#ffffff)">
+                      <span style="height:6px;width:70%;background:{{ c.accent }}"></span>
+                      <span style="height:5px;width:45%;background:{{ c.accent2 }}"></span>
+                      <span style="height:5px;width:85%;background:color-mix(in srgb,{{ c.accent }} 25%,#ffffff)"></span>
+                    </span>
+                  </div>
+                  <div class="card-title">{{ c.name }}</div>
+                  <div style="font-size:11.5px;opacity:.65;line-height:1.55">{{ c.palette }} · {{ c.fonts }}<br>{{ c.shape }}</div>
+                  <div class="card-meta"><span>{{ c.state }}</span><span style="margin-left:auto"><button class="btn btn-primary" onClick="{{ c.apply }}">Apply</button></span></div>
+                </div>
+              </sc-for>
+            </div>
+            <p style="margin-top:var(--space-4);font-size:11.5px;color:color-mix(in srgb,var(--color-text) 55%,transparent)">Applying a theme fills every control in the other sections — nothing is locked afterwards.</p>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.delegation }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:760px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Customer self-service</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Hand a customer the keys to their own workspace only. What they get is a reduced version of this studio, scoped to their company — they can never touch another tenant, the platform default, or a raw colour value.</p>
+            <div class="hr"></div>
+            <h3 style="margin:0 0 var(--space-2);font-size:20px">Per tenant</h3>
+            <sc-for list="{{ delegation }}" as="d" hint-placeholder-count="4">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:12px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <div><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ d.name }}</strong><div class="tz-num" style="font-size:12px;opacity:.6">{{ d.meta }}</div></div>
+                <span style="font-size:12.5px;opacity:.7">{{ d.scope }}</span>
+                <label class="radio"><input type="checkbox" checked="{{ d.on }}" onChange="{{ d.toggle }}"><span class="dot"></span><span style="font-size:12px">{{ d.stateLabel }}</span></label>
+              </div>
+            </sc-for>
+            <h3 style="margin:var(--space-6) 0 var(--space-2);font-size:20px">What a customer may change</h3>
+            <div class="tz-tablewrap" style="border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <table class="table">
+                <thead><tr><th>Control</th><th style="text-align:right">Permission</th></tr></thead>
+                <tbody>
+                  <sc-for list="{{ tenantGrants }}" as="g" hint-placeholder-count="8">
+                    <tr><td style="font-size:13px">{{ g.label }}</td><td style="text-align:right"><span class="tag tag-neutral">{{ g.on }}</span></td></tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <p style="margin-top:var(--space-3);font-size:11.5px;color:color-mix(in srgb,var(--color-text) 55%,transparent)">A tenant edit creates a company-scope override with its own version history; revoking self-service reverts them to the platform theme on the next publish.</p>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.type }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:640px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Typography</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Two families, one scale. Changing them here changes every screen in the product immediately.</p>
+            <div class="hr"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+              <div class="field"><label>Heading font</label>
+                <select class="input" value="{{ t.headingFont }}" onChange="{{ on.headingFont }}">
+                  <sc-for list="{{ fontList }}" as="f" hint-placeholder-count="5"><option value="{{ f }}">{{ f }}</option></sc-for>
+                </select>
+              </div>
+              <div class="field"><label>Body font</label>
+                <select class="input" value="{{ t.bodyFont }}" onChange="{{ on.bodyFont }}">
+                  <sc-for list="{{ fontList }}" as="f" hint-placeholder-count="5"><option value="{{ f }}">{{ f }}</option></sc-for>
+                </select>
+              </div>
+              <div class="field"><label>Base text size · {{ baseLabel }}</label><input type="range" min="12" max="18" step="1" value="{{ t.baseSize }}" onChange="{{ on.baseSize }}"></div>
+              <div class="field"><label>Heading scale · {{ scaleLabel }}</label><input type="range" min="0.85" max="1.25" step="0.01" value="{{ t.headingScale }}" onChange="{{ on.headingScale }}"></div>
+              <div class="field"><label>Line height · {{ lineHeightLabel }}</label><input type="range" min="1.3" max="2" step="0.05" value="{{ t.lineHeight }}" onChange="{{ on.lineHeight }}"></div>
+              <div class="field"><label>Letter spacing · {{ letterLabel }}</label><input type="range" min="-0.02" max="0.06" step="0.005" value="{{ t.letterSpacing }}" onChange="{{ on.letterSpacing }}"></div>
+              <div class="field"><label>Heading weight · {{ weightLabel }}</label><input type="range" min="400" max="700" step="100" value="{{ t.headingWeight }}" onChange="{{ on.headingWeight }}"></div>
+              <div class="field"><label>Small labels</label><select class="input" value="{{ t.kickerCase }}" onChange="{{ on.kickerCase }}"><option value="uppercase">UPPERCASE · spaced</option><option value="none">Sentence case</option></select></div>
+            </div>
+            <label class="radio" style="margin-top:var(--space-2)"><input type="checkbox" checked="{{ t.tabular }}" onChange="{{ on.tabular }}"><span class="dot"></span>Tabular figures in tables and metrics · {{ tabularLabel }}</label>
+            <div style="margin-top:var(--space-4);padding:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <h3 style="margin:0 0 6px">Conversations</h3>
+              <p style="margin:0;font-size:13.5px;line-height:1.7">Nour Chami · WhatsApp · Sales. الخط العربي بينعرض هون كمان — جرّب Cairo إذا الواجهة رح تكون عربية بالأساس.</p>
+              <div class="tz-num" style="margin-top:6px;font-family:var(--font-heading);font-size:26px">1,284 · 68% · $4,180</div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.shape }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:640px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Shape &amp; elevation</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Corners, button treatment, card fills and shadow depth — the difference between an editorial sheet and a conventional SaaS console.</p>
+            <div class="hr"></div>
+            <div class="field" style="margin-bottom:var(--space-4)"><label>Corner radius · {{ radiusLabel }}</label><input type="range" min="0" max="24" step="1" value="{{ t.radius }}" onChange="{{ on.radius }}"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+              <div class="field"><label>Buttons</label><select class="input" value="{{ t.buttons }}" onChange="{{ on.buttons }}"><option value="outline">Outline (stroke only)</option><option value="soft">Soft tint</option><option value="solid">Solid fill</option></select></div>
+              <div class="field"><label>Elevation</label><select class="input" value="{{ t.shadow }}" onChange="{{ on.shadow }}"><option value="none">Flat — no shadow</option><option value="sm">Whisper</option><option value="md">Lifted</option></select></div>
+              <div class="field"><label>Button text size · {{ btnSizeLabel }}</label><input type="range" min="12" max="17" step="1" value="{{ t.buttonSize }}" onChange="{{ on.buttonSize }}"></div>
+              <div class="field"><label>Border width · {{ lineLabel }}</label><input type="range" min="1" max="3" step="1" value="{{ t.borderWidth }}" onChange="{{ on.borderWidth }}"></div>
+              <div class="field"><label>Inputs</label><select class="input" value="{{ t.inputStyle }}" onChange="{{ on.inputStyle }}"><option value="box">Boxed</option><option value="line">Underline only</option></select></div>
+              <div class="field"><label>Avatars</label><select class="input" value="{{ t.avatar }}" onChange="{{ on.avatar }}"><option value="50%">Circle</option><option value="8px">Rounded</option><option value="0px">Square</option></select></div>
+              <div class="field"><label>Focus ring · {{ focusLabel }}</label><input type="range" min="1" max="4" step="1" value="{{ t.focusRing }}" onChange="{{ on.focusRing }}"></div>
+            </div>
+            <label class="radio" style="margin-top:var(--space-2)"><input type="checkbox" checked="{{ t.cardFill }}" onChange="{{ on.cardFill }}"><span class="dot"></span>Fill cards and panels with a surface colour</label>
+            <div style="display:flex;gap:var(--space-3);align-items:center;margin-top:var(--space-4);padding:var(--space-4);border:1px solid var(--color-divider);border-radius:var(--radius-md)">
+              <button class="btn btn-primary">Primary</button><button class="btn btn-secondary">Secondary</button><button class="btn btn-ghost">Ghost</button>
+              <span class="tag tag-accent">Tag</span>
+              <div class="card elev-md" style="width:180px;margin-left:auto"><span class="card-kicker">Preview</span><div class="card-title">Card surface</div></div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.layout }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:640px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Layout &amp; density</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Density multiplies the whole spacing scale at once, so nothing drifts out of rhythm.</p>
+            <div class="hr"></div>
+            <div class="field" style="margin-bottom:var(--space-4)"><label>Density · {{ densityLabel }}</label><input type="range" min="0.75" max="1.2" step="0.01" value="{{ t.density }}" onChange="{{ on.density }}"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)">
+              <div class="field"><label>Side rail width · {{ railLabel }}</label><input type="range" min="180" max="300" step="2" value="{{ t.railWidth }}" onChange="{{ on.railWidth }}"></div>
+              <div class="field"><label>Top bar height · {{ topbarLabel }}</label><input type="range" min="48" max="80" step="2" value="{{ t.topbar }}" onChange="{{ on.topbar }}"></div>
+              <div class="field"><label>Page measure · {{ maxLabel }}</label><input type="range" min="0" max="1600" step="40" value="{{ t.maxWidth }}" onChange="{{ on.maxWidth }}"></div>
+              <div class="field"><label>Motion · {{ speedLabel }}</label><input type="range" min="0" max="320" step="20" value="{{ t.speed }}" onChange="{{ on.speed }}"></div>
+            </div>
+            <div class="field" style="margin-top:var(--space-2)"><label>Reading direction</label><p style="margin:0;font-size:12.5px;color:color-mix(in srgb,var(--color-text) 60%,transparent)">Direction follows the tenant's interface language (Arabic flips the whole shell to RTL). Force it from the Tweaks panel while reviewing.</p></div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.modules }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:720px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Modules &amp; menu</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Turn a module off and it disappears from the customer's menu and routing — the backend keeps enforcing permissions regardless.</p>
+            <div class="hr"></div>
+            <sc-for list="{{ moduleRows }}" as="m" hint-placeholder-count="12">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-4);align-items:center;padding:11px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <div><strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ m.label }}</strong><div style="font-size:12px;opacity:.6">{{ m.note }}</div></div>
+                <label class="radio"><input type="checkbox" checked="{{ m.on }}" onChange="{{ m.toggle }}"><span class="dot"></span><span style="font-size:12px">{{ m.stateLabel }}</span></label>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ secIs.publish }}" hint-placeholder-val="{{ false }}">
+          <div style="max-width:720px">
+            <h2 style="margin:0 0 var(--space-2);font-weight:400;font-size:30px">Scope &amp; publish</h2>
+            <p style="font-size:13px;color:color-mix(in srgb,var(--color-text) 65%,transparent)">Themes cascade: platform default → plan → tenant. A tenant override wins, and every publish is a version you can roll back.</p>
+            <div class="hr"></div>
+            <h3 style="margin:0 0 var(--space-2);font-size:20px">Applies to</h3>
+            <sc-for list="{{ scopes }}" as="sc" hint-placeholder-count="4">
+              <div class="tz-row" style="display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--space-4);align-items:center;padding:10px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <strong style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">{{ sc.name }}</strong>
+                <span class="tz-num" style="font-size:12px;opacity:.6">{{ sc.n }}</span>
+                <span class="tag tag-neutral">{{ sc.state }}</span>
+              </div>
+            </sc-for>
+            <h3 style="margin:var(--space-6) 0 var(--space-2);font-size:20px">Version history</h3>
+            <sc-for list="{{ versions }}" as="v" hint-placeholder-count="3">
+              <div class="tz-row" style="display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;gap:var(--space-4);align-items:center;padding:10px var(--space-2);border-bottom:1px solid var(--color-divider)">
+                <span class="tz-num" style="font-family:var(--font-heading);font-size:16px">{{ v.v }}</span>
+                <div><div style="font-size:13px">{{ v.note }}</div><span class="tz-kick tz-num" style="opacity:.5">{{ v.who }} · {{ v.when }}</span></div>
+                <span class="tag tag-neutral">{{ v.state }}</span>
+                <button class="btn btn-ghost">Restore</button>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+        </div>
+
+        <div class="tz-pane-aux" style="width:300px;flex:none;border-left:1px solid var(--color-divider);display:flex;flex-direction:column;min-height:0">
+          <div style="padding:var(--space-4);border-bottom:1px solid var(--color-divider)">
+            <span class="tz-kick" style="color:var(--color-accent-700)">Live on every screen</span>
+            <h4 style="margin:4px 0 0;font-size:18px">Preview</h4>
+          </div>
+          <div style="flex:1;overflow-y:auto;padding:var(--space-4);display:flex;flex-direction:column;gap:var(--space-4)">
+            <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--color-divider)"><span style="width:18px;height:18px;border-radius:50%;border:1px solid var(--color-accent)"></span><span style="font-family:var(--font-heading);font-weight:600;font-size:13px">Nour Chami</span><span class="tag tag-accent" style="margin-left:auto">You own this</span></div>
+              <div style="padding:10px;display:flex;flex-direction:column;gap:8px">
+                <div style="align-self:flex-start;max-width:80%;padding:8px 10px;border:1px solid var(--color-divider);border-radius:var(--radius-md);font-size:12px">بكم الشاشة؟</div>
+                <div style="align-self:flex-end;max-width:80%;padding:8px 10px;border:1px solid var(--color-divider);border-radius:var(--radius-md);font-size:12px;background:color-mix(in srgb,var(--color-accent) 8%,transparent)">449$ مع ضمانة سنة.</div>
+              </div>
+            </div>
+            <div class="card"><span class="card-kicker">Conversations</span><div class="tz-fig tz-num" style="font-size:30px">1,284</div><div class="card-meta">37 open now</div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary">Send reply</button><button class="btn btn-secondary">Transfer</button></div>
+            <table class="table"><thead><tr><th>Product</th><th style="text-align:right">Price</th></tr></thead><tbody><tr><td>Samsung 55"</td><td class="tz-num" style="text-align:right">$449</td></tr><tr><td>iPhone 15</td><td class="tz-num" style="text-align:right">$799</td></tr></tbody></table>
+          </div>
+          <div style="padding:var(--space-3) var(--space-4);border-top:1px solid var(--color-divider);display:flex;flex-direction:column;gap:8px">
+            <span class="tz-kick" style="opacity:.55">Draft · unsaved changes</span>
+            <div style="display:flex;gap:8px"><button class="btn btn-secondary" style="flex:1">Save draft</button><button class="btn btn-primary" style="flex:1">Publish</button></div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;palette&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Brand Blue&quot;,&quot;Deep Navy&quot;,&quot;Emerald&quot;,&quot;Indigo&quot;,&quot;Graphite&quot;,&quot;Ink &amp; Gold&quot;,&quot;Plum&quot;,&quot;Sand&quot;],&quot;default&quot;:&quot;Brand Blue&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light' | 'dark'&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;rail&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;tinted&quot;,&quot;paper&quot;,&quot;ink&quot;],&quot;default&quot;:&quot;tinted&quot;,&quot;tsType&quot;:&quot;'tinted' | 'paper' | 'ink'&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;comfortable&quot;,&quot;compact&quot;],&quot;default&quot;:&quot;compact&quot;,&quot;tsType&quot;:&quot;'comfortable' | 'compact'&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;dir&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;ltr&quot;,&quot;rtl&quot;],&quot;default&quot;:&quot;ltr&quot;,&quot;tsType&quot;:&quot;'ltr' | 'rtl'&quot;,&quot;section&quot;:&quot;Layout&quot;}}">
+class Component extends DCLogic {
+  static SCREENS = ["dashboard","conversations","customers","teaching","publish","catalogue",
+    "notifications","tasks","appointments","teamchat","broadcast","calls","savedreplies",
+    "replyflows","analytics","company","roles","settings","platform","themestudio"];
+
+  state = {
+    screen: "dashboard",
+    theme: {},
+    section: "brand",
+    railOpen: true,
+    sidePanel: "timeline",
+    sideOpen: false,
+    modules: Object.fromEntries(Component.SCREENS.map((k) => [k, true])),
+  };
+
+  set(screen) { this.setState({ screen }); }
+
+  static FONTS = {
+    "Cormorant Garamond": '"Cormorant Garamond", Georgia, serif',
+    "Lora": '"Lora", Georgia, serif',
+    "IBM Plex Sans": '"IBM Plex Sans", system-ui, sans-serif',
+    "Manrope": '"Manrope", system-ui, sans-serif',
+    "Cairo": '"Cairo", system-ui, sans-serif',
+    "Tajawal": '"Tajawal", system-ui, sans-serif',
+    "Space Grotesk": '"Space Grotesk", system-ui, sans-serif',
+    "IBM Plex Mono": '"IBM Plex Mono", ui-monospace, monospace',
+  };
+
+  /* Curated palettes — accent, status colour, paper tone and rail are chosen together
+     so they always sit right; the studio offers these, never a free colour picker. */
+  static PALETTES = {
+    "Brand Blue":  { accent: "#1b9be0", accent2: "#3fb552", rail: "#1479b8", paper: "cool",    note: "The T-ZONE mark, straight from the logo" },
+    "Sky & Leaf":  { accent: "#0f8fd4", accent2: "#48c858", rail: "#eaf4fb", paper: "cool",    note: "Light sky rail, green as the status colour" },
+    "Deep Navy":   { accent: "#2f6ea8", accent2: "#3f9e86", rail: "#274468", paper: "cool",    note: "Calm and corporate, high trust" },
+    "Emerald":     { accent: "#1f8a52", accent2: "#2fa8e8", rail: "#1c6b46", paper: "neutral", note: "Green-led, the logo's second colour" },
+    "Indigo":      { accent: "#4f63f0", accent2: "#22c07d", rail: "#3b45bd", paper: "cool",    note: "Matches the current app palette" },
+    "Graphite":    { accent: "#5b7a8c", accent2: "#7aa38f", rail: "#3a444b", paper: "neutral", note: "Quiet, low-contrast, long shifts" },
+    "Ink & Gold":  { accent: "#b68235", accent2: "#7d5411", rail: "#221d18", paper: "warm",    note: "The editorial Classical original" },
+    "Plum":        { accent: "#7a4a8c", accent2: "#c98a1e", rail: "#5c3570", paper: "warm",    note: "Distinctive, good for a sub-brand" },
+    "Sand":        { accent: "#a2683c", accent2: "#6a8f6f", rail: "#efe7db", paper: "warm",    note: "Light rail, warm paper, soft contrast" },
+  };
+
+  static BASE = {
+    palette: "Brand Blue", danger: "#d2493f", warning: "#c98a1e",
+    mode: "light", rail: "tinted", dividerStrength: 15,
+    headingFont: "Cormorant Garamond", bodyFont: "Lora", baseSize: 15, headingScale: 1,
+    lineHeight: 1.55, letterSpacing: 0, headingWeight: 600, kickerCase: "uppercase", tabular: true,
+    radius: 4, buttons: "outline", buttonSize: 14, cardFill: false, shadow: "sm",
+    borderWidth: 1, inputStyle: "box", focusRing: 2, avatar: "50%",
+    density: 1, railWidth: 222, railSide: "left", topbar: 56, maxWidth: 0, speed: 140,
+    brandName: "T-ZONE Trading", brandTag: "Growth plan · 14 seats",
+  };
+
+  static PRESETS = {
+    Classical: { ...Component.BASE },
+    "T-ZONE Modern": { ...Component.BASE, palette: "Indigo",
+      headingFont: "Manrope", bodyFont: "IBM Plex Sans", baseSize: 14, headingScale: 0.94, headingWeight: 700,
+      lineHeight: 1.5, radius: 16, buttons: "solid", cardFill: true, shadow: "md", railWidth: 236 },
+    "Console Dark": { ...Component.BASE, palette: "Graphite", mode: "dark",
+      headingFont: "IBM Plex Sans", bodyFont: "IBM Plex Sans", baseSize: 13, headingScale: 0.9,
+      density: 0.85, radius: 6, buttons: "soft", cardFill: true, shadow: "none", railWidth: 210,
+      avatar: "6px", speed: 90 },
+    "Arabic First": { ...Component.BASE, palette: "Emerald",
+      headingFont: "Cairo", bodyFont: "Cairo", baseSize: 15, headingScale: 0.96, headingWeight: 700,
+      lineHeight: 1.8, density: 1.05, radius: 10, buttons: "solid", railWidth: 228 },
+    "Editorial Ink": { ...Component.BASE, palette: "Ink & Gold",
+      headingScale: 1.1, radius: 2, shadow: "none" },
+    "Soft Minimal": { ...Component.BASE, palette: "Sand", rail: "paper",
+      headingFont: "Manrope", bodyFont: "Manrope", baseSize: 14, headingScale: 0.92, headingWeight: 600,
+      radius: 20, buttons: "soft", cardFill: true, dividerStrength: 9, density: 1.1,
+      kickerCase: "none", inputStyle: "line" },
+    "Swiss Grid": { ...Component.BASE, palette: "Graphite", rail: "ink",
+      headingFont: "Space Grotesk", bodyFont: "IBM Plex Sans", baseSize: 14, headingScale: 0.9,
+      headingWeight: 700, letterSpacing: -0.005, radius: 0, borderWidth: 2, buttons: "outline",
+      shadow: "none", dividerStrength: 26, avatar: "0px", density: 0.95 },
+    "Rounded Friendly": { ...Component.BASE, palette: "Emerald", rail: "tinted",
+      headingFont: "Manrope", bodyFont: "Manrope", baseSize: 15, headingScale: 0.95, headingWeight: 700,
+      lineHeight: 1.65, radius: 22, buttons: "solid", cardFill: true, shadow: "md",
+      dividerStrength: 10, density: 1.08, kickerCase: "none", railWidth: 244 },
+    "Dense Ops": { ...Component.BASE, palette: "Deep Navy", rail: "ink",
+      headingFont: "IBM Plex Sans", bodyFont: "IBM Plex Sans", baseSize: 13, headingScale: 0.86,
+      lineHeight: 1.42, density: 0.78, radius: 3, buttons: "soft", cardFill: true, shadow: "none",
+      railWidth: 196, topbar: 48, avatar: "4px", speed: 80 },
+    "High Contrast": { ...Component.BASE, palette: "Deep Navy", rail: "ink",
+      headingFont: "IBM Plex Sans", bodyFont: "IBM Plex Sans", baseSize: 16, headingWeight: 700,
+      radius: 4, borderWidth: 3, focusRing: 4, shadow: "none", dividerStrength: 34,
+      buttons: "solid", lineHeight: 1.7 },
+    "Terminal": { ...Component.BASE, palette: "Graphite", mode: "dark", rail: "ink",
+      headingFont: "IBM Plex Mono", bodyFont: "IBM Plex Mono", baseSize: 13, headingScale: 0.88,
+      letterSpacing: -0.01, radius: 0, borderWidth: 1, buttons: "outline", shadow: "none",
+      density: 0.85, avatar: "0px", speed: 0, dividerStrength: 22 },
+    "Arabic Sans": { ...Component.BASE, palette: "Plum",
+      headingFont: "Tajawal", bodyFont: "Tajawal", baseSize: 15, headingWeight: 700,
+      lineHeight: 1.75, radius: 12, buttons: "soft", cardFill: true, density: 1.05 },
+  };
+
+  theme() {
+    return {
+      ...Component.BASE,
+      palette: this.props.palette ?? Component.BASE.palette,
+      mode: this.props.mode ?? "light",
+      rail: this.props.rail ?? "tinted",
+      density: (this.props.density ?? "comfortable") === "compact" ? 0.85 : 1,
+      ...this.state.theme,
+    };
+  }
+
+  patch(part) { this.setState((s) => ({ theme: { ...s.theme, ...part } })); }
+
+  componentDidMount() { this.applyTheme(); }
+  componentDidUpdate() { this.applyTheme(); }
+
+  applyTheme() {
+    const t = this.theme();
+    const p = Component.PALETTES[t.palette] || Component.PALETTES["Brand Blue"];
+    const root = document.documentElement;
+    const dark = t.mode === "dark";
+    const mixW = (q) => `color-mix(in srgb, ${p.accent} ${q}%, #ffffff)`;
+    const mixB = (q) => `color-mix(in srgb, ${p.accent} ${q}%, #000000)`;
+    const d = (n) => `${(n * t.density).toFixed(2)}px`;
+    const paperLight = { warm: "#f6f4f1", cool: "#f7f8fa", neutral: "#f6f6f6" }[p.paper] || "#f7f8fa";
+    const inkText = { warm: "#211f1c", cool: "#18202a", neutral: "#1d1d1d" }[p.paper] || "#18202a";
+    const railColor = t.rail === "paper"
+      ? (dark ? "#18212c" : `color-mix(in srgb, ${paperLight} 82%, ${p.accent})`)
+      : t.rail === "ink" ? (dark ? "#0a1017" : "#141414")
+      : (dark ? `color-mix(in srgb, ${p.rail} 70%, #000000)` : p.rail);
+    const lum = (hex) => {
+      const m = /^#([0-9a-f]{6})$/i.exec(hex || "");
+      if (!m) return 0;
+      const n = parseInt(m[1], 16);
+      return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+    };
+    const railLight = !dark && (t.rail === "paper" || (t.rail === "tinted" && lum(p.rail) > 0.62));
+    const shadows = {
+      none: ["none", "none", "none"],
+      sm: ["0 1px 2px rgba(15,23,32,.10)", "0 3px 10px rgba(15,23,32,.12)", "0 12px 32px rgba(15,23,32,.18)"],
+      md: ["0 2px 6px rgba(15,23,32,.12)", "0 10px 24px rgba(15,23,32,.14)", "0 24px 60px rgba(15,23,32,.22)"],
+    }[t.shadow] || ["none", "none", "none"];
+    const vars = {
+      "--color-accent": p.accent,
+      "--color-accent-100": mixW(10), "--color-accent-200": mixW(24), "--color-accent-300": mixW(44),
+      "--color-accent-400": mixW(66), "--color-accent-500": mixW(88), "--color-accent-600": mixB(86),
+      "--color-accent-700": dark ? mixW(66) : mixB(68), "--color-accent-800": dark ? mixW(44) : mixB(52), "--color-accent-900": mixB(40),
+      "--color-accent-2": p.accent2, "--color-accent-2-500": p.accent2,
+      "--color-accent-2-100": `color-mix(in srgb, ${p.accent2} 12%, #ffffff)`,
+      "--color-accent-2-700": dark ? `color-mix(in srgb, ${p.accent2} 60%, #ffffff)` : `color-mix(in srgb, ${p.accent2} 70%, #000000)`,
+      "--color-accent-2-800": `color-mix(in srgb, ${p.accent2} 55%, #000000)`,
+      "--tz-danger": t.danger, "--tz-warning": t.warning,
+      "--color-bg": dark ? "#101720" : paperLight,
+      "--color-surface": dark ? "#18212c" : `color-mix(in srgb, ${paperLight} 88%, #000000)`,
+      "--color-text": dark ? "#eef2f6" : inkText,
+      "--color-divider": `color-mix(in srgb, ${dark ? "#eef2f6" : inkText} ${t.dividerStrength}%, transparent)`,
+      "--tz-rail": railColor,
+      "--tz-rail-text": railLight ? inkText : "#f6f7f8",
+      "--tz-rail-width": `${t.railWidth}px`,
+      "--tz-ch-messenger": t.chMessenger, "--tz-ch-whatsapp": t.chWhatsapp,
+      "--tz-ch-instagram": t.chInstagram, "--tz-ch-telegram": t.chTelegram, "--tz-ch-website": t.chWebsite,
+      "--font-heading": Component.FONTS[t.headingFont] || Component.FONTS["Cormorant Garamond"],
+      "--font-body": Component.FONTS[t.bodyFont] || Component.FONTS.Lora,
+      "--font-heading-weight": String(t.headingWeight),
+      "--tz-base-size": `${t.baseSize}px`,
+      "--tz-heading-scale": String(t.headingScale),
+      "--tz-line-height": String(t.lineHeight),
+      "--tz-letter-spacing": `${t.letterSpacing}em`,
+      "--tz-kick-case": t.kickerCase,
+      "--tz-tnum": t.tabular ? '"tnum"' : "normal",
+      "--radius-sm": `${Math.round(t.radius / 2)}px`,
+      "--radius-md": `${t.radius}px`,
+      "--radius-lg": `${Math.round(t.radius * 1.6)}px`,
+      "--tz-avatar": t.avatar,
+      "--space-1": d(4.6), "--space-2": d(9.2), "--space-3": d(13.8),
+      "--space-4": d(18.4), "--space-6": d(27.6), "--space-8": d(36.8),
+      "--shadow-sm": shadows[0], "--shadow-md": shadows[1], "--shadow-lg": shadows[2],
+      "--tz-btn-bg": t.buttons === "solid" ? p.accent : t.buttons === "soft" ? mixW(12) : "transparent",
+      "--tz-btn-fg": t.buttons === "solid" ? "#ffffff" : dark ? mixW(66) : mixB(68),
+      "--tz-btn-size": `${t.buttonSize}px`,
+      "--tz-card-bg": t.cardFill ? (dark ? "#18212c" : "#ffffff") : "transparent",
+      "--tz-line": `${t.borderWidth}px`,
+      "--tz-focus": `${t.focusRing}px`,
+      "--tz-topbar": `${t.topbar}px`,
+      "--tz-max": t.maxWidth ? `${t.maxWidth}px` : "none",
+      "--tz-speed": `${t.speed}ms`,
+      "--tz-input-border": t.inputStyle === "line" ? "0 0 1px 0" : `${t.borderWidth}px`,
+      "--tz-input-radius": t.inputStyle === "line" ? "0px" : `${t.radius}px`,
+    };
+    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+  }
+
+  renderVals() {
+    const s = this.state.screen;
+    const t = this.theme();
+    const accent = "var(--color-accent-700)";
+    const muted = "color-mix(in srgb, var(--color-text) 55%, transparent)";
+    return {
+      dir: this.props.dir ?? "ltr",
+      isDashboard: s === "dashboard",
+      isConversations: s === "conversations",
+      isCustomers: s === "customers",
+      isTeaching: s === "teaching",
+      isPublish: s === "publish",
+      isCatalogue: s === "catalogue",
+      goDashboard: () => this.set("dashboard"),
+      goConversations: () => this.set("conversations"),
+      goCustomers: () => this.set("customers"),
+      goTeaching: () => this.set("teaching"),
+      goPublish: () => this.set("publish"),
+      goCatalogue: () => this.set("catalogue"),
+      go: Object.fromEntries(Component.SCREENS.map((k) => [k, () => this.set(k)])),
+      is: Object.fromEntries(Component.SCREENS.map((k) => [k, s === k])),
+      asideClass: this.state.railOpen ? "tz-aside" : "tz-aside tz-min",
+      railToggleLabel: this.state.railOpen ? "Collapse" : "Expand",
+      toggleRail: () => this.setState((st) => ({ railOpen: !st.railOpen })),
+      sideClass: this.state.sideOpen && this.state.chatOpen !== false ? "tz-conv-side" : "tz-conv-side tz-hidden",
+      toggleSide: () => this.setState((st) => ({ sideOpen: !st.sideOpen })),
+      hasChat: this.state.chatOpen !== false,
+      noChat: this.state.chatOpen === false,
+      exitChat: () => this.setState({ chatOpen: false, sideOpen: false }),
+      openChat: () => this.setState({ chatOpen: true }),
+      sideCards: [
+        { key: "timeline", title: "Timeline", badge: "6", isTimeline: true },
+        { key: "customer", title: "Customer", badge: "Nour Chami", isCustomer: true },
+        { key: "control", title: "Conversation control", badge: "", hasButtons: true,
+          buttons: ["Transfer to colleague", "Change department", "Snooze until tomorrow", "Reopen"] },
+        { key: "create", title: "Create from this chat", badge: "", hasButtons: true,
+          buttons: ["Task", "Appointment", "Repair ticket", "Quote from catalogue"] },
+        { key: "export", title: "Export & share", badge: "", hasButtons: true,
+          buttons: ["Transcript · PDF", "Transcript · CSV", "Copy share link", "Send to email"] },
+        { key: "moderation", title: "Moderation", badge: "", hasButtons: true,
+          buttons: ["Report as spam", "Block this contact"] },
+      ].map((c) => {
+        const open = this.state.cards?.[c.key] ?? c.key === "timeline";
+        return { ...c, open, caret: open ? "▾" : "▸",
+          toggle: () => this.setState((st) => ({ cards: { ...st.cards, [c.key]: !(st.cards?.[c.key] ?? c.key === "timeline") } })) };
+      }),
+      panelIs: {
+        timeline: this.state.sidePanel === "timeline",
+        details: this.state.sidePanel === "details",
+        actions: this.state.sidePanel === "actions",
+      },
+      panelCls: {
+        timeline: this.state.sidePanel === "timeline" ? "tz-chip tz-chip-on" : "tz-chip",
+        details: this.state.sidePanel === "details" ? "tz-chip tz-chip-on" : "tz-chip",
+        actions: this.state.sidePanel === "actions" ? "tz-chip tz-chip-on" : "tz-chip",
+      },
+      panelGo: {
+        timeline: () => this.setState({ sidePanel: "timeline" }),
+        details: () => this.setState({ sidePanel: "details" }),
+        actions: () => this.setState({ sidePanel: "actions" }),
+      },
+      show: this.state.modules,
+      mod: Object.fromEntries(Component.SCREENS.map((k) => [k, () =>
+        this.setState((st) => ({ modules: { ...st.modules, [k]: !st.modules[k] } }))])),
+      t,
+      radiusLabel: `${t.radius}px`,
+      baseLabel: `${t.baseSize}px`,
+      scaleLabel: `${Math.round(t.headingScale * 100)}%`,
+      densityLabel: `${Math.round(t.density * 100)}%`,
+      railLabel: `${t.railWidth}px`,
+      palettes: Object.entries(Component.PALETTES).map(([name, p]) => ({
+        name, note: p.note, accent: p.accent, accent2: p.accent2, rail: p.rail,
+        cls: t.palette === name ? "tz-pal tz-pal-on" : "tz-pal",
+        state: t.palette === name ? "In use" : "Apply",
+        apply: () => this.patch({ palette: name }),
+      })),
+      themeCards: Object.entries(Component.PRESETS).map(([name, v]) => {
+        const p = Component.PALETTES[v.palette] || Component.PALETTES["Brand Blue"];
+        return { name, accent: p.accent, accent2: p.accent2, rail: p.rail, palette: v.palette,
+          fonts: `${v.headingFont} · ${v.bodyFont}`,
+          shape: `${v.radius}px corners · ${v.buttons} buttons · ${v.shadow} shadow`,
+          state: name === "Classical" ? "Platform default" : "Available",
+          apply: () => this.setState({ theme: { ...v } }) };
+      }),
+      delegation: [
+        ["T-ZONE Trading", "14 users · Growth", true, "Palette, fonts, density, dark mode"],
+        ["Zone Mobile Saida", "3 users · Starter", false, "Locked to platform theme"],
+        ["NetPlus IPTV", "6 users · Trial", true, "Palette and dark mode only"],
+        ["Cedar Electronics", "2 users · Starter", false, "Locked to platform theme"],
+      ].map(([name, meta, on, scope], i) => ({
+        name, meta, scope, on,
+        stateLabel: on ? "Self-service on" : "Locked",
+        toggle: () => this.setState((st) => ({ deleg: { ...st.deleg, [i]: !(st.deleg?.[i] ?? on) } })),
+      })),
+      tenantGrants: [
+        { label: "Choose from the palette library", on: "Allowed" },
+        { label: "Choose a published theme preset", on: "Allowed" },
+        { label: "Light / dark ground", on: "Allowed" },
+        { label: "Density and text size", on: "Allowed" },
+        { label: "Fonts", on: "Allowed" },
+        { label: "Custom colour values", on: "Never — palettes only" },
+        { label: "Module visibility", on: "Platform only" },
+        { label: "Menu labels and order", on: "Platform only" },
+      ],
+      on: {
+        radius: (e) => this.patch({ radius: Number(e.target.value) }),
+        dividerStrength: (e) => this.patch({ dividerStrength: Number(e.target.value) }),
+        lineHeight: (e) => this.patch({ lineHeight: Number(e.target.value) }),
+        letterSpacing: (e) => this.patch({ letterSpacing: Number(e.target.value) }),
+        headingWeight: (e) => this.patch({ headingWeight: Number(e.target.value) }),
+        kickerCase: (e) => this.patch({ kickerCase: e.target.value }),
+        tabular: () => this.patch({ tabular: !t.tabular }),
+        buttonSize: (e) => this.patch({ buttonSize: Number(e.target.value) }),
+        borderWidth: (e) => this.patch({ borderWidth: Number(e.target.value) }),
+        inputStyle: (e) => this.patch({ inputStyle: e.target.value }),
+        focusRing: (e) => this.patch({ focusRing: Number(e.target.value) }),
+        avatar: (e) => this.patch({ avatar: e.target.value }),
+        topbar: (e) => this.patch({ topbar: Number(e.target.value) }),
+        maxWidth: (e) => this.patch({ maxWidth: Number(e.target.value) }),
+        speed: (e) => this.patch({ speed: Number(e.target.value) }),
+        brandName: (e) => this.patch({ brandName: e.target.value }),
+        brandTag: (e) => this.patch({ brandTag: e.target.value }),
+        baseSize: (e) => this.patch({ baseSize: Number(e.target.value) }),
+        headingScale: (e) => this.patch({ headingScale: Number(e.target.value) }),
+        density: (e) => this.patch({ density: Number(e.target.value) }),
+        railWidth: (e) => this.patch({ railWidth: Number(e.target.value) }),
+        headingFont: (e) => this.patch({ headingFont: e.target.value }),
+        bodyFont: (e) => this.patch({ bodyFont: e.target.value }),
+        mode: (e) => this.patch({ mode: e.target.value }),
+        rail: (e) => this.patch({ rail: e.target.value }),
+        buttons: (e) => this.patch({ buttons: e.target.value }),
+        shadow: (e) => this.patch({ shadow: e.target.value }),
+        cardFill: () => this.patch({ cardFill: !t.cardFill }),
+      },
+      preset: Object.fromEntries(Object.entries(Component.PRESETS).map(([name, v]) =>
+        [name.toLowerCase().replace(/[^a-z]/g, ""), () => this.setState({ theme: { ...v } })])),
+      sec: Object.fromEntries(["brand","catalogue","type","shape","layout","modules","delegation","publish"].map((k) =>
+        [k, () => this.setState({ section: k })])),
+      secIs: Object.fromEntries(["brand","catalogue","type","shape","layout","modules","delegation","publish"].map((k) =>
+        [k, this.state.section === k])),
+      lineHeightLabel: t.lineHeight.toFixed(2),
+      letterLabel: `${t.letterSpacing.toFixed(3)}em`,
+      weightLabel: String(t.headingWeight),
+      btnSizeLabel: `${t.buttonSize}px`,
+      lineLabel: `${t.borderWidth}px`,
+      hairlineLabel: `${t.dividerStrength}%`,
+      focusLabel: `${t.focusRing}px`,
+      topbarLabel: `${t.topbar}px`,
+      speedLabel: `${t.speed}ms`,
+      maxLabel: t.maxWidth ? `${t.maxWidth}px` : "Full width",
+      tabularLabel: t.tabular ? "On" : "Off",
+      moduleRows: [
+        ["customers", "Customers / CRM", "Contacts, segments, timeline"],
+        ["teaching", "AI Teaching", "Instructions, knowledge, test bench"],
+        ["publish", "Community & Publish", "Scheduler and comment inbox"],
+        ["catalogue", "Master Catalogue", "Products, stock, pricing"],
+        ["tasks", "Tasks", "Internal work items"],
+        ["appointments", "Appointments", "Scheduler and branch slots"],
+        ["teamchat", "Team Chat", "Internal messaging"],
+        ["broadcast", "Broadcast", "Bulk campaigns per segment"],
+        ["calls", "Calls", "Manual call log"],
+        ["savedreplies", "Saved Replies", "Composer shortcuts"],
+        ["replyflows", "Reply Flows", "Admin-only flow builder"],
+        ["analytics", "Analytics", "Operational and AI reporting"],
+      ].map(([key, label, note]) => ({
+        key, label, note,
+        on: this.state.modules[key],
+        stateLabel: this.state.modules[key] ? "On" : "Off",
+        toggle: () => this.setState((st) => ({ modules: { ...st.modules, [key]: !st.modules[key] } })),
+      })),
+      fontList: Object.keys(Component.FONTS),
+      versions: [
+        { v: "v14", who: "Rami Haddad", when: "22 Jul 09:02", note: "Accent → brand blue, rail ink", state: "Live" },
+        { v: "v13", who: "Rami Haddad", when: "21 Jul 17:40", note: "Radius 4 → 6, compact density trial", state: "Rolled back" },
+        { v: "v12", who: "System", when: "18 Jul 11:15", note: "Initial Classical baseline", state: "Archived" },
+      ],
+      scopes: [
+        { name: "All tenants", n: "4 companies", state: "Default" },
+        { name: "T-ZONE Trading", n: "14 users", state: "Override" },
+        { name: "Growth plan", n: "2 companies", state: "Inherit" },
+        { name: "Trial accounts", n: "1 company", state: "Inherit" },
+      ],
+      recent: [
+        { initial: "N", name: "Nour Chami", line: "Sales · Samsung 55\" price and delivery", channel: "WhatsApp", status: "Human", tint: "var(--tz-ch-whatsapp)" },
+        { initial: "K", name: "Karim Aoun", line: "Support · IPTV renewal not activated", channel: "Messenger", status: "AI", tint: "var(--tz-ch-messenger)" },
+        { initial: "L", name: "Layla Fares", line: "Repairs · screen replacement quote", channel: "Instagram", status: "Human", tint: "var(--tz-ch-instagram)" },
+        { initial: "H", name: "Hadi Zein", line: "Sales · bulk order, 12 tablets", channel: "Telegram", status: "Queued", tint: "var(--tz-ch-telegram)" },
+        { initial: "S", name: "Sarah Khoury", line: "Accounts · invoice copy for July", channel: "Website", status: "AI", tint: "var(--tz-ch-website)" },
+      ],
+      channels: [
+        { initial: "M", name: "T-ZONE Lebanon", kind: "Messenger page", status: "Active" },
+        { initial: "W", name: "+961 3 991 402", kind: "WhatsApp Business", status: "Active" },
+        { initial: "I", name: "@tzone.lb", kind: "Instagram", status: "Active" },
+        { initial: "T", name: "T-ZONE Support", kind: "Telegram bot", status: "Active" },
+        { initial: "W", name: "tzone.com.lb", kind: "Website chat", status: "Active" },
+      ],
+      folderChips: [
+        { label: "Inbox", count: 37, cls: "tz-chip tz-chip-on" },
+        { label: "Assigned to me", count: 8, cls: "tz-chip" },
+        { label: "Unread", count: 12, cls: "tz-chip" },
+        { label: "Starred", count: 5, cls: "tz-chip" },
+        { label: "Done", count: 214, cls: "tz-chip" },
+        { label: "Archived", count: 1031, cls: "tz-chip" },
+      ],
+      chanChips: [
+        { label: "WhatsApp", count: 15, tint: "var(--tz-ch-whatsapp)" },
+        { label: "Messenger", count: 14, tint: "var(--tz-ch-messenger)" },
+        { label: "Instagram", count: 4, tint: "var(--tz-ch-instagram)" },
+        { label: "Telegram", count: 2, tint: "var(--tz-ch-telegram)" },
+        { label: "Website", count: 2, tint: "var(--tz-ch-website)" },
+      ],
+      threads: [
+        { initial: "N", name: "Nour Chami", time: "09:12", channel: "WhatsApp", owner: "You", sel: true, unread: false, sla: "6 min", tint: "var(--tz-ch-whatsapp)", preview: "طيب و في ضمانة سنتين؟ و كيف الديليفري لطرابلس؟" },
+        { initial: "K", name: "Karim Aoun", time: "09:05", channel: "Messenger", owner: "AI", sel: false, unread: true, sla: "13 min", tint: "var(--tz-ch-messenger)", preview: "My IPTV subscription is still not working after the payment yesterday." },
+        { initial: "L", name: "Layla Fares", time: "08:51", channel: "Instagram", owner: "Maya", sel: false, unread: true, sla: "27 min", tint: "var(--tz-ch-instagram)", preview: "Sent you a photo of the cracked screen — how much for the repair?" },
+        { initial: "H", name: "Hadi Zein", time: "08:44", channel: "Telegram", owner: "Unassigned", sel: false, unread: true, sla: "34 min", tint: "var(--tz-ch-telegram)", preview: "We need 12 tablets for the office, can you quote with an invoice?" },
+        { initial: "S", name: "Sarah Khoury", time: "08:20", channel: "Website", owner: "AI", sel: false, unread: false, sla: "AI", tint: "var(--tz-ch-website)", preview: "Can I get a copy of the July invoice for accounting?" },
+        { initial: "R", name: "Rania Saad", time: "Yesterday", channel: "WhatsApp", owner: "Ali", sel: false, unread: false, sla: "Closed", tint: "var(--tz-ch-whatsapp)", preview: "شكراً كتير، وصلني الطلب اليوم." },
+        { initial: "G", name: "George Matar", time: "Yesterday", channel: "Messenger", owner: "Done", sel: false, unread: false, sla: "Closed", tint: "var(--tz-ch-messenger)", preview: "Warranty case closed — replacement unit collected from the branch." },
+      ],
+      messages: [
+        { who: "Nour · customer", time: "09:01", align: "flex-start", bg: "transparent", tint: muted, text: "مرحبا، بكم شاشة سامسونغ ٥٥ إنش؟" },
+        { who: "Assistant · 0.88", time: "09:01", align: "flex-end", bg: "color-mix(in srgb, var(--color-accent) 6%, transparent)", tint: accent, text: "أهلين! Samsung 55\" 4K سعرها 449$ مع ضمانة سنة من T-ZONE." },
+        { who: "Nour · customer", time: "09:03", align: "flex-start", bg: "transparent", tint: muted, text: "طيب و في ضمانة سنتين؟ و كيف الديليفري لطرابلس؟" },
+        { who: "Assistant · 0.42 · escalated", time: "09:04", align: "flex-end", bg: "transparent", tint: accent, text: "Confidence below threshold — routed to Sales and handed to a human. No reply was sent to the customer." },
+        { who: "You · Rami", time: "09:06", align: "flex-end", bg: "color-mix(in srgb, var(--color-text) 4%, transparent)", tint: "var(--color-text)", text: "منين نحنا نقدر نمدد الضمانة لسنتين بـ35$. الديليفري لطرابلس مجاني عالطلبات فوق 300$." },
+      ],
+      timeline: [
+        { text: "AI replied with catalogue price", meta: "09:01 · confidence 0.88" },
+        { text: "Confidence dropped — escalated to Sales", meta: "09:04 · policy: below 0.55" },
+        { text: "Rami Haddad took ownership", meta: "09:04 · AI paused" },
+        { text: "Reply sent by Rami", meta: "09:06" },
+        { text: "Tagged “warranty-upsell”", meta: "09:06 · Rami" },
+        { text: "Follow-up task created for tomorrow", meta: "09:07 · Rami" },
+      ],
+      contacts: [
+        { name: "Nour Chami", phone: "+961 3 ••41 22", channels: "WA · MSG", stage: "Customer", tags: "vip, warranty-upsell", owner: "Rami", value: "$4,180", last: "09:12 today" },
+        { name: "Karim Aoun", phone: "+961 71 ••88 04", channels: "MSG", stage: "Customer", tags: "iptv, renewal-due", owner: "Maya", value: "$960", last: "09:05 today" },
+        { name: "Layla Fares", phone: "+961 3 ••12 77", channels: "IG", stage: "Lead", tags: "repair-open", owner: "Ali", value: "$0", last: "08:51 today" },
+        { name: "Hadi Zein", phone: "+961 76 ••30 19", channels: "TG · WA", stage: "Opportunity", tags: "b2b, bulk", owner: "Rami", value: "$11,420", last: "08:44 today" },
+        { name: "Sarah Khoury", phone: "+961 3 ••55 61", channels: "Web", stage: "Customer", tags: "invoices", owner: "Nadia", value: "$2,310", last: "08:20 today" },
+        { name: "Rania Saad", phone: "+961 70 ••09 43", channels: "WA", stage: "Customer", tags: "vip", owner: "Ali", value: "$6,905", last: "Yesterday" },
+        { name: "George Matar", phone: "+961 3 ••77 20", channels: "MSG", stage: "Customer", tags: "warranty-closed", owner: "Maya", value: "$1,540", last: "Yesterday" },
+        { name: "Ziad Nassar", phone: "+961 81 ••64 12", channels: "TG", stage: "Cold lead", tags: "price-shopper", owner: "Unassigned", value: "$0", last: "18 Jul" },
+      ],
+      knowledge: [
+        { title: "Price list · TV & screens", meta: "Synced from Master Catalogue · 214 items", kind: "Catalogue", used: "1,204 uses" },
+        { title: "Warranty and returns policy", meta: "Arabic + English · updated 3 days ago", kind: "Document", used: "612 uses" },
+        { title: "IPTV activation steps", meta: "Step-by-step, includes payment check", kind: "Playbook", used: "388 uses" },
+        { title: "Branch hours and locations", meta: "Beirut, Tripoli, Saida", kind: "Snippet", used: "271 uses" },
+      ],
+      week: [
+        { day: "Mon", date: "20", posts: [{ at: "10:00", net: "IG", kind: "Reel", text: "Back-to-school laptop bundle — three configurations under $600." }] },
+        { day: "Tue", date: "21", posts: [{ at: "13:30", net: "FB", kind: "Post", text: "عرض الشاشات: خصم 15% لآخر الشهر على كل قياسات سامسونغ." }] },
+        { day: "Wed", date: "22", posts: [{ at: "11:00", net: "IG · FB", kind: "Post", text: "Repair desk: same-day screen replacement now in Tripoli branch." }, { at: "18:00", net: "IG", kind: "Story", text: "Poll — which accessory should we restock first?" }] },
+        { day: "Thu", date: "23", posts: [{ at: "12:00", net: "FB", kind: "Post", text: "IPTV renewal reminder with the one-tap renewal link." }] },
+        { day: "Fri", date: "24", posts: [] },
+        { day: "Sat", date: "25", posts: [{ at: "17:00", net: "IG", kind: "Reel", text: "Weekend unboxing — the new tablet range in stock." }] },
+        { day: "Sun", date: "26", posts: [] },
+      ],
+      comments: [
+        { who: "@sami.k", text: "بكم التابلت الجديد؟", net: "Instagram" },
+        { who: "Maria Haddad", text: "Do you deliver to Zahle on Saturdays?", net: "Facebook" },
+        { who: "@tech.lb", text: "Is the warranty valid if I buy online?", net: "Instagram" },
+        { who: "Elie Rahme", text: "طلبي وصل ناقص شاحن.", net: "Facebook" },
+      ],
+      products: [
+        { name: "Samsung 55\" 4K UHD", sku: "TV-SAM-55U", cat: "Screens", cost: "$372", price: "$449", stock: "18", status: "In stock" },
+        { name: "iPhone 15 · 128GB", sku: "MOB-APL-1512", cat: "Mobiles", cost: "$690", price: "$799", stock: "6", status: "In stock" },
+        { name: "Redmi Note 13 · 256GB", sku: "MOB-XIA-N13", cat: "Mobiles", cost: "$168", price: "$219", stock: "3", status: "Low stock" },
+        { name: "Anker 65W GaN charger", sku: "ACC-ANK-65W", cat: "Accessories", cost: "$22", price: "$39", stock: "74", status: "In stock" },
+        { name: "TP-Link AX1500 router", sku: "NET-TPL-AX15", cat: "Networking", cost: "$41", price: "$69", stock: "12", status: "In stock" },
+        { name: "IPTV · 12-month plan", sku: "SUB-IPTV-12", cat: "IPTV", cost: "$44", price: "$89", stock: "∞", status: "Service" },
+        { name: "Screen protector · universal", sku: "ACC-GEN-SP", cat: "Accessories", cost: "$1", price: "$5", stock: "2", status: "Low stock" },
+        { name: "Lenovo IdeaPad 3 · i5", sku: "LAP-LEN-IP3", cat: "Laptops", cost: "$430", price: "$539", stock: "9", status: "In stock" },
+      ],
+      notifs: [
+        { title: "Nour Chami is waiting on you", meta: "Conversation · WhatsApp · 2 min ago", kind: "Assigned", unread: true },
+        { title: "Escalation: confidence 0.31 on Messenger", meta: "AI handover · Support · 14 min ago", kind: "Escalation", unread: true },
+        { title: "Task “Call back Hadi Zein” is due today", meta: "Tasks · 09:00 · Rami", kind: "Task", unread: true },
+        { title: "Broadcast “July screens offer” finished", meta: "1,204 delivered · 38 failed · 1 h ago", kind: "Broadcast", unread: false },
+        { title: "Maya Sleiman transferred a conversation to you", meta: "Sales · Instagram · 2 h ago", kind: "Transfer", unread: false },
+        { title: "Low stock: Redmi Note 13 · 3 left", meta: "Catalogue · this morning", kind: "Stock", unread: false },
+      ],
+      tasks: [
+        { title: "Call back Hadi Zein with the 12-tablet quote", who: "Rami", due: "Today 14:00", pri: "Urgent", type: "Sales inquiry", state: "Open", late: false },
+        { title: "Send warranty extension terms to Nour", who: "Rami", due: "Today 17:00", pri: "High", type: "Follow up", state: "Open", late: false },
+        { title: "Check IPTV activation for Karim Aoun", who: "Maya", due: "Yesterday", pri: "Urgent", type: "Complaint", state: "Overdue", late: true },
+        { title: "Order screen protectors — stock at 2", who: "Nadia", due: "23 Jul", pri: "Normal", type: "Internal", state: "Open", late: false },
+        { title: "Prepare Tripoli branch repair report", who: "Ali", due: "25 Jul", pri: "Normal", type: "Service request", state: "In progress", late: false },
+        { title: "Reply to Instagram comments backlog", who: "Maya", due: "26 Jul", pri: "Low", type: "Other", state: "Open", late: false },
+      ],
+      agenda: [
+        { time: "09:30", len: "30 min", title: "Screen repair drop-off", who: "Layla Fares", staff: "Ali", state: "Scheduled" },
+        { time: "11:00", len: "45 min", title: "B2B quote review · 12 tablets", who: "Hadi Zein", staff: "Rami", state: "Scheduled" },
+        { time: "13:15", len: "20 min", title: "IPTV setup at home", who: "Karim Aoun", staff: "Maya", state: "Scheduled" },
+        { time: "15:00", len: "30 min", title: "Warranty claim inspection", who: "George Matar", staff: "Ali", state: "Completed" },
+        { time: "17:30", len: "30 min", title: "Laptop handover", who: "Sarah Khoury", staff: "Nadia", state: "No show" },
+      ],
+      hours: ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00"],
+      chatRooms: [
+        { name: "# sales-floor", meta: "Rami: تم إرسال العرض", unread: "3" },
+        { name: "# repairs", meta: "Ali: قطعة الشاشة وصلت", unread: "" },
+        { name: "# tripoli-branch", meta: "Nadia: closing at 18:00", unread: "1" },
+        { name: "# announcements", meta: "Owner: July targets", unread: "" },
+        { name: "Maya Sleiman", meta: "Can you take Nour?", unread: "" },
+      ],
+      chatMsgs: [
+        { who: "Maya Sleiman", time: "08:52", align: "flex-start", bg: "transparent", text: "Nour is asking about a 2-year warranty — is 35$ still the price?" },
+        { who: "Rami Haddad", time: "08:54", align: "flex-end", bg: "color-mix(in srgb, var(--color-text) 4%, transparent)", text: "Yes, 35$ for two years on screens above 40\". I'm taking the conversation." },
+        { who: "Ali Deeb", time: "09:01", align: "flex-start", bg: "transparent", text: "بلغوني إذا بدها تركيب، عندي وقت بعد الضهر." },
+        { who: "Rami Haddad", time: "09:03", align: "flex-end", bg: "color-mix(in srgb, var(--color-text) 4%, transparent)", text: "Noted — I'll create a task if she confirms." },
+      ],
+      broadcasts: [
+        { name: "July screens offer", audience: "VIP · 128", channel: "WhatsApp", sent: "1,204", state: "Sent", when: "21 Jul" },
+        { name: "IPTV renewal reminder", audience: "IPTV renewals due · 64", channel: "Messenger", sent: "64", state: "Sending", when: "22 Jul" },
+        { name: "Back-to-school bundle", audience: "All customers · 6,910", channel: "Telegram", sent: "—", state: "Draft", when: "—" },
+        { name: "Tripoli branch opening", audience: "North segment · 812", channel: "WhatsApp", sent: "812", state: "Sent", when: "12 Jul" },
+      ],
+      calls: [
+        { dir: "Out", who: "Hadi Zein", num: "+961 76 ••30 19", dur: "6:12", state: "Completed", by: "Rami", when: "Today 08:40" },
+        { dir: "In", who: "Layla Fares", num: "+961 3 ••12 77", dur: "0:00", state: "Missed", by: "—", when: "Today 08:22" },
+        { dir: "Out", who: "Karim Aoun", num: "+961 71 ••88 04", dur: "3:48", state: "Completed", by: "Maya", when: "Yesterday" },
+        { dir: "In", who: "Unknown", num: "+961 81 ••64 12", dur: "1:05", state: "Voicemail", by: "—", when: "Yesterday" },
+        { dir: "Out", who: "Sarah Khoury", num: "+961 3 ••55 61", dur: "0:00", state: "No answer", by: "Nadia", when: "20 Jul" },
+      ],
+      replies: [
+        { short: "/warranty", title: "Warranty terms", body: "كل الأجهزة معها ضمانة سنة من T-ZONE. فيك تمدّدها لسنتين بـ35$.", used: "412" },
+        { short: "/hours", title: "Branch hours", body: "Beirut 09:00–19:00 · Tripoli 09:00–18:00 · Saida 10:00–18:00.", used: "306" },
+        { short: "/delivery", title: "Delivery policy", body: "التوصيل مجاني عالطلبات فوق 300$، وغير هيك 5$ داخل بيروت.", used: "271" },
+        { short: "/iptv", title: "IPTV activation", body: "Send us the payment reference and the device MAC; activation takes 10 minutes.", used: "188" },
+      ],
+      flows: [
+        { name: "Default sales flow", channels: "WhatsApp · Messenger", nodes: "14", state: "Live", edited: "2 days ago" },
+        { name: "After-hours autoresponder", channels: "All channels", nodes: "6", state: "Live", edited: "1 week ago" },
+        { name: "Repair intake", channels: "Instagram", nodes: "11", state: "Draft", edited: "Yesterday" },
+        { name: "IPTV renewal chase", channels: "WhatsApp", nodes: "9", state: "Paused", edited: "12 Jul" },
+      ],
+      flowNodes: [
+        { group: "Opening", label: "Greeting", desc: "The opening message when a chat starts." },
+        { group: "Reply mode", label: "AI — Knowledge Only", desc: "AI answers only from the Knowledge Base." },
+        { group: "Logic", label: "Condition / Branch", desc: "Split on a saved answer." },
+        { group: "Reply mode", label: "Human Handoff", desc: "Stop the AI and notify a team member." },
+        { group: "Actions", label: "Create Task", desc: "Create an internal task from this conversation." },
+      ],
+      funnel: [
+        { stage: "Lead", n: "1,842", w: "100%" },
+        { stage: "Active", n: "1,106", w: "60%" },
+        { stage: "Customer", n: "648", w: "35%" },
+        { stage: "VIP", n: "128", w: "7%" },
+        { stage: "Churned", n: "96", w: "5%" },
+      ],
+      agents: [
+        { who: "Rami Haddad", handled: "312", first: "1m 12s", res: "18m", csat: "4.8" },
+        { who: "Maya Sleiman", handled: "287", first: "1m 44s", res: "22m", csat: "4.7" },
+        { who: "Ali Deeb", handled: "196", first: "2m 08s", res: "31m", csat: "4.6" },
+        { who: "Nadia Rizk", handled: "148", first: "2m 51s", res: "27m", csat: "4.9" },
+        { who: "T-ZONE Assistant", handled: "1,904", first: "3s", res: "4m", csat: "4.4" },
+      ],
+      chartDays: [
+        { d: "Mon", h: "46%" }, { d: "Tue", h: "62%" }, { d: "Wed", h: "54%" }, { d: "Thu", h: "78%" },
+        { d: "Fri", h: "88%" }, { d: "Sat", h: "71%" }, { d: "Sun", h: "39%" },
+      ],
+      connected: [
+        { name: "WhatsApp", note: "Official Meta Cloud API", state: "Connected", who: "+961 3 991 402" },
+        { name: "Facebook Messenger", note: "One-click via Facebook login", state: "Connected", who: "T-ZONE Lebanon" },
+        { name: "Instagram", note: "Connected together with your Facebook Page", state: "Connected", who: "@tzone.lb" },
+        { name: "Telegram", note: "Bot token from @BotFather", state: "Connected", who: "T-ZONE Support" },
+      ],
+      soonChannels: [
+        { name: "Viber", cat: "Messaging" }, { name: "LINE", cat: "Messaging" }, { name: "Signal", cat: "Messaging" },
+        { name: "TikTok", cat: "Social" }, { name: "X (Twitter)", cat: "Social" }, { name: "LinkedIn", cat: "Social" },
+        { name: "Website live chat", cat: "Business & web" }, { name: "Email", cat: "Business & web" }, { name: "SMS", cat: "Business & web" },
+        { name: "Google Business Messages", cat: "Business & web" },
+      ],
+      roleRows: [
+        { role: "Owner", people: "1", scope: "Everything, including billing and security" },
+        { role: "Manager", people: "2", scope: "Assignment override, reports, departments" },
+        { role: "Agent", people: "8", scope: "Own conversations, tasks, customer data" },
+        { role: "Technician", people: "2", scope: "Repairs, parts, warranty status" },
+        { role: "Accountant", people: "1", scope: "Payments, invoices, receivables, closing" },
+      ],
+      permGroups: [
+        { area: "Conversations", perms: "view · reply · assign · transfer · close", agent: "view · reply", manager: "all" },
+        { area: "Knowledge Base", perms: "view · edit · publish", agent: "view", manager: "all" },
+        { area: "Channels", perms: "view · connect · disconnect", agent: "—", manager: "view" },
+        { area: "Team & Departments", perms: "view · invite · edit roles", agent: "—", manager: "view · invite" },
+        { area: "Billing & Subscription", perms: "view · change plan", agent: "—", manager: "—" },
+      ],
+      teamRows: [
+        { who: "Rami Haddad", mail: "rami@tzone.com.lb", role: "Owner", branch: "Beirut", state: "Active", last: "Today 08:12" },
+        { who: "Maya Sleiman", mail: "maya@tzone.com.lb", role: "Manager", branch: "Beirut", state: "Active", last: "Today 08:44" },
+        { who: "Ali Deeb", mail: "ali@tzone.com.lb", role: "Technician", branch: "Tripoli", state: "Active", last: "Today 07:59" },
+        { who: "Nadia Rizk", mail: "nadia@tzone.com.lb", role: "Accountant", branch: "Beirut", state: "Active", last: "Yesterday" },
+        { who: "Ziad Karam", mail: "ziad@tzone.com.lb", role: "Agent", branch: "Saida", state: "Suspended", last: "12 Jul" },
+      ],
+      tenants: [
+        { name: "T-ZONE Trading", plan: "Growth · annual", users: "14", convos: "1,284", state: "Active" },
+        { name: "Zone Mobile Saida", plan: "Starter · monthly", users: "3", convos: "212", state: "Active" },
+        { name: "NetPlus IPTV", plan: "Growth · monthly", users: "6", convos: "702", state: "Trial" },
+        { name: "Cedar Electronics", plan: "Starter · monthly", users: "2", convos: "58", state: "Suspended" },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

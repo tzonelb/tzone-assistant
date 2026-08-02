@@ -1,17 +1,31 @@
+/*
+ * ThemeProvider (frontend/src/contexts/ThemeContext.jsx) writes the
+ * --color-, --font-, --radius-, --space- and --tz-rail custom properties
+ * below directly onto <html style="..."> once /api/platform-ui/config
+ * resolves. Every var() here falls back to the current hand-picked
+ * default, so nothing changes visually before that first fetch (or if
+ * it fails) — see CLAUDE_CODE_THEME_SPEC.md §4.
+ */
 :root {
   /* Brand — modern indigo-blue, less saturated/flat than the old palette */
-  --tz-primary: #4F63F0;
-  --tz-primary-dark: #3B4ED6;
-  --tz-primary-soft: #EEF1FE;
+  --tz-primary: var(--color-accent, #4F63F0);
+  --tz-primary-dark: var(--color-accent-dark, #3B4ED6);
+  --tz-primary-soft: var(--color-accent-soft, #EEF1FE);
 
-  --tz-brand-blue: #4F63F0;
-  --tz-brand-blue-dark: #3B4ED6;
-  --tz-brand-blue-deep: #2E3EB8;
-  --tz-brand-green: #22C07D;
+  --tz-brand-blue: var(--color-accent, #4F63F0);
+  --tz-brand-blue-dark: var(--color-accent-dark, #3B4ED6);
+  --tz-brand-blue-deep: var(--color-accent-deep, #2E3EB8);
+  --tz-brand-green: var(--color-accent2, #22C07D);
 
-  --tz-secondary: #22C07D;
-  --tz-secondary-dark: #17A369;
-  --tz-secondary-soft: #E7FAF1;
+  --tz-secondary: var(--color-accent2, #22C07D);
+  --tz-secondary-dark: var(--color-accent2-dark, #17A369);
+  --tz-secondary-soft: var(--color-accent2-soft, #E7FAF1);
+
+  /* Typography — Theme Studio §4 (headingFont/bodyFont/baseSize/headingScale) */
+  --tz-font-heading: var(--font-heading, Inter, ui-sans-serif, system-ui, sans-serif);
+  --tz-font-body: var(--font-body, Inter, ui-sans-serif, system-ui, sans-serif);
+  --tz-font-base-size: var(--font-base-size, 15px);
+  --tz-font-heading-scale: var(--font-heading-scale, 1);
 
   /* Status */
   --tz-success: #17A369;
@@ -50,33 +64,38 @@
   --tz-border: #ECEBF7;
   --tz-border-strong: #DDDCF0;
 
-  /* Radius — slightly softer/rounder for a more contemporary feel */
-  --tz-radius-xs: 8px;
-  --tz-radius-sm: 12px;
-  --tz-radius-md: 16px;
-  --tz-radius-lg: 20px;
-  --tz-radius-xl: 24px;
-  --tz-radius-2xl: 30px;
+  /* Radius — Theme Studio §4 shape.radius drives --radius-md (0-24px);
+     the rest of the scale keeps its proportion to that base. */
+  --tz-radius-md: var(--radius-md, 16px);
+  --tz-radius-xs: max(2px, calc(var(--tz-radius-md) * 0.5));
+  --tz-radius-sm: max(4px, calc(var(--tz-radius-md) * 0.75));
+  --tz-radius-lg: calc(var(--tz-radius-md) * 1.25);
+  --tz-radius-xl: calc(var(--tz-radius-md) * 1.5);
+  --tz-radius-2xl: calc(var(--tz-radius-md) * 1.875);
   --tz-radius-round: 999px;
 
-  /* Shadows — softer, more diffuse */
-  --tz-shadow-xs: 0 2px 6px rgb(28 26 66 / 5%);
-  --tz-shadow-sm: 0 6px 18px rgb(28 26 66 / 7%);
-  --tz-shadow-md: 0 14px 32px rgb(28 26 66 / 9%);
-  --tz-shadow-lg: 0 26px 60px rgb(28 26 66 / 13%);
+  /* Shadows — Theme Studio §4 shape.shadow (none|sm|md) swaps the whole
+     ramp via --shadow-strength (0 = none, 1 = sm, 2 = md defaults). */
+  --shadow-strength: 1;
+  --tz-shadow-xs: 0 2px 6px rgb(28 26 66 / calc(0.05 * var(--shadow-strength)));
+  --tz-shadow-sm: 0 6px 18px rgb(28 26 66 / calc(0.07 * var(--shadow-strength)));
+  --tz-shadow-md: 0 14px 32px rgb(28 26 66 / calc(0.09 * var(--shadow-strength)));
+  --tz-shadow-lg: 0 26px 60px rgb(28 26 66 / calc(0.13 * var(--shadow-strength)));
 
-  /* Spacing */
-  --tz-space-1: 4px;
-  --tz-space-2: 6px;
-  --tz-space-3: 10px;
-  --tz-space-4: 13px;
-  --tz-space-5: 16px;
-  --tz-space-6: 20px;
-  --tz-space-7: 22px;
-  --tz-space-8: 26px;
+  /* Spacing — Theme Studio §4 layout.density (0.75-1.2) scales the base
+     4px unit; every --tz-space-* stays proportional to it. */
+  --tz-space-unit: calc(4px * var(--space-density, 1));
+  --tz-space-1: var(--tz-space-unit);
+  --tz-space-2: calc(var(--tz-space-unit) * 1.5);
+  --tz-space-3: calc(var(--tz-space-unit) * 2.5);
+  --tz-space-4: calc(var(--tz-space-unit) * 3.25);
+  --tz-space-5: calc(var(--tz-space-unit) * 4);
+  --tz-space-6: calc(var(--tz-space-unit) * 5);
+  --tz-space-7: calc(var(--tz-space-unit) * 5.5);
+  --tz-space-8: calc(var(--tz-space-unit) * 6.5);
 
-  /* Layout */
-  --tz-sidebar-width: 236px;
+  /* Layout — layout.railWidth (180-300, Theme Studio §4) */
+  --tz-sidebar-width: var(--tz-rail-width, 236px);
   --tz-sidebar-collapsed-width: 78px;
   --tz-topbar-height: 60px;
 
@@ -84,6 +103,12 @@
   --tz-transition-fast: 140ms ease;
   --tz-transition-normal: 200ms ease;
 }
+
+/* --tz-font-heading/--tz-font-body are NOT applied to body/#root here on
+   purpose: AppLayout.jsx already sets a personal font choice
+   (localStorage "tzone_ui_font") as an inline style on <html>, which a
+   direct body/#root rule would silently override. The v2 shell (Phase 2)
+   applies these deliberately once it reconciles the two settings surfaces. */
 
 /* جاهز للوضع الداكن لاحقًا */
 [data-theme="dark"] {

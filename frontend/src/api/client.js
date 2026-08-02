@@ -1200,3 +1200,40 @@ export async function deleteBroadcastRequest(broadcastId) {
 export async function getBroadcastReportRequest(broadcastId) {
   return apiRequest(`/api/broadcasts/${broadcastId}/report`);
 }
+
+// ---- Theme Studio / platform UI config (CLAUDE_CODE_THEME_SPEC.md) ----
+
+export async function getPlatformUiConfigRequest() {
+  return apiRequest("/api/platform-ui/config");
+}
+
+export async function listUiThemesRequest(scopeType, scopeId) {
+  const params = new URLSearchParams({ scope_type: scopeType });
+  if (scopeId) params.set("scope_id", scopeId);
+  return apiRequest(`/api/platform-ui/themes?${params.toString()}`);
+}
+
+export async function createUiThemeDraftRequest({ scopeType, scopeId, tokens, modules }) {
+  return apiRequest("/api/platform-ui/themes", {
+    method: "POST",
+    body: { scope_type: scopeType, scope_id: scopeId ?? null, tokens: tokens || {}, modules: modules || {} },
+  });
+}
+
+export async function updateUiThemeDraftRequest(themeId, { tokens, modules }) {
+  return apiRequest(`/api/platform-ui/themes/${themeId}`, {
+    method: "PATCH",
+    body: { tokens: tokens ?? null, modules: modules ?? null },
+  });
+}
+
+export async function publishUiThemeRequest(themeId, reason) {
+  return apiRequest(`/api/platform-ui/themes/${themeId}/publish`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+export async function restoreUiThemeRequest(themeId) {
+  return apiRequest(`/api/platform-ui/themes/${themeId}/restore`, { method: "POST" });
+}
