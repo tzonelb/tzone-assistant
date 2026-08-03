@@ -37,6 +37,27 @@ class ConversationOwnershipConflict(RuntimeError):
         )
 
 
+class ConversationVersionConflict(ValueError):
+    """Raised when a control update's expected_updated_at is stale.
+
+    This means another employee (or another tab/request) has changed the
+    conversation's control state since the caller last loaded it. It is a
+    ValueError so it fits the existing "raise on conflict" pattern used by
+    company_settings_service.update_section, but it is a distinct subclass
+    so routes can map it to HTTP 409 (stale version) instead of the generic
+    422 used for plain validation errors.
+    """
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(
+            message
+            or (
+                "This conversation was updated by someone else since you "
+                "last loaded it. Reload the conversation before saving."
+            )
+        )
+
+
 def _takeover_timeout_minutes(company_id: int) -> int:
     """Return the company-configured human takeover timeout safely.
 
@@ -1386,6 +1407,7 @@ class ConversationControlService:
         department: str | None = None,
         assigned_user_id: int | None = None,
         is_admin: bool = False,
+        expected_updated_at: str | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
@@ -1394,6 +1416,12 @@ class ConversationControlService:
                 external_user_id
             ),
         )
+
+        if (
+            expected_updated_at is not None
+            and state.get("updated_at") != expected_updated_at
+        ):
+            raise ConversationVersionConflict()
 
         if (
             status is not None
@@ -1610,12 +1638,19 @@ class ConversationControlService:
         tags: list[str] | None = None,
         clear_assignment: bool = False,
         is_unread: bool | None = None,
+        expected_updated_at: str | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
         )
+
+        if (
+            expected_updated_at is not None
+            and state.get("updated_at") != expected_updated_at
+        ):
+            raise ConversationVersionConflict()
 
         valid_folders = {
             "inbox",

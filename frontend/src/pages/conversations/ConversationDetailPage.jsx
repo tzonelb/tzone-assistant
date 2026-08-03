@@ -206,6 +206,16 @@ export default function ConversationDetailPage({
   const liveSignatureRef = useRef("");
   const live = useConversationLive();
 
+  // Tracks the alias draft's dirty state without recreating loadConversation
+  // on every keystroke: aliasDraftRef always mirrors the latest aliasDraft,
+  // and lastSyncedAliasRef.current is the {alias, updatedAt} pair last
+  // confirmed to match the server. When they diverge the user has an
+  // unsaved edit in flight, so silent polling must not overwrite it — and
+  // saving must use the version the edit was actually based on, not
+  // whatever the most recent poll happens to show.
+  const aliasDraftRef = useRef("");
+  const lastSyncedAliasRef = useRef({ alias: "", updatedAt: null });
+
   const [messages, setMessages] = useState([]);
   const [control, setControl] = useState(null);
   const [notes, setNotes] = useState([]);
@@ -298,7 +308,26 @@ export default function ConversationDetailPage({
         );
         setCurrentUserIsAdmin(Boolean(controlResult?.current_user_is_admin));
         setPermissions(controlResult?.permissions || {});
-        setAliasDraft(controlResult?.conversation?.customer_alias || "");
+
+        const serverAlias = controlResult?.conversation?.customer_alias || "";
+        const serverUpdatedAt = controlResult?.conversation?.updated_at ?? null;
+        const hasUnsavedAliasEdit =
+          aliasDraftRef.current !== lastSyncedAliasRef.current.alias;
+
+        if (!hasUnsavedAliasEdit) {
+          // Safe to sync: the user has no in-progress edit on this field,
+          // so the server snapshot can't be clobbering anything.
+          aliasDraftRef.current = serverAlias;
+          setAliasDraft(serverAlias);
+          lastSyncedAliasRef.current = {
+            alias: serverAlias,
+            updatedAt: serverUpdatedAt,
+          };
+        }
+        // If dirty, leave aliasDraft and lastSyncedAliasRef alone — the
+        // user's edit keeps the version it was based on, so saving it will
+        // correctly be rejected with 409 if the record has actually moved
+        // on underneath them.
       } catch (requestError) {
         setError(
           requestError.message ||
@@ -320,8 +349,19 @@ export default function ConversationDetailPage({
     setDraft("");
     setActionError("");
     setActionSuccess("");
+    setAliasDraft("");
+    aliasDraftRef.current = "";
+    lastSyncedAliasRef.current = { alias: "", updatedAt: null };
     loadConversation();
   }, [channel, userId, loadConversation]);
+
+
+  // Keep aliasDraftRef in sync with every aliasDraft change (typing,
+  // programmatic resets) so loadConversation's dirty check always sees the
+  // latest value without needing aliasDraft itself in its dependency array.
+  useEffect(() => {
+    aliasDraftRef.current = aliasDraft;
+  }, [aliasDraft]);
 
 
   useEffect(() => {
@@ -545,6 +585,32 @@ export default function ConversationDetailPage({
   }
 
 
+  // A 409 with code "stale_version" means someone else changed this
+  // conversation/customer record after we last loaded it. We must not
+  // silently keep either side's data: leave both the local draft and the
+  // last-rendered `control` snapshot untouched, and make the conflict
+  // visible so the user reloads and reconciles before trying again.
+  function applyVersionConflict(requestError) {
+    const detail = requestError?.data?.detail;
+    if (
+      requestError?.status !== 409
+      || !detail
+      || typeof detail !== "object"
+      || detail.code !== "stale_version"
+    ) {
+      return false;
+    }
+
+    setActionError(
+      detail.message
+      || "Someone else changed this conversation since you loaded it. "
+        + "Reload the conversation before saving again.",
+    );
+
+    return true;
+  }
+
+
   async function runModeAction(request, successMessage) {
     setChangingMode(true);
     setActionError("");
@@ -617,7 +683,18 @@ export default function ConversationDetailPage({
     );
   }
 
-  async function handleControlUpdate(updates, successMessage) {
+  // `expectedUpdatedAt` lets a caller pin the version its edit was based
+  // on (the alias draft does this, since it may have diverged from the
+  // continuously-polled `control` snapshot). Callers without an in-flight
+  // draft — star/pin/department/assignment/tags/status/priority, which
+  // always mirror the latest `control` straight through to the UI — just
+  // use whatever `control.updated_at` currently is.
+  async function handleControlUpdate(updates, successMessage, options = {}) {
+    const { expectedUpdatedAt } = options;
+    const versionToSend = Object.prototype.hasOwnProperty.call(options, "expectedUpdatedAt")
+      ? expectedUpdatedAt
+      : control?.updated_at ?? null;
+
     setSaving(true);
     setActionError("");
     setActionSuccess("");
@@ -626,24 +703,39 @@ export default function ConversationDetailPage({
       const result = await updateConversationControlRequest(
         channel,
         userId,
-        updates,
+        { ...updates, expected_updated_at: versionToSend ?? null },
       );
 
       if (result?.conversation) {
         setControl(result.conversation);
       }
 
+      if (Object.prototype.hasOwnProperty.call(updates, "customer_alias")) {
+        const savedAlias = result?.conversation?.customer_alias || "";
+        const savedUpdatedAt = result?.conversation?.updated_at ?? null;
+        aliasDraftRef.current = savedAlias;
+        setAliasDraft(savedAlias);
+        lastSyncedAliasRef.current = { alias: savedAlias, updatedAt: savedUpdatedAt };
+      }
+
       setActionSuccess(successMessage || "Conversation updated.");
       await loadConversation({ silent: true });
       onConversationChanged?.();
     } catch (requestError) {
-      if (!applyOwnershipConflict(requestError)) {
-        setActionError(
-          requestError.message ||
-          "Conversation could not be updated.",
-        );
+      if (applyVersionConflict(requestError)) {
+        // Stale version: leave the draft and the rendered control snapshot
+        // exactly as they are — no silent overwrite in either direction.
+        // The user has to explicitly reload to pick up the newer version
+        // before they can save again.
+      } else {
+        if (!applyOwnershipConflict(requestError)) {
+          setActionError(
+            requestError.message ||
+            "Conversation could not be updated.",
+          );
+        }
+        await loadConversation({ silent: true });
       }
-      await loadConversation({ silent: true });
     } finally {
       setSaving(false);
     }
@@ -1108,6 +1200,7 @@ export default function ConversationDetailPage({
                       onClick={() => handleControlUpdate(
                         { customer_alias: aliasDraft },
                         "Internal customer name updated.",
+                        { expectedUpdatedAt: lastSyncedAliasRef.current.updatedAt },
                       )}
                     >
                       Save

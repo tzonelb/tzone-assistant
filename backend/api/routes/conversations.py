@@ -34,6 +34,7 @@ from backend.services.auth_service import (
 )
 from backend.services.conversation_control_service import (
     ConversationOwnershipConflict,
+    ConversationVersionConflict,
     conversation_control_service,
 )
 from core.conversation_store import (
@@ -97,6 +98,11 @@ class ConversationControlUpdate(
     tags: list[str] | None = None
     clear_assignment: bool = False
     is_unread: bool | None = None
+    # Optimistic-concurrency marker: the "updated_at" the client last saw
+    # from GET .../control. When present, the write is rejected with 409
+    # if the stored value has since moved on (someone else changed the
+    # conversation/customer record in the meantime).
+    expected_updated_at: str | None = None
 
 
 class ConversationNoteCreate(
@@ -1321,6 +1327,9 @@ def update_control(
                     .assigned_user_id
                 ),
                 is_admin=_is_admin,
+                expected_updated_at=(
+                    payload.expected_updated_at
+                ),
             )
         )
     except ConversationOwnershipConflict as exc:
@@ -1340,28 +1349,63 @@ def update_control(
             },
         ) from exc
 
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
+            },
+        ) from exc
+
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
             detail=str(exc),
         ) from exc
 
-    conversation = (
-        conversation_control_service
-        .update_workspace_state(
-            company_id=company_id,
-            channel=channel,
-            external_user_id=user_id,
-            actor_user_id=current_user["id"],
-            customer_alias=payload.customer_alias,
-            folder=payload.folder,
-            is_starred=payload.is_starred,
-            is_pinned=payload.is_pinned,
-            tags=payload.tags,
-            clear_assignment=payload.clear_assignment,
-            is_unread=payload.is_unread,
+    try:
+        conversation = (
+            conversation_control_service
+            .update_workspace_state(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=user_id,
+                actor_user_id=current_user["id"],
+                customer_alias=payload.customer_alias,
+                folder=payload.folder,
+                is_starred=payload.is_starred,
+                is_pinned=payload.is_pinned,
+                tags=payload.tags,
+                clear_assignment=payload.clear_assignment,
+                is_unread=payload.is_unread,
+                # `conversation` here already reflects this same request's
+                # update_state() write (if any), so we check freshness
+                # against that, not the pre-request snapshot — otherwise
+                # a request that touches both status/priority fields *and*
+                # workspace fields (e.g. alias) would always conflict with
+                # itself on the second write.
+                expected_updated_at=(
+                    conversation.get("updated_at")
+                    if payload.expected_updated_at is not None
+                    else None
+                ),
+            )
         )
-    )
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
+            },
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
 
     conversation[
         "assigned_user_name"
