@@ -339,11 +339,23 @@ def _assert_can_control_conversation(
     channel: str,
     external_user_id: str,
 ) -> tuple[dict[str, Any], bool]:
+    # SECURITY (repair round): create_if_missing=False -- this helper backs
+    # every employee-initiated control action (return-to-ai, update-control,
+    # notes). It must never auto-vivify a company-scoped ownership row for a
+    # conversation this company has never actually had; that side effect is
+    # exactly what let one company's employee manufacture "ownership" of
+    # another company's conversation and defeat conversation_exists().
     state = conversation_control_service.get_state(
         company_id=company_id,
         channel=channel,
         external_user_id=external_user_id,
+        create_if_missing=False,
     )
+    if state is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found.",
+        )
     is_admin = _is_conversation_admin(current_user, company_id)
     owner_user_id = state.get("assigned_user_id")
     is_owner = (
@@ -394,14 +406,28 @@ def _build_summary(
     if not messages:
         return None
 
+    # SECURITY (repair round): create_if_missing=False. This function is
+    # invoked once per file under the GLOBAL (not company-scoped) flat-file
+    # conversation store for every list_conversations/live_events poll. With
+    # auto-vivification on, simply opening the inbox as any employee would
+    # silently create a company-scoped ownership row for every OTHER
+    # company's customer in the entire system, and (before this fix) also
+    # leaked those companies' customer name / last message / tags into this
+    # company's list -- with no gate at all, unlike read_conversation. A
+    # conversation file that has no existing row for this company_id is not
+    # this company's conversation; skip it instead of adopting it.
     control = (
         conversation_control_service
         .get_state(
             company_id=company_id,
             channel=channel,
             external_user_id=user_id,
+            create_if_missing=False,
         )
     )
+
+    if control is None:
+        return None
 
     last_message = messages[-1]
     metadata = _latest_metadata(messages)
@@ -1025,6 +1051,25 @@ def read_conversation(
         get_current_user
     ),
 ):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        # Do not distinguish "no such conversation anywhere" from
+        # "this conversation belongs to a different company" -- both
+        # cases must return the same 404 so this endpoint cannot be used
+        # to confirm/deny another tenant's customers by probing channel
+        # + user_id combinations.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Conversation not found."
+            ),
+        )
+
     messages = get_conversation(
         channel,
         user_id,
@@ -1039,7 +1084,6 @@ def read_conversation(
             ),
         )
 
-    company_id = auth_service.resolve_company_id(current_user)
     conversation_control_service.record_opened(
         company_id=company_id,
         channel=channel,
@@ -1073,6 +1117,24 @@ def read_control(
             current_user
         )
     )
+
+    # SECURITY (repair round): timeline() calls get_state() internally,
+    # which used to auto-vivify a company-scoped ownership row on first
+    # lookup. A single, otherwise-harmless-looking GET here was enough for
+    # any employee to manufacture ownership of another company's
+    # conversation and defeat conversation_exists() in read_conversation /
+    # export_conversation. Gate on the read-only existence check *before*
+    # calling timeline(), so the auto-create side effect never runs for a
+    # conversation this company doesn't actually own.
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found.",
+        )
 
     result = (
         conversation_control_service
@@ -1151,6 +1213,21 @@ def take_over(
         )
     )
 
+    # SECURITY (repair round): set_ai_mode() calls get_or_create()
+    # internally, which used to auto-vivify a company-scoped ownership row
+    # on first lookup. Taking over a conversation your company was never
+    # actually contacted about is not a legitimate action; gate on the
+    # read-only existence check first so no such row can be manufactured.
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found.",
+        )
+
     try:
         conversation = (
             conversation_control_service
@@ -1206,6 +1283,20 @@ def release_conversation(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+
+    # SECURITY (repair round): release() calls get_state() internally,
+    # which used to auto-vivify a company-scoped ownership row on first
+    # lookup. Gate on the read-only existence check first.
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Conversation not found.",
+        )
+
     is_admin = _is_conversation_admin(current_user, company_id)
     try:
         conversation = conversation_control_service.release(
@@ -1568,6 +1659,21 @@ def export_conversation(
             current_user
         )
     )
+
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        # Same cross-tenant gate as read_conversation: a 404 here must
+        # not reveal whether the conversation exists for some other
+        # company.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Conversation not found."
+            ),
+        )
 
     messages = get_conversation(
         channel,

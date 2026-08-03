@@ -514,7 +514,21 @@ class ConversationControlService:
         company_id: int,
         channel: str,
         external_user_id: str,
-    ) -> dict[str, Any]:
+        create_if_missing: bool = True,
+    ) -> dict[str, Any] | None:
+        """Look up the company-scoped conversation row.
+
+        SECURITY (repair round): `create_if_missing` defaults to True so
+        every pre-existing caller keeps its current auto-vivify-on-first-
+        lookup behavior unless it explicitly opts out. Employee-initiated
+        HTTP routes that must NOT be able to manufacture a same-shape
+        "ownership" row for a conversation their company has never
+        actually had pass create_if_missing=False and treat a None result
+        as "not found" (HTTP 404) -- see conversation_exists()'s docstring
+        for why auto-vivification is a cross-tenant read-gate bypass.
+        Genuine inbound-message paths (record_customer_message and the
+        webhook/processor call chains that lead to it) keep the default.
+        """
         normalized_channel = (
             channel.strip().lower()
         )
@@ -545,6 +559,9 @@ class ConversationControlService:
                 return self.row_to_dict(
                     row
                 )
+
+            if not create_if_missing:
+                return None
 
             now = utc_now_iso()
 
@@ -611,6 +628,52 @@ class ConversationControlService:
             return self.row_to_dict(
                 row
             )
+
+    def conversation_exists(
+        self,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+    ) -> bool:
+        """Read-only tenant ownership check.
+
+        Returns True only if a `conversations` row already exists for
+        this exact (company_id, channel, external_user_id). Deliberately
+        does NOT go through get_or_create()/get_state() — those
+        auto-vivify a new row on first lookup, which would make this
+        check always return True for any caller and defeat its purpose
+        as a cross-tenant read gate. Callers must check this (or an
+        equivalent DB-backed ownership check) before returning any data
+        keyed only by (channel, external_user_id), such as the raw
+        conversation transcript from core.conversation_store, which has
+        no company_id concept of its own.
+        """
+        normalized_channel = (
+            channel.strip().lower()
+        )
+
+        normalized_user_id = (
+            external_user_id.strip()
+        )
+
+        with db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM conversations
+                WHERE company_id = ?
+                  AND channel = ?
+                  AND external_user_id = ?
+                LIMIT 1
+                """,
+                (
+                    company_id,
+                    normalized_channel,
+                    normalized_user_id,
+                ),
+            ).fetchone()
+
+        return row is not None
 
     def insert_event(
         self,
@@ -753,7 +816,8 @@ class ConversationControlService:
         company_id: int,
         channel: str,
         external_user_id: str,
-    ) -> dict[str, Any]:
+        create_if_missing: bool = True,
+    ) -> dict[str, Any] | None:
         self.expire_overdue_takeovers()
 
         return self.get_or_create(
@@ -762,6 +826,7 @@ class ConversationControlService:
             external_user_id=(
                 external_user_id
             ),
+            create_if_missing=create_if_missing,
         )
 
     def is_ai_handling(
