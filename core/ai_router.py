@@ -38,7 +38,6 @@ class AIRouter:
         connector_results: list[dict] | None = None,
         response_policy: dict | None = None,
         match_result: dict[str, Any] | None = None,
-        company_id: int | None = None,
     ) -> dict[str, Any] | None:
         if not config.AI_ENABLED:
             return None
@@ -69,7 +68,6 @@ class AIRouter:
                 connector_results=connector_results,
                 response_policy=response_policy,
                 match_result=match_result,
-                company_id=company_id,
             )
 
             result = self.normalize_result(raw_result)
@@ -98,7 +96,6 @@ class AIRouter:
         connector_results: list[dict],
         response_policy: dict,
         match_result: dict[str, Any],
-        company_id: int | None = None,
     ) -> dict[str, Any]:
         company_prompt = prompt_builder.build_system_prompt(channel, company_id)
 

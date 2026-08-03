@@ -591,7 +591,6 @@ class Engine:
             connector_results=connector_results,
             response_policy=channel_policy,
             match_result=match_result,
-            company_id=request.company_id,
         )
 
         if not ai_result:
