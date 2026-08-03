@@ -324,9 +324,19 @@ class Engine:
         return "en"
 
     def should_ai_take_priority(self, request):
-        return automation_policy.should_auto_reply_with_ai(
+        if not automation_policy.should_auto_reply_with_ai(
+            request.channel
+        ):
+            return False
+
+        channel_policy = response_policy.get_channel_policy(
             request.channel
         )
+
+        if channel_policy.get("reply_mode") == "flow_only":
+            return False
+
+        return True
 
     def handle_start(self, request, language):
         if automation_policy.should_auto_reply_with_ai(
