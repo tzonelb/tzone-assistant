@@ -15,7 +15,7 @@ class PromptBuilder:
         modules = profile_loader.get_modules(company_id)
         channel_role = profile_loader.get_channel_role(channel, company_id)
         ai_style = profile_loader.get_ai_style(company_id)
-        channel_policy = automation_policy.get_channel_policy(channel)
+        channel_policy = automation_policy.get_channel_policy(channel, company_id)
 
         context = {
             "company": company,
