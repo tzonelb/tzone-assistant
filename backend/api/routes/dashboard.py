@@ -271,6 +271,11 @@ def get_subscription(
         )
     )
 
+    require_dashboard_access(
+        current_user,
+        resolved_company_id,
+    )
+
     subscription = db.get_active_subscription(
         resolved_company_id
     )
