@@ -325,7 +325,8 @@ class Engine:
 
     def should_ai_take_priority(self, request):
         if not automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            request.company_id,
         ):
             return False
 
@@ -462,7 +463,8 @@ class Engine:
         current_department,
     ):
         if not automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            request.company_id,
         ):
             return None
 
@@ -579,6 +581,7 @@ class Engine:
             message=request.message,
             channel=request.channel,
             user_id=request.user_id,
+            company_id=request.company_id,
             language=language,
             current_state=current_state,
             context=memory_context,

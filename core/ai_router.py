@@ -30,6 +30,7 @@ class AIRouter:
         message: str,
         channel: str,
         user_id: str,
+        company_id: int | None = None,
         language: str | None = None,
         current_state: str | None = None,
         context: dict[str, Any] | None = None,
@@ -59,6 +60,7 @@ class AIRouter:
                 message=message,
                 channel=channel,
                 user_id=user_id,
+                company_id=company_id,
                 language=language,
                 current_state=current_state,
                 context=context,
@@ -86,6 +88,7 @@ class AIRouter:
         message: str,
         channel: str,
         user_id: str,
+        company_id: int | None,
         language: str | None,
         current_state: str | None,
         context: dict[str, Any],
@@ -94,7 +97,7 @@ class AIRouter:
         response_policy: dict,
         match_result: dict[str, Any],
     ) -> dict[str, Any]:
-        company_prompt = prompt_builder.build_system_prompt(channel)
+        company_prompt = prompt_builder.build_system_prompt(channel, company_id)
 
         grounded_prompt = """
 You are the customer-facing AI assistant for a business platform.
