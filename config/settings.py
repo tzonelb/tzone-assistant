@@ -108,6 +108,35 @@ class AppConfig:
         "",
     )
 
+    FACEBOOK_APP_ID: str = os.getenv(
+        "FACEBOOK_APP_ID",
+        "",
+    )
+
+    FACEBOOK_APP_SECRET: str = os.getenv(
+        "FACEBOOK_APP_SECRET",
+        "",
+    )
+
+    PUBLIC_APP_URL: str = os.getenv(
+        "PUBLIC_APP_URL",
+        "http://127.0.0.1:8000",
+    )
+
+    FRONTEND_URL: str = os.getenv(
+        "FRONTEND_URL",
+        "http://localhost:5173",
+    )
+
+    # INSECURE DEV DEFAULT ONLY -- production MUST override this with a
+    # real Fernet key (generate one via `Fernet.generate_key().decode()`).
+    # Using the default in production means anyone with repo/source access
+    # can decrypt every stored channel access token.
+    TOKEN_ENCRYPTION_KEY: str = os.getenv(
+        "TOKEN_ENCRYPTION_KEY",
+        "aW5zZWN1cmUtZGV2LW9ubHktZmVybmV0LWtleS0zMng=",
+    )
+
     AI_ENABLED: bool = (
         os.getenv("AI_ENABLED", "true").lower() == "true"
     )

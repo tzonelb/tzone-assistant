@@ -36,7 +36,48 @@ class Database:
 
             conn.commit()
 
+    @staticmethod
+    def _heal_legacy_channel_accounts_table(cursor):
+        """Rename away a channel_accounts table created by the old,
+        incompatible schema (backend/services/conversation_control_service.py
+        used to create one, with channel_type/display_name/phone_number
+        columns and no `channel` column, whenever that service was imported
+        before this method ever ran -- which was every boot on a brand-new
+        database). That shape breaks the CREATE UNIQUE INDEX below with
+        "no such column: channel". Self-heal it here so any database
+        created by the old buggy code path (or a stale local dev/CI file)
+        recovers automatically instead of crashing on every future boot.
+
+        The legacy table is never written to by any code in this
+        repository (only ever created/ALTERed, never INSERTed into), so
+        renaming it aside -- rather than trying to migrate data out of it
+        -- is safe.
+        """
+        row = cursor.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'channel_accounts'
+            """
+        ).fetchone()
+        if row is None:
+            return
+
+        columns = {
+            r[1] for r in cursor.execute("PRAGMA table_info(channel_accounts)")
+        }
+        if "channel" in columns:
+            return
+
+        # Guard against a hypothetical repeat heal leaving a stale backup
+        # from a previous run occupying the rename target.
+        cursor.execute("DROP TABLE IF EXISTS channel_accounts_legacy_backup")
+        cursor.execute(
+            "ALTER TABLE channel_accounts RENAME TO channel_accounts_legacy_backup"
+        )
+
     def _create_platform_tables(self, cursor):
+        self._heal_legacy_channel_accounts_table(cursor)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS workspaces (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -507,6 +548,78 @@ class Database:
                 FOREIGN KEY(user_id)
                     REFERENCES users(id)
                     ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS broadcasts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,
+                message_text TEXT NOT NULL,
+                target_department TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                estimated_recipient_count INTEGER NOT NULL DEFAULT 0,
+                actual_recipient_count INTEGER NOT NULL DEFAULT 0,
+                sent_count INTEGER NOT NULL DEFAULT 0,
+                failed_count INTEGER NOT NULL DEFAULT 0,
+                created_by_user_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(created_by_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_broadcasts_company
+            ON broadcasts(
+                company_id,
+                created_at DESC
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS broadcast_recipients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                broadcast_id INTEGER NOT NULL,
+                conversation_id INTEGER NOT NULL,
+                external_user_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                error TEXT,
+                sent_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(broadcast_id)
+                    REFERENCES broadcasts(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(conversation_id)
+                    REFERENCES conversations(id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_broadcast_recipients_unique
+            ON broadcast_recipients(
+                broadcast_id,
+                conversation_id
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_broadcast_recipients_status
+            ON broadcast_recipients(
+                broadcast_id,
+                status
             )
         """)
 

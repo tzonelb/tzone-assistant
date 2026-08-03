@@ -209,6 +209,148 @@ def test_released_conversation_auto_returns_to_ai_after_timeout(fresh_db):
     assert final_state["assigned_user_id"] is None
 
 
+def test_take_over_bumps_control_version(fresh_db):
+    """set_ai_mode() (Take Over / Return to AI) must advance control_version
+    like update_state()/update_workspace_state() do, so a subsequent save
+    made by someone else with a stale version is correctly rejected."""
+    svc = fresh_db
+    before = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    result = svc.set_ai_mode(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        handled_by_ai=False, actor_user_id=101,
+    )
+    assert result["control_version"] == before["control_version"] + 1
+
+
+def test_take_over_rejects_stale_expected_control_version(fresh_db):
+    svc = fresh_db
+    from backend.services.conversation_control_service import ConversationVersionConflict
+
+    state = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    stale_version = state["control_version"]
+
+    # Someone else changes a control field first, advancing the version.
+    svc.update_state(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        actor_user_id=202, priority="high",
+    )
+
+    with pytest.raises(ConversationVersionConflict):
+        svc.set_ai_mode(
+            company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+            handled_by_ai=False, actor_user_id=101,
+            expected_control_version=stale_version,
+        )
+
+
+def test_return_to_ai_bumps_control_version(fresh_db):
+    svc = fresh_db
+    svc.set_ai_mode(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        handled_by_ai=False, actor_user_id=101,
+    )
+    before = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    result = svc.set_ai_mode(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        handled_by_ai=True, actor_user_id=101,
+        expected_control_version=before["control_version"],
+    )
+    assert result["control_version"] == before["control_version"] + 1
+
+
+def test_return_to_ai_rejects_stale_expected_control_version(fresh_db):
+    svc = fresh_db
+    from backend.services.conversation_control_service import ConversationVersionConflict
+
+    svc.set_ai_mode(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        handled_by_ai=False, actor_user_id=101,
+    )
+    state = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    stale_version = state["control_version"]
+
+    # Another change (e.g. an employee reply extending the lease... here we
+    # just use update_workspace_state, a distinct control-mutating path).
+    svc.update_workspace_state(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        actor_user_id=101, is_starred=True,
+    )
+
+    with pytest.raises(ConversationVersionConflict):
+        svc.set_ai_mode(
+            company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+            handled_by_ai=True, actor_user_id=101,
+            expected_control_version=stale_version,
+        )
+
+
+def test_release_bumps_control_version_and_rejects_stale_version(fresh_db):
+    svc = fresh_db
+    from backend.services.conversation_control_service import ConversationVersionConflict
+
+    svc.set_ai_mode(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        handled_by_ai=False, actor_user_id=101,
+    )
+    state = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    stale_version = state["control_version"]
+
+    # Someone else changes a control field first (e.g. priority), advancing
+    # the version out from under a stale Release click.
+    svc.update_state(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        actor_user_id=999, priority="urgent", is_admin=True,
+    )
+
+    with pytest.raises(ConversationVersionConflict):
+        svc.release(
+            company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+            actor_user_id=101, force=False, expected_control_version=stale_version,
+        )
+
+    # A fresh version succeeds and itself advances control_version.
+    fresh_state = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    result = svc.release(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        actor_user_id=101, force=False, expected_control_version=fresh_state["control_version"],
+    )
+    assert result["control_version"] == fresh_state["control_version"] + 1
+
+
+def test_update_state_concurrent_writes_second_one_rejected_not_silently_clobbered(fresh_db):
+    """Regression test for the 'true concurrency' gap: two requests that
+    both read the same control_version and both pass the pre-check must
+    not both succeed. The second one's UPDATE (a compare-and-swap on
+    control_version) must be rejected instead of silently overwriting the
+    first."""
+    svc = fresh_db
+    from backend.services.conversation_control_service import ConversationVersionConflict
+
+    state = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    shared_expected_version = state["control_version"]
+
+    first = svc.update_state(
+        company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+        actor_user_id=101, priority="high",
+        expected_control_version=shared_expected_version,
+    )
+    assert first["priority"] == "high"
+
+    # Second caller read the *same* stale version before the first write
+    # landed (simulated here by reusing shared_expected_version) and must
+    # be rejected now that the row has actually moved on.
+    with pytest.raises(ConversationVersionConflict):
+        svc.update_state(
+            company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID,
+            actor_user_id=202, priority="urgent",
+            expected_control_version=shared_expected_version,
+        )
+
+    # The first writer's change must still be intact -- not clobbered.
+    final_state = svc.get_state(company_id=COMPANY_ID, channel=CHANNEL, external_user_id=CUSTOMER_ID)
+    assert final_state["priority"] == "high"
+
+
 def test_second_employee_can_still_claim_a_released_conversation_before_timeout(fresh_db):
     """Releasing must not block other employees from taking it over — the
     timeout is a fallback for when nobody does, not an exclusive lock."""

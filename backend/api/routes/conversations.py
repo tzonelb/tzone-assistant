@@ -34,6 +34,7 @@ from backend.services.auth_service import (
 )
 from backend.services.conversation_control_service import (
     ConversationOwnershipConflict,
+    ConversationVersionConflict,
     conversation_control_service,
 )
 from core.conversation_store import (
@@ -97,6 +98,29 @@ class ConversationControlUpdate(
     tags: list[str] | None = None
     clear_assignment: bool = False
     is_unread: bool | None = None
+    # Optimistic-concurrency marker: the dedicated "control_version" the
+    # client last saw from GET .../control (conversation.control_version).
+    # When present, the write is rejected with 409 if the stored version has
+    # since moved on (someone else changed a control field in the
+    # meantime). This is intentionally NOT the row's general "updated_at",
+    # which is also bumped by unrelated activity (inbound customer
+    # messages, AI/employee replies, takeover-timeout expiry, ...) and
+    # would otherwise cause spurious conflicts unrelated to concurrent
+    # control-field edits.
+    expected_control_version: int | None = None
+
+
+class ConversationModeChangeRequest(BaseModel):
+    # Same optimistic-concurrency marker as ConversationControlUpdate
+    # above. Take Over / Release / Return to AI mutate the same control
+    # fields (assigned_user_id, handled_by_ai, status, workflow_state,
+    # needs_human) as the generic control-update path, so they must be
+    # able to participate in the same stale-version check: without this,
+    # a user with a stale local `control_version` who clicks one of these
+    # buttons could silently clobber a concurrent change made by someone
+    # else via either path. Optional and defaults to None (no check) so
+    # older/other callers keep working unchanged.
+    expected_control_version: int | None = None
 
 
 class ConversationNoteCreate(
@@ -483,6 +507,10 @@ def _build_summary(
             or control.get("updated_at")
             or ""
         ),
+        # Optimistic-concurrency anchor for quick actions (star/pin/folder/
+        # tags) fired straight from the list view — see control_version on
+        # the control PATCH payload / GET .../control response.
+        "control_version": control.get("control_version"),
         "message_count": len(messages),
         "branch_id": control.get(
             "branch_id"
@@ -1109,6 +1137,7 @@ def read_control(
 def take_over(
     channel: str,
     user_id: str,
+    payload: ConversationModeChangeRequest | None = None,
     current_user: dict[
         str,
         Any,
@@ -1131,6 +1160,9 @@ def take_over(
                 external_user_id=user_id,
                 handled_by_ai=False,
                 actor_user_id=current_user["id"],
+                expected_control_version=(
+                    payload.expected_control_version if payload else None
+                ),
             )
         )
     except ConversationOwnershipConflict as exc:
@@ -1143,6 +1175,14 @@ def take_over(
                     exc.owner_user_id,
                     "Conversation is currently owned by another employee.",
                 ),
+            },
+        ) from exc
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
             },
         ) from exc
 
@@ -1162,6 +1202,7 @@ def take_over(
 def release_conversation(
     channel: str,
     user_id: str,
+    payload: ConversationModeChangeRequest | None = None,
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -1173,6 +1214,9 @@ def release_conversation(
             external_user_id=user_id,
             actor_user_id=int(current_user["id"]),
             force=is_admin,
+            expected_control_version=(
+                payload.expected_control_version if payload else None
+            ),
         )
     except ConversationOwnershipConflict as exc:
         raise HTTPException(
@@ -1186,6 +1230,14 @@ def release_conversation(
                 ),
             },
         ) from exc
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
+            },
+        ) from exc
     conversation["assigned_user_name"] = None
     return {"status": "ok", "conversation": conversation}
 
@@ -1196,6 +1248,7 @@ def release_conversation(
 def return_to_ai(
     channel: str,
     user_id: str,
+    payload: ConversationModeChangeRequest | None = None,
     current_user: dict[
         str,
         Any,
@@ -1216,18 +1269,30 @@ def return_to_ai(
         external_user_id=user_id,
     )
 
-    conversation = (
-        conversation_control_service
-        .set_ai_mode(
-            company_id=company_id,
-            channel=channel,
-            external_user_id=user_id,
-            handled_by_ai=True,
-            actor_user_id=(
-                current_user["id"]
-            ),
+    try:
+        conversation = (
+            conversation_control_service
+            .set_ai_mode(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=user_id,
+                handled_by_ai=True,
+                actor_user_id=(
+                    current_user["id"]
+                ),
+                expected_control_version=(
+                    payload.expected_control_version if payload else None
+                ),
+            )
         )
-    )
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
+            },
+        ) from exc
 
     return {
         "status": "ok",
@@ -1321,6 +1386,9 @@ def update_control(
                     .assigned_user_id
                 ),
                 is_admin=_is_admin,
+                expected_control_version=(
+                    payload.expected_control_version
+                ),
             )
         )
     except ConversationOwnershipConflict as exc:
@@ -1340,28 +1408,63 @@ def update_control(
             },
         ) from exc
 
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
+            },
+        ) from exc
+
     except ValueError as exc:
         raise HTTPException(
             status_code=422,
             detail=str(exc),
         ) from exc
 
-    conversation = (
-        conversation_control_service
-        .update_workspace_state(
-            company_id=company_id,
-            channel=channel,
-            external_user_id=user_id,
-            actor_user_id=current_user["id"],
-            customer_alias=payload.customer_alias,
-            folder=payload.folder,
-            is_starred=payload.is_starred,
-            is_pinned=payload.is_pinned,
-            tags=payload.tags,
-            clear_assignment=payload.clear_assignment,
-            is_unread=payload.is_unread,
+    try:
+        conversation = (
+            conversation_control_service
+            .update_workspace_state(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=user_id,
+                actor_user_id=current_user["id"],
+                customer_alias=payload.customer_alias,
+                folder=payload.folder,
+                is_starred=payload.is_starred,
+                is_pinned=payload.is_pinned,
+                tags=payload.tags,
+                clear_assignment=payload.clear_assignment,
+                is_unread=payload.is_unread,
+                # `conversation` here already reflects this same request's
+                # update_state() write (if any), so we check freshness
+                # against that, not the pre-request snapshot — otherwise
+                # a request that touches both status/priority fields *and*
+                # workspace fields (e.g. alias) would always conflict with
+                # itself on the second write.
+                expected_control_version=(
+                    conversation.get("control_version")
+                    if payload.expected_control_version is not None
+                    else None
+                ),
+            )
         )
-    )
+    except ConversationVersionConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "stale_version",
+                "message": str(exc),
+            },
+        ) from exc
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=str(exc),
+        ) from exc
 
     conversation[
         "assigned_user_name"

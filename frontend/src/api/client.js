@@ -96,6 +96,7 @@ export async function apiRequest(
 
     throw new Error(
       "Cannot connect to the T-ZONE server. Make sure FastAPI is running on port 8000.",
+      { cause: error },
     );
   }
 
@@ -237,30 +238,42 @@ export async function getConversationControlRequest(
 export async function takeOverConversationRequest(
   channel,
   userId,
+  expectedControlVersion = null,
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/take-over`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { expected_control_version: expectedControlVersion },
+    },
   );
 }
 
 export async function releaseConversationRequest(
   channel,
   userId,
+  expectedControlVersion = null,
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/release`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { expected_control_version: expectedControlVersion },
+    },
   );
 }
 
 export async function returnConversationToAiRequest(
   channel,
   userId,
+  expectedControlVersion = null,
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/return-to-ai`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { expected_control_version: expectedControlVersion },
+    },
   );
 }
 
@@ -509,6 +522,30 @@ export async function clearVisibleNotificationsRequest(notificationIds) {
   });
 }
 
+export async function createBroadcastRequest(payload) {
+  return apiRequest("/api/broadcasts", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function sendBroadcastRequest(broadcastId) {
+  return apiRequest(
+    `/api/broadcasts/${encodeURIComponent(broadcastId)}/send`,
+    { method: "POST" },
+  );
+}
+
+export async function getBroadcastRequest(broadcastId) {
+  return apiRequest(
+    `/api/broadcasts/${encodeURIComponent(broadcastId)}`,
+  );
+}
+
+export async function getBroadcastsRequest() {
+  return apiRequest("/api/broadcasts");
+}
+
 export async function getCompanySettingSectionRequest(section) {
   return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`);
 }
@@ -518,4 +555,8 @@ export async function updateCompanySettingSectionRequest(section, values) {
     method: "PUT",
     body: { values },
   });
+}
+
+export async function facebookConnectRequest() {
+  return apiRequest("/api/channels/facebook/connect", { method: "POST" });
 }

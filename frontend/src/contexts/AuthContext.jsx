@@ -87,23 +87,47 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const activeCompany = useMemo(() => {
+    if (!companies?.length) return null;
+    const activeCompanyId = user?.active_company_id;
+    return (
+      companies.find((company) => company.id === activeCompanyId)
+      || companies[0]
+    );
+  }, [companies, user]);
+
+  const hasPermission = useCallback(
+    (code) => {
+      if (!user) return false;
+      if (user.is_super_admin) return true;
+      if (!activeCompany) return false;
+      if (activeCompany.role_code === "owner") return true;
+      return Boolean(activeCompany.permission_codes?.includes(code));
+    },
+    [user, activeCompany],
+  );
+
   const value = useMemo(
     () => ({
       user,
       companies,
+      activeCompany,
       loading,
       authenticated: Boolean(user),
       login,
       logout,
       refreshUser: loadCurrentUser,
+      hasPermission,
     }),
     [
       user,
       companies,
+      activeCompany,
       loading,
       login,
       logout,
       loadCurrentUser,
+      hasPermission,
     ],
   );
 

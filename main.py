@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
     auth,
+    broadcasts,
+    channel_oauth,
     conversations,
     company_settings,
     customers,
@@ -123,6 +125,8 @@ app.include_router(developer_center.router)
 app.include_router(notifications.router)
 app.include_router(manual_messages.router)
 app.include_router(roles.router)
+app.include_router(broadcasts.router)
+app.include_router(channel_oauth.router)
 
 app.include_router(
     whatsapp_webhook.router
