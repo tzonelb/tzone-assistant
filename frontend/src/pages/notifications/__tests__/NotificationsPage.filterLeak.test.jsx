@@ -111,3 +111,81 @@ describe("NotificationsPage filter isolation", () => {
     expect(appliedFilters.status).toBeUndefined();
   });
 });
+
+describe("NotificationContext in-flight filter race", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getNotificationSummaryRequest.mockResolvedValue({ unread: 0, total: 0, read: 0 });
+  });
+
+  it("fires an immediate follow-up fetch when filters change while a stale-filtered fetch is in flight", async () => {
+    let resolveFirstFetch;
+    getNotificationsRequest.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveFirstFetch = resolve;
+    }));
+    getNotificationsRequest.mockResolvedValue([]);
+
+    let refresh;
+    render(
+      <NotificationProvider>
+        <BackgroundConsumer onReady={(r) => { refresh = r; }} />
+      </NotificationProvider>,
+    );
+
+    // Initial mount fetch is the one left pending/in-flight below.
+    await waitFor(() => expect(getNotificationsRequest).toHaveBeenCalledTimes(1));
+
+    // While the first (unfiltered) fetch is still in flight, an explicit
+    // filter change arrives (e.g. NotificationsPage applying a status tab).
+    await act(async () => {
+      refresh({ filters: { status: "read" }, silent: true });
+    });
+
+    // The in-flight guard blocks the second call from starting a fetch of
+    // its own -- still only one call so far.
+    expect(getNotificationsRequest).toHaveBeenCalledTimes(1);
+
+    // The originally in-flight fetch now resolves with its stale (unfiltered)
+    // snapshot.
+    await act(async () => {
+      resolveFirstFetch([]);
+    });
+
+    // A follow-up fetch should fire immediately, using the newly-applied
+    // filters, instead of waiting for the next poll/focus trigger.
+    await waitFor(() => expect(getNotificationsRequest).toHaveBeenCalledTimes(2));
+    const followUpFilters = getNotificationsRequest.mock.calls[1][0];
+    expect(followUpFilters.status).toBe("read");
+  });
+
+  it("does not queue a follow-up fetch when the blocked call's filters match the in-flight fetch", async () => {
+    let resolveFirstFetch;
+    getNotificationsRequest.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveFirstFetch = resolve;
+    }));
+    getNotificationsRequest.mockResolvedValue([]);
+
+    let refresh;
+    render(
+      <NotificationProvider>
+        <BackgroundConsumer onReady={(r) => { refresh = r; }} />
+      </NotificationProvider>,
+    );
+
+    await waitFor(() => expect(getNotificationsRequest).toHaveBeenCalledTimes(1));
+
+    // A second call arrives mid-flight with the same (default) filters --
+    // there is nothing new to converge on, so no follow-up is needed.
+    await act(async () => {
+      refresh({ filters: {}, silent: true });
+    });
+
+    await act(async () => {
+      resolveFirstFetch([]);
+    });
+
+    // Give any (incorrect) follow-up a chance to fire before asserting.
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    expect(getNotificationsRequest).toHaveBeenCalledTimes(1);
+  });
+});
