@@ -50,13 +50,15 @@ class AutomationPolicy:
         translates the two fields that map onto this module's vocabulary:
 
           - ai_behavior.enabled (bool) -> bot_enabled + ai_enabled. This is
-            deliberately a single company-wide on/off switch: enabled=False
-            forces both flags False (disables AI/bot auto-reply on every
-            channel for that company); enabled=True forces both flags True,
-            which is a no-op against every channel's current file default
-            (all of them already default bot_enabled/ai_enabled=True) so it
-            can never *widen* what a channel does -- a channel still gated
-            off by its own ai_mode (e.g. telegram's "flow_only", whatsapp's
+            deliberately a single company-wide on/off switch. It is
+            AND-combined with the static per-channel file value by
+            get_channel_policy() (never a direct override): the file is an
+            ops-level gate ("this channel/integration is disabled for
+            everyone") and this per-company DB setting is that company's
+            own choice within that gate. A company can turn itself off
+            even when the file allows it; nothing can turn itself on when
+            the file forbids it. A channel still gated off by its own
+            ai_mode (e.g. telegram's "flow_only", whatsapp's
             "meta_agent_only") stays gated off regardless of this flag.
 
           - ai_behavior.mode (str) -> ai_mode, but ONLY when it is one of
@@ -120,7 +122,33 @@ class AutomationPolicy:
 
         merged = default_policy.copy()
         merged.update(channel_policy)
-        merged.update(self._company_overrides(company_id))
+
+        company_overrides = self._company_overrides(company_id)
+
+        # bot_enabled/ai_enabled are AND-combined with the file-level value,
+        # never overridden outright: the static file is an ops-level gate
+        # ("this channel/integration is disabled for everyone") and the
+        # per-company DB setting is that company's own choice within that
+        # gate. A company can turn itself off even when the file allows it
+        # (True AND False -> False); nothing can turn itself on when the
+        # file forbids it (False AND True -> False). This is what keeps a
+        # file-level kill switch (e.g. bot_enabled=false for a channel)
+        # from being silently resurrected by an unconfigured company's
+        # DEFAULT_SETTINGS-merged "enabled": True.
+        if "bot_enabled" in company_overrides:
+            merged["bot_enabled"] = (
+                bool(merged.get("bot_enabled", True))
+                and bool(company_overrides["bot_enabled"])
+            )
+
+        if "ai_enabled" in company_overrides:
+            merged["ai_enabled"] = (
+                bool(merged.get("ai_enabled", True))
+                and bool(company_overrides["ai_enabled"])
+            )
+
+        if "ai_mode" in company_overrides:
+            merged["ai_mode"] = company_overrides["ai_mode"]
 
         return merged
 
