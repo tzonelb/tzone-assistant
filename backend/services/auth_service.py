@@ -443,10 +443,36 @@ class AuthService:
                 ORDER BY companies.id ASC
             """, (user_id,)).fetchall()
 
-            return [
-                dict(row)
-                for row in rows
-            ]
+            companies = [dict(row) for row in rows]
+
+            all_permission_codes: list[str] | None = None
+
+            for company in companies:
+                if company.get("role_code") == "owner":
+                    if all_permission_codes is None:
+                        all_permission_codes = [
+                            row["code"]
+                            for row in conn.execute(
+                                "SELECT code FROM permissions ORDER BY code"
+                            ).fetchall()
+                        ]
+                    company["permission_codes"] = list(all_permission_codes)
+                elif company.get("role_id"):
+                    company["permission_codes"] = [
+                        row["code"]
+                        for row in conn.execute("""
+                            SELECT permissions.code
+                            FROM role_permissions
+                            JOIN permissions
+                                ON permissions.id = role_permissions.permission_id
+                            WHERE role_permissions.role_id = ?
+                            ORDER BY permissions.code
+                        """, (company["role_id"],)).fetchall()
+                    ]
+                else:
+                    company["permission_codes"] = []
+
+            return companies
 
     def resolve_company_id(
         self,

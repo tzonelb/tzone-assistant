@@ -18,6 +18,7 @@ import {
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import tzoneLogo from "../../assets/tzone-logo.png";
+import { useAuth } from "../../contexts/AuthContext";
 
 const navigationItems = [
   ["/dashboard", "Dashboard", DashboardOutlined],
@@ -33,13 +34,17 @@ const navigationItems = [
   ["/analytics", "Analytics", QueryStatsOutlined],
   ["/team-chat", "Team Chat", EventNoteOutlined],
   ["/settings", "Settings", SettingsOutlined],
-  ["/company-settings", "Company Settings", TuneOutlined],
+  ["/company-settings", "Company Settings", TuneOutlined, "settings.view"],
   ["/roles", "Roles & Permissions", AdminPanelSettingsOutlined],
 ];
 
 export default function Sidebar({ open, collapsed, companyName, onClose, onToggleCollapsed }) {
   const [hovered, setHovered] = useState(false);
+  const { hasPermission } = useAuth();
   const expanded = !collapsed || hovered;
+  const visibleItems = navigationItems.filter(
+    ([, , , requiredPermission]) => !requiredPermission || hasPermission(requiredPermission),
+  );
   return (
     <>
       {open ? <button type="button" className="sidebar-overlay" aria-label="Close navigation" onClick={onClose} /> : null}
@@ -53,7 +58,7 @@ export default function Sidebar({ open, collapsed, companyName, onClose, onToggl
           <div className="sidebar-brand-copy"><strong>T-ZONE</strong><span>{companyName || "Platform"}</span></div>
         </div>
         <nav className="sidebar-navigation">
-          {navigationItems.map(([path, label, Icon]) => (
+          {visibleItems.map(([path, label, Icon]) => (
             <NavLink key={path} to={path} title={collapsed ? label : undefined} className={({ isActive }) => `sidebar-link ${isActive ? "sidebar-link-active" : ""}`} onClick={onClose}>
               <Icon fontSize="small" /><span>{label}</span>
             </NavLink>
