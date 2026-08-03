@@ -20,6 +20,7 @@ import {
   WhatsApp,
 } from "@mui/icons-material";
 import { useNavigate, useParams } from "react-router-dom";
+import toast from "react-hot-toast";
 import {
   getConversationsRequest,
   updateConversationControlRequest,
@@ -189,6 +190,13 @@ export default function ConversationsPage() {
         // here (the row always mirrors the server snapshot), so simply
         // re-fetching the list resolves it — the row's control_version
         // (and whatever field changed) will be current on the next render.
+        // The click itself did NOT apply though, so this must not be a
+        // silent no-op: surface a visible toast so the user knows to
+        // check the (now-refreshed) row and retry if they still want it.
+        toast.error(
+          requestError?.data?.detail?.message
+          || "This conversation changed elsewhere — please try again.",
+        );
         await loadConversations({ silent: true });
         return;
       }

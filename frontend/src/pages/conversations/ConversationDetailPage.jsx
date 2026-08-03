@@ -650,18 +650,25 @@ export default function ConversationDetailPage({
   }
 
 
+  // Take Over / Release / Return to AI mutate the same control fields
+  // (assigned_user_id, handled_by_ai, status, workflow_state, needs_human)
+  // as handleControlUpdate()'s generic path, so they must go through the
+  // same optimistic-concurrency check: send the control_version this page
+  // last saw, and treat a 409 stale_version the same way (surface it, do
+  // not silently reload over the user without telling them why).
   async function runModeAction(request, successMessage) {
     setChangingMode(true);
     setActionError("");
     setActionSuccess("");
+    const versionToSend = control?.control_version ?? null;
     try {
-      const result = await request(channel, userId);
+      const result = await request(channel, userId, versionToSend);
       if (result?.conversation) setControl(result.conversation);
       setActionSuccess(successMessage);
       await loadConversation({ silent: true });
       onConversationChanged?.();
     } catch (requestError) {
-      if (!applyOwnershipConflict(requestError)) {
+      if (!applyVersionConflict(requestError) && !applyOwnershipConflict(requestError)) {
         setActionError(requestError.message || "Conversation mode could not be changed.");
       }
       await loadConversation({ silent: true });
@@ -689,14 +696,14 @@ export default function ConversationDetailPage({
     setChangingMode(true);
     setActionError("");
     try {
-      const result = await takeOverConversationRequest(channel, userId);
+      const result = await takeOverConversationRequest(channel, userId, control?.control_version ?? null);
       if (result?.conversation) setControl(result.conversation);
       await loadConversation({ silent: true });
       onConversationChanged?.();
       window.setTimeout(() => composerRef.current?.focus(), 0);
       return true;
     } catch (requestError) {
-      if (!applyOwnershipConflict(requestError)) {
+      if (!applyVersionConflict(requestError) && !applyOwnershipConflict(requestError)) {
         setActionError(requestError.message || "Conversation could not be assigned to you.");
       }
       await loadConversation({ silent: true });

@@ -237,30 +237,42 @@ export async function getConversationControlRequest(
 export async function takeOverConversationRequest(
   channel,
   userId,
+  expectedControlVersion = null,
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/take-over`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { expected_control_version: expectedControlVersion },
+    },
   );
 }
 
 export async function releaseConversationRequest(
   channel,
   userId,
+  expectedControlVersion = null,
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/release`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { expected_control_version: expectedControlVersion },
+    },
   );
 }
 
 export async function returnConversationToAiRequest(
   channel,
   userId,
+  expectedControlVersion = null,
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/return-to-ai`,
-    { method: "POST" },
+    {
+      method: "POST",
+      body: { expected_control_version: expectedControlVersion },
+    },
   );
 }
 
