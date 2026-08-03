@@ -4,8 +4,6 @@ import requests
 
 from config.settings import config
 from channels.meta.logger import log_meta_event
-from backend.services.token_crypto import decrypt_token
-from database.database import db
 
 
 logger = logging.getLogger(__name__)
@@ -25,44 +23,43 @@ def is_fake_meta_id(recipient_id: str) -> bool:
     return str(recipient_id) in FAKE_TEST_IDS
 
 
-def _resolve_access_token(company_id: int | None, channel: str) -> str:
-    """Resolve the Graph API access token to use for a send.
+def _resolve_access_token(channel: str, company_id: int | None) -> str | None:
+    """Pick which Page/IG access token to send a reply through.
 
-    When company_id is provided, looks up an active channel_accounts row
-    for (company_id, channel) and decrypts its stored token. Falls back
-    to the legacy single-tenant config.META_PAGE_ACCESS_TOKEN when
-    company_id is None, no matching row exists, or decryption fails --
-    preserving 100% backward compatibility for existing callers that
-    don't pass company_id.
+    When `company_id` is set, try the per-company token connected via the
+    OAuth flow (channel_accounts.access_token_encrypted, decrypted through
+    backend.services.token_crypto). Any failure — no company_id, no matching
+    active channel account, no decrypt helper available yet, a bad token —
+    falls straight back to the single, global META_PAGE_ACCESS_TOKEN so the
+    current default-company flow is always preserved byte-for-byte.
     """
-    if company_id is None:
-        return config.META_PAGE_ACCESS_TOKEN
+    if company_id is not None:
+        try:
+            from backend.services.channel_account_service import (
+                channel_account_service,
+            )
+            from backend.services.token_crypto import decrypt_token
 
-    try:
-        with db.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT access_token_encrypted
-                FROM channel_accounts
-                WHERE company_id = ? AND channel = ? AND status = 'active'
-                ORDER BY id DESC
-                LIMIT 1
-                """,
-                (company_id, channel),
-            ).fetchone()
-    except Exception:
-        logger.exception(
-            "send_meta: failed to look up channel_accounts token for company_id=%s channel=%s",
-            company_id,
-            channel,
-        )
-        return config.META_PAGE_ACCESS_TOKEN
+            account = channel_account_service.get_active_account(
+                company_id=company_id,
+                channel=channel,
+            )
+            encrypted_token = (account or {}).get("access_token_encrypted")
 
-    if not row or not row["access_token_encrypted"]:
-        return config.META_PAGE_ACCESS_TOKEN
+            if encrypted_token:
+                decrypted = decrypt_token(encrypted_token)
+                if decrypted:
+                    return decrypted
+        except ImportError:
+            # token_crypto / channel_account_service not wired up yet.
+            pass
+        except Exception as exc:  # noqa: BLE001
+            log_meta_event(
+                "company_token_resolution_failed",
+                {"company_id": company_id, "channel": channel, "error": str(exc)},
+            )
 
-    decrypted = decrypt_token(row["access_token_encrypted"])
-    return decrypted or config.META_PAGE_ACCESS_TOKEN
+    return config.META_PAGE_ACCESS_TOKEN
 
 
 def send_meta_text(
@@ -82,7 +79,7 @@ def send_meta_text(
         log_meta_event("send_skipped", result)
         return result
 
-    access_token = _resolve_access_token(company_id, channel)
+    access_token = _resolve_access_token(channel, company_id)
 
     if not access_token:
         result = {
@@ -164,8 +161,6 @@ def send_meta_buttons(
             "payload": title,
         })
 
-    access_token = _resolve_access_token(company_id, channel)
-
     url = f"https://graph.facebook.com/{config.META_API_VERSION}/me/messages"
 
     payload = {
@@ -175,6 +170,8 @@ def send_meta_buttons(
             "quick_replies": quick_replies,
         },
     }
+
+    access_token = _resolve_access_token(channel, company_id)
 
     params = {
         "access_token": access_token,
