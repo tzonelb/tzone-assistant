@@ -96,6 +96,7 @@ export async function apiRequest(
 
     throw new Error(
       "Cannot connect to the T-ZONE server. Make sure FastAPI is running on port 8000.",
+      { cause: error },
     );
   }
 
