@@ -1189,6 +1189,72 @@ class Database:
         except ValueError:
             return False
 
+    def get_bot_profile(
+        self,
+        company_id: int,
+        channel_account_id: int | None = None,
+    ):
+        """Company-scoped bot profile row from `bot_profiles`.
+
+        Prefers a channel-specific row (channel_account_id matches) and
+        falls back to the company's default row (channel_account_id IS
+        NULL). Returns None when the company has no configured profile
+        yet -- callers are expected to fall back to static defaults in
+        that case.
+        """
+        with self.connect() as conn:
+            if channel_account_id is not None:
+                row = conn.execute("""
+                    SELECT *
+                    FROM bot_profiles
+                    WHERE company_id = ?
+                      AND channel_account_id = ?
+                      AND status = 'active'
+                    ORDER BY id DESC
+                    LIMIT 1
+                """, (company_id, channel_account_id)).fetchone()
+
+                if row:
+                    return dict(row)
+
+            row = conn.execute("""
+                SELECT *
+                FROM bot_profiles
+                WHERE company_id = ?
+                  AND channel_account_id IS NULL
+                  AND status = 'active'
+                ORDER BY id DESC
+                LIMIT 1
+            """, (company_id,)).fetchone()
+
+            return dict(row) if row else None
+
+    def get_business_connectors(
+        self,
+        company_id: int,
+    ) -> dict[str, dict]:
+        """Company-scoped connector rows from `business_connectors`,
+        keyed by connector_type (e.g. "products", "accounting", "orders").
+
+        Returns an empty dict when the company has no configured
+        connectors yet -- callers are expected to fall back to static
+        defaults in that case.
+        """
+        with self.connect() as conn:
+            rows = conn.execute("""
+                SELECT *
+                FROM business_connectors
+                WHERE company_id = ?
+            """, (company_id,)).fetchall()
+
+        connectors: dict[str, dict] = {}
+
+        for row in rows:
+            data = dict(row)
+            connectors[data["connector_type"]] = data
+
+        return connectors
+
     def log_audit(
         self,
         action: str,
