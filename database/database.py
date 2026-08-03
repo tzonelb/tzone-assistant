@@ -36,7 +36,48 @@ class Database:
 
             conn.commit()
 
+    @staticmethod
+    def _heal_legacy_channel_accounts_table(cursor):
+        """Rename away a channel_accounts table created by the old,
+        incompatible schema (backend/services/conversation_control_service.py
+        used to create one, with channel_type/display_name/phone_number
+        columns and no `channel` column, whenever that service was imported
+        before this method ever ran -- which was every boot on a brand-new
+        database). That shape breaks the CREATE UNIQUE INDEX below with
+        "no such column: channel". Self-heal it here so any database
+        created by the old buggy code path (or a stale local dev/CI file)
+        recovers automatically instead of crashing on every future boot.
+
+        The legacy table is never written to by any code in this
+        repository (only ever created/ALTERed, never INSERTed into), so
+        renaming it aside -- rather than trying to migrate data out of it
+        -- is safe.
+        """
+        row = cursor.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'channel_accounts'
+            """
+        ).fetchone()
+        if row is None:
+            return
+
+        columns = {
+            r[1] for r in cursor.execute("PRAGMA table_info(channel_accounts)")
+        }
+        if "channel" in columns:
+            return
+
+        # Guard against a hypothetical repeat heal leaving a stale backup
+        # from a previous run occupying the rename target.
+        cursor.execute("DROP TABLE IF EXISTS channel_accounts_legacy_backup")
+        cursor.execute(
+            "ALTER TABLE channel_accounts RENAME TO channel_accounts_legacy_backup"
+        )
+
     def _create_platform_tables(self, cursor):
+        self._heal_legacy_channel_accounts_table(cursor)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS workspaces (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

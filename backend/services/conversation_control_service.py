@@ -192,6 +192,20 @@ class ConversationControlService:
             )
 
     def ensure_schema(self) -> None:
+        # ConversationControlService is instantiated as a module-level
+        # singleton and gets imported (directly or transitively) very early
+        # -- before main.py's lifespan() ever calls db.create_tables(). On a
+        # brand-new database that means this method used to run first and
+        # could create tables (most importantly channel_accounts) with an
+        # older, incompatible shape. database/database.py is the
+        # authoritative schema owner (see backend/services/
+        # channel_account_service.py's module docstring); make sure it always
+        # wins the race, regardless of import order. This is idempotent --
+        # every statement in create_tables() is CREATE TABLE/INDEX IF NOT
+        # EXISTS or INSERT OR IGNORE -- so calling it again from
+        # main.py's lifespan afterward is safe.
+        db.create_tables()
+
         with db.connect() as conn:
             if not self._table_exists(
                 conn,
@@ -345,58 +359,25 @@ class ConversationControlService:
                 """
             )
 
-            if not self._table_exists(
-                conn,
-                "channel_accounts",
-            ):
-                conn.execute(
-                    """
-                    CREATE TABLE channel_accounts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id INTEGER NOT NULL,
-                        branch_id INTEGER,
-                        channel_type TEXT NOT NULL,
-                        display_name TEXT NOT NULL,
-                        external_account_id TEXT,
-                        phone_number TEXT,
-                        status TEXT NOT NULL
-                            DEFAULT 'active',
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        FOREIGN KEY(company_id)
-                            REFERENCES companies(id)
-                            ON DELETE CASCADE,
-                        FOREIGN KEY(branch_id)
-                            REFERENCES branches(id)
-                            ON DELETE SET NULL
-                    )
-                    """
-                )
-            else:
-                self._add_missing_columns(
-                    conn,
-                    "channel_accounts",
-                    {
-                        "company_id":
-                            "INTEGER",
-                        "branch_id":
-                            "INTEGER",
-                        "channel_type":
-                            "TEXT",
-                        "display_name":
-                            "TEXT",
-                        "external_account_id":
-                            "TEXT",
-                        "phone_number":
-                            "TEXT",
-                        "status":
-                            "TEXT DEFAULT 'active'",
-                        "created_at":
-                            "TEXT",
-                        "updated_at":
-                            "TEXT",
-                    },
-                )
+            # NOTE: channel_accounts is intentionally NOT created/altered
+            # here. database/database.py's create_tables() (called at the
+            # top of this method, above) owns its schema exclusively --
+            # company_id, channel, name, external_account_id, page_id,
+            # instagram_business_id, access_token_encrypted, status, etc.
+            # An older revision of this method created a second,
+            # incompatible channel_accounts table here (channel_type/
+            # display_name/phone_number columns) whenever this service
+            # singleton was imported before db.create_tables() ran --
+            # which, given the app's real import order, was every time on
+            # a brand-new database. That shape doesn't have a `channel`
+            # column, so database.py's own
+            # `CREATE UNIQUE INDEX idx_channel_external_account ...
+            # ON channel_accounts(channel, external_account_id)` would then
+            # crash with "no such column: channel" on first boot against a
+            # fresh database -- and the Facebook OAuth connect flow's
+            # upsert (which relies on that exact unique index) would never
+            # work. Nothing else in the codebase reads channel_type/
+            # display_name/phone_number, so removing this stanza is safe.
 
             conn.execute(
                 """
@@ -439,32 +420,6 @@ class ConversationControlService:
                 )
                 """
             )
-
-            channel_account_columns = (
-                self._table_columns(
-                    conn,
-                    "channel_accounts",
-                )
-            )
-
-            if {
-                "company_id",
-                "status",
-                "channel_type",
-            }.issubset(
-                channel_account_columns
-            ):
-                conn.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS
-                    idx_channel_accounts_company
-                    ON channel_accounts (
-                        company_id,
-                        status,
-                        channel_type
-                    )
-                    """
-                )
 
             conn.commit()
 
