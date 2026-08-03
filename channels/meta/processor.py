@@ -1,3 +1,4 @@
+from backend.services.channel_account_service import channel_account_service
 from backend.services.company_settings_service import company_settings_service
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.customer_service import customer_service
@@ -30,7 +31,19 @@ def process_meta_payload(payload: dict):
     user_id = parsed["user_id"]
     text = parsed["text"]
     official_profile = resolve_meta_profile(user_id=user_id, channel=channel)
-    company_id = conversation_control_service.resolve_default_company_id()
+
+    # Multi-tenant resolution: the incoming recipient_id is the Facebook
+    # Page id (messenger) or Instagram Business Account id (instagram) that
+    # actually received the message. If a company has connected that page
+    # via the OAuth flow, route the message to them. Otherwise fall back to
+    # exactly the previous single-tenant behavior so the default company's
+    # flow never changes.
+    company_id = channel_account_service.get_company_id_for_account(
+        channel=channel,
+        external_account_id=parsed.get("recipient_id"),
+    )
+    if company_id is None:
+        company_id = conversation_control_service.resolve_default_company_id()
 
     customer = customer_service.upsert_from_channel(
         company_id=company_id,
