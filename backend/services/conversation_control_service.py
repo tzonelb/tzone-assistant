@@ -38,22 +38,30 @@ class ConversationOwnershipConflict(RuntimeError):
 
 
 class ConversationVersionConflict(ValueError):
-    """Raised when a control update's expected_updated_at is stale.
+    """Raised when a control update's expected_control_version is stale.
 
-    This means another employee (or another tab/request) has changed the
-    conversation's control state since the caller last loaded it. It is a
-    ValueError so it fits the existing "raise on conflict" pattern used by
-    company_settings_service.update_section, but it is a distinct subclass
-    so routes can map it to HTTP 409 (stale version) instead of the generic
-    422 used for plain validation errors.
+    This means another employee (or another tab/request) changed one of
+    this conversation's *control* fields (status/priority/department/
+    assignment/alias/folder/star/pin/tags/read-state) via update_state()
+    or update_workspace_state() since the caller last loaded it. The
+    comparison is against the dedicated `control_version` counter, which
+    only those two write paths increment — general conversation activity
+    (inbound customer messages, AI/employee replies, takeover-timeout
+    expiry, etc.) bumps the conversations row's `updated_at` but does not
+    touch `control_version`, so it can never trigger a false conflict here.
+    It is a ValueError so it fits the existing "raise on conflict" pattern
+    used by company_settings_service.update_section, but it is a distinct
+    subclass so routes can map it to HTTP 409 (stale version) instead of
+    the generic 422 used for plain validation errors.
     """
 
     def __init__(self, message: str | None = None) -> None:
         super().__init__(
             message
             or (
-                "This conversation was updated by someone else since you "
-                "last loaded it. Reload the conversation before saving."
+                "This conversation's control fields were updated by someone "
+                "else since you last loaded it. Reload the conversation "
+                "before saving."
             )
         )
 
@@ -225,6 +233,7 @@ class ConversationControlService:
                         is_starred INTEGER NOT NULL DEFAULT 0,
                         is_pinned INTEGER NOT NULL DEFAULT 0,
                         tags_json TEXT NOT NULL DEFAULT '[]',
+                        control_version INTEGER NOT NULL DEFAULT 0,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     )
@@ -273,6 +282,8 @@ class ConversationControlService:
                         "INTEGER NOT NULL DEFAULT 0",
                     "tags_json":
                         "TEXT NOT NULL DEFAULT '[]'",
+                    "control_version":
+                        "INTEGER NOT NULL DEFAULT 0",
                 },
             )
 
@@ -1407,7 +1418,7 @@ class ConversationControlService:
         department: str | None = None,
         assigned_user_id: int | None = None,
         is_admin: bool = False,
-        expected_updated_at: str | None = None,
+        expected_control_version: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
@@ -1418,8 +1429,8 @@ class ConversationControlService:
         )
 
         if (
-            expected_updated_at is not None
-            and state.get("updated_at") != expected_updated_at
+            expected_control_version is not None
+            and int(state.get("control_version") or 0) != int(expected_control_version)
         ):
             raise ConversationVersionConflict()
 
@@ -1556,7 +1567,8 @@ class ConversationControlService:
                             workflow_state = 'human_active',
                             needs_human = 1,
                             takeover_expires_at = ?,
-                            updated_at = ?
+                            updated_at = ?,
+                            control_version = control_version + 1
                         WHERE id = ?
                           AND company_id = ?
                         """,
@@ -1574,7 +1586,8 @@ class ConversationControlService:
                         UPDATE conversations
                         SET
                             {field_name} = ?,
-                            updated_at = ?
+                            updated_at = ?,
+                            control_version = control_version + 1
                         WHERE id = ?
                           AND company_id = ?
                         """,
@@ -1638,7 +1651,7 @@ class ConversationControlService:
         tags: list[str] | None = None,
         clear_assignment: bool = False,
         is_unread: bool | None = None,
-        expected_updated_at: str | None = None,
+        expected_control_version: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
@@ -1647,8 +1660,8 @@ class ConversationControlService:
         )
 
         if (
-            expected_updated_at is not None
-            and state.get("updated_at") != expected_updated_at
+            expected_control_version is not None
+            and int(state.get("control_version") or 0) != int(expected_control_version)
         ):
             raise ConversationVersionConflict()
 
@@ -1754,7 +1767,8 @@ class ConversationControlService:
                     f"""
                     UPDATE conversations
                     SET {field_name} = ?,
-                        updated_at = ?
+                        updated_at = ?,
+                        control_version = control_version + 1
                     WHERE id = ?
                       AND company_id = ?
                     """,

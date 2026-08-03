@@ -98,11 +98,16 @@ class ConversationControlUpdate(
     tags: list[str] | None = None
     clear_assignment: bool = False
     is_unread: bool | None = None
-    # Optimistic-concurrency marker: the "updated_at" the client last saw
-    # from GET .../control. When present, the write is rejected with 409
-    # if the stored value has since moved on (someone else changed the
-    # conversation/customer record in the meantime).
-    expected_updated_at: str | None = None
+    # Optimistic-concurrency marker: the dedicated "control_version" the
+    # client last saw from GET .../control (conversation.control_version).
+    # When present, the write is rejected with 409 if the stored version has
+    # since moved on (someone else changed a control field in the
+    # meantime). This is intentionally NOT the row's general "updated_at",
+    # which is also bumped by unrelated activity (inbound customer
+    # messages, AI/employee replies, takeover-timeout expiry, ...) and
+    # would otherwise cause spurious conflicts unrelated to concurrent
+    # control-field edits.
+    expected_control_version: int | None = None
 
 
 class ConversationNoteCreate(
@@ -489,6 +494,10 @@ def _build_summary(
             or control.get("updated_at")
             or ""
         ),
+        # Optimistic-concurrency anchor for quick actions (star/pin/folder/
+        # tags) fired straight from the list view — see control_version on
+        # the control PATCH payload / GET .../control response.
+        "control_version": control.get("control_version"),
         "message_count": len(messages),
         "branch_id": control.get(
             "branch_id"
@@ -1327,8 +1336,8 @@ def update_control(
                     .assigned_user_id
                 ),
                 is_admin=_is_admin,
-                expected_updated_at=(
-                    payload.expected_updated_at
+                expected_control_version=(
+                    payload.expected_control_version
                 ),
             )
         )
@@ -1385,9 +1394,9 @@ def update_control(
                 # a request that touches both status/priority fields *and*
                 # workspace fields (e.g. alias) would always conflict with
                 # itself on the second write.
-                expected_updated_at=(
-                    conversation.get("updated_at")
-                    if payload.expected_updated_at is not None
+                expected_control_version=(
+                    conversation.get("control_version")
+                    if payload.expected_control_version is not None
                     else None
                 ),
             )

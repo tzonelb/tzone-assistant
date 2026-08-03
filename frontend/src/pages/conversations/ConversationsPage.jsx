@@ -168,9 +168,30 @@ export default function ConversationsPage() {
   async function quickUpdate(row, updates) {
     if (!row.can_manage) return;
     try {
-      await updateConversationControlRequest(row.channel, row.external_user_id, updates);
+      // Pin the row's control_version so this quick action (star/pin/
+      // folder/tags) is checked for concurrent edits the same way the
+      // conversation detail page's control panel is, instead of writing
+      // straight through and silently overwriting someone else's change.
+      // These rows always mirror the latest server snapshot (no separate
+      // draft state), so on a stale-version conflict a plain reload (see
+      // the catch block below) is enough to reconcile — no dedicated
+      // per-row recovery UI is needed.
+      await updateConversationControlRequest(row.channel, row.external_user_id, {
+        ...updates,
+        expected_control_version: row.control_version ?? null,
+      });
       await loadConversations({ silent: true });
     } catch (requestError) {
+      const code = requestError?.data?.detail?.code;
+      if (code === "stale_version") {
+        // Someone else changed this conversation's control fields since
+        // this row was fetched. There is no separate draft to protect
+        // here (the row always mirrors the server snapshot), so simply
+        // re-fetching the list resolves it — the row's control_version
+        // (and whatever field changed) will be current on the next render.
+        await loadConversations({ silent: true });
+        return;
+      }
       setError(requestError.message || "Conversation action failed.");
     }
   }

@@ -208,13 +208,19 @@ export default function ConversationDetailPage({
 
   // Tracks the alias draft's dirty state without recreating loadConversation
   // on every keystroke: aliasDraftRef always mirrors the latest aliasDraft,
-  // and lastSyncedAliasRef.current is the {alias, updatedAt} pair last
+  // and lastSyncedAliasRef.current is the {alias, controlVersion} pair last
   // confirmed to match the server. When they diverge the user has an
   // unsaved edit in flight, so silent polling must not overwrite it — and
   // saving must use the version the edit was actually based on, not
   // whatever the most recent poll happens to show.
+  //
+  // `controlVersion` is the dedicated conversations.control_version counter
+  // (see conversation_control_service.update_state/update_workspace_state),
+  // NOT the row's general `updated_at` — updated_at is also bumped by
+  // unrelated activity (inbound customer messages, AI/employee replies,
+  // takeover-timeout expiry, ...) and would cause spurious conflicts here.
   const aliasDraftRef = useRef("");
-  const lastSyncedAliasRef = useRef({ alias: "", updatedAt: null });
+  const lastSyncedAliasRef = useRef({ alias: "", controlVersion: null });
 
   const [messages, setMessages] = useState([]);
   const [control, setControl] = useState(null);
@@ -233,6 +239,12 @@ export default function ConversationDetailPage({
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+  // True when the last alias save was rejected as stale: the alias draft
+  // and its version anchor are pinned to what the user was editing (see
+  // aliasDraftRef/lastSyncedAliasRef above), so the ordinary silent poll
+  // can never clear this on its own — an explicit user action must discard
+  // the edit and resync before another save can succeed.
+  const [aliasVersionConflict, setAliasVersionConflict] = useState(false);
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [aliasDraft, setAliasDraft] = useState("");
@@ -310,7 +322,7 @@ export default function ConversationDetailPage({
         setPermissions(controlResult?.permissions || {});
 
         const serverAlias = controlResult?.conversation?.customer_alias || "";
-        const serverUpdatedAt = controlResult?.conversation?.updated_at ?? null;
+        const serverControlVersion = controlResult?.conversation?.control_version ?? null;
         const hasUnsavedAliasEdit =
           aliasDraftRef.current !== lastSyncedAliasRef.current.alias;
 
@@ -321,7 +333,7 @@ export default function ConversationDetailPage({
           setAliasDraft(serverAlias);
           lastSyncedAliasRef.current = {
             alias: serverAlias,
-            updatedAt: serverUpdatedAt,
+            controlVersion: serverControlVersion,
           };
         }
         // If dirty, leave aliasDraft and lastSyncedAliasRef alone — the
@@ -351,7 +363,8 @@ export default function ConversationDetailPage({
     setActionSuccess("");
     setAliasDraft("");
     aliasDraftRef.current = "";
-    lastSyncedAliasRef.current = { alias: "", updatedAt: null };
+    lastSyncedAliasRef.current = { alias: "", controlVersion: null };
+    setAliasVersionConflict(false);
     loadConversation();
   }, [channel, userId, loadConversation]);
 
@@ -585,12 +598,20 @@ export default function ConversationDetailPage({
   }
 
 
-  // A 409 with code "stale_version" means someone else changed this
-  // conversation/customer record after we last loaded it. We must not
+  // A 409 with code "stale_version" means someone else changed one of this
+  // conversation's control fields after we last loaded it. We must not
   // silently keep either side's data: leave both the local draft and the
   // last-rendered `control` snapshot untouched, and make the conflict
   // visible so the user reloads and reconciles before trying again.
-  function applyVersionConflict(requestError) {
+  //
+  // `touchedAlias` marks conflicts from a save that included the alias
+  // draft: unlike the other control fields (which always mirror the
+  // latest polled `control` snapshot straight through), the alias draft
+  // is tracked separately (aliasDraftRef/lastSyncedAliasRef) specifically
+  // so the 3s silent poll won't clobber an unsaved edit — which also means
+  // the poll can never clear a stale-version conflict on its own. Flag it
+  // so the UI can offer an explicit "discard edit and reload" recovery.
+  function applyVersionConflict(requestError, { touchedAlias = false } = {}) {
     const detail = requestError?.data?.detail;
     if (
       requestError?.status !== 409
@@ -607,7 +628,25 @@ export default function ConversationDetailPage({
         + "Reload the conversation before saving again.",
     );
 
+    if (touchedAlias) {
+      setAliasVersionConflict(true);
+    }
+
     return true;
+  }
+
+
+  // Explicit recovery for a stuck alias stale-version conflict: discards
+  // the user's unsaved alias edit (and its pinned version anchor) so the
+  // next load can resync from the server, instead of leaving the user
+  // stuck re-submitting the same stale edit indefinitely.
+  async function discardAliasEditAndReload() {
+    aliasDraftRef.current = "";
+    setAliasDraft("");
+    lastSyncedAliasRef.current = { alias: "", controlVersion: null };
+    setAliasVersionConflict(false);
+    setActionError("");
+    await loadConversation({ silent: true });
   }
 
 
@@ -683,50 +722,73 @@ export default function ConversationDetailPage({
     );
   }
 
-  // `expectedUpdatedAt` lets a caller pin the version its edit was based
-  // on (the alias draft does this, since it may have diverged from the
-  // continuously-polled `control` snapshot). Callers without an in-flight
-  // draft — star/pin/department/assignment/tags/status/priority, which
-  // always mirror the latest `control` straight through to the UI — just
-  // use whatever `control.updated_at` currently is.
+  // `expectedControlVersion` lets a caller pin the version its edit was
+  // based on (the alias draft does this, since it may have diverged from
+  // the continuously-polled `control` snapshot). Callers without an
+  // in-flight draft — star/pin/department/assignment/tags/status/priority,
+  // which always mirror the latest `control` straight through to the UI —
+  // just use whatever `control.control_version` currently is. This is the
+  // dedicated per-conversation control_version counter, not the row's
+  // general `updated_at` (which is also bumped by unrelated activity like
+  // inbound customer messages and would cause spurious conflicts).
   async function handleControlUpdate(updates, successMessage, options = {}) {
-    const { expectedUpdatedAt } = options;
-    const versionToSend = Object.prototype.hasOwnProperty.call(options, "expectedUpdatedAt")
-      ? expectedUpdatedAt
-      : control?.updated_at ?? null;
+    const { expectedControlVersion } = options;
+    const versionToSend = Object.prototype.hasOwnProperty.call(options, "expectedControlVersion")
+      ? expectedControlVersion
+      : control?.control_version ?? null;
+    const touchesAlias = Object.prototype.hasOwnProperty.call(updates, "customer_alias");
+    // Snapshot exactly what we're sending for the alias field so the
+    // success handler can detect whether the user kept typing while the
+    // request was in flight, instead of blindly overwriting newer input
+    // with the older value that was actually saved.
+    const submittedAlias = touchesAlias ? updates.customer_alias : null;
 
     setSaving(true);
     setActionError("");
     setActionSuccess("");
+    if (touchesAlias) {
+      setAliasVersionConflict(false);
+    }
 
     try {
       const result = await updateConversationControlRequest(
         channel,
         userId,
-        { ...updates, expected_updated_at: versionToSend ?? null },
+        { ...updates, expected_control_version: versionToSend ?? null },
       );
 
       if (result?.conversation) {
         setControl(result.conversation);
       }
 
-      if (Object.prototype.hasOwnProperty.call(updates, "customer_alias")) {
+      if (touchesAlias) {
         const savedAlias = result?.conversation?.customer_alias || "";
-        const savedUpdatedAt = result?.conversation?.updated_at ?? null;
-        aliasDraftRef.current = savedAlias;
-        setAliasDraft(savedAlias);
-        lastSyncedAliasRef.current = { alias: savedAlias, updatedAt: savedUpdatedAt };
+        const savedControlVersion = result?.conversation?.control_version ?? null;
+        // The user's edit anchor must always advance to the version we
+        // just saved, whether or not we also update the visible draft —
+        // otherwise a later save would incorrectly conflict with this one.
+        lastSyncedAliasRef.current = { alias: savedAlias, controlVersion: savedControlVersion };
+        // Only overwrite the visible draft (and its ref) if nothing has
+        // changed it since we sent this request. If the user kept typing
+        // in the meantime, leave their newer text alone — it is now
+        // correctly flagged dirty against the version we just recorded
+        // above, so the next Save will be checked against it.
+        if (aliasDraftRef.current === submittedAlias) {
+          aliasDraftRef.current = savedAlias;
+          setAliasDraft(savedAlias);
+        }
       }
 
       setActionSuccess(successMessage || "Conversation updated.");
       await loadConversation({ silent: true });
       onConversationChanged?.();
     } catch (requestError) {
-      if (applyVersionConflict(requestError)) {
+      if (applyVersionConflict(requestError, { touchedAlias: touchesAlias })) {
         // Stale version: leave the draft and the rendered control snapshot
         // exactly as they are — no silent overwrite in either direction.
-        // The user has to explicitly reload to pick up the newer version
-        // before they can save again.
+        // The user has to explicitly reload (or use the "discard edit and
+        // reload" recovery action for the alias field) to pick up the
+        // newer version before they can save again.
       } else {
         if (!applyOwnershipConflict(requestError)) {
           setActionError(
@@ -1200,12 +1262,27 @@ export default function ConversationDetailPage({
                       onClick={() => handleControlUpdate(
                         { customer_alias: aliasDraft },
                         "Internal customer name updated.",
-                        { expectedUpdatedAt: lastSyncedAliasRef.current.updatedAt },
+                        { expectedControlVersion: lastSyncedAliasRef.current.controlVersion },
                       )}
                     >
                       Save
                     </AppButton>
                   </div>
+                  {aliasVersionConflict ? (
+                    <div className="inline-field-conflict">
+                      <span>
+                        This name was changed elsewhere, so your edit can&apos;t be
+                        saved as-is.
+                      </span>
+                      <button
+                        type="button"
+                        className="inline-text-button"
+                        onClick={discardAliasEditAndReload}
+                      >
+                        Discard my edit &amp; reload
+                      </button>
+                    </div>
+                  ) : null}
                 </label>
 
                 <label>
