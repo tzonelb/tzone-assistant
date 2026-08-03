@@ -64,6 +64,15 @@ function itemTouchesIds(item, targetIds) {
   return groupIds(item).some((id) => targetIds.has(id));
 }
 
+function filtersEqual(a, b) {
+  const left = a || {};
+  const right = b || {};
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => left[key] === right[key]);
+}
+
 export function NotificationProvider({ children }) {
   const { authenticated } = useAuth();
   const [items, setItems] = useState([]);
@@ -71,14 +80,46 @@ export function NotificationProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const inFlightRef = useRef(false);
+  // The filter set the currently in-flight fetch was launched with (null
+  // when nothing is in flight). Used to detect whether a call blocked by
+  // the in-flight guard below actually needs a follow-up fetch, or whether
+  // the in-flight fetch already matches what was just requested.
+  const inFlightFiltersRef = useRef(null);
+  // Set when an explicit-filters call is blocked by the in-flight guard
+  // while the filters it recorded differ from the ones the in-flight fetch
+  // is using. Consumed by the in-flight fetch's `finally` block to trigger
+  // an immediate follow-up fetch, so the UI converges on the correct
+  // filtered view right away instead of waiting up to POLL_INTERVAL_MS for
+  // the next natural trigger. Carries the `silent` flag of the blocked call
+  // so the follow-up preserves its loading-indicator behavior.
+  const pendingRerunRef = useRef(null);
+  // Remembers the last explicitly-applied filter set so background refreshes
+  // (interval / focus / visibilitychange) keep respecting it instead of
+  // silently reverting to the unfiltered list. Only calls that pass a
+  // `filters` argument update this; calls that omit it (background polling,
+  // post-mutation refreshes) reuse whatever was last applied.
+  //
+  // This ref is Provider-wide (shared by NotificationsPage, the bell
+  // dropdown, and the Topbar badge's `items`-derived state), but only
+  // NotificationsPage ever applies a non-default filter. NotificationsPage
+  // is therefore responsible for releasing it — via `refresh({ filters: {} })`
+  // in an unmount cleanup effect — whenever it stops being the active view,
+  // so the filter can't outlive the page and leak into the dropdown/badge
+  // for the rest of the session. See NotificationsPage.jsx.
+  const lastFiltersRef = useRef({});
 
-  const refresh = useCallback(async ({ silent = false, filters = {} } = {}) => {
-    if (!authenticated || inFlightRef.current) return;
+  // Performs the actual fetch. Split out from `refresh` so the in-flight
+  // guard's queued follow-up (see `pendingRerunRef`) can re-invoke it
+  // directly once the current fetch clears, without re-running the
+  // filters-recording logic in `refresh` itself.
+  const runFetch = useCallback(async (silent) => {
     inFlightRef.current = true;
     if (!silent) setLoading(true);
+    const appliedFilters = lastFiltersRef.current;
+    inFlightFiltersRef.current = appliedFilters;
     try {
       const [nextItems, summaryPayload] = await Promise.all([
-        getNotificationsRequest({ pageSize: 100, ...filters }),
+        getNotificationsRequest({ pageSize: 100, ...appliedFilters }),
         getNotificationSummaryRequest(),
       ]);
       const normalizedItems = Array.isArray(nextItems) ? nextItems : [];
@@ -91,14 +132,49 @@ export function NotificationProvider({ children }) {
       }
     } finally {
       inFlightRef.current = false;
+      inFlightFiltersRef.current = null;
       if (!silent) setLoading(false);
+      if (pendingRerunRef.current) {
+        const pending = pendingRerunRef.current;
+        pendingRerunRef.current = null;
+        // Re-run immediately (rather than waiting for the next poll/focus
+        // trigger) so a filter change that arrived mid-fetch is reflected
+        // right away instead of leaving a stale-filtered view on screen.
+        runFetch(pending.silent);
+      }
     }
-  }, [authenticated]);
+  }, []);
+
+  const refresh = useCallback(async ({ silent = false, filters } = {}) => {
+    // Record an explicitly-supplied filter set (including NotificationsPage's
+    // unmount cleanup passing `{}` to release it) even if a fetch is already
+    // in flight, so the applied filter is never lost to the in-flight guard
+    // below and background refreshes pick up the change on their next tick.
+    if (filters !== undefined) {
+      lastFiltersRef.current = filters;
+    }
+    if (!authenticated) return;
+    if (inFlightRef.current) {
+      // The ref above is updated, but the fetch already underway snapshotted
+      // the *previous* filters and will still resolve with them. If what we
+      // just recorded actually differs from that snapshot, queue an
+      // immediate follow-up fetch (fired from runFetch's `finally`) instead
+      // of letting the in-flight fetch's stale-filtered result stand until
+      // the next poll tick.
+      if (filters !== undefined && !filtersEqual(filters, inFlightFiltersRef.current)) {
+        pendingRerunRef.current = { silent };
+      }
+      return;
+    }
+    await runFetch(silent);
+  }, [authenticated, runFetch]);
 
   useEffect(() => {
     if (!authenticated) {
       setItems([]);
       setSummary({ unread: 0, total: 0, read: 0 });
+      lastFiltersRef.current = {};
+      pendingRerunRef.current = null;
       return undefined;
     }
 

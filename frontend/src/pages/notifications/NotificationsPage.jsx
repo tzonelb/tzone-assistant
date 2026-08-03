@@ -19,6 +19,16 @@ export default function NotificationsPage() {
 
   useEffect(() => { refresh({ filters: { status: statusFilter, type: typeFilter, channel: channelFilter, date: dateFilter } }); }, [statusFilter, typeFilter, channelFilter, dateFilter, refresh]);
 
+  // This page is the only consumer that ever applies a non-default filter to
+  // the shared NotificationContext. Every other consumer (bell dropdown,
+  // Topbar badge, and the context's own background poll/focus refreshes)
+  // relies on the context falling back to the unfiltered view. Explicitly
+  // clear the applied filter when this page goes away (route change, e.g.
+  // clicking a row navigates to /conversations/...) so the shared context
+  // doesn't keep applying this page's last-picked filter to those other
+  // consumers for the rest of the session.
+  useEffect(() => () => { refresh({ filters: {}, silent: true }); }, [refresh]);
+
   const counts = useMemo(() => {
     const channel = Object.fromEntries(CHANNELS.map((name) => [name, 0]));
     const type = {};
