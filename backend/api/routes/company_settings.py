@@ -12,9 +12,15 @@ router = APIRouter(prefix="/api/company-settings", tags=["Company Settings"])
 
 # Sections that expose billing, security or credential-adjacent data.
 # Viewing these (not just editing them) requires "settings.manage",
-# not just "settings.view". Must stay in sync with the frontend's
-# SENSITIVE_SECTIONS set in CompanySettingsPage.jsx.
-SENSITIVE_SECTIONS = {"ai", "subscription", "security", "api", "backup"}
+# not just "settings.view". These are the backend section identifiers
+# (company_settings_service / DEFAULT_SETTINGS keys, i.e. the {section}
+# path param and the keys returned by get_all()) -- NOT the frontend tab
+# ids. In particular the AI Behavior tab's frontend id is "ai" but its
+# backend section id is "ai_behavior" (see CompanySettingsPage.jsx's
+# BACKEND_SECTION_ID mapping). Must stay in sync with the frontend's
+# SENSITIVE_SECTIONS set in CompanySettingsPage.jsx (which is keyed by
+# frontend tab id and maps ai -> ai_behavior before comparing).
+SENSITIVE_SECTIONS = {"ai_behavior", "subscription", "security", "api", "backup"}
 
 
 def _company_id(current_user: dict[str, Any]) -> int:

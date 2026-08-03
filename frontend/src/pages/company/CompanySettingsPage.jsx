@@ -88,6 +88,7 @@ function GenericSectionEditor({ section, canManage }) {
   const fieldKeys = useMemo(() => fields.map((label) => [label, slugifyFieldLabel(label)]), [fields]);
 
   const [values, setValues] = useState({});
+  const [savedValues, setSavedValues] = useState({});
   const [locked, setLocked] = useState([]);
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
@@ -100,7 +101,9 @@ function GenericSectionEditor({ section, canManage }) {
     getCompanySettingSectionRequest(backendSectionId)
       .then((result) => {
         if (cancelled) return;
-        setValues(result?.values || {});
+        const loadedValues = result?.values || {};
+        setValues(loadedValues);
+        setSavedValues(loadedValues);
         setLocked(result?.locked_keys || []);
       })
       .catch((error) => {
@@ -121,12 +124,23 @@ function GenericSectionEditor({ section, canManage }) {
     setSaving(true);
     setStatus("");
     try {
+      // Only submit fields the user actually changed. Locked fields are
+      // disabled and therefore never change, but even for unlocked fields
+      // the backend rejects the whole update if any submitted key is
+      // locked -- so re-sending an untouched locked field's value would
+      // needlessly 409 the save of an unrelated field in the same section.
       const changedValues = {};
       fieldKeys.forEach(([, key]) => {
-        changedValues[key] = values[key] ?? "";
+        const nextValue = values[key] ?? "";
+        const previousValue = savedValues[key] ?? "";
+        if (nextValue !== previousValue) {
+          changedValues[key] = nextValue;
+        }
       });
       const result = await updateCompanySettingSectionRequest(backendSectionId, changedValues);
-      setValues(result?.values || changedValues);
+      const nextValues = result?.values || { ...values, ...changedValues };
+      setValues(nextValues);
+      setSavedValues(nextValues);
       setLocked(result?.locked_keys || []);
       setStatus("Saved.");
     } catch (error) {
