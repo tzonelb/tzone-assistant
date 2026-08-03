@@ -76,15 +76,27 @@ export function NotificationProvider({ children }) {
   // silently reverting to the unfiltered list. Only calls that pass a
   // `filters` argument update this; calls that omit it (background polling,
   // post-mutation refreshes) reuse whatever was last applied.
+  //
+  // This ref is Provider-wide (shared by NotificationsPage, the bell
+  // dropdown, and the Topbar badge's `items`-derived state), but only
+  // NotificationsPage ever applies a non-default filter. NotificationsPage
+  // is therefore responsible for releasing it — via `refresh({ filters: {} })`
+  // in an unmount cleanup effect — whenever it stops being the active view,
+  // so the filter can't outlive the page and leak into the dropdown/badge
+  // for the rest of the session. See NotificationsPage.jsx.
   const lastFiltersRef = useRef({});
 
   const refresh = useCallback(async ({ silent = false, filters } = {}) => {
-    if (!authenticated || inFlightRef.current) return;
-    inFlightRef.current = true;
-    if (!silent) setLoading(true);
+    // Record an explicitly-supplied filter set (including NotificationsPage's
+    // unmount cleanup passing `{}` to release it) even if a fetch is already
+    // in flight, so the applied filter is never lost to the in-flight guard
+    // below and background refreshes pick up the change on their next tick.
     if (filters !== undefined) {
       lastFiltersRef.current = filters;
     }
+    if (!authenticated || inFlightRef.current) return;
+    inFlightRef.current = true;
+    if (!silent) setLoading(true);
     const appliedFilters = lastFiltersRef.current;
     try {
       const [nextItems, summaryPayload] = await Promise.all([
