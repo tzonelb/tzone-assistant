@@ -141,7 +141,7 @@ export default function BroadcastPage() {
 
     try {
       const result = await getBroadcastsRequest();
-      const list = result?.broadcasts || [];
+      const list = Array.isArray(result) ? result : result?.broadcasts || [];
       setBroadcasts(list);
 
       const inProgress = list.find((item) => item.status === "sending");
