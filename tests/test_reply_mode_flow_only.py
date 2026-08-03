@@ -18,6 +18,13 @@ machine only, skipping AI/knowledge reply generation entirely, while the
 default ("grounded_ai" / "knowledge_then_ai") keeps producing an
 AI-pipeline reply exactly as before.
 
+It also covers the message == "start" special case in Engine.handle_start,
+which is a second, independent AI-vs-flow decision point in engine.py.
+handle_start must also honor reply_mode="flow_only" even when
+automation_policy's ai_mode is independently set to "auto_reply" (a
+config combination an operator can legitimately create), instead of only
+looking at automation_policy the way should_ai_take_priority() used to.
+
 Run with: python3 -m pytest tests/test_reply_mode_flow_only.py -v
 """
 import json
@@ -34,6 +41,7 @@ from core.engine import engine  # noqa: E402
 from core.request import Request  # noqa: E402
 from core.session import session  # noqa: E402
 from core.response_policy import response_policy  # noqa: E402
+from core.automation_policy import automation_policy  # noqa: E402
 from database.database import db  # noqa: E402
 
 
@@ -60,37 +68,56 @@ def fresh_db():
             pass
 
 
-@pytest.fixture()
-def default_reply_mode_policy():
-    """Force config/response_policy.json's website_chat reply_mode to the
-    default AI-pipeline value for the duration of the test, regardless of
-    whatever is currently checked in, and restore it afterwards."""
+def _write_response_policy(monkeypatch, tmp_path, channel, reply_mode):
+    """Redirect response_policy.POLICY_FILE to a throwaway file under
+    tmp_path instead of mutating the real checked-in
+    config/response_policy.json, so a crash/interrupt mid-test can never
+    corrupt the production policy config on disk."""
     original_text = response_policy.POLICY_FILE.read_text(encoding="utf-8")
     policy = json.loads(original_text)
-    policy["channels"].setdefault("website_chat", {})["reply_mode"] = "grounded_ai"
-    response_policy.POLICY_FILE.write_text(
+    policy["channels"].setdefault(channel, {})["reply_mode"] = reply_mode
+
+    policy_file = tmp_path / "response_policy.json"
+    policy_file.write_text(
         json.dumps(policy, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    yield
-
-    response_policy.POLICY_FILE.write_text(original_text, encoding="utf-8")
+    monkeypatch.setattr(response_policy, "POLICY_FILE", policy_file)
 
 
-@pytest.fixture()
-def flow_only_reply_mode_policy():
-    """Force config/response_policy.json's website_chat reply_mode to
-    "flow_only" for the duration of the test, and restore it afterwards."""
-    original_text = response_policy.POLICY_FILE.read_text(encoding="utf-8")
+def _write_automation_policy(monkeypatch, tmp_path, channel, ai_mode):
+    """Redirect automation_policy.POLICY_FILE to a throwaway file under
+    tmp_path instead of mutating the real checked-in
+    config/automation_policy.json."""
+    original_text = automation_policy.POLICY_FILE.read_text(encoding="utf-8")
     policy = json.loads(original_text)
-    policy["channels"].setdefault("website_chat", {})["reply_mode"] = "flow_only"
-    response_policy.POLICY_FILE.write_text(
+    channel_policy = policy["channels"].setdefault(channel, {})
+    channel_policy["ai_mode"] = ai_mode
+    channel_policy.setdefault("bot_enabled", True)
+    channel_policy["ai_enabled"] = True
+
+    policy_file = tmp_path / "automation_policy.json"
+    policy_file.write_text(
         json.dumps(policy, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    monkeypatch.setattr(automation_policy, "POLICY_FILE", policy_file)
+
+
+@pytest.fixture()
+def default_reply_mode_policy(monkeypatch, tmp_path):
+    """Force website_chat's reply_mode to the default AI-pipeline value
+    for the duration of the test, without touching the real config file."""
+    _write_response_policy(monkeypatch, tmp_path, "website_chat", "grounded_ai")
     yield
 
-    response_policy.POLICY_FILE.write_text(original_text, encoding="utf-8")
+
+@pytest.fixture()
+def flow_only_reply_mode_policy(monkeypatch, tmp_path):
+    """Force website_chat's reply_mode to "flow_only" for the duration of
+    the test, without touching the real config file."""
+    _write_response_policy(monkeypatch, tmp_path, "website_chat", "flow_only")
+    yield
 
 
 def _send(user_id):
@@ -143,3 +170,54 @@ def test_should_ai_take_priority_false_for_flow_only_reply_mode(flow_only_reply_
     request = Request(channel=CHANNEL, user_id="reply_mode_unit_test_flow_only", message=MESSAGE)
 
     assert engine.should_ai_take_priority(request) is False
+
+
+def test_handle_start_flow_only_reply_mode_overrides_independent_ai_mode(
+    fresh_db, monkeypatch, tmp_path
+):
+    """The second AI-vs-flow decision point: message == "start" is routed
+    through Engine.handle_start(), which used to gate purely on
+    automation_policy.should_auto_reply_with_ai() and ignore reply_mode
+    entirely. This reproduces the exact scenario from review: telegram's
+    response_policy.reply_mode is "flow_only" while automation_policy's
+    ai_mode is independently "auto_reply" (a legitimate, separate config)
+    -> /start must still land in the scripted telegram_iptv_start flow
+    state, not the AI/business-module main menu."""
+    _write_response_policy(monkeypatch, tmp_path, "telegram", "flow_only")
+    _write_automation_policy(monkeypatch, tmp_path, "telegram", "auto_reply")
+
+    session.sessions.pop("reply_mode_test_start_flow_only", None)
+
+    request = Request(
+        channel="telegram",
+        user_id="reply_mode_test_start_flow_only",
+        message="start",
+    )
+
+    response = engine.handle(request)
+
+    assert "T-ZONE IPTV" in response.text
+    assert "Welcome to T-ZONE" not in response.text
+    assert "أهلاً وسهلاً بك في T-ZONE" not in response.text
+
+
+def test_handle_start_default_reply_mode_uses_ai_main_menu(
+    fresh_db, monkeypatch, tmp_path
+):
+    """Regression guard: when reply_mode is not "flow_only" and
+    automation_policy allows auto_reply, "start" must still produce the
+    AI/business-module main menu exactly as before this fix."""
+    _write_response_policy(monkeypatch, tmp_path, "website_chat", "grounded_ai")
+    _write_automation_policy(monkeypatch, tmp_path, "website_chat", "auto_reply")
+
+    session.sessions.pop("reply_mode_test_start_default", None)
+
+    request = Request(
+        channel="website_chat",
+        user_id="reply_mode_test_start_default",
+        message="start",
+    )
+
+    response = engine.handle(request)
+
+    assert "T-ZONE IPTV" not in response.text

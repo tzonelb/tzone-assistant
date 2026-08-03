@@ -339,9 +339,7 @@ class Engine:
         return True
 
     def handle_start(self, request, language):
-        if automation_policy.should_auto_reply_with_ai(
-            request.channel
-        ):
+        if self.should_ai_take_priority(request):
             return self.build_main_menu_response(language)
 
         if request.channel == "telegram":
