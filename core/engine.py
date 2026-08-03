@@ -565,6 +565,7 @@ class Engine:
                 if match_result.get("department") != "unknown"
                 else current_department
             ),
+            company_id=request.company_id,
         )
 
         ai_result = ai_router.route(
@@ -578,6 +579,7 @@ class Engine:
             connector_results=connector_results,
             response_policy=channel_policy,
             match_result=match_result,
+            company_id=request.company_id,
         )
 
         if not ai_result:
@@ -607,6 +609,7 @@ class Engine:
         message,
         language,
         department,
+        company_id=None,
     ):
         results = []
         lowered = message.lower()
@@ -666,7 +669,9 @@ class Engine:
 
         if asks_accounting:
             result = (
-                business_connectors.get_customer_balance()
+                business_connectors.get_customer_balance(
+                    company_id=company_id,
+                )
             )
 
             result["connector"] = "accounting"
@@ -674,7 +679,9 @@ class Engine:
 
         if asks_order:
             result = (
-                business_connectors.get_order_status()
+                business_connectors.get_order_status(
+                    company_id=company_id,
+                )
             )
 
             result["connector"] = "orders"
@@ -683,7 +690,8 @@ class Engine:
         if asks_product:
             result = (
                 business_connectors.get_product_info(
-                    message
+                    message,
+                    company_id=company_id,
                 )
             )
 
