@@ -96,6 +96,7 @@ export async function apiRequest(
 
     throw new Error(
       "Cannot connect to the T-ZONE server. Make sure FastAPI is running on port 8000.",
+      { cause: error },
     );
   }
 
@@ -507,6 +508,30 @@ export async function clearVisibleNotificationsRequest(notificationIds) {
     method: "DELETE",
     body: { notification_ids: notificationIds },
   });
+}
+
+export async function createBroadcastRequest(payload) {
+  return apiRequest("/api/broadcasts", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function sendBroadcastRequest(broadcastId) {
+  return apiRequest(
+    `/api/broadcasts/${encodeURIComponent(broadcastId)}/send`,
+    { method: "POST" },
+  );
+}
+
+export async function getBroadcastRequest(broadcastId) {
+  return apiRequest(
+    `/api/broadcasts/${encodeURIComponent(broadcastId)}`,
+  );
+}
+
+export async function getBroadcastsRequest() {
+  return apiRequest("/api/broadcasts");
 }
 
 export async function getCompanySettingSectionRequest(section) {
