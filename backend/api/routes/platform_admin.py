@@ -115,7 +115,7 @@ def create_company(
 ):
     _require_super_admin(current_user)
     try:
-        return platform_admin_service.create_company(**payload.model_dump())
+        return platform_admin_service.create_company(**payload.model_dump(), actor_user_id=current_user.get("id"))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -200,6 +200,7 @@ def change_plan(
             company_id=company_id,
             plan_id=payload.plan_id,
             duration_days=payload.duration_days,
+            actor_user_id=current_user.get("id"),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

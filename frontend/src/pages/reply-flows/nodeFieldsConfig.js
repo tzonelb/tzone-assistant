@@ -20,6 +20,12 @@ const CONDITION_OPERATORS = [
   { value: "is_set", label: "is set (has any value)" },
 ];
 
+const ASK_QUESTION_MODES = [
+  { value: "text", label: "Text only — customer types an answer (today's behavior)" },
+  { value: "buttons", label: "Buttons only — customer must tap a choice" },
+  { value: "both", label: "Buttons + text — either works" },
+];
+
 export const NODE_FIELDS = {
   greeting: [
     { key: "text", label: "Greeting message", type: "textarea", placeholder: "Hi {{customer_name}}, welcome to {{company_name}}!", hint: "Variables: {{customer_name}}, {{company_name}}" },
@@ -30,6 +36,11 @@ export const NODE_FIELDS = {
   ask_question: [
     { key: "question", label: "Question to ask", type: "textarea", placeholder: "How can we help you today?" },
     { key: "save_as", label: "Save the answer as (variable name)", type: "text", placeholder: "e.g. customer_need" },
+    { key: "mode", label: "How the customer answers", type: "select", options: ASK_QUESTION_MODES },
+    {
+      key: "options", label: "Button options", type: "option_list",
+      hint: "Only used when the answer mode above is Buttons or Buttons + text. Channels without real button support fall back to a numbered text list.",
+    },
   ],
   ai_direct: [
     { key: "instructions", label: "Instructions for the AI", type: "textarea", placeholder: "Answer naturally in your own words, stay on topic, keep it short." },

@@ -288,6 +288,65 @@ class AuthService:
             print("LOGIN SUCCESS")
             return safe_user
 
+    def authenticate_super_admin(
+        self,
+        email: str,
+        password: str,
+    ) -> dict[str, Any] | None:
+        """Company-free login for the dedicated Super Admin portal — same
+        password/lockout checks as authenticate(), but requires no workspace
+        code and rejects anyone whose account isn't is_super_admin=1 (a
+        correct password for a regular company user must never grant entry
+        here). active_company_id is set to config.DEFAULT_COMPANY_ID purely
+        as a session anchor; resolve_company_id() already treats a super
+        admin's active_company_id as a default, not a scope restriction."""
+        normalized_email = self.normalize_email(email)
+
+        with db.connect() as conn:
+            user = conn.execute(
+                "SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1",
+                (normalized_email,),
+            ).fetchone()
+
+            if not user:
+                return None
+
+            user_data = dict(user)
+
+            if not user_data.get("is_super_admin"):
+                return None
+
+            if user_data.get("status") != "active":
+                return None
+
+            locked_until = user_data.get("locked_until")
+            if locked_until:
+                try:
+                    locked_until_dt = datetime.fromisoformat(locked_until)
+                    if locked_until_dt.tzinfo is None:
+                        locked_until_dt = locked_until_dt.replace(tzinfo=timezone.utc)
+                    if locked_until_dt > datetime.now(timezone.utc):
+                        return None
+                except ValueError:
+                    pass
+
+            if not self.verify_password(password, user_data.get("password_hash")):
+                self._register_failed_login(conn, user_id=user_data["id"])
+                return None
+
+            conn.execute(
+                "UPDATE users SET failed_login_attempts = 0, locked_until = NULL, "
+                "last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (user_data["id"],),
+            )
+            conn.commit()
+
+            safe_user = self.sanitize_user(user_data)
+            safe_user["active_company_id"] = config.DEFAULT_COMPANY_ID
+            safe_user["active_company_name"] = None
+            safe_user["active_company_slug"] = None
+            return safe_user
+
     def create_session(
         self,
         user_id: int,
@@ -610,6 +669,26 @@ class AuthService:
             if role["code"] == "owner":
                 return True
 
+            # A per-user override always wins over the role default —
+            # this is how an owner grants or revokes one specific
+            # permission for one specific employee without creating a
+            # whole new role for them.
+            override = conn.execute("""
+                SELECT allowed
+                FROM user_permission_overrides
+                WHERE company_id = ?
+                  AND user_id = ?
+                  AND permission_code = ?
+                LIMIT 1
+            """, (
+                company_id,
+                user_id,
+                permission_code,
+            )).fetchone()
+
+            if override is not None:
+                return bool(override["allowed"])
+
             permission = conn.execute("""
                 SELECT permissions.id
                 FROM role_permissions
@@ -625,6 +704,66 @@ class AuthService:
             )).fetchone()
 
             return permission is not None
+
+    def list_permission_overrides(
+        self,
+        company_id: int,
+        user_id: int,
+    ) -> list[dict[str, Any]]:
+        with db.connect() as conn:
+            rows = conn.execute("""
+                SELECT permission_code, allowed
+                FROM user_permission_overrides
+                WHERE company_id = ? AND user_id = ?
+                ORDER BY permission_code
+            """, (company_id, user_id)).fetchall()
+            return [
+                {"permission_code": row["permission_code"], "allowed": bool(row["allowed"])}
+                for row in rows
+            ]
+
+    def set_permission_overrides(
+        self,
+        company_id: int,
+        user_id: int,
+        overrides: list[dict[str, Any]],
+    ) -> None:
+        """Replaces the full override set for one user with the given
+        list of {permission_code, allowed}. An empty list clears every
+        override, returning the user to plain role defaults."""
+        with db.connect() as conn:
+            conn.execute(
+                "DELETE FROM user_permission_overrides WHERE company_id = ? AND user_id = ?",
+                (company_id, user_id),
+            )
+            for item in overrides:
+                conn.execute("""
+                    INSERT INTO user_permission_overrides (company_id, user_id, permission_code, allowed)
+                    VALUES (?, ?, ?, ?)
+                """, (company_id, user_id, item["permission_code"], 1 if item["allowed"] else 0))
+            conn.commit()
+
+    def admin_reset_password(self, user_id: int) -> str:
+        """Generates a fresh temporary password for a user, stores its
+        hash, and revokes every existing session of theirs so a lost
+        session token can't keep using the old password's session. The
+        plaintext temporary password is returned once so the admin can
+        hand it to the employee — nothing else in this codebase stores
+        or emails it."""
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+        temporary_password = "".join(secrets.choice(alphabet) for _ in range(12))
+        password_hash = self.hash_password(temporary_password)
+        with db.connect() as conn:
+            cursor = conn.execute(
+                "UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (password_hash, user_id),
+            )
+            if cursor.rowcount == 0:
+                conn.commit()
+                raise ValueError("User not found.")
+            conn.commit()
+        self.revoke_all_user_sessions(user_id)
+        return temporary_password
 
     def create_user(
         self,

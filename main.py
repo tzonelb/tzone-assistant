@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import (
+    activity_log,
     ai_teaching_chat,
     analytics,
     appointments,
@@ -56,6 +57,8 @@ from backend.services.scheduled_post_service import scheduled_post_service
 from backend.services.call_log_service import call_log_service
 from backend.services.catalogue_service import catalogue_service
 from backend.services.team_chat_service import team_chat_service
+from backend.services.team_chat_rooms_service import team_chat_rooms_service
+from backend.services.activity_log_service import activity_log_service
 from backend.services.ai_teaching_chat_service import ai_teaching_chat_service
 from backend.services.conversation_control_service import (
     conversation_control_service,
@@ -115,6 +118,12 @@ _AUTO_SEND_SKIP_REASON_TEXT = {
 async def reminder_worker() -> None:
     while True:
         try:
+            # Time-based appointment_reminder Reply Flow flows piggyback on
+            # this exact same 30s cadence rather than a second worker loop —
+            # see reply_flow_engine.check_appointment_reminders for the scan/
+            # claim/fire logic.
+            reply_flow_engine.check_appointment_reminders()
+
             fired = conversation_control_service.check_due_reminders()
             for reminder in fired:
                 display_name = (
@@ -212,6 +221,8 @@ async def lifespan(app: FastAPI):
     catalogue_service.ensure_schema()
     call_log_service.ensure_schema()
     team_chat_service.ensure_schema()
+    team_chat_rooms_service.ensure_schema()
+    activity_log_service.ensure_schema()
     appointment_service.ensure_schema()
     media_upload_service.ensure_storage()
     scheduled_post_service.ensure_schema()
@@ -392,6 +403,7 @@ app.include_router(tasks.router)
 app.include_router(catalogue.router)
 app.include_router(calls.router)
 app.include_router(team_chat.router)
+app.include_router(activity_log.router)
 app.include_router(appointments.router)
 app.include_router(scheduled_posts.router)
 

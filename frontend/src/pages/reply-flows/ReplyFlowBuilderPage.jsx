@@ -6,8 +6,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ArrowBackOutlined, CloseOutlined, SaveOutlined, AutoAwesomeOutlined } from "@mui/icons-material";
-import { getReplyFlowRequest, updateReplyFlowRequest, listDepartmentsRequest, generateReplyFlowFromTextRequest } from "../../api/client";
-import { AppButton, LoadingState, ErrorState } from "../../components/common";
+import { getReplyFlowRequest, updateReplyFlowRequest, listDepartmentsRequest, generateReplyFlowFromTextRequest, getReplyFlowTriggerTypesRequest } from "../../api/client";
+import { LoadingState, ErrorState } from "../../components/common";
 import FlowStepNode from "./FlowStepNode";
 import { NODE_GROUPS, NODE_TYPE_CONFIG } from "./nodeTypesConfig";
 import { NODE_FIELDS, previewText } from "./nodeFieldsConfig";
@@ -16,6 +16,74 @@ import { CHANNEL_OPTIONS, REPLY_MODE_OPTIONS } from "./ReplyFlowsListPage";
 import "./ReplyFlowBuilderPage.css";
 
 const REACT_FLOW_NODE_TYPES = { step: FlowStepNode };
+
+// Placeholder mirror of the backend's TRIGGER_TYPES registry
+// (GET /api/reply-flows/trigger-types), used only if that endpoint isn't
+// reachable yet (e.g. 404 while it's still being built) so the picker still
+// works. Shape: { key, label, category, description, config_fields }, where
+// config_fields is shaped exactly like NODE_FIELDS entries above.
+const FALLBACK_TRIGGER_TYPES = [
+  { key: "new_conversation", label: "New conversation", category: "Conversation", description: "Starts when a customer opens a new chat.", config_fields: [] },
+  { key: "conversation_closed", label: "Conversation closed", category: "Conversation", description: "Starts when a conversation is closed.", config_fields: [] },
+  { key: "appointment_created", label: "Appointment created", category: "Appointments", description: "Starts when a new appointment is booked.", config_fields: [] },
+  { key: "appointment_completed", label: "Appointment completed", category: "Appointments", description: "Starts when an appointment is marked completed.", config_fields: [] },
+  {
+    key: "appointment_reminder", label: "Appointment reminder", category: "Appointments",
+    description: "Starts ahead of a scheduled appointment.",
+    config_fields: [{ key: "minutes_before", label: "Minutes before the appointment", type: "number", placeholder: "60" }],
+  },
+  { key: "call_logged", label: "Call logged", category: "Calls", description: "Starts when a call is logged.", config_fields: [] },
+  { key: "task_completed", label: "Task completed", category: "Tasks", description: "Starts when a task linked to this customer is marked done.", config_fields: [] },
+];
+const DEFAULT_TRIGGER_TYPE = "new_conversation";
+
+// Repeatable {label, value} row editor for ask_question's "options" field
+// (only relevant when its "mode" field is "buttons"/"both" — see
+// nodeFieldsConfig.js). The engine (core/reply_flow_engine.py) matches a
+// customer's reply against these by position, label, or value; the canvas
+// node (FlowStepNode.jsx) shows them as read-only pills.
+function OptionListField({ field, value, onChange }) {
+  const options = Array.isArray(value) ? value : [];
+
+  function updateOption(index, key, nextValue) {
+    onChange(options.map((option, i) => (i === index ? { ...option, [key]: nextValue } : option)));
+  }
+
+  function addOption() {
+    onChange([...options, { label: "", value: "" }]);
+  }
+
+  function removeOption(index) {
+    onChange(options.filter((_, i) => i !== index));
+  }
+
+  return (
+    <div className="reply-flow-field">
+      {field.label}
+      <div className="reply-flow-option-list">
+        {options.map((option, index) => (
+          <div className="reply-flow-option-row" key={index}>
+            <input
+              placeholder="Label (shown to the customer)"
+              value={option?.label || ""}
+              onChange={(event) => updateOption(index, "label", event.target.value)}
+            />
+            <input
+              placeholder="Value (saved as the answer — defaults to the label)"
+              value={option?.value || ""}
+              onChange={(event) => updateOption(index, "value", event.target.value)}
+            />
+            <button type="button" className="reply-flow-option-remove" onClick={() => removeOption(index)} aria-label="Remove option">
+              <CloseOutlined fontSize="small" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button type="button" className="reply-flow-option-add" onClick={addOption}>+ Add option</button>
+      {field.hint ? <span className="reply-flow-field-hint">{field.hint}</span> : null}
+    </div>
+  );
+}
 
 function NodeConfigField({ field, value, onChange, autoFocus }) {
   if (field.type === "checkbox") {
@@ -27,12 +95,16 @@ function NodeConfigField({ field, value, onChange, autoFocus }) {
     );
   }
 
+  if (field.type === "option_list") {
+    return <OptionListField field={field} value={value} onChange={onChange} />;
+  }
+
   let control;
   if (field.type === "textarea") {
     control = <textarea rows={7} autoFocus={autoFocus} value={value || ""} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} />;
   } else if (field.type === "select") {
     control = (
-      <select className="tz-select" autoFocus={autoFocus} value={value || ""} onChange={(event) => onChange(event.target.value)}>
+      <select className="input" autoFocus={autoFocus} value={value || ""} onChange={(event) => onChange(event.target.value)}>
         <option value="">Choose…</option>
         {field.options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
       </select>
@@ -44,7 +116,7 @@ function NodeConfigField({ field, value, onChange, autoFocus }) {
   }
 
   return (
-    <label className="ai-teaching-field reply-flow-primary-field">
+    <label className="reply-flow-field reply-flow-primary-field">
       {field.label}
       {control}
       {field.hint ? <span className="reply-flow-field-hint">{field.hint}</span> : null}
@@ -193,7 +265,7 @@ function BuilderCanvas({ nodes, edges, setNodes, setEdges, onNodesChange, onEdge
               autoFocus={index === 0}
             />
           ))}
-          <label className="ai-teaching-field reply-flow-inspector-name">
+          <label className="reply-flow-field reply-flow-inspector-name">
             Internal step name <span className="reply-flow-field-hint">(for your own reference on the canvas — not sent to the customer)</span>
             <input value={selectedNode.data.label || ""} onChange={(event) => updateSelectedLabel(event.target.value)} />
           </label>
@@ -238,8 +310,9 @@ function OutlinePanel({ id, nodes, onGenerated }) {
   return (
     <div className="reply-flow-outline">
       <p className="reply-flow-outline-hint">
-        Write the flow out in your own words — one step per line works well. The AI turns it into real steps
-        (existing steps drawn on the canvas are replaced when you generate).
+        Describe both what should trigger this flow and what it should do — e.g. "when an appointment finishes,
+        ask the customer to rate 1 to 5" — one step per line works well. The AI sets the trigger and the steps
+        together (existing steps drawn on the canvas are replaced when you generate).
       </p>
       <textarea
         className="reply-flow-outline-textarea"
@@ -249,9 +322,9 @@ function OutlinePanel({ id, nodes, onGenerated }) {
         rows={16}
       />
       {generateError ? <p className="customer-segment-error">{generateError}</p> : null}
-      <AppButton variant="primary" icon={<AutoAwesomeOutlined fontSize="small" />} loading={generating} onClick={generate} disabled={!text.trim()}>
-        Generate flow with AI
-      </AppButton>
+      <button type="button" className="btn btn-primary" disabled={generating || !text.trim()} onClick={generate}>
+        <AutoAwesomeOutlined fontSize="small" /> {generating ? "Generating…" : "Generate flow with AI"}
+      </button>
     </div>
   );
 }
@@ -272,6 +345,9 @@ export default function ReplyFlowBuilderPage() {
   const [replyModes, setReplyModes] = useState([]);
   const [allDepartments, setAllDepartments] = useState([]);
   const [status, setStatus] = useState("draft");
+  const [triggerTypes, setTriggerTypes] = useState(FALLBACK_TRIGGER_TYPES);
+  const [triggerType, setTriggerType] = useState(DEFAULT_TRIGGER_TYPE);
+  const [triggerConfig, setTriggerConfig] = useState({});
   const [view, setView] = useState(searchParams.get("view") === "outline" ? "outline" : "canvas");
   const [graphVersion, setGraphVersion] = useState(0);
 
@@ -287,6 +363,8 @@ export default function ReplyFlowBuilderPage() {
         setDepartments(result.departments || []);
         setReplyModes(result.reply_modes || []);
         setStatus(result.status);
+        setTriggerType(result.trigger_type || DEFAULT_TRIGGER_TYPE);
+        setTriggerConfig(result.trigger_config || {});
         setNodes(result.nodes || []);
         setEdges(result.edges || []);
         setGraphVersion((v) => v + 1);
@@ -294,6 +372,15 @@ export default function ReplyFlowBuilderPage() {
       .catch((requestError) => setError(requestError.message || "Could not load this flow."))
       .finally(() => setLoading(false));
     listDepartmentsRequest().then((result) => setAllDepartments((result?.departments || []).filter((name) => name !== "Unassigned"))).catch(() => {});
+    // The trigger-types registry endpoint is being built concurrently on the
+    // backend — fall back to the mirrored placeholder list above if it 404s
+    // or the request otherwise fails, so the picker still renders.
+    getReplyFlowTriggerTypesRequest()
+      .then((result) => {
+        const types = result?.trigger_types || result?.types || (Array.isArray(result) ? result : null);
+        if (Array.isArray(types) && types.length) setTriggerTypes(types);
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -309,6 +396,18 @@ export default function ReplyFlowBuilderPage() {
     // not clear a dirty flag it didn't set.
     setNodes(updatedFlow.nodes || []);
     setEdges(updatedFlow.edges || []);
+    // generate_from_text is being extended to also infer a trigger from the
+    // same plain-language description. Accept either a nested `trigger`
+    // object or flat `trigger_type`/`trigger_config` fields, since the exact
+    // response shape is still landing on the backend concurrently. Applying
+    // it here only updates local state — it still requires Save, same as
+    // the generated nodes/edges did before this.
+    const trigger = updatedFlow.trigger || updatedFlow;
+    if (trigger.trigger_type) {
+      setTriggerType(trigger.trigger_type);
+      setTriggerConfig(trigger.trigger_config || {});
+      setDirty(true);
+    }
     setGraphVersion((v) => v + 1);
     switchView("canvas");
   }
@@ -317,7 +416,11 @@ export default function ReplyFlowBuilderPage() {
     setSaving(true);
     setSaveError("");
     try {
-      await updateReplyFlowRequest(id, { name, channels, departments, reply_modes: replyModes, status, nodes, edges });
+      await updateReplyFlowRequest(id, {
+        name, channels, departments, reply_modes: replyModes, status,
+        trigger_type: triggerType, trigger_config: triggerConfig,
+        nodes, edges,
+      });
       setDirty(false);
     } catch (requestError) {
       setSaveError(requestError.message || "Could not save this flow.");
@@ -326,14 +429,27 @@ export default function ReplyFlowBuilderPage() {
     }
   }
 
+  function updateTriggerConfig(key, value) {
+    setTriggerConfig((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  }
+
   if (loading) return <LoadingState label="Loading flow…" />;
-  if (error) return <ErrorState title="Could not load this flow" description={error} action={<AppButton variant="primary" onClick={() => navigate("/reply-flows")}>Back to list</AppButton>} />;
+  if (error) return <ErrorState title="Could not load this flow" description={error} action={<button type="button" className="btn btn-primary" onClick={() => navigate("/company-settings?section=flow")}>Back to list</button>} />;
   if (!flow) return null;
+
+  const selectedTriggerType = triggerTypes.find((t) => t.key === triggerType);
+  const triggerCategories = triggerTypes.reduce((groups, t) => {
+    const category = t.category || "Trigger";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push(t);
+    return groups;
+  }, {});
 
   return (
     <section className="reply-flow-builder">
       <header className="reply-flow-builder-header">
-        <button type="button" className="reply-flow-back" onClick={() => navigate("/reply-flows")}>
+        <button type="button" className="reply-flow-back" onClick={() => navigate("/company-settings?section=flow")}>
           <ArrowBackOutlined fontSize="small" /> Reply Flows
         </button>
         <input
@@ -364,15 +480,42 @@ export default function ReplyFlowBuilderPage() {
             onChange={(next) => { setReplyModes(next); setDirty(true); }}
             allLabel="Per-step"
           />
-          <select className="tz-select" value={status} onChange={(event) => { setStatus(event.target.value); setDirty(true); }}>
+          <div className="reply-flow-trigger-control">
+            <span className="reply-flow-trigger-label">Trigger</span>
+            <select
+              className="input"
+              value={triggerType}
+              onChange={(event) => {
+                setTriggerType(event.target.value);
+                setTriggerConfig({});
+                setDirty(true);
+              }}
+            >
+              {Object.entries(triggerCategories).map(([category, items]) => (
+                <optgroup label={category} key={category}>
+                  {items.map((t) => <option value={t.key} key={t.key}>{t.label}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            {(selectedTriggerType?.config_fields || []).map((field, index) => (
+              <NodeConfigField
+                key={field.key}
+                field={field}
+                value={triggerConfig?.[field.key]}
+                onChange={(value) => updateTriggerConfig(field.key, value)}
+                autoFocus={index === 0}
+              />
+            ))}
+          </div>
+          <select className="input" value={status} onChange={(event) => { setStatus(event.target.value); setDirty(true); }}>
             <option value="draft">Draft</option>
             <option value="active">Active</option>
             <option value="archived">Archived</option>
           </select>
           {saveError ? <span className="reply-flow-save-error">{saveError}</span> : null}
-          <AppButton variant="primary" icon={<SaveOutlined fontSize="small" />} loading={saving} onClick={save}>
-            {dirty ? "Save changes" : "Saved"}
-          </AppButton>
+          <button type="button" className="btn btn-primary" disabled={saving} onClick={save}>
+            <SaveOutlined fontSize="small" /> {saving ? "Saving…" : (dirty ? "Save changes" : "Saved")}
+          </button>
         </div>
       </header>
 

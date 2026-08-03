@@ -46,6 +46,9 @@
   --tz-channel-telegram: #2FA8E8;
   --tz-channel-instagram: #E1306C;
   --tz-channel-website: #6B7280;
+  /* Facebook's own brand blue — used only for the "Connect with Facebook"
+     OAuth button, matching Facebook's official button guidelines. */
+  --tz-channel-facebook: #1877F2;
 
   /* Backgrounds — soft lavender-tinted neutrals, not stark gray */
   --tz-background: #F7F7FC;

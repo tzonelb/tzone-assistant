@@ -3,6 +3,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from backend.api.schemas.roles import (
+    PermissionOverridesUpdateRequest,
     RoleCreateRequest,
     RoleUpdateRequest,
     UserAssignmentRequest,
@@ -15,6 +16,17 @@ from database.database import db
 
 
 router = APIRouter(prefix="/api/admin/access", tags=["Roles and Permissions"])
+
+
+def _log_activity(*, company_id: int, actor_user_id: int | None, action: str, entity_id: int | None, description: str) -> None:
+    try:
+        from backend.services.activity_log_service import activity_log_service
+        activity_log_service.record(
+            company_id=company_id, actor_user_id=actor_user_id, action=action,
+            entity_type="role_permission", entity_id=entity_id, description=description,
+        )
+    except Exception:
+        pass
 
 
 def _company_id(current_user: dict) -> int:
@@ -87,6 +99,9 @@ def overview(current_user: dict = Depends(get_current_user)):
         """, (company_id,)).fetchall()]
         for user in users:
             user["departments"] = json.loads(user.pop("departments_json") or "[]")
+            user["permission_overrides"] = auth_service.list_permission_overrides(
+                company_id=company_id, user_id=user["id"],
+            )
 
         branches = [dict(row) for row in conn.execute("""
             SELECT id, name, code
@@ -128,6 +143,10 @@ def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_cur
         role_id = cursor.lastrowid
         _set_role_permissions(conn, role_id, payload.permission_codes)
         conn.commit()
+    _log_activity(
+        company_id=company_id, actor_user_id=current_user.get("id"), action="role_created",
+        entity_id=role_id, description=f'Created role "{payload.name.strip()}"',
+    )
     return {"success": True, "role_id": role_id}
 
 
@@ -164,6 +183,10 @@ def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = D
         if payload.permission_codes is not None:
             _set_role_permissions(conn, role_id, payload.permission_codes)
         conn.commit()
+    _log_activity(
+        company_id=company_id, actor_user_id=current_user.get("id"), action="role_updated",
+        entity_id=role_id, description=f'Updated role "{role["name"]}"' + (" (permissions changed)" if payload.permission_codes is not None else ""),
+    )
     return {"success": True}
 
 
@@ -240,3 +263,65 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
             raise HTTPException(status_code=404, detail="Company user not found.")
         conn.commit()
     return {"success": True}
+
+
+def _require_company_member(company_id: int, user_id: int) -> None:
+    with db.connect() as conn:
+        member = conn.execute(
+            "SELECT 1 FROM company_users WHERE company_id = ? AND user_id = ? LIMIT 1",
+            (company_id, user_id),
+        ).fetchone()
+    if not member:
+        raise HTTPException(status_code=404, detail="Company user not found.")
+
+
+@router.get("/users/{user_id}/overrides")
+def get_user_permission_overrides(user_id: int, current_user: dict = Depends(get_current_user)):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+    _require_company_member(company_id, user_id)
+    return {"overrides": auth_service.list_permission_overrides(company_id=company_id, user_id=user_id)}
+
+
+@router.put("/users/{user_id}/overrides")
+def put_user_permission_overrides(
+    user_id: int, payload: PermissionOverridesUpdateRequest, current_user: dict = Depends(get_current_user),
+):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+    _require_company_member(company_id, user_id)
+    auth_service.set_permission_overrides(
+        company_id=company_id,
+        user_id=user_id,
+        overrides=[item.model_dump() for item in payload.overrides],
+    )
+    return {"overrides": auth_service.list_permission_overrides(company_id=company_id, user_id=user_id)}
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_user_password(user_id: int, current_user: dict = Depends(get_current_user)):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+    _require_company_member(company_id, user_id)
+    try:
+        temporary_password = auth_service.admin_reset_password(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _log_activity(
+        company_id=company_id, actor_user_id=current_user.get("id"), action="employee_password_reset",
+        entity_id=user_id, description=f"Reset password for employee #{user_id}",
+    )
+    return {"success": True, "temporary_password": temporary_password}
+
+
+@router.post("/users/{user_id}/logout")
+def force_logout_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+    _require_company_member(company_id, user_id)
+    revoked = auth_service.revoke_all_user_sessions(user_id)
+    _log_activity(
+        company_id=company_id, actor_user_id=current_user.get("id"), action="employee_force_logout",
+        entity_id=user_id, description=f"Forced logout for employee #{user_id} ({revoked} session(s) revoked)",
+    )
+    return {"success": True, "revoked_sessions": revoked}

@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
 import SignupPage from "./pages/auth/SignupPage";
-import RolesPermissionsPage from "./pages/admin/RolesPermissionsPage";
 import PlatformAdminPage from "./pages/admin/PlatformAdminPage";
 import ThemeStudioPage from "./pages/admin/ThemeStudioPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
@@ -10,7 +9,8 @@ import ConversationsPage from "./pages/conversations/ConversationsPage";
 import ConversationsPageV2 from "./pages/conversations/ConversationsPageV2";
 import { useEffect, useState } from "react";
 import { isUiV2Enabled } from "./config/featureFlags";
-import CommunityHubPage from "./pages/community/CommunityHubPage";
+import PublishStandalonePage from "./pages/publish/PublishStandalonePage";
+import CommentsPage from "./pages/community/InboxPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import DashboardPageV2 from "./pages/dashboard/DashboardPageV2";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
@@ -18,18 +18,26 @@ import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import CataloguePage from "./pages/catalogue/CataloguePage";
 import CallsPage from "./pages/calls/CallsPage";
 import TeamChatPage from "./pages/team-chat/TeamChatPage";
+import TeamChatPageV2 from "./pages/team-chat/TeamChatPageV2";
 import AppointmentsPage from "./pages/appointments/AppointmentsPage";
+import AppointmentsPageV2 from "./pages/appointments/AppointmentsPageV2";
 import CustomersPage from "./pages/customers/CustomersPage";
+import CustomersPageV2 from "./pages/customers/CustomersPageV2";
 import CustomerDetailPage from "./pages/customers/CustomerDetailPage";
-import AITeachingHubPage from "./pages/ai-teaching/AITeachingHubPage";
+import CustomerDetailPageV2 from "./pages/customers/CustomerDetailPageV2";
+import TrainAndTestPage from "./pages/ai-teaching/TrainAndTestPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import TasksPage from "./pages/tasks/TasksPage";
+import TasksPageV2 from "./pages/tasks/TasksPageV2";
 import SavedRepliesPage from "./pages/saved-replies/SavedRepliesPage";
-import ReplyFlowsListPage from "./pages/reply-flows/ReplyFlowsListPage";
 import ReplyFlowBuilderPage from "./pages/reply-flows/ReplyFlowBuilderPage";
 import BroadcastPage from "./pages/broadcast/BroadcastPage";
+import BroadcastPageV2 from "./pages/broadcast/BroadcastPageV2";
 import BroadcastDetailPage from "./pages/broadcast/BroadcastDetailPage";
+import BroadcastDetailPageV2 from "./pages/broadcast/BroadcastDetailPageV2";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
+import NotificationsPageV2 from "./pages/notifications/NotificationsPageV2";
+import ThemePreviewPage from "./pages/theme-preview/ThemePreviewPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 // Renders V2Component when the ui_v2 flag is on, V1Component otherwise —
@@ -49,38 +57,46 @@ function v2Route(V1Component, V2Component) {
 
 const ConversationsRoute = v2Route(ConversationsPage, ConversationsPageV2);
 const DashboardRoute = v2Route(DashboardPage, DashboardPageV2);
+const NotificationsRoute = v2Route(NotificationsPage, NotificationsPageV2);
+const TasksRoute = v2Route(TasksPage, TasksPageV2);
+const AppointmentsRoute = v2Route(AppointmentsPage, AppointmentsPageV2);
+const TeamChatRoute = v2Route(TeamChatPage, TeamChatPageV2);
+const CustomersRoute = v2Route(CustomersPage, CustomersPageV2);
+const CustomerDetailRoute = v2Route(CustomerDetailPage, CustomerDetailPageV2);
+const BroadcastRoute = v2Route(BroadcastPage, BroadcastPageV2);
+const BroadcastDetailRoute = v2Route(BroadcastDetailPage, BroadcastDetailPageV2);
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/theme-preview" element={<ThemePreviewPage />} />
       <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ConversationDetailPage standalone /></ProtectedRoute>} />
       <Route path="/platform-admin" element={<ProtectedRoute requireSuperAdmin><PlatformAdminPage /></ProtectedRoute>} />
       <Route path="/platform-admin/theme-studio" element={<ProtectedRoute requireSuperAdmin><ThemeStudioPage /></ProtectedRoute>} />
       <Route path="/company-settings/*" element={<ProtectedRoute><CompanySettingsPage /></ProtectedRoute>} />
-      <Route path="/community/*" element={<ProtectedRoute><CommunityHubPage /></ProtectedRoute>} />
-      <Route path="/ai-teaching/*" element={<ProtectedRoute><AITeachingHubPage /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute><UISettingsPage /></ProtectedRoute>} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardRoute />} />
-        <Route path="/notifications" element={<NotificationsPage />} />
+        <Route path="/notifications" element={<NotificationsRoute />} />
         <Route path="/conversations" element={<ConversationsRoute />} />
         <Route path="/conversations/:channel/:userId" element={<ConversationsRoute />} />
-        <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/customers/:customerId" element={<CustomerDetailPage />} />
-        <Route path="/broadcast" element={<BroadcastPage />} />
-        <Route path="/broadcast/:broadcastId" element={<BroadcastDetailPage />} />
+        <Route path="/customers" element={<CustomersRoute />} />
+        <Route path="/customers/:customerId" element={<CustomerDetailRoute />} />
+        <Route path="/broadcast" element={<BroadcastRoute />} />
+        <Route path="/broadcast/:broadcastId" element={<BroadcastDetailRoute />} />
         <Route path="/catalogue" element={<CataloguePage />} />
         <Route path="/calls" element={<CallsPage />} />
-        <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/tasks" element={<TasksRoute />} />
         <Route path="/saved-replies" element={<SavedRepliesPage />} />
-        <Route path="/reply-flows" element={<ReplyFlowsListPage />} />
         <Route path="/reply-flows/:id" element={<ReplyFlowBuilderPage />} />
-        <Route path="/appointments" element={<AppointmentsPage />} />
+        <Route path="/appointments" element={<AppointmentsRoute />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/team-chat" element={<TeamChatPage />} />
-        <Route path="/roles" element={<RolesPermissionsPage />} />
+        <Route path="/team-chat" element={<TeamChatRoute />} />
+        <Route path="/publish" element={<PublishStandalonePage />} />
+        <Route path="/comments" element={<CommentsPage />} />
+        <Route path="/test-ai" element={<TrainAndTestPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

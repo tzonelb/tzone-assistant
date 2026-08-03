@@ -1,3 +1,49 @@
+.calls-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.calls-field input,
+.calls-field textarea {
+  padding: 0 13px;
+  min-height: 42px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  outline: none;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.calls-field textarea {
+  min-height: auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  resize: vertical;
+}
+
+.calls-field input:focus,
+.calls-field textarea:focus {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 4px rgb(22 137 232 / 9%);
+}
+
+.calls-contact-preview {
+  margin: 3px 0 0;
+  max-width: 420px;
+  overflow: hidden;
+  color: var(--tz-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .calls-filter-bar {
   display: flex;
   flex-wrap: wrap;

@@ -48,7 +48,9 @@ const pageTitles = {
   "/settings": "Settings",
   "/company-settings": "Company Settings",
   "/channels": "Channels",
-  "/roles": "Roles & Permissions",
+  "/publish": "Publish",
+  "/comments": "Comments",
+  "/test-ai": "Test & Train AI",
   "/platform-admin": "Platform Admin",
 };
 

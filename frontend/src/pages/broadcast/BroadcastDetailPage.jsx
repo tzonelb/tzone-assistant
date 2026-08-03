@@ -12,7 +12,7 @@ import {
 } from "@mui/icons-material";
 
 import { getBroadcastReportRequest, listCustomerSegmentsRequest, sendBroadcastRequest } from "../../api/client";
-import { AppButton, AppCard, AppTable, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ErrorState, LoadingState, StatusBadge } from "../../components/common";
 import "./BroadcastPage.css";
 import "./BroadcastDetailPage.css";
 import "../analytics/AnalyticsPage.css";
@@ -128,7 +128,7 @@ export default function BroadcastDetailPage() {
 
   if (loading) return <LoadingState title="Loading broadcast report..." />;
   if (error && !report) {
-    return <ErrorState title="Could not load this broadcast" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
+    return <ErrorState title="Could not load this broadcast" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />;
   }
   if (!report) return null;
 
@@ -198,9 +198,9 @@ export default function BroadcastDetailPage() {
         </div>
         {isDraft ? (
           <div className="client-file-header-controls">
-            <AppButton variant="primary" icon={<SendOutlined fontSize="small" />} onClick={() => { setSendError(""); setSendOpen(true); }}>
-              Send now
-            </AppButton>
+            <button type="button" className="btn btn-primary" onClick={() => { setSendError(""); setSendOpen(true); }}>
+              <SendOutlined fontSize="small" /> Send now
+            </button>
           </div>
         ) : null}
       </div>
@@ -230,9 +230,9 @@ export default function BroadcastDetailPage() {
             This broadcast will reach {totals.recipients ?? broadcast.recipient_count ?? 0} contact
             {(totals.recipients ?? broadcast.recipient_count) === 1 ? "" : "s"} on {channelLabel(broadcast.channel)} once sent.
           </p>
-          <AppButton variant="primary" icon={<SendOutlined fontSize="small" />} onClick={() => { setSendError(""); setSendOpen(true); }}>
-            Send now
-          </AppButton>
+          <button type="button" className="btn btn-primary" onClick={() => { setSendError(""); setSendOpen(true); }}>
+            <SendOutlined fontSize="small" /> Send now
+          </button>
         </AppCard>
       ) : null}
 
@@ -289,8 +289,8 @@ export default function BroadcastDetailPage() {
               {sendError ? <p className="broadcast-error-text">{sendError}</p> : null}
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton variant="secondary" disabled={sending} onClick={() => setSendOpen(false)}>Cancel</AppButton>
-              <AppButton variant="primary" loading={sending} onClick={confirmSend}>Send now</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={sending} onClick={() => setSendOpen(false)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={sending} onClick={confirmSend}>{sending ? "Sending…" : "Send now"}</button>
             </footer>
           </section>
         </div>

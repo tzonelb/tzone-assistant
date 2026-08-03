@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ChatOutlined,
   GroupOutlined,
+  InsightsOutlined,
   PersonAddOutlined,
   RefreshOutlined,
 } from "@mui/icons-material";
@@ -21,7 +22,7 @@ import {
 } from "recharts";
 
 import { getAnalyticsSummaryRequest } from "../../api/client";
-import { AppButton, AppCard, ErrorState, LoadingState, PageHeader } from "../../components/common";
+import { AppCard, ErrorState, LoadingState, PageHeader } from "../../components/common";
 import "./AnalyticsPage.css";
 
 // Canonical lifecycle pipeline order (matches backend/services/customer_service.py
@@ -233,7 +234,7 @@ export default function AnalyticsPage() {
         <ErrorState
           title="Analytics could not load"
           description={error}
-          action={<AppButton variant="primary" icon={<RefreshOutlined fontSize="small" />} onClick={load}>Try again</AppButton>}
+          action={<button type="button" className="btn btn-primary" onClick={load}><RefreshOutlined fontSize="small" /> Try again</button>}
         />
       </AppCard>
     );
@@ -249,9 +250,9 @@ export default function AnalyticsPage() {
     <section className="analytics-page">
       <PageHeader
         actions={
-          <AppButton variant="secondary" icon={<RefreshOutlined fontSize="small" />} onClick={load}>
-            Refresh
-          </AppButton>
+          <button type="button" className="btn btn-secondary" onClick={load}>
+            <RefreshOutlined fontSize="small" /> Refresh
+          </button>
         }
       />
 
@@ -327,6 +328,11 @@ export default function AnalyticsPage() {
             emptyText="No tags used yet."
             formatLabel={(value) => value}
           />
+        </AppCard>
+
+        <AppCard padding="medium" className="analytics-breakdown-card analytics-insights-card">
+          <h3><InsightsOutlined fontSize="small" /> Insights</h3>
+          <p className="analytics-breakdown-empty">Engagement stats per post and per channel will land here next.</p>
         </AppCard>
       </section>
     </section>

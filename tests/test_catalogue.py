@@ -72,6 +72,77 @@ def client_and_db():
             time.sleep(0.1)
 
 
+def test_module_disabled_for_company_blocks_catalogue_access():
+    """Regression test: Platform Admin's per-company "Modules" toggle used
+    to write module_catalogue_enabled but nothing ever read it back — any
+    company could use Catalogue regardless of the flag. Confirms a
+    suspended module now actually blocks access, and that a super admin
+    (who isn't scoped to any one company's plan) still gets through."""
+    from database.database import db
+    from backend.services.auth_service import auth_service
+    from backend.services.catalogue_service import catalogue_service
+    from backend.services.platform_admin_service import platform_admin_service
+
+    tmp_db_path = tempfile.mktemp(suffix=".db")
+    original_db_path = db.db_path
+    db.db_path = Path(tmp_db_path)
+
+    db.create_tables()
+    auth_service.create_tables()
+    catalogue_service.ensure_schema()
+    platform_admin_service.ensure_schema()
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (1, 'agent@test.local', 'Agent', 'active', 0)"
+        )
+        conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (1, 'Test Co', 'test-co', 1)")
+        conn.execute(
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (1, 'Owner', 'owner', 'Full access', 1)"
+        )
+        owner_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'").fetchone()["id"]
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 1, ?, 'active')",
+            (owner_role_id,),
+        )
+        conn.execute("UPDATE companies SET module_catalogue_enabled = 0 WHERE id = 1")
+        conn.commit()
+
+    from main import app
+    from backend.services.auth_service import get_current_user
+
+    state = {"is_super_admin": False}
+
+    async def _override():
+        return {"id": 1, "email": "agent@test.local", "is_super_admin": state["is_super_admin"], "active_company_id": COMPANY_ID}
+    app.dependency_overrides[get_current_user] = _override
+
+    try:
+        from fastapi.testclient import TestClient
+        client = TestClient(app)
+
+        resp = client.get("/api/catalogue/options")
+        assert resp.status_code == 403
+
+        state["is_super_admin"] = True
+        resp = client.get("/api/catalogue/options")
+        assert resp.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+        db.db_path = original_db_path
+        import gc
+        gc.collect()
+        for _attempt in range(5):
+            try:
+                if os.path.exists(tmp_db_path):
+                    os.remove(tmp_db_path)
+                break
+            except PermissionError:
+                time.sleep(0.1)
+
+
 def _make_product(client, **overrides):
     payload = {"name": "Widget"}
     payload.update(overrides)

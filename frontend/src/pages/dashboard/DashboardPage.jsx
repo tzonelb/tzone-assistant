@@ -13,7 +13,6 @@ import {
 
 import { getDashboardSummaryRequest } from "../../api/client";
 import {
-  AppButton,
   AppCard,
   EmptyState,
   ErrorState,
@@ -96,13 +95,13 @@ export default function DashboardPage() {
           title="Dashboard could not load"
           description={error}
           action={
-            <AppButton
-              variant="primary"
-              icon={<RefreshOutlined fontSize="small" />}
+            <button
+              type="button"
+              className="btn btn-primary"
               onClick={loadSummary}
             >
-              Try again
-            </AppButton>
+              <RefreshOutlined fontSize="small" /> Try again
+            </button>
           }
         />
       </AppCard>
@@ -120,13 +119,13 @@ export default function DashboardPage() {
       <PageHeader
         actions={
           <>
-            <AppButton
-              variant="secondary"
-              icon={<RefreshOutlined fontSize="small" />}
+            <button
+              type="button"
+              className="btn btn-secondary"
               onClick={loadSummary}
             >
-              Refresh
-            </AppButton>
+              <RefreshOutlined fontSize="small" /> Refresh
+            </button>
           </>
         }
       />
@@ -214,13 +213,13 @@ export default function DashboardPage() {
               <h3>Recent conversations</h3>
             </div>
 
-            <AppButton
-              variant="ghost"
-              size="small"
+            <button
+              type="button"
+              className="btn btn-ghost"
               onClick={() => navigate("/conversations")}
             >
               View all
-            </AppButton>
+            </button>
           </div>
 
           {conversations.length ? (
@@ -340,14 +339,13 @@ export default function DashboardPage() {
             <h3>Connected channels</h3>
           </div>
 
-          <AppButton
-            variant="secondary"
-            size="small"
-            icon={<AddOutlined fontSize="small" />}
+          <button
+            type="button"
+            className="btn btn-secondary"
             onClick={() => navigate("/company-settings?section=channels")}
           >
-            Add channel
-          </AppButton>
+            <AddOutlined fontSize="small" /> Add channel
+          </button>
         </div>
 
         {channels.length ? (

@@ -13,17 +13,21 @@ import {
   getConversationsRequest,
   updateConversationControlRequest,
 } from "../../api/client";
-import { AppButton, ErrorState } from "../../components/common";
+import { ErrorState } from "../../components/common";
 import { useConversationLive } from "../../contexts/ConversationLiveContext";
-import ConversationDetailPage from "./ConversationDetailPage";
+import { channelIcon } from "../community/channelIcon";
+import ConversationDetailPageV2 from "./ConversationDetailPageV2";
 import "./ConversationsPageV2.css";
 
 // Same data/handlers as ConversationsPage.jsx (v1) — this is a visual
-// rebuild of the thread-list side only (CLAUDE_CODE_UI_IMPLEMENTATION.md
-// §3), not a new data layer. The detail pane keeps reusing
-// ConversationDetailPage as-is: it's 1900+ lines of real, live,
-// business-critical messaging logic (attachments, voice notes, takeover,
-// transfer) that a visual-only pass shouldn't risk rewriting blind.
+// rebuild of the thread-list side (CLAUDE_CODE_UI_IMPLEMENTATION.md §3).
+// The detail pane now renders ConversationDetailPageV2, which reuses every
+// request call and piece of state from ConversationDetailPage.jsx (v1)
+// verbatim — attachments, voice notes, takeover, transfer — and only
+// rebuilds the JSX/classnames. v1's ConversationDetailPage.jsx is left
+// untouched and still backs the standalone `/conversations/:channel/:userId/full`
+// route (outside AppLayout, so it never gets the .tzv2-scoped design-system
+// classes ConversationDetailPageV2 relies on).
 const CHANNELS = ["all", "messenger", "whatsapp", "instagram", "telegram", "website"];
 const FOLDERS = [
   { value: "inbox", label: "Inbox" },
@@ -155,27 +159,56 @@ export default function ConversationsPageV2() {
   return (
     <div className="tzv2-conv-page">
       <div className="tzv2-conv-filterbar">
-        <select className="tzv2-select" value={activeFolder} onChange={(event) => {
-          setActiveFolder(event.target.value);
-          if (event.target.value === "unread") setReadStatus("unread");
-          else if (readStatus === "unread") setReadStatus("all");
-          navigate("/conversations");
-        }}>
-          {FOLDERS.map((folder) => (
-            <option value={folder.value} key={folder.value}>{folder.label}</option>
-          ))}
-        </select>
-        <select className="tzv2-select" value={activeChannel} onChange={(event) => setActiveChannel(event.target.value)}>
-          <option value="all">All channels · {totalCount}</option>
-          {CHANNELS.filter((name) => name !== "all").map((name) => (
-            <option value={name} key={name} disabled={!enabledChannels.has(name)}>
-              {humanize(name)} · {Number(channelCounts[name] || 0)}
-            </option>
-          ))}
-        </select>
-        <button type="button" className="btn btn-primary tzv2-new-conv" onClick={() => setListOpen(true)}>
-          <AddOutlined fontSize="small" /> New conversation
-        </button>
+        <div className="tzv2-conv-filterbar-row">
+          <select className="tzv2-select" value={activeFolder} onChange={(event) => {
+            setActiveFolder(event.target.value);
+            if (event.target.value === "unread") setReadStatus("unread");
+            else if (readStatus === "unread") setReadStatus("all");
+            navigate("/conversations");
+          }}>
+            {FOLDERS.map((folder) => (
+              <option value={folder.value} key={folder.value}>{folder.label}</option>
+            ))}
+          </select>
+          <div className="tzv2-channel-filter" role="group" aria-label="Filter by channel">
+            <button
+              type="button"
+              className={`tzv2-channel-chip ${activeChannel === "all" ? "is-active" : ""}`}
+              onClick={() => setActiveChannel("all")}
+            >
+              All channels
+              {totalCount ? <span className="tzv2-channel-chip-count">{totalCount}</span> : null}
+            </button>
+            {CHANNELS.filter((name) => name !== "all").map((name) => {
+              const Icon = channelIcon(name);
+              const enabled = enabledChannels.has(name);
+              const count = Number(channelCounts[name] || 0);
+              return (
+                <button
+                  type="button"
+                  key={name}
+                  className={`tzv2-channel-chip ${activeChannel === name ? "is-active" : ""}`}
+                  style={{ "--channel-color": `var(--color-channel-${name})` }}
+                  disabled={!enabled}
+                  title={enabled ? humanize(name) : `No ${humanize(name)} channel connected yet`}
+                  onClick={() => setActiveChannel(name)}
+                >
+                  <Icon fontSize="inherit" />
+                  {humanize(name)}
+                  {count ? <span className="tzv2-channel-chip-count">{count}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            className="btn btn-primary tzv2-new-conv"
+            disabled
+            title="Starting a new outbound conversation isn't available yet — conversations begin when a customer messages a connected channel."
+          >
+            <AddOutlined fontSize="small" /> New conversation
+          </button>
+        </div>
       </div>
 
       <div className="tzv2-conv-body">
@@ -194,14 +227,14 @@ export default function ConversationsPageV2() {
                     className={`tag ${statusChip === value ? "tag-outline" : "tag-neutral"}`}
                     onClick={() => setStatusChip(value)}
                   >
-                    {value === "all" ? "Open" : value === "waiting_customer" ? "Waiting" : "Snoozed"}
+                    {value === "all" ? "Open" : value === "waiting_customer" ? "Waiting" : "Needs agent"}
                   </button>
                 ))}
               </div>
             </div>
             <div className="tzv2-conv-rows">
               {loading ? <div className="tzv2-conv-empty">Loading…</div> : null}
-              {error ? <ErrorState title="Could not load conversations" description={error} action={<AppButton variant="primary" onClick={() => loadConversations()}>Retry</AppButton>} /> : null}
+              {error ? <ErrorState title="Could not load conversations" description={error} action={<button type="button" className="btn btn-primary" onClick={() => loadConversations()}>Retry</button>} /> : null}
               {!loading && !error && rows.length === 0 ? <div className="tzv2-conv-empty">No conversations here.</div> : null}
               {!loading && !error && rows.map((row) => {
                 const selected = routeChannel === row.channel && routeUserId === row.external_user_id;
@@ -237,10 +270,18 @@ export default function ConversationsPageV2() {
                         <button type="button" title={row.is_starred ? "Unstar" : "Star"} onClick={(event) => quickUpdate(row, { is_starred: !row.is_starred }, event)}>
                           <StarOutlineOutlined fontSize="inherit" />
                         </button>
-                        <button type="button" title="Mark done" onClick={(event) => quickUpdate(row, { folder: "done" }, event)}>
+                        <button
+                          type="button"
+                          title={activeFolder === "done" ? "Move to inbox" : "Mark done"}
+                          onClick={(event) => quickUpdate(row, { folder: activeFolder === "done" ? "inbox" : "done" }, event)}
+                        >
                           <CheckCircleOutlineOutlined fontSize="inherit" />
                         </button>
-                        <button type="button" title="Archive" onClick={(event) => quickUpdate(row, { folder: "archived" }, event)}>
+                        <button
+                          type="button"
+                          title={activeFolder === "archived" ? "Unarchive" : "Archive"}
+                          onClick={(event) => quickUpdate(row, { folder: activeFolder === "archived" ? "inbox" : "archived" }, event)}
+                        >
                           <ArchiveOutlined fontSize="inherit" />
                         </button>
                       </div>
@@ -258,7 +299,7 @@ export default function ConversationsPageV2() {
 
         <main className="tzv2-conv-detail">
           {hasSelectedConversation ? (
-            <ConversationDetailPage
+            <ConversationDetailPageV2
               embedded
               channelOverride={routeChannel}
               userIdOverride={routeUserId}

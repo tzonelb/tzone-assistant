@@ -8,7 +8,7 @@ import {
   duplicateReplyFlowRequest,
   listDepartmentsRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
 import MultiSelectChips from "../../components/common/MultiSelectChips";
 import "./ReplyFlowsListPage.css";
 
@@ -116,8 +116,8 @@ function NewFlowDialog({ open, departments, saving, error, onCancel, onCreate })
           {error ? <p className="customer-segment-error">{error}</p> : null}
         </div>
         <footer className="tz-dialog-actions">
-          <AppButton type="button" variant="secondary" disabled={saving} onClick={onCancel}>Cancel</AppButton>
-          <AppButton type="submit" variant="primary" loading={saving} disabled={!name.trim()}>Create</AppButton>
+          <button type="button" className="btn btn-secondary" disabled={saving} onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !name.trim()}>{saving ? "Creating…" : "Create"}</button>
         </footer>
       </form>
     </div>
@@ -220,18 +220,18 @@ export default function ReplyFlowsListPage() {
   ];
 
   if (loading) return <LoadingState label="Loading reply flows…" />;
-  if (error) return <ErrorState title="Could not load reply flows" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
+  if (error) return <ErrorState title="Could not load reply flows" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />;
 
   return (
     <section className="reply-flows-page">
-      <header className="reply-flows-header">
-        <div>
-          <h2>Reply Flows</h2>
-          <p>Design how the AI responds — per channel, per department. Drag steps onto a canvas and connect them.</p>
-        </div>
-        <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={() => setDialogOpen(true)}>
-          Create Reply Flow
-        </AppButton>
+      {/* No repeated "Reply Flows" heading here — this list now renders
+          embedded inside Company Settings' "Reply Flow & Saved Replies"
+          section, which already provides that title and description right
+          above. Only the action button belongs in this local header. */}
+      <header className="reply-flows-header reply-flows-header-embedded">
+        <button type="button" className="btn btn-primary" onClick={() => setDialogOpen(true)}>
+          <AddOutlined fontSize="small" /> Create Reply Flow
+        </button>
       </header>
 
       {flows.length === 0 ? (

@@ -1071,7 +1071,7 @@
 
 @media (max-width: 720px) {
   .company-settings-locked-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     height: auto;
     min-height: 100%;
     overflow: visible;

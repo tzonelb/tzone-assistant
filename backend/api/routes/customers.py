@@ -118,6 +118,11 @@ def update_customer(
     context=Depends(current_context),
 ):
     current_user, company_id = context
+    # NOT gated behind settings.manage on purpose, unlike bulk_update — this
+    # is deliberately open to any employee as core day-to-day CRM work (see
+    # test_permission_gating.py::test_employee_with_zero_permissions_can_still_do_basic_customer_crud).
+    # An earlier pass here added a settings.manage gate by analogy with
+    # bulk_update_customers, which broke that intended behavior; reverted.
     try:
         return customer_service.update_customer(
             company_id=company_id,

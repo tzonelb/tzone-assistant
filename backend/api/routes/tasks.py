@@ -16,6 +16,23 @@ def current_context(current_user=Depends(get_current_user)):
     return current_user, int(company_id)
 
 
+def _can_modify_task(current_user, company_id: int, task: dict) -> bool:
+    """Anyone can create/view tasks (this is a shared team work list — the
+    Tasks page and Team Chat's "Create task" button both rely on that), but
+    changing or deleting one you didn't create and aren't assigned to is a
+    real gap otherwise: any employee could silently reassign, complete,
+    or delete a colleague's task. Allowed here: the task's own assignee,
+    whoever created it, or an admin (users.manage — the same permission
+    this codebase already uses for "manager-level" actions elsewhere)."""
+    actor_id = int(current_user.get("id"))
+    if task.get("assigned_user_id") == actor_id or task.get("created_by_user_id") == actor_id:
+        return True
+    return auth_service.has_permission(
+        user_id=actor_id, company_id=company_id, permission_code="users.manage",
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    )
+
+
 @router.get("/options")
 def task_options(context=Depends(current_context)):
     """Reference data for the Tasks UI — the fixed status/priority
@@ -81,6 +98,12 @@ def get_task(task_id: int, context=Depends(current_context)):
 def update_task(task_id: int, payload: TaskUpdateRequest, context=Depends(current_context)):
     current_user, company_id = context
     try:
+        existing = task_service.get_task(company_id=company_id, task_id=task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not _can_modify_task(current_user, company_id, existing):
+        raise HTTPException(status_code=403, detail="Only the assignee, the creator, or an admin can edit this task.")
+    try:
         return task_service.update_task(
             company_id=company_id,
             task_id=task_id,
@@ -95,9 +118,15 @@ def update_task(task_id: int, payload: TaskUpdateRequest, context=Depends(curren
 
 @router.delete("/{task_id}")
 def delete_task(task_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
     try:
-        task_service.delete_task(company_id=company_id, task_id=task_id)
+        existing = task_service.get_task(company_id=company_id, task_id=task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not _can_modify_task(current_user, company_id, existing):
+        raise HTTPException(status_code=403, detail="Only the assignee, the creator, or an admin can delete this task.")
+    try:
+        task_service.delete_task(company_id=company_id, task_id=task_id, actor_user_id=current_user.get("id"))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"deleted": True}

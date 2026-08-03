@@ -94,6 +94,7 @@ export function NotificationProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const inFlightRef = useRef(false);
+  const pendingRefreshRef = useRef(false);
 
   const seenIdsRef = useRef(null);
 
@@ -101,6 +102,15 @@ export function NotificationProvider({ children }) {
   // respects - the bell used to poll and play a sound completely
   // unfiltered, ignoring a user's own "mute this channel" / "no sound"
   // settings.
+  // Remembers the last explicitly-requested filter set so that silent,
+  // filter-less refreshes (the 15s background poll, the focus/visibility
+  // listener, and the optimistic refresh inside markRead/markUnread/
+  // markAllRead) don't clobber whatever the Notification Center page has
+  // currently filtered to. Without this, ticking "Unread only" (or picking
+  // a type/channel/date) would silently revert to showing everything again
+  // within one poll interval, even though the filter control still looked
+  // active.
+  const filtersRef = useRef({});
   const [preferences, setPreferences] = useState(() => readNotificationPreferences(user));
   useEffect(() => {
     setPreferences(readNotificationPreferences(user));
@@ -111,13 +121,25 @@ export function NotificationProvider({ children }) {
   const preferencesRef = useRef(preferences);
   preferencesRef.current = preferences;
 
-  const refresh = useCallback(async ({ silent = false, filters = {} } = {}) => {
-    if (!authenticated || inFlightRef.current) return;
+  const refresh = useCallback(async ({ silent = false, filters } = {}) => {
+    if (!authenticated) return;
+    // A filter change while a background poll is already in flight used to
+    // bail out here BEFORE recording the new filter, so filtersRef stayed
+    // stale until the user touched a control again. Record it unconditionally
+    // now, and re-run once the in-flight request settles so the change the
+    // user just made actually takes effect promptly, not on the next poll.
+    const effectiveFilters = filters !== undefined ? filters : filtersRef.current;
+    const filtersChanged = filters !== undefined && JSON.stringify(filters) !== JSON.stringify(filtersRef.current);
+    filtersRef.current = effectiveFilters;
+    if (inFlightRef.current) {
+      if (filtersChanged) pendingRefreshRef.current = true;
+      return;
+    }
     inFlightRef.current = true;
     if (!silent) setLoading(true);
     try {
       const [rawItems, summaryPayload] = await Promise.all([
-        getNotificationsRequest({ pageSize: 100, ...filters }),
+        getNotificationsRequest({ pageSize: 100, ...effectiveFilters }),
         getNotificationSummaryRequest(),
       ]);
       const prefs = preferencesRef.current;
@@ -147,6 +169,10 @@ export function NotificationProvider({ children }) {
     } finally {
       inFlightRef.current = false;
       if (!silent) setLoading(false);
+      if (pendingRefreshRef.current) {
+        pendingRefreshRef.current = false;
+        refresh({ silent: true });
+      }
     }
   }, [authenticated]);
 

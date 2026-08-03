@@ -288,8 +288,17 @@ class PlatformUiService:
         if scope_type in ("plan", "company") and not scope_id:
             raise PlatformUiValidationError(f'scope_id is required for scope_type "{scope_type}".')
 
-        cleaned_tokens = _validate_tokens_patch(tokens or {})
-        cleaned_modules = _validate_modules_patch(modules or {})
+        # A new draft must start from whatever this scope currently has
+        # published, not from an empty patch — otherwise publishing it
+        # replaces the published row wholesale and any earlier published
+        # key this draft doesn't touch (e.g. color.accent from a prior
+        # publish) is silently lost the moment this one goes live.
+        published = self._latest_published(scope_type=scope_type, scope_id=scope_id)
+        base_tokens = json.loads(published["tokens_json"]) if published else {}
+        base_modules = json.loads(published["modules_json"]) if published else {}
+
+        cleaned_tokens = _merge_tokens_patch(base_tokens, _validate_tokens_patch(tokens or {}))
+        cleaned_modules = _merge_modules_patch(base_modules, _validate_modules_patch(modules or {}))
 
         now = utc_now_iso()
         with db.connect() as conn:

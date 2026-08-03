@@ -1,8 +1,5 @@
 import { CloseOutlined } from "@mui/icons-material";
 
-import AppButton from "./AppButton";
-
-
 export default function ConfirmDialog({
   open,
   title = "Confirm action",
@@ -10,7 +7,10 @@ export default function ConfirmDialog({
   error,
   confirmLabel = "Confirm",
   cancelLabel = "Cancel",
-  confirmVariant = "danger",
+  // confirmVariant is accepted for backward compatibility but no longer used —
+  // this design system has no red/danger button; the dialog's own title/message
+  // conveys the seriousness of a destructive action instead.
+  confirmVariant: _confirmVariant,
   loading = false,
   onConfirm,
   onCancel,
@@ -21,7 +21,7 @@ export default function ConfirmDialog({
 
   return (
     <div
-      className="tz-dialog-backdrop"
+      className="dialog-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -30,19 +30,19 @@ export default function ConfirmDialog({
       }}
     >
       <section
-        className="tz-dialog"
+        className="dialog"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="tz-dialog-title"
+        aria-labelledby="tz-confirm-dialog-title"
       >
-        <header className="tz-dialog-header">
-          <h3 id="tz-dialog-title">
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-2)" }}>
+          <span className="dialog-title" id="tz-confirm-dialog-title">
             {title}
-          </h3>
+          </span>
 
           <button
             type="button"
-            className="tz-dialog-close"
+            className="btn btn-ghost btn-icon"
             aria-label="Close dialog"
             onClick={onCancel}
           >
@@ -50,28 +50,30 @@ export default function ConfirmDialog({
           </button>
         </header>
 
-        <div className="tz-dialog-body">
+        <div className="dialog-body">
           {message}
-          {error ? <p className="customer-segment-error">{error}</p> : null}
+          {error ? <p style={{ color: "var(--color-accent-700)" }}>{error}</p> : null}
         </div>
 
-        <footer className="tz-dialog-actions">
-          <AppButton
-            variant="secondary"
+        <div className="dialog-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
             disabled={loading}
             onClick={onCancel}
           >
             {cancelLabel}
-          </AppButton>
+          </button>
 
-          <AppButton
-            variant={confirmVariant}
-            loading={loading}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={loading}
             onClick={onConfirm}
           >
-            {confirmLabel}
-          </AppButton>
-        </footer>
+            {loading ? "Working…" : confirmLabel}
+          </button>
+        </div>
       </section>
     </div>
   );

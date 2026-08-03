@@ -25,6 +25,7 @@ import httpx
 
 from backend.services.department_service import department_service
 from config.settings import config
+from core.reply_flow_triggers import DEFAULT_TRIGGER_TYPE, TRIGGER_TYPES
 from database.database import db
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,23 @@ NODE_TYPE_REFERENCE = """
 - end: no fields.
 """.strip()
 
+# Same idea as NODE_TYPE_REFERENCE above, but for what STARTS a flow —
+# embedded in the AI text-to-flow prompt so it can also pick a trigger.
+# Kept in sync by hand with core/reply_flow_triggers.py's TRIGGER_TYPES.
+def _build_trigger_type_reference() -> str:
+    lines = []
+    for key, info in TRIGGER_TYPES.items():
+        fields = info.get("config_fields") or []
+        if fields:
+            field_text = "; ".join(f"config.{f['key']} ({f['type']})" for f in fields)
+            lines.append(f"- {key}: {info['description']} Fields: {field_text}.")
+        else:
+            lines.append(f"- {key}: {info['description']} No fields.")
+    return "\n".join(lines)
+
+
+TRIGGER_TYPE_REFERENCE = _build_trigger_type_reference()
+
 
 class ReplyFlowService:
     def ensure_schema(self) -> None:
@@ -95,6 +113,12 @@ class ReplyFlowService:
                 conn.execute("ALTER TABLE reply_flows ADD COLUMN departments_json TEXT NOT NULL DEFAULT '[]'")
             if "reply_modes_json" not in existing_columns:
                 conn.execute("ALTER TABLE reply_flows ADD COLUMN reply_modes_json TEXT NOT NULL DEFAULT '[]'")
+            if "trigger_type" not in existing_columns:
+                conn.execute(
+                    f"ALTER TABLE reply_flows ADD COLUMN trigger_type TEXT NOT NULL DEFAULT '{DEFAULT_TRIGGER_TYPE}'"
+                )
+            if "trigger_config" not in existing_columns:
+                conn.execute("ALTER TABLE reply_flows ADD COLUMN trigger_config TEXT NOT NULL DEFAULT '{}'")
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_reply_flows_company ON reply_flows(company_id)"
             )
@@ -124,6 +148,21 @@ class ReplyFlowService:
                 cleaned.append(mode)
         return cleaned
 
+    def _clean_trigger_type(self, trigger_type: str | None) -> str:
+        trigger_type = (trigger_type or DEFAULT_TRIGGER_TYPE).strip()
+        if trigger_type not in TRIGGER_TYPES:
+            raise ValueError(
+                f'"{trigger_type}" is not a valid trigger type. Choose from: {", ".join(TRIGGER_TYPES)}.'
+            )
+        return trigger_type
+
+    def _clean_trigger_config(self, trigger_config: dict[str, Any] | None) -> dict[str, Any]:
+        if trigger_config is None:
+            return {}
+        if not isinstance(trigger_config, dict):
+            raise ValueError("Trigger config must be an object.")
+        return trigger_config
+
     def _clean_departments(self, *, company_id: int, departments: list[str] | None) -> list[str]:
         if not departments:
             return []
@@ -146,7 +185,8 @@ class ReplyFlowService:
         with db.connect() as conn:
             rows = conn.execute(
                 "SELECT id, company_id, name, channels_json, departments_json, reply_modes_json, status, is_default, "
-                "nodes_json, created_at, updated_at FROM reply_flows WHERE company_id = ? ORDER BY updated_at DESC",
+                "trigger_type, trigger_config, nodes_json, created_at, updated_at FROM reply_flows "
+                "WHERE company_id = ? ORDER BY updated_at DESC",
                 (company_id,),
             ).fetchall()
         items = []
@@ -155,6 +195,7 @@ class ReplyFlowService:
             item["channels"] = json.loads(item.pop("channels_json") or "[]")
             item["departments"] = json.loads(item.pop("departments_json") or "[]")
             item["reply_modes"] = json.loads(item.pop("reply_modes_json") or "[]")
+            item["trigger_config"] = json.loads(item.pop("trigger_config") or "{}")
             item["node_count"] = len(json.loads(item.pop("nodes_json") or "[]"))
             items.append(item)
         return items
@@ -176,11 +217,13 @@ class ReplyFlowService:
         item["channels"] = json.loads(item.pop("channels_json") or "[]")
         item["departments"] = json.loads(item.pop("departments_json") or "[]")
         item["reply_modes"] = json.loads(item.pop("reply_modes_json") or "[]")
+        item["trigger_config"] = json.loads(item.pop("trigger_config") or "{}")
         return item
 
     def create(
         self, *, company_id: int, name: str, channels: list[str] | None = None,
         departments: list[str] | None = None, reply_modes: list[str] | None = None,
+        trigger_type: str | None = None, trigger_config: dict[str, Any] | None = None,
         actor_user_id: int | None = None,
     ) -> dict[str, Any]:
         name = (name or "").strip()
@@ -189,18 +232,21 @@ class ReplyFlowService:
         cleaned_channels = self._clean_channels(channels)
         cleaned_departments = self._clean_departments(company_id=company_id, departments=departments)
         cleaned_reply_modes = self._clean_reply_modes(reply_modes)
+        cleaned_trigger_type = self._clean_trigger_type(trigger_type)
+        cleaned_trigger_config = self._clean_trigger_config(trigger_config)
         now = utc_now_iso()
         with db.connect() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO reply_flows (
                     company_id, name, channels_json, departments_json, reply_modes_json, status, nodes_json, edges_json,
-                    created_by_user_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 'draft', '[]', '[]', ?, ?, ?)
+                    trigger_type, trigger_config, created_by_user_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 'draft', '[]', '[]', ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id, name, json.dumps(cleaned_channels), json.dumps(cleaned_departments),
-                    json.dumps(cleaned_reply_modes), actor_user_id, now, now,
+                    json.dumps(cleaned_reply_modes), cleaned_trigger_type, json.dumps(cleaned_trigger_config),
+                    actor_user_id, now, now,
                 ),
             )
             flow_id = int(cursor.lastrowid)
@@ -211,6 +257,7 @@ class ReplyFlowService:
         self, *, company_id: int, flow_id: int,
         name: str | None = None, channels: list[str] | None = None, departments: list[str] | None = None,
         reply_modes: list[str] | None = None,
+        trigger_type: str | None = None, trigger_config: dict[str, Any] | None = None,
         status: str | None = None, nodes: list[dict] | None = None, edges: list[dict] | None = None,
     ) -> dict[str, Any]:
         existing = self.get(company_id=company_id, flow_id=flow_id)
@@ -226,6 +273,10 @@ class ReplyFlowService:
             cleaned["departments_json"] = json.dumps(self._clean_departments(company_id=company_id, departments=departments))
         if reply_modes is not None:
             cleaned["reply_modes_json"] = json.dumps(self._clean_reply_modes(reply_modes))
+        if trigger_type is not None:
+            cleaned["trigger_type"] = self._clean_trigger_type(trigger_type)
+        if trigger_config is not None:
+            cleaned["trigger_config"] = json.dumps(self._clean_trigger_config(trigger_config))
         if status is not None:
             if status not in ("draft", "active", "archived"):
                 raise ValueError('Status must be "draft", "active", or "archived".')
@@ -265,18 +316,29 @@ class ReplyFlowService:
 
         system_prompt = f"""
 You design conversation flows for a customer-support chat platform. Convert the
-admin's plain-language description into a step-by-step flow graph.
+admin's plain-language description into a step-by-step flow graph AND, if the
+description implies what should START the flow, a trigger.
 
 Available step (node) types and their real config fields:
 {NODE_TYPE_REFERENCE}
+
+Available trigger types and their real config fields:
+{TRIGGER_TYPE_REFERENCE}
 
 Rules:
 - Break the description into a logical sequence of steps, choosing the closest node type for each.
 - Each node needs a short "label" and a "config" object with the fields listed above for that type.
 - Connect steps in the order they should happen via edges (source -> target).
-- Return ONLY JSON: {{"nodes": [{{"id": "n1", "nodeType": "...", "label": "...", "config": {{...}}}}], "edges": [{{"source": "n1", "target": "n2"}}]}}
+- If the description says or implies what starts the flow (e.g. "when an appointment finishes…",
+  "once a chat is closed…"), pick the closest trigger type and fill in its config fields.
+  If nothing about a trigger is implied, use "new_conversation" with an empty config.
+- Return ONLY JSON: {{
+    "trigger": {{"type": "...", "config": {{...}}}},
+    "nodes": [{{"id": "n1", "nodeType": "...", "label": "...", "config": {{...}}}}],
+    "edges": [{{"source": "n1", "target": "n2"}}]
+  }}
 - Use short sequential ids like n1, n2, n3.
-- Do not invent node types outside the list above.
+- Do not invent node types or trigger types outside the lists above.
 """.strip()
 
         payload = {
@@ -312,7 +374,18 @@ Rules:
             raise ValueError("The AI returned an unreadable flow. Try describing it differently.") from None
 
         nodes, edges = self._build_graph_from_ai_result(parsed)
-        return self.update(company_id=company_id, flow_id=flow_id, nodes=nodes, edges=edges)
+
+        update_kwargs: dict[str, Any] = {"nodes": nodes, "edges": edges}
+        trigger = parsed.get("trigger")
+        if isinstance(trigger, dict) and trigger.get("type") in TRIGGER_TYPES:
+            update_kwargs["trigger_type"] = trigger["type"]
+            trigger_config = trigger.get("config")
+            update_kwargs["trigger_config"] = trigger_config if isinstance(trigger_config, dict) else {}
+        # An invalid/missing trigger from the AI is silently ignored rather than
+        # failing the whole generation — the nodes/edges are still real and useful
+        # even if the trigger guess didn't come back usable.
+
+        return self.update(company_id=company_id, flow_id=flow_id, **update_kwargs)
 
     def _extract_output_text(self, data: dict[str, Any]) -> str | None:
         if data.get("output_text"):
@@ -381,13 +454,14 @@ Rules:
                 """
                 INSERT INTO reply_flows (
                     company_id, name, channels_json, departments_json, reply_modes_json, status, nodes_json, edges_json,
-                    created_by_user_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)
+                    trigger_type, trigger_config, created_by_user_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id, f"{source['name']} (copy)",
                     json.dumps(source["channels"]), json.dumps(source["departments"]), json.dumps(source["reply_modes"]),
                     json.dumps(source["nodes"]), json.dumps(source["edges"]),
+                    source["trigger_type"], json.dumps(source["trigger_config"]),
                     actor_user_id, now, now,
                 ),
             )

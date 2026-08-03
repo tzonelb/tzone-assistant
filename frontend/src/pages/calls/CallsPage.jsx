@@ -7,7 +7,7 @@ import {
   listCallLogsRequest,
   listCustomersRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
 import { useAuth } from "../../contexts/AuthContext";
 import "../customers/CustomersPage.css";
 import "./CallsPage.css";
@@ -75,19 +75,19 @@ function NewCallDialog({ open, directions, statuses, saving, error, onCancel, on
 
   return (
     <div className="tz-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !saving) onCancel(); }}>
-      <form className="tz-dialog ai-teaching-knowledge-dialog" onSubmit={submit}>
+      <form className="tz-dialog" onSubmit={submit}>
         <header className="tz-dialog-header">
           <h3>Log a call</h3>
           <button type="button" className="tz-dialog-close" onClick={onCancel} disabled={saving}><CloseOutlined fontSize="small" /></button>
         </header>
         <div className="tz-dialog-body">
-          <label className="ai-teaching-field">
+          <label className="calls-field">
             Direction
             <select className="tz-select" value={direction} disabled={saving} onChange={(event) => setDirection(event.target.value)}>
               {directions.map((value) => <option value={value} key={value}>{humanize(value)}</option>)}
             </select>
           </label>
-          <label className="ai-teaching-field">
+          <label className="calls-field">
             Contact (optional — search existing contacts)
             {selectedCustomer ? (
               <div className="calls-selected-customer">
@@ -110,35 +110,35 @@ function NewCallDialog({ open, directions, statuses, saving, error, onCancel, on
               </>
             )}
           </label>
-          <label className="ai-teaching-field">
+          <label className="calls-field">
             Phone number {selectedCustomer ? "(optional)" : "(required if no contact selected)"}
             <input value={phoneNumber} disabled={saving} onChange={(event) => setPhoneNumber(event.target.value)} placeholder="+961 ..." />
           </label>
           <div className="calls-duration-row">
-            <label className="ai-teaching-field">
+            <label className="calls-field">
               Duration (min)
               <input type="number" min="0" value={durationMinutes} disabled={saving} onChange={(event) => setDurationMinutes(event.target.value)} />
             </label>
-            <label className="ai-teaching-field">
+            <label className="calls-field">
               Duration (sec)
               <input type="number" min="0" max="59" value={durationSeconds} disabled={saving} onChange={(event) => setDurationSeconds(event.target.value)} />
             </label>
-            <label className="ai-teaching-field">
+            <label className="calls-field">
               Outcome
               <select className="tz-select" value={status} disabled={saving} onChange={(event) => setStatus(event.target.value)}>
                 {statuses.map((value) => <option value={value} key={value}>{humanize(value)}</option>)}
               </select>
             </label>
           </div>
-          <label className="ai-teaching-field">
+          <label className="calls-field">
             Notes
             <textarea rows={3} value={notes} disabled={saving} onChange={(event) => setNotes(event.target.value)} />
           </label>
           {error ? <p className="customer-segment-error">{error}</p> : null}
         </div>
         <footer className="tz-dialog-actions">
-          <AppButton type="button" variant="secondary" disabled={saving} onClick={onCancel}>Cancel</AppButton>
-          <AppButton type="submit" variant="primary" loading={saving} disabled={!canSave}>Save</AppButton>
+          <button type="button" className="btn btn-secondary" disabled={saving} onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !canSave}>{saving ? "Saving…" : "Save"}</button>
         </footer>
       </form>
     </div>
@@ -233,7 +233,7 @@ export default function CallsPage() {
       render: (value, row) => (
         <div>
           <strong>{value || "Unknown contact"}</strong>
-          <p className="ai-teaching-content-preview">{row.phone_number || "—"}</p>
+          <p className="calls-contact-preview">{row.phone_number || "—"}</p>
         </div>
       ),
     },
@@ -244,12 +244,12 @@ export default function CallsPage() {
     { key: "created_at", label: "When", render: (value) => formatDateTime(value) },
     ...(canManageSettings ? [{
       key: "_actions", label: "", align: "right",
-      render: (_value, row) => <AppButton variant="danger" size="small" onClick={() => setToDelete(row)}>Delete</AppButton>,
+      render: (_value, row) => <button type="button" className="btn btn-primary" onClick={() => setToDelete(row)}>Delete</button>,
     }] : []),
   ], [canManageSettings]);
 
   if (loading) return <LoadingState title="Loading calls..." />;
-  if (error) return <ErrorState title="Could not load calls" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
+  if (error) return <ErrorState title="Could not load calls" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />;
 
   return (
     <section className="customers-page">
@@ -263,7 +263,7 @@ export default function CallsPage() {
             <option value="">All outcomes</option>
             {statuses.map((value) => <option value={value} key={value}>{humanize(value)}</option>)}
           </select>
-          <AppButton variant="secondary" onClick={() => setDialogOpen(true)}>+ Log a call</AppButton>
+          <button type="button" className="btn btn-secondary" onClick={() => setDialogOpen(true)}>+ Log a call</button>
         </div>
       </AppCard>
 

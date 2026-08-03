@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  chatWithBotRequest,
   listAiTeachingChatRequest,
   listDepartmentsRequest,
   sendAiTeachingChatRequest,
   testAiReplyRequest,
 } from "../../api/client";
-import { AppButton, AppCard, LoadingState } from "../../components/common";
+import { AppCard, LoadingState } from "../../components/common";
+import { useAuth } from "../../contexts/AuthContext";
 import { CHANNEL_OPTIONS } from "./TagPicker";
 
 function TrainChat() {
@@ -73,7 +75,7 @@ function TrainChat() {
           {error ? <p className="customer-segment-error">{error}</p> : null}
           <form className="ai-teaching-chat-form" onSubmit={submit}>
             <input value={draft} disabled={sending} placeholder="Teach the AI something..." onChange={(event) => setDraft(event.target.value)} />
-            <AppButton type="submit" variant="primary" loading={sending} disabled={!draft.trim()}>Send</AppButton>
+            <button type="submit" className="btn btn-primary" disabled={sending || !draft.trim()}>{sending ? "Sending…" : "Send"}</button>
           </form>
         </>
       )}
@@ -137,9 +139,9 @@ function TestYourAI() {
           placeholder="e.g. How much does the internet package cost?"
           style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }}
         />
-        <AppButton type="submit" variant="primary" loading={testing} disabled={!message.trim()} style={{ alignSelf: "flex-start" }}>
-          Send test message
-        </AppButton>
+        <button type="submit" className="btn btn-primary" disabled={testing || !message.trim()} style={{ alignSelf: "flex-start" }}>
+          {testing ? "Sending…" : "Send test message"}
+        </button>
       </form>
 
       {error ? <p className="customer-segment-error">{error}</p> : null}
@@ -159,7 +161,67 @@ function TestYourAI() {
   );
 }
 
+function ChatWithYourBot() {
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (!text) return;
+    setSending(true);
+    setError("");
+    const outgoing = { id: `me-${Date.now()}`, role: "manager", text };
+    setMessages((current) => [...current, outgoing]);
+    setDraft("");
+    try {
+      const result = await chatWithBotRequest({ message: text, channel: "website" });
+      setMessages((current) => [...current, { id: `bot-${Date.now()}`, role: "assistant", text: result.reply }]);
+    } catch (requestError) {
+      setError(requestError.message || "The bot could not reply — try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <AppCard padding="medium">
+      <h3 className="client-file-section-title">Chat with your bot</h3>
+      <p className="ai-teaching-section-hint">
+        Talk to your company's AI exactly like a customer would — this is the real bot, not a demo.
+        Ask it anything a customer might ask, so you know what they'll see.
+      </p>
+      <div className="ai-teaching-chat-log">
+        {messages.length === 0 ? <p className="ai-teaching-empty-hint">No messages yet — try "How much does the internet package cost?"</p> : null}
+        {messages.map((message) => (
+          <div className={`ai-teaching-chat-bubble ${message.role === "manager" ? "is-manager" : "is-assistant"}`} key={message.id}>
+            <span>{message.text}</span>
+          </div>
+        ))}
+      </div>
+      {error ? <p className="customer-segment-error">{error}</p> : null}
+      <form className="ai-teaching-chat-form" onSubmit={submit}>
+        <input value={draft} disabled={sending} placeholder="Type a message..." onChange={(event) => setDraft(event.target.value)} />
+        <button type="submit" className="btn btn-primary" disabled={sending || !draft.trim()}>{sending ? "Sending…" : "Send"}</button>
+      </form>
+    </AppCard>
+  );
+}
+
 export default function TrainAndTestPage() {
+  const { user, companies } = useAuth();
+  const canUseTeachingTools = useMemo(() => {
+    if (user?.is_super_admin) return true;
+    const activeCompany = companies.find((company) => company.id === user?.active_company_id) || companies[0];
+    return activeCompany?.role_code === "owner" || (activeCompany?.permission_codes || []).includes("modules.ai_teaching_chat");
+  }, [user, companies]);
+
+  if (!canUseTeachingTools) {
+    return <ChatWithYourBot />;
+  }
+
   return (
     <>
       <TrainChat />

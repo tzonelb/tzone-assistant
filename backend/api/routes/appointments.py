@@ -4,6 +4,7 @@ from backend.api.routes.conversations import _company_employees
 from backend.api.schemas.appointments import AppointmentCreateRequest, AppointmentUpdateRequest
 from backend.services.appointment_service import STATUSES, appointment_service
 from backend.services.auth_service import auth_service, get_current_user
+from backend.services.platform_admin_service import platform_admin_service
 
 
 router = APIRouter(prefix="/api/appointments", tags=["Appointments"])
@@ -13,7 +14,10 @@ def current_context(current_user=Depends(get_current_user)):
     company_id = auth_service.resolve_company_id(
         current_user=current_user, requested_company_id=None
     )
-    return current_user, int(company_id)
+    company_id = int(company_id)
+    if not current_user.get("is_super_admin") and not platform_admin_service.is_module_enabled(company_id=company_id, module="appointments"):
+        raise HTTPException(status_code=403, detail="The Appointments module is not enabled for this company.")
+    return current_user, company_id
 
 
 def _can_view_all(current_user, company_id: int) -> bool:

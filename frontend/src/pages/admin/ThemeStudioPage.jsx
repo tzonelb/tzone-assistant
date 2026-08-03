@@ -8,7 +8,7 @@ import {
   restoreUiThemeRequest,
   updateUiThemeDraftRequest,
 } from "../../api/client";
-import "../../styles/v2-components.css";
+import { generateAccentRamp } from "../../contexts/ThemeContext";
 import "./ThemeStudioPage.css";
 
 // Real feature per CLAUDE_CODE_THEME_SPEC.md §5 — platform scope only
@@ -58,17 +58,49 @@ function mergeSection(base, override) {
 }
 
 function PreviewPane({ tokens }) {
+  const accentRamp = generateAccentRamp(tokens.color.accent);
+  const accent2Ramp = generateAccentRamp(tokens.color.accent2);
+
+  // Mirrors ThemeContext's applyTokens() button-style logic exactly, so
+  // the studio's own preview actually shows what flipping "Buttons"
+  // (outline/soft/solid) does instead of leaving the sample buttons
+  // looking identical no matter which option is picked.
+  let btnBg;
+  let btnFg;
+  if (tokens.shape.buttons === "solid") {
+    btnBg = tokens.color.accent;
+    btnFg = "#ffffff";
+  } else if (tokens.shape.buttons === "soft") {
+    btnBg = `color-mix(in srgb, ${tokens.color.accent} 12%, transparent)`;
+    btnFg = tokens.color.accent;
+  } else {
+    btnBg = "transparent";
+    btnFg = tokens.color.accent;
+  }
+
   const style = {
     "--color-accent": tokens.color.accent,
+    "--color-accent-dark": accentRamp[600],
+    "--color-accent-soft": accentRamp[100],
     "--color-accent2": tokens.color.accent2,
+    "--color-accent2-dark": accent2Ramp[600],
+    "--color-accent2-soft": accent2Ramp[100],
+    "--color-accent-100": accentRamp[100],
+    "--color-accent-800": accentRamp[800],
+    "--tz-btn-bg": btnBg,
+    "--tz-btn-fg": btnFg,
     "--font-heading": `"${tokens.type.headingFont}", sans-serif`,
     "--font-body": `"${tokens.type.bodyFont}", sans-serif`,
     "--radius-md": `${tokens.shape.radius}px`,
     background: tokens.color.mode === "dark" ? "#0b1220" : "#fff",
     color: tokens.color.mode === "dark" ? "#f4f7fb" : "#16182B",
   };
+  // No "tzv2" wrapper needed: the app has a single global button/card/tag
+  // system (classical-styles.css + tzone-theme.css) that reads every token
+  // this page edits (--tz-btn-bg/--tz-btn-fg/--tz-card-bg/--color-accent-*),
+  // so the preview reflects "Buttons: outline/soft/solid" live.
   return (
-    <div className="tzv2 theme-preview-pane" style={style}>
+    <div className="theme-preview-pane" style={style}>
       <div className="theme-preview-header" style={{ background: tokens.color.rail === "ink" ? "#141414" : tokens.color.rail === "accent" ? tokens.color.accent : "#f3f2f2" }}>
         <strong style={{ fontFamily: "var(--font-heading)", color: tokens.color.rail === "paper" ? "#16182B" : "#fff" }}>T-ZONE</strong>
       </div>

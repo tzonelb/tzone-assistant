@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChatBubbleOutlined, SendOutlined, GridViewOutlined } from "@mui/icons-material";
-import { listCommentPostsRequest, listPostCommentsRequest, replyToCommentRequest } from "../../api/client";
+import { listCommentPostsRequest, listPostCommentsRequest, replyToCommentRequest, scheduledPostOptionsRequest } from "../../api/client";
 import { channelIcon } from "./channelIcon";
 import "./InboxPage.css";
 
@@ -19,9 +19,10 @@ function timeAgo(value) {
 }
 
 export default function InboxPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const channelFilter = searchParams.get("channel");
 
+  const [channelAccounts, setChannelAccounts] = useState([]);
   const [posts, setPosts] = useState([]);
   const [unansweredTotal, setUnansweredTotal] = useState(0);
   const [selectedPost, setSelectedPost] = useState(null);
@@ -47,6 +48,19 @@ export default function InboxPage() {
   }
 
   useEffect(() => { loadPosts(); /* eslint-disable-next-line */ }, [channelFilter]);
+
+  useEffect(() => {
+    scheduledPostOptionsRequest()
+      .then((result) => setChannelAccounts(Array.isArray(result?.channel_accounts) ? result.channel_accounts : []))
+      .catch(() => {});
+  }, []);
+
+  function setChannelFilter(accountId) {
+    const next = new URLSearchParams(searchParams);
+    if (accountId) next.set("channel", String(accountId));
+    else next.delete("channel");
+    setSearchParams(next, { replace: true });
+  }
 
   async function openPost(post) {
     setSelectedPost(post);
@@ -103,6 +117,31 @@ export default function InboxPage() {
           <h2>All Channels</h2>
           {unansweredTotal ? <span className="community-inbox-badge">{unansweredTotal}</span> : null}
         </div>
+        {channelAccounts.length > 0 ? (
+          <div className="community-inbox-channel-filter">
+            <button
+              type="button"
+              className={`community-inbox-channel-chip ${!channelFilter ? "is-active" : ""}`}
+              onClick={() => setChannelFilter(null)}
+            >
+              All
+            </button>
+            {channelAccounts.map((account) => {
+              const Icon = channelIcon(account.channel);
+              const active = channelFilter === String(account.id);
+              return (
+                <button
+                  key={account.id}
+                  type="button"
+                  className={`community-inbox-channel-chip ${active ? "is-active" : ""}`}
+                  onClick={() => setChannelFilter(account.id)}
+                >
+                  <Icon fontSize="inherit" /> {account.name}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
       </header>
 
       <div className="community-inbox-body">
@@ -211,8 +250,8 @@ export default function InboxPage() {
                               onChange={(event) => setDraft(event.target.value)}
                             />
                             <div className="community-inbox-reply-actions">
-                              <button type="button" onClick={() => { setReplyingTo(null); setDraft(""); }} disabled={sending}>Cancel</button>
-                              <button type="button" className="is-primary" onClick={() => sendReply(comment)} disabled={sending || !draft.trim()}>
+                              <button type="button" className="btn btn-secondary" onClick={() => { setReplyingTo(null); setDraft(""); }} disabled={sending}>Cancel</button>
+                              <button type="button" className="btn btn-primary" onClick={() => sendReply(comment)} disabled={sending || !draft.trim()}>
                                 <SendOutlined fontSize="inherit" /> {sending ? "Sending…" : "Reply"}
                               </button>
                             </div>

@@ -28,6 +28,12 @@ class TeamChatService:
                 )
                 """
             )
+            existing_columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(team_messages)").fetchall()
+            }
+            for column in ("attachment_url", "attachment_type", "attachment_filename"):
+                if column not in existing_columns:
+                    conn.execute(f"ALTER TABLE team_messages ADD COLUMN {column} TEXT")
             conn.commit()
 
     def _validate_mentions(self, conn, *, company_id: int, mentioned_user_ids: list[int]) -> list[int]:
@@ -47,9 +53,10 @@ class TeamChatService:
 
     def send_message(
         self, *, company_id: int, sender_user_id: int, text: str, mentioned_user_ids: list[int] | None = None,
+        attachment_url: str | None = None, attachment_type: str | None = None, attachment_filename: str | None = None,
     ) -> dict[str, Any]:
         text = (text or "").strip()
-        if not text:
+        if not text and not attachment_url:
             raise ValueError("Message text cannot be empty.")
         if len(text) > 4000:
             raise ValueError("Message is too long (max 4000 characters).")
@@ -61,10 +68,13 @@ class TeamChatService:
             )
             cursor = conn.execute(
                 """
-                INSERT INTO team_messages (company_id, sender_user_id, text, mentioned_user_ids_json, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO team_messages (
+                    company_id, sender_user_id, text, mentioned_user_ids_json,
+                    attachment_url, attachment_type, attachment_filename, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (company_id, sender_user_id, text, json.dumps(valid_mentions), now),
+                (company_id, sender_user_id, text, json.dumps(valid_mentions),
+                 attachment_url, attachment_type, attachment_filename, now),
             )
             message_id = int(cursor.lastrowid)
             conn.commit()

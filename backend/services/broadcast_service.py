@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from database.database import db
@@ -64,6 +64,8 @@ class BroadcastService:
                 conn.execute("ALTER TABLE broadcasts ADD COLUMN media_url TEXT")
             if "media_type" not in broadcast_columns:
                 conn.execute("ALTER TABLE broadcasts ADD COLUMN media_type TEXT")
+            if "send_lock_acquired_at" not in broadcast_columns:
+                conn.execute("ALTER TABLE broadcasts ADD COLUMN send_lock_acquired_at TEXT")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS broadcast_recipients (
@@ -399,15 +401,73 @@ class BroadcastService:
         # else. Calling this again on a 'sending' broadcast now resumes
         # it instead of being a permanent dead end.
         self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)
+        # The 'draft'/'sending' status check alone only ever guarded against
+        # a double-click starting a fresh send from 'draft' — once a
+        # broadcast reached 'sending' (which resuming an interrupted send
+        # requires), TWO overlapping resume requests would both match
+        # status='sending' and both proceed to send, duplicating messages to
+        # every not-yet-confirmed recipient. send_lock_acquired_at is a
+        # real mutual-exclusion claim on top of status: only the request
+        # that atomically clears a NULL (or a lock stale enough to assume
+        # its owner crashed) lock proceeds; the lock is always released in
+        # the finally block below so a genuine crash doesn't strand it.
+        lock_claimed_at = utc_now_iso()
+        stale_before = (datetime.fromisoformat(lock_claimed_at) - timedelta(minutes=10)).isoformat()
         with db.connect() as conn:
             cursor = conn.execute(
-                "UPDATE broadcasts SET status = 'sending' WHERE id = ? AND company_id = ? AND status IN ('draft', 'sending')",
-                (broadcast_id, company_id),
+                """
+                UPDATE broadcasts SET status = 'sending', send_lock_acquired_at = ?
+                WHERE id = ? AND company_id = ? AND status IN ('draft', 'sending')
+                  AND (send_lock_acquired_at IS NULL OR send_lock_acquired_at < ?)
+                """,
+                (lock_claimed_at, broadcast_id, company_id, stale_before),
             )
             conn.commit()
         if cursor.rowcount == 0:
+            with db.connect() as conn:
+                current = conn.execute(
+                    "SELECT status FROM broadcasts WHERE id = ? AND company_id = ?", (broadcast_id, company_id),
+                ).fetchone()
+            if current and current["status"] == "sending":
+                raise ValueError("This broadcast is already being sent — please wait for it to finish.")
             raise ValueError("This broadcast has already been sent.")
 
+        try:
+            return self._send_broadcast_locked(company_id=company_id, broadcast_id=broadcast_id)
+        finally:
+            with db.connect() as conn:
+                conn.execute(
+                    "UPDATE broadcasts SET send_lock_acquired_at = NULL WHERE id = ? AND company_id = ?",
+                    (broadcast_id, company_id),
+                )
+                conn.commit()
+
+    def preview_recipient_count(self, *, company_id: int, broadcast_id: int) -> int:
+        """Recomputes how many contacts a draft would actually reach right
+        now. `recipient_count` on the row is a snapshot taken at creation
+        time — if the broadcast sits as a draft while the underlying
+        segment/lifecycle/tag membership changes, that snapshot goes stale.
+        The actual send always re-resolves recipients fresh (see
+        `_send_broadcast_locked`), so this mirrors that logic for display."""
+        broadcast = self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)
+        if broadcast.get("raw_numbers_json"):
+            try:
+                stored_numbers = json.loads(broadcast["raw_numbers_json"])
+            except (TypeError, ValueError):
+                stored_numbers = []
+            if not isinstance(stored_numbers, list):
+                stored_numbers = []
+            return len(stored_numbers)
+        recipients = self._resolve_recipients(
+            company_id=company_id,
+            channel=broadcast["channel"],
+            segment_id=broadcast["segment_id"],
+            lifecycle_stage=broadcast["lifecycle_stage"],
+            tag=broadcast["tag"],
+        )
+        return len(recipients)
+
+    def _send_broadcast_locked(self, *, company_id: int, broadcast_id: int) -> dict[str, Any]:
         broadcast = self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)
         if broadcast.get("raw_numbers_json"):
             try:
@@ -442,6 +502,7 @@ class BroadcastService:
                 (broadcast_id,),
             )
             conn.commit()
+        fresh_total_count = len(recipients)
         recipients = [r for r in recipients if r["external_user_id"] not in already_sent]
 
         for recipient in recipients:
@@ -512,10 +573,13 @@ class BroadcastService:
             conn.execute(
                 """
                 UPDATE broadcasts
-                SET status = 'sent', sent_count = ?, failed_count = ?, sent_at = ?
+                SET status = 'sent', sent_count = ?, failed_count = ?, sent_at = ?, recipient_count = ?
                 WHERE id = ? AND company_id = ?
                 """,
-                (totals_by_status.get("sent", 0), totals_by_status.get("failed", 0), now, broadcast_id, company_id),
+                (
+                    totals_by_status.get("sent", 0), totals_by_status.get("failed", 0), now,
+                    fresh_total_count + len(already_sent), broadcast_id, company_id,
+                ),
             )
             conn.commit()
         return self.get_broadcast(company_id=company_id, broadcast_id=broadcast_id)

@@ -24,7 +24,7 @@ import {
   getConversationsRequest,
   updateConversationControlRequest,
 } from "../../api/client";
-import { AppButton, AppCard, ErrorState, StatusBadge } from "../../components/common";
+import { AppCard, ErrorState, StatusBadge } from "../../components/common";
 import { useConversationLive } from "../../contexts/ConversationLiveContext";
 import ConversationDetailPage from "./ConversationDetailPage";
 import "./ConversationInbox.css";
@@ -278,7 +278,7 @@ export default function ConversationsPage() {
 
             <div className="unified-list-items">
               {loading ? <div className="unified-list-empty">Loading...</div> : null}
-              {error ? <ErrorState title="Could not load conversations" description={error} action={<AppButton variant="primary" onClick={() => loadConversations()}>Retry</AppButton>} /> : null}
+              {error ? <ErrorState title="Could not load conversations" description={error} action={<button type="button" className="btn btn-primary" onClick={() => loadConversations()}>Retry</button>} /> : null}
               {!loading && !error && rows.length === 0 ? <div className="unified-list-empty">No conversations found in {activeFolderItem.label}.</div> : null}
               {!loading && !error && rows.map((row) => {
                 const selected = routeChannel === row.channel && routeUserId === row.external_user_id;

@@ -1,5 +1,6 @@
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -9,6 +10,25 @@ from channels.meta.sender import send_meta_text
 from channels.whatsapp.sender import send_whatsapp_text
 from backend.services.message_status_service import message_status_service
 from core.conversation_store import save_conversation_message
+
+logger = logging.getLogger(__name__)
+
+
+def _fire_conversation_closed_trigger(*, company_id: int, channel: str, external_user_id: str, department: str | None) -> None:
+    """A conversation being marked closed/done fires the `conversation_closed`
+    Reply Flow trigger (e.g. to ask the customer for a rating). Lazy import
+    breaks the natural import cycle — core.reply_flow_engine already imports
+    this module — mirroring the same lazy-import pattern main.py's lifespan
+    uses for channels.telegram.manager. Never raises: a broken/misconfigured
+    trigger flow must never block the real status change that fired it."""
+    try:
+        from core.reply_flow_engine import reply_flow_engine
+        reply_flow_engine.fire_event(
+            company_id=company_id, trigger_type="conversation_closed", channel=channel,
+            external_user_id=external_user_id, department=department,
+        )
+    except Exception:
+        logger.exception("conversation_closed reply flow trigger failed for %s/%s", channel, external_user_id)
 
 
 VALID_STATUSES = {
@@ -1849,6 +1869,15 @@ class ConversationControlService:
 
             conn.commit()
 
+        status_change = next((c for c in actual_changes if c[0] == "status"), None)
+        if status_change is not None and status_change[2] == "closed":
+            department_change = next((c for c in actual_changes if c[0] == "department"), None)
+            fresh_department = department_change[2] if department_change is not None else state.get("department")
+            _fire_conversation_closed_trigger(
+                company_id=company_id, channel=channel, external_user_id=external_user_id,
+                department=fresh_department,
+            )
+
         return self.get_state(
             company_id=company_id,
             channel=channel,
@@ -2007,6 +2036,13 @@ class ConversationControlService:
                 )
 
             conn.commit()
+
+        folder_change = next((u for u in updates if u[0] == "folder"), None)
+        if folder_change is not None and folder_change[2] == "done":
+            _fire_conversation_closed_trigger(
+                company_id=company_id, channel=channel, external_user_id=external_user_id,
+                department=state.get("department"),
+            )
 
         return self.get_state(
             company_id=company_id,

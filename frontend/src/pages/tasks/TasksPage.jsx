@@ -9,7 +9,7 @@ import {
   taskOptionsRequest,
   updateTaskRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, SearchBar, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, SearchBar, StatusBadge } from "../../components/common";
 import "./TasksPage.css";
 
 const PRIORITY_TONE = { low: "neutral", normal: "info", high: "warning", urgent: "danger" };
@@ -297,9 +297,9 @@ export default function TasksPage() {
     <section className="tasks-page">
       <PageHeader
         actions={
-          <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openDialog}>
-            New Task
-          </AppButton>
+          <button type="button" className="btn btn-primary" onClick={openDialog}>
+            <AddOutlined fontSize="small" /> New Task
+          </button>
         }
       />
 
@@ -317,7 +317,7 @@ export default function TasksPage() {
       </AppCard>
 
       {error ? (
-        <ErrorState title="Could not load tasks" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />
+        <ErrorState title="Could not load tasks" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />
       ) : (
         <AppTable
           columns={columns}
@@ -451,8 +451,8 @@ export default function TasksPage() {
               {formError ? <p className="task-form-error">{formError}</p> : null}
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton type="button" variant="secondary" disabled={saving} onClick={closeDialog}>Cancel</AppButton>
-              <AppButton type="submit" variant="primary" loading={saving}>Create task</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeDialog}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Creating…" : "Create task"}</button>
             </footer>
           </form>
         </div>

@@ -7,6 +7,15 @@ import tzoneLogo from "../../assets/tzone-logo.png";
 
 const IS_DESKTOP = typeof window !== "undefined" && Boolean(window.tzoneDesktop);
 
+// The Android/iOS app needs the same runtime server switch as desktop —
+// the APK ships with a baked-in default that must be changeable when the
+// real server goes live, without republishing the app.
+const IS_NATIVE_APP =
+  typeof window !== "undefined" &&
+  Boolean(window.Capacitor?.isNativePlatform?.());
+
+const SHOW_SERVER_SETTINGS = IS_DESKTOP || IS_NATIVE_APP;
+
 
 export default function LoginPage() {
   const { authenticated, loading, login, verifyTwoFactor } = useAuth();
@@ -251,7 +260,7 @@ export default function LoginPage() {
           <Link to="/signup">Create an account</Link>
         </small>
 
-        {IS_DESKTOP ? (
+        {SHOW_SERVER_SETTINGS ? (
           <div className="login-server-settings">
             <button
               type="button"

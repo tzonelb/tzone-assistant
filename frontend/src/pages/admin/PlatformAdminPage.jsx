@@ -470,7 +470,7 @@ export default function PlatformAdminPage() {
         {!loading && tab === "usage" ? (
           <section>
             <h2 style={styles.sectionTitle}>Revenue</h2>
-            <p style={styles.sectionSubtitle}>Computed from active/trialing subscription rows — real numbers only.</p>
+            <p style={styles.sectionSubtitle}>MRR is computed from paying ("active") subscriptions only — trials are shown separately, not counted as revenue.</p>
             <div style={styles.usageGrid}>
               <div style={styles.usageCard}>
                 <div style={styles.muted}>Total MRR</div>

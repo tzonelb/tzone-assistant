@@ -277,3 +277,118 @@ def test_task_options_includes_task_types(client_and_db):
     client = client_and_db
     resp = client.get("/api/tasks/options")
     assert "follow_up" in resp.json()["task_types"]
+
+
+# -- update/delete restricted to assignee, creator, or admin ---------------
+
+@pytest.fixture()
+def client_and_db_with_bystander():
+    """A second, no-role employee (user 2) alongside the fixture's default
+    user 1 — for testing that editing/deleting a task you're neither
+    assigned to nor created isn't allowed unless you're an admin."""
+    from database.database import db
+    from backend.services.auth_service import auth_service
+    from backend.services.task_service import task_service
+
+    tmp_db_path = tempfile.mktemp(suffix=".db")
+    original_db_path = db.db_path
+    db.db_path = Path(tmp_db_path)
+
+    db.create_tables()
+    auth_service.create_tables()
+    task_service.ensure_schema()
+
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (1, 'agent@test.local', 'Agent', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (2, 'bystander@test.local', 'Bystander', 'active', 0)"
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO users (id, email, full_name, status, is_super_admin) "
+            "VALUES (3, 'owner@test.local', 'Owner', 'active', 0)"
+        )
+        conn.execute("INSERT OR IGNORE INTO companies (id, name, slug, workspace_id) VALUES (1, 'Test Co', 'test-co', 1)")
+        conn.execute(
+            "INSERT OR IGNORE INTO roles (company_id, name, code, description, is_system) "
+            "VALUES (1, 'Owner', 'owner', 'Full access', 1)"
+        )
+        owner_role_id = conn.execute("SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'").fetchone()["id"]
+        conn.execute("INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 1, 'active')")
+        conn.execute("INSERT OR IGNORE INTO company_users (company_id, user_id, status) VALUES (1, 2, 'active')")
+        conn.execute(
+            "INSERT OR IGNORE INTO company_users (company_id, user_id, role_id, status) VALUES (1, 3, ?, 'active')",
+            (owner_role_id,),
+        )
+        conn.commit()
+
+    from main import app
+    from backend.services.auth_service import get_current_user
+
+    state = {"user_id": 1}
+
+    async def _override():
+        return {"id": state["user_id"], "email": "test@test.local", "is_super_admin": False, "active_company_id": COMPANY_ID}
+    app.dependency_overrides[get_current_user] = _override
+
+    from fastapi.testclient import TestClient
+    yield TestClient(app), state
+
+    app.dependency_overrides.clear()
+    db.db_path = original_db_path
+    import gc
+    gc.collect()
+    for _attempt in range(5):
+        try:
+            if os.path.exists(tmp_db_path):
+                os.remove(tmp_db_path)
+            break
+        except PermissionError:
+            time.sleep(0.1)
+
+
+def test_bystander_cannot_update_someone_elses_task(client_and_db_with_bystander):
+    client, state = client_and_db_with_bystander
+    task = client.post("/api/tasks", json={"title": "Follow up"}).json()
+
+    state["user_id"] = 2
+    resp = client.put(f"/api/tasks/{task['id']}", json={"status": "done"})
+    assert resp.status_code == 403
+
+
+def test_bystander_cannot_delete_someone_elses_task(client_and_db_with_bystander):
+    client, state = client_and_db_with_bystander
+    task = client.post("/api/tasks", json={"title": "Follow up"}).json()
+
+    state["user_id"] = 2
+    resp = client.delete(f"/api/tasks/{task['id']}")
+    assert resp.status_code == 403
+
+
+def test_assignee_can_update_task_even_if_not_the_creator(client_and_db_with_bystander):
+    client, state = client_and_db_with_bystander
+    task = client.post("/api/tasks", json={"title": "Follow up", "assigned_user_id": 2}).json()
+
+    state["user_id"] = 2
+    resp = client.put(f"/api/tasks/{task['id']}", json={"status": "done"})
+    assert resp.status_code == 200, resp.text
+
+
+def test_admin_can_update_anyones_task(client_and_db_with_bystander):
+    client, state = client_and_db_with_bystander
+    task = client.post("/api/tasks", json={"title": "Follow up"}).json()
+
+    state["user_id"] = 3
+    resp = client.put(f"/api/tasks/{task['id']}", json={"status": "done"})
+    assert resp.status_code == 200, resp.text
+
+
+def test_creator_can_delete_even_if_assigned_to_someone_else(client_and_db_with_bystander):
+    client, state = client_and_db_with_bystander
+    task = client.post("/api/tasks", json={"title": "Follow up", "assigned_user_id": 2}).json()
+
+    resp = client.delete(f"/api/tasks/{task['id']}")
+    assert resp.status_code == 200

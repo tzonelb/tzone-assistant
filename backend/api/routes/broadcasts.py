@@ -66,6 +66,17 @@ def get_broadcast_report(broadcast_id: int, context=Depends(current_context)):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.get("/{broadcast_id}/recipient-count")
+def preview_broadcast_recipient_count(broadcast_id: int, context=Depends(current_context)):
+    current_user, company_id = context
+    auth_service.require_permission(current_user, company_id, "channels.view")
+    try:
+        count = broadcast_service.preview_recipient_count(company_id=company_id, broadcast_id=broadcast_id)
+        return {"recipient_count": count}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.post("/{broadcast_id}/send")
 def send_broadcast(broadcast_id: int, context=Depends(current_context)):
     current_user, company_id = context

@@ -40,10 +40,16 @@ from backend.services.diagnostics_service import diagnostics_service
 from backend.services.notification_service import notification_service
 from backend.services.reply_flow_service import reply_flow_service
 from backend.services.task_service import task_service
+from channels.meta.sender import send_meta_buttons
+from channels.telegram.sender import send_telegram_buttons
+from channels.whatsapp.sender import send_whatsapp_text
 from config.settings import config
 from core.ai_router import ai_router
+from core.conversation_store import save_conversation_message
 from core.instruction_service import instruction_service
 from core.knowledge_manager import knowledge_manager
+from core.reply_flow_triggers import DEFAULT_TRIGGER_TYPE
+from core.request import Request
 from core.response import Response
 from database.database import db
 
@@ -106,9 +112,25 @@ class ReplyFlowEngine:
     # -- flow selection -----------------------------------------------
 
     def _pick_flow(self, company_id: int, channel: str, department: str | None) -> dict[str, Any] | None:
+        """Today's ONLY flow-selection path, unchanged: implicitly triggered by
+        ANY new incoming customer message. Now just the `new_conversation`
+        trigger type under the hood — every flow already in the database
+        defaults to this trigger via the schema migration, so behavior for
+        existing flows is byte-for-byte identical to before triggers existed."""
+        return self._pick_flow_for_trigger(company_id, DEFAULT_TRIGGER_TYPE, channel, department)
+
+    def _pick_flow_for_trigger(
+        self, company_id: int, trigger_type: str, channel: str | None, department: str | None,
+    ) -> dict[str, Any] | None:
+        """Generic version of _pick_flow, keyed by trigger type instead of
+        being hardcoded to the implicit new-message trigger. Same channel/
+        department precedence: an exact department match wins, otherwise the
+        first flow with no department restriction, otherwise nothing."""
         flows = [
             flow for flow in reply_flow_service.list_for_company(company_id=company_id)
-            if flow["status"] == "active" and (not flow["channels"] or channel in flow["channels"])
+            if flow["status"] == "active"
+            and (flow.get("trigger_type") or DEFAULT_TRIGGER_TYPE) == trigger_type
+            and (not flow["channels"] or not channel or channel in flow["channels"])
         ]
         if not flows:
             return None
@@ -123,6 +145,165 @@ class ReplyFlowEngine:
                 return reply_flow_service.get(company_id=company_id, flow_id=flow["id"])
 
         return None
+
+    # -- event-based triggers ---------------------------------------------
+    # conversation_closed / appointment_created / appointment_completed /
+    # appointment_reminder / call_logged all land here. Each is a real hook
+    # in the service that owns that event (conversation_control_service,
+    # appointment_service, call_log_service) or, for the time-based
+    # appointment_reminder, a periodic scan alongside main.py's existing
+    # reminder_worker() loop. Every one of them funnels into fire_event,
+    # which reuses the exact same _start_session/_advance machinery
+    # message-triggered flows use — no parallel execution path.
+
+    def fire_event(
+        self, *, company_id: int, trigger_type: str, channel: str, external_user_id: str,
+        department: str | None = None,
+    ) -> None:
+        """Starts a brand-new flow session for the first active flow whose
+        trigger_type/channel/department matches, then dispatches whatever it
+        sends through the same real per-channel senders the message-triggered
+        path uses (channels/meta/smart_reply.py's _finish_pending dispatches
+        the same three functions). A closed-conversation/appointment/call flow
+        is a fresh, separate mini-conversation — starting it reuses (and
+        resets) the same one session slot a normal new_conversation flow would
+        use for this channel+external_user_id, since only one flow session can
+        be active per conversation at a time; that's fine here because the
+        conversation the trigger fired on is, by definition, wrapping up.
+        Never raises — a broken trigger flow must never block the real event
+        (a status change, a booked appointment, a logged call) that fired it."""
+        try:
+            flow = self._pick_flow_for_trigger(company_id, trigger_type, channel, department)
+            if not flow or not flow["nodes"]:
+                return
+
+            session_row = self._start_session(
+                company_id=company_id, channel=channel, external_user_id=external_user_id, flow_id=flow["id"],
+            )
+            request = Request(channel=channel, user_id=external_user_id, message="", company_id=company_id)
+            state = conversation_control_service.get_state(
+                company_id=company_id, channel=channel, external_user_id=external_user_id,
+            )
+            response = self._advance(request, flow, session_row, state)
+            if response is not None and (response.text or response.buttons):
+                self._dispatch_event_response(
+                    company_id=company_id, channel=channel, external_user_id=external_user_id, response=response,
+                )
+        except Exception:
+            logger.exception("Reply flow trigger '%s' failed for %s/%s", trigger_type, channel, external_user_id)
+
+    def fire_event_for_customer(self, *, company_id: int, customer_id: int | None, trigger_type: str) -> None:
+        """Same as fire_event, but for triggers that only know a customer_id
+        (appointments, call logs) rather than a channel+external_user_id
+        directly — resolves every channel identity that customer has via
+        customer_identities and fires the trigger on each. A customer with no
+        linked channel identity (e.g. a walk-in appointment with just a phone
+        number typed in) has nowhere to send a message, so it's a no-op."""
+        if not customer_id:
+            return
+        try:
+            with db.connect() as conn:
+                identities = conn.execute(
+                    "SELECT channel, external_user_id FROM customer_identities WHERE company_id = ? AND customer_id = ?",
+                    (company_id, customer_id),
+                ).fetchall()
+        except Exception:
+            logger.exception("Reply flow trigger '%s' could not resolve customer #%s", trigger_type, customer_id)
+            return
+
+        for identity in identities:
+            channel = identity["channel"]
+            external_user_id = identity["external_user_id"]
+            state = conversation_control_service.get_state(
+                company_id=company_id, channel=channel, external_user_id=external_user_id,
+            )
+            self.fire_event(
+                company_id=company_id, trigger_type=trigger_type, channel=channel,
+                external_user_id=external_user_id, department=state.get("department"),
+            )
+
+    def _dispatch_event_response(self, *, company_id: int, channel: str, external_user_id: str, response: Response) -> None:
+        """The actual send, for a flow session that has no incoming customer
+        message to piggy-back a reply onto (there's no smart_reply.py buffer
+        to flush here — the event, not a customer message, is what's driving
+        this). Calls the exact same per-channel sender functions
+        channels/meta/smart_reply.py's _finish_pending calls for
+        message-triggered flows, so a channel that gets real interactive
+        buttons there gets them here too."""
+        buttons = response.buttons or None
+        if channel == "telegram":
+            send_result = send_telegram_buttons(recipient_id=external_user_id, text=response.text, buttons=buttons, channel=channel)
+        elif channel == "whatsapp":
+            send_result = send_whatsapp_text(to=external_user_id, text=response.text, buttons=buttons, company_id=company_id)
+        else:
+            send_result = send_meta_buttons(recipient_id=external_user_id, text=response.text, buttons=buttons, channel=channel, company_id=company_id)
+
+        save_conversation_message(
+            channel=channel, user_id=external_user_id, direction="out", text=response.text,
+            metadata={"buttons": buttons, "send_result": send_result, "sender_type": "ai", "source": "reply_flow_trigger"},
+        )
+
+    def check_appointment_reminders(self) -> None:
+        """Called periodically by main.py's reminder_worker() loop, right
+        alongside conversation_control_service.check_due_reminders() — same
+        cadence, same fire-and-forget contract. For every active
+        appointment_reminder flow, scans that company's scheduled
+        appointments for ones now within trigger_config.minutes_before
+        minutes of scheduled_at that haven't fired this reminder yet, claims
+        each one (flow_reminder_sent_at, same claim-then-act discipline as
+        check_due_reminders' reminder_notified_at, so a slow send can never
+        cause a double-fire), then fires the flow for that appointment's
+        linked customer."""
+        try:
+            with db.connect() as conn:
+                flow_rows = conn.execute(
+                    "SELECT company_id, trigger_config FROM reply_flows WHERE status = 'active' AND trigger_type = 'appointment_reminder'",
+                ).fetchall()
+        except Exception:
+            logger.exception("appointment_reminder flow scan failed")
+            return
+
+        now = datetime.now(timezone.utc)
+        for flow_row in flow_rows:
+            company_id = flow_row["company_id"]
+            try:
+                trigger_config = json.loads(flow_row["trigger_config"] or "{}")
+                minutes_before = int(trigger_config.get("minutes_before") or 60)
+            except (TypeError, ValueError):
+                minutes_before = 60
+            minutes_before = max(1, minutes_before)
+
+            window_end = (now + timedelta(minutes=minutes_before)).isoformat()
+            # Safety bound: never resurrect a "reminder" for an appointment left
+            # sitting in 'scheduled' status long after it should have happened
+            # (e.g. the worker was down, or nobody ever marked it completed).
+            window_start = (now - timedelta(hours=24)).isoformat()
+
+            try:
+                claimed_customer_ids: list[int | None] = []
+                with db.connect() as conn:
+                    due = conn.execute(
+                        """
+                        SELECT id, customer_id FROM appointments
+                        WHERE company_id = ? AND status = 'scheduled' AND flow_reminder_sent_at IS NULL
+                          AND scheduled_at <= ? AND scheduled_at >= ?
+                        """,
+                        (company_id, window_end, window_start),
+                    ).fetchall()
+                    for row in due:
+                        cursor = conn.execute(
+                            "UPDATE appointments SET flow_reminder_sent_at = ? WHERE id = ? AND flow_reminder_sent_at IS NULL",
+                            (utc_now_iso(), row["id"]),
+                        )
+                        if cursor.rowcount:
+                            claimed_customer_ids.append(row["customer_id"])
+                    conn.commit()
+            except Exception:
+                logger.exception("appointment_reminder claim failed for company %s", company_id)
+                continue
+
+            for customer_id in claimed_customer_ids:
+                self.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type="appointment_reminder")
 
     # -- graph helpers --------------------------------------------------
 
@@ -319,9 +500,25 @@ class ReplyFlowEngine:
         edges = self._edges_from(flow, node_id)
         if not edges:
             return None
-        if matched or len(edges) == 1:
+        if len(edges) == 1:
             return edges[0]["target"]
-        return edges[1]["target"]
+
+        # The builder's condition node now has two distinctly-labeled
+        # handles ("Yes"/"No" — FlowStepNode.jsx), which tags each edge with
+        # sourceHandle="true"/"false" so a flow author can draw the branches
+        # in either order without silently swapping them. Older flows saved
+        # before that existed have no sourceHandle on either edge — for
+        # those, fall back to the original convention (first-drawn edge =
+        # true branch, second = false) so nothing already built breaks.
+        wanted_handle = "true" if matched else "false"
+        for edge in edges:
+            if edge.get("sourceHandle") == wanted_handle:
+                return edge["target"]
+        if any(edge.get("sourceHandle") in ("true", "false") for edge in edges):
+            # At least one edge is labeled but not the one we want (e.g. only
+            # the true branch was ever connected) — no edge for this outcome.
+            return None
+        return edges[0]["target"] if matched else edges[1]["target"]
 
     def _handle_create_task(self, request: Any, config: dict[str, Any], state: dict[str, Any] | None, *, is_appointment: bool = False) -> None:
         task_type = config.get("task_type") if not is_appointment else "follow_up"
@@ -379,6 +576,40 @@ class ReplyFlowEngine:
             )
         except Exception:
             logger.exception("Reply flow could not schedule a timeout follow-up")
+
+    def _match_button_option(self, message: str, options: list[dict[str, Any]]) -> dict[str, Any] | None:
+        """Matches a customer's reply against an ask_question's button
+        options — by 1-based position ("2"), or by the option's label/value
+        text (case-insensitive). This covers every way a tap can come back as
+        plain text: a Telegram reply-keyboard tap echoes the button's label
+        verbatim; a Messenger/Instagram quick-reply tap's payload is set to
+        that same (truncated) label text in channels/meta/sender.py's
+        send_meta_buttons; and the WhatsApp numbered-list fallback explicitly
+        asks the customer to reply with the number or the option name."""
+        text = (message or "").strip()
+        if not text:
+            return None
+        lowered = text.lower()
+        for index, option in enumerate(options, start=1):
+            if not isinstance(option, dict):
+                continue
+            label = str(option.get("label") or "").strip()
+            value = str(option.get("value") or "").strip()
+            if lowered == str(index):
+                return option
+            if label and lowered == label.lower():
+                return option
+            if value and lowered == value.lower():
+                return option
+        return None
+
+    def _render_question_buttons(self, config: dict[str, Any]) -> list[str] | None:
+        mode = config.get("mode") or "text"
+        if mode not in ("buttons", "both"):
+            return None
+        options = config.get("options") or []
+        labels = [str(option.get("label") or "").strip() for option in options if isinstance(option, dict) and option.get("label")]
+        return labels or None
 
     def _close_chat_text(self, config: dict[str, Any]) -> str:
         text = "Thanks for chatting with us — is there anything else we can help with?"
@@ -441,10 +672,28 @@ class ReplyFlowEngine:
         else:
             node_type = current_node["data"].get("nodeType")
             if node_type == "ask_question":
-                save_as = (current_node["data"].get("config") or {}).get("save_as")
-                if save_as:
-                    variables[save_as] = request.message
-                current_node_id = self._next_node_id(flow, current_node_id)
+                node_config = current_node["data"].get("config") or {}
+                save_as = node_config.get("save_as")
+                mode = node_config.get("mode") or "text"
+                options = node_config.get("options") or []
+                matched = (
+                    self._match_button_option(request.message, options)
+                    if mode in ("buttons", "both") and options
+                    else None
+                )
+                if mode == "buttons" and options and matched is None:
+                    # Strict buttons mode: free text is never a valid answer —
+                    # re-prompt with the same buttons instead of advancing.
+                    # current_node_id is left unchanged so the loop below
+                    # re-processes this same ask_question node.
+                    variables["__invalid_choice__"] = True
+                else:
+                    if matched is not None:
+                        if save_as:
+                            variables[save_as] = matched.get("value") or matched.get("label")
+                    elif save_as:
+                        variables[save_as] = request.message
+                    current_node_id = self._next_node_id(flow, current_node_id)
             elif node_type in AI_NODE_TYPES and variables.pop("__stay_at__", None) == current_node_id:
                 # exit_when said "not yet" last time — re-run this same AI
                 # step with the customer's new message instead of advancing.
@@ -471,11 +720,14 @@ class ReplyFlowEngine:
                 continue
 
             if node_type == "ask_question":
+                if variables.pop("__invalid_choice__", False):
+                    reply_parts.append("Please choose one of the options below.")
                 question = self._format_text(config.get("question", ""), request, variables)
                 if question:
                     reply_parts.append(question)
+                buttons = self._render_question_buttons(config)
                 self._save_progress(session_row, current_node_id=current_node_id, variables=variables)
-                return Response("\n\n".join(reply_parts)) if reply_parts else None
+                return Response("\n\n".join(reply_parts), buttons=buttons) if reply_parts else None
 
             if node_type in AI_NODE_TYPES:
                 ai_text, should_exit = self._run_ai_step(request, node, department, variables)

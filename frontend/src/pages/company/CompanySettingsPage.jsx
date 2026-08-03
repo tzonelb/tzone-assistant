@@ -1,30 +1,59 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listDepartmentsRequest, createDepartmentRequest, deleteDepartmentRequest, listSupportTicketsRequest, createSupportTicketRequest, getCurrentUserRequest } from "../../api/client";
+import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSupportTicketsRequest, createSupportTicketRequest, getCurrentUserRequest } from "../../api/client";
 import SecureChannelsPanel from "./SecureChannelsPanel";
+import RolesPermissionsPage from "../admin/RolesPermissionsPage";
+import ActivityLogPage from "../admin/ActivityLogPage";
+import ReplyFlowsListPage from "../reply-flows/ReplyFlowsListPage";
+import InstructionsPage from "../ai-teaching/InstructionsPage";
+import KnowledgePage from "../ai-teaching/KnowledgePage";
 
 const SECTIONS = [
   ["profile", "Company Profile", "Identity, contact information, branches, timezone, business details and branding.", ["Company name", "Workspace code", "Timezone", "Default language", "Logo"]],
-  ["departments", "Departments", "Your own departments — set these up first, before Chatbot Control, since routing and knowledge scoping depend on them.", []],
-  ["ai", "Chatbot Control", "One place for all bot behaviour — greeting, who replies first, human takeover workflow and saved replies.", []],
-  ["flow", "Reply Flow & Saved Replies", "Design the real step-by-step conversation flow per channel and department, plus reusable replies employees can insert from any conversation. Admins only.", [], "users.manage"],
-  ["roles", "Roles & Permissions", "Manage employee roles and exactly what each one is allowed to do. Admins only.", [], "users.manage"],
-  ["channels", "Channels", "Messenger, WhatsApp, Instagram, Telegram, email and website.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
-  ["api", "API & Webhooks", "Not built yet — each connected channel already has its own real webhook wired up automatically; a general API-key/webhook-management screen isn't available.", []],
-  ["security", "Security", "How channel credential access is protected — verification, encryption at rest, and the session change log.", []],
-  ["backup", "Backup", "Not built yet — there is no self-service backup/restore control in T-ZONE. Contact support if you need a restore.", []],
+  ["ai", "Chatbot Control", "One place for all bot behaviour — greeting, who replies first, and the human takeover workflow. Walk through it step by step below.", []],
+  ["instructions", "AI Instructions", "Behavior rules for how your AI should act — tone, what not to say, when to hand off. Earlier rules take priority when they conflict. Scope a rule to a department/channel, or leave it unscoped.", []],
+  ["knowledge", "AI Knowledge", "What your AI knows about your business — pricing, services, policies, anything customers ask. The AI uses these, not generic knowledge, when replying.", []],
+  ["flow", "Reply Flows", "Design the real step-by-step conversation flow per channel and department. Admins only.", [], "users.manage"],
+  ["roles", "Roles & Permissions", "Manage employee roles, departments, and exactly what each one is allowed to do — including overrides beyond their role. Admins only.", [], "users.manage"],
+  ["activity_log", "Activity Log", "Every task, customer, catalogue, broadcast and role/permission change your team makes — who did what, and when. Admins only.", [], "users.manage"],
+  ["channels", "Channels", "Messenger, WhatsApp, Instagram and Telegram — email and website are coming soon.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
+  ["security", "Security & Backup", "How channel credential access is protected — verification, encryption at rest, the session change log — plus backup status. There is no self-service backup/restore control in T-ZONE; contact support if you need a restore.", []],
   ["billing", "Billing", "Your plan, usage limits, billing history, and plan-change or renewal requests.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
   ["help", "Help", "Frequently asked questions about running your workspace on T-ZONE.", []],
   ["ticketing", "Ticketing", "Open a support or maintenance ticket to the T-ZONE team about platform issues.", []],
 ];
 
+// Same real settings as before (mode, greeting_message, reply_access_mode,
+// return_to_ai_timeout_minutes, auto_release_to_ai, voice_reply_enabled),
+// persisted the same way via updateCompanySettingSectionRequest("ai_behavior",
+// ...) — just walked through one step at a time with Back/Next buttons
+// instead of one flat form, per the owner's "make it happen through
+// buttons, like an investigation/wizard flow" request. The much bigger
+// full conversation-flow logic (department routing, per-step data source,
+// follow-up timers, auto-tagging) the owner also described belongs to the
+// existing Reply Flow builder instead (see frontend/src/pages/reply-flows/
+// nodeTypesConfig.js — greeting, ask_question, ai_direct/knowledge-only/
+// knowledge-plus, human_handoff, timeout_followup, close_chat, etc. already
+// cover exactly that); it is intentionally out of scope here.
+const WIZARD_STEPS = [
+  { key: "greeting", label: "Greeting" },
+  { key: "who_may", label: "Who may reply" },
+  { key: "return_ai", label: "Return to AI" },
+  { key: "voice", label: "Voice replies" },
+];
+
 function WorkflowSettings() {
+  // mode is always "ai_first" — a chatbot platform exists precisely so the
+  // AI answers immediately; a "human replies first" toggle made no sense
+  // as a real choice here (per owner feedback) and was removed. Still sent
+  // to the backend since the field exists there, just no longer editable.
   const [values, setValues] = useState({ mode: "ai_first", greeting_message: "", reply_access_mode: "take_required", return_to_ai_timeout_minutes: 5, auto_release_to_ai: true, voice_reply_enabled: false });
   const [locked, setLocked] = useState([]);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [voiceAiOnPlan, setVoiceAiOnPlan] = useState(true);
+  const [step, setStep] = useState(0);
 
   useEffect(() => {
     getCompanySettingSectionRequest("ai_behavior")
@@ -39,7 +68,7 @@ function WorkflowSettings() {
     setSaving(true); setStatus("");
     try {
       const result = await updateCompanySettingSectionRequest("ai_behavior", {
-        mode: values.mode,
+        mode: "ai_first",
         greeting_message: values.greeting_message || "",
         reply_access_mode: values.reply_access_mode,
         return_to_ai_timeout_minutes: Math.max(1, Number(values.return_to_ai_timeout_minutes) || 5),
@@ -52,14 +81,58 @@ function WorkflowSettings() {
     finally { setSaving(false); }
   }
 
+  const current = WIZARD_STEPS[step];
+
   return <div className="workflow-settings-card">
-    <div className="workflow-setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}><div><strong>Greeting message</strong><span>Sent when a new conversation starts. Leave blank to use the built-in default welcome.</span></div><textarea rows={2} value={values.greeting_message || ""} disabled={locked.includes("greeting_message")} onChange={(e) => setValues({ ...values, greeting_message: e.target.value })} placeholder="Welcome! How can we help you today?" style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} /></div>
-    <div className="workflow-setting-row"><div><strong>Who replies first?</strong><span>AI first lets the bot answer immediately; human first holds new chats for an employee to open them.</span></div><select value={values.mode} disabled={locked.includes("mode")} onChange={(e) => setValues({ ...values, mode: e.target.value })}><option value="ai_first">AI replies first</option><option value="human_first">Human replies first</option></select></div>
-    <div className="workflow-setting-row"><div><strong>Who may reply?</strong><span>Exclusive takeover is safest. Shared mode lets the first employee reply claim an unassigned human chat atomically.</span></div><select value={values.reply_access_mode} disabled={locked.includes("reply_access_mode")} onChange={(e) => setValues({ ...values, reply_access_mode: e.target.value })}><option value="take_required">Take conversation required</option><option value="shared_until_taken">Anyone until first reply</option></select></div>
-    <div className="workflow-setting-row"><div><strong>Return to AI timeout</strong><span>After the employee's last reply, ownership is released and AI resumes automatically.</span></div><div className="timeout-input"><input type="number" min="1" max="1440" value={values.return_to_ai_timeout_minutes} disabled={locked.includes("return_to_ai_timeout_minutes")} onChange={(e) => setValues({ ...values, return_to_ai_timeout_minutes: e.target.value })}/><span>minutes</span></div></div>
-    <label className="workflow-toggle"><input type="checkbox" checked={Boolean(values.auto_release_to_ai)} disabled={locked.includes("auto_release_to_ai")} onChange={(e) => setValues({ ...values, auto_release_to_ai: e.target.checked })}/><div><strong>Auto-release ownership and return to AI</strong><span>Clears the assigned employee when the timeout expires, completing the full cycle.</span></div></label>
-    <label className="workflow-toggle"><input type="checkbox" checked={Boolean(values.voice_reply_enabled)} disabled={locked.includes("voice_reply_enabled") || !voiceAiOnPlan} onChange={(e) => setValues({ ...values, voice_reply_enabled: e.target.checked })}/><div><strong>Reply with voice</strong><span>{voiceAiOnPlan ? "The AI sends a real voice note instead of text whenever the reply doesn't need buttons." : "Not included on your current plan — upgrade under Billing to enable."}</span></div></label>
-    <div className="workflow-setting-row" style={{ borderBottom: "none" }}><div><strong>Saved reply behaviour</strong><span>Saved replies are manual snippets employees insert inside a conversation — they never send automatically. Manage them under the "Reply Flow &amp; Saved Replies" section.</span></div></div>
+    <div className="workflow-wizard-steps" role="tablist" aria-label="Chatbot control steps">
+      {WIZARD_STEPS.map((wizardStep, index) => (
+        <button
+          key={wizardStep.key}
+          type="button"
+          role="tab"
+          aria-selected={index === step}
+          className={`workflow-wizard-step-btn${index === step ? " is-active" : ""}${index < step ? " is-done" : ""}`}
+          onClick={() => setStep(index)}
+        >
+          <span className="workflow-wizard-step-num">{index + 1}</span>
+          {wizardStep.label}
+        </button>
+      ))}
+    </div>
+
+    <div className="workflow-wizard-panel">
+      {current.key === "greeting" ? (
+        <div className="workflow-setting-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+          <div><strong>Greeting message</strong><span>Sent when a new conversation starts. Leave blank to use the built-in default welcome.</span></div>
+          <textarea rows={3} value={values.greeting_message || ""} disabled={locked.includes("greeting_message")} onChange={(e) => setValues({ ...values, greeting_message: e.target.value })} placeholder="Welcome! How can we help you today?" style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }} />
+        </div>
+      ) : null}
+      {current.key === "who_may" ? (
+        <div className="workflow-setting-row">
+          <div><strong>Who may reply?</strong><span>Exclusive takeover is safest. Shared mode lets the first employee reply claim an unassigned human chat atomically.</span></div>
+          <select value={values.reply_access_mode} disabled={locked.includes("reply_access_mode")} onChange={(e) => setValues({ ...values, reply_access_mode: e.target.value })}><option value="take_required">Take conversation required</option><option value="shared_until_taken">Anyone until first reply</option></select>
+        </div>
+      ) : null}
+      {current.key === "return_ai" ? (
+        <>
+          <div className="workflow-setting-row">
+            <div><strong>Return to AI timeout</strong><span>After the employee's last reply, ownership is released and AI resumes automatically.</span></div>
+            <div className="timeout-input"><input type="number" min="1" max="1440" value={values.return_to_ai_timeout_minutes} disabled={locked.includes("return_to_ai_timeout_minutes")} onChange={(e) => setValues({ ...values, return_to_ai_timeout_minutes: e.target.value })}/><span>minutes</span></div>
+          </div>
+          <label className="workflow-toggle"><input type="checkbox" checked={Boolean(values.auto_release_to_ai)} disabled={locked.includes("auto_release_to_ai")} onChange={(e) => setValues({ ...values, auto_release_to_ai: e.target.checked })}/><div><strong>Auto-release ownership and return to AI</strong><span>Clears the assigned employee when the timeout expires, completing the full cycle.</span></div></label>
+        </>
+      ) : null}
+      {current.key === "voice" ? (
+        <label className="workflow-toggle"><input type="checkbox" checked={Boolean(values.voice_reply_enabled)} disabled={locked.includes("voice_reply_enabled") || !voiceAiOnPlan} onChange={(e) => setValues({ ...values, voice_reply_enabled: e.target.checked })}/><div><strong>Reply with voice</strong><span>{voiceAiOnPlan ? "The AI sends a real voice note instead of text whenever the reply doesn't need buttons." : "Not included on your current plan — upgrade under Billing to enable."}</span></div></label>
+      ) : null}
+    </div>
+
+    <div className="workflow-wizard-nav">
+      <button type="button" className="btn btn-secondary" disabled={step === 0} onClick={() => setStep((s) => Math.max(0, s - 1))}>Back</button>
+      <span className="workflow-wizard-progress">Step {step + 1} of {WIZARD_STEPS.length}</span>
+      <button type="button" className="btn btn-secondary" disabled={step === WIZARD_STEPS.length - 1} onClick={() => setStep((s) => Math.min(WIZARD_STEPS.length - 1, s + 1))}>Next</button>
+    </div>
+
     <div className="workflow-settings-footer"><span>{status}</span><button type="button" onClick={save} disabled={saving}>{saving ? "Saving..." : "Save chatbot control"}</button></div>
   </div>;
 }
@@ -542,149 +615,6 @@ function ProfileSettings() {
   );
 }
 
-function ReplyFlowLink() {
-  const navigate = useNavigate();
-  return (
-    <div className="workflow-settings-card">
-      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
-        <div>
-          <strong>Reply Flow</strong>
-          <br />
-          <span style={{ fontWeight: 400, color: "#6b7280" }}>
-            Design the real step-by-step conversation flow — greeting, AI reply mode, appointments, task
-            creation, human handoff — per channel and department, on its own drag-and-drop canvas.
-          </span>
-        </div>
-        <button type="button" onClick={() => navigate("/reply-flows")}>Open Reply Flows</button>
-      </div>
-    </div>
-  );
-}
-
-function RolesPermissionsLink() {
-  const navigate = useNavigate();
-  return (
-    <div className="workflow-settings-card">
-      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
-        <div>
-          <strong>Roles &amp; Permissions</strong>
-          <br />
-          <span style={{ fontWeight: 400, color: "#6b7280" }}>
-            Create roles, grant exactly the permissions each one needs, and assign employees to them.
-          </span>
-        </div>
-        <button type="button" onClick={() => navigate("/roles")}>Open Roles &amp; Permissions</button>
-      </div>
-    </div>
-  );
-}
-
-function DepartmentsManager() {
-  const [departments, setDepartments] = useState([]);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [newName, setNewName] = useState("");
-
-  function load() {
-    listDepartmentsRequest()
-      .then((result) => setDepartments(result?.departments || []))
-      .catch((e) => setError(e.message || "Could not load departments."));
-  }
-
-  useEffect(() => { load(); }, []);
-
-  async function addDepartment(e) {
-    e.preventDefault();
-    const value = newName.trim();
-    if (!value) return;
-    setSaving(true);
-    setError("");
-    try {
-      const result = await createDepartmentRequest(value);
-      setDepartments(result.departments || []);
-      setNewName("");
-    } catch (x) {
-      setError(x.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function remove(name) {
-    setError("");
-    try {
-      const result = await deleteDepartmentRequest(name);
-      setDepartments(result.departments || []);
-    } catch (x) {
-      setError(x.message);
-    }
-  }
-
-  return (
-    <div className="workflow-settings-card">
-      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
-        <div>
-          <strong>Your company's departments</strong>
-          <br />
-          <span style={{ fontWeight: 400, color: "#6b7280" }}>
-            Set these up first — used for routing conversations, and can scope AI Knowledge and Reply Flow steps to a specific
-            department. Every company defines its own list; nothing is preset for you.
-          </span>
-        </div>
-      </div>
-
-      {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
-
-      <form onSubmit={addDepartment} style={{ display: "flex", gap: 10, padding: "12px 0" }}>
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="e.g. Sales, Technical Support, Billing"
-          style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5" }}
-        />
-        <button type="submit" disabled={saving || !newName.trim()}>{saving ? "Adding..." : "+ Add department"}</button>
-      </form>
-
-      {departments.map((name) => (
-        <div className="workflow-setting-row" key={name}>
-          <div><strong>{name}</strong>{name === "Unassigned" ? <span style={{ marginLeft: 8, fontSize: 11, color: "#9296AC" }}>(always available)</span> : null}</div>
-          {name !== "Unassigned" ? (
-            <button type="button" onClick={() => remove(name)}>Delete</button>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SavedRepliesLink() {
-  const navigate = useNavigate();
-  return (
-    <div className="workflow-settings-card" style={{ marginTop: 20 }}>
-      <div className="workflow-setting-row" style={{ borderBottom: "none" }}>
-        <div>
-          <strong>Saved replies</strong>
-          <br />
-          <span style={{ fontWeight: 400, color: "#6b7280" }}>
-            Saved replies now live on their own page. Admins add and manage them there; employees insert
-            department-relevant ones from inside any conversation.
-          </span>
-        </div>
-        <button type="button" onClick={() => navigate("/saved-replies")}>Open Saved Replies</button>
-      </div>
-    </div>
-  );
-}
-
-function ReplyFlowAndSavedReplies() {
-  return (
-    <div>
-      <ReplyFlowLink />
-      <div style={{ marginTop: 20 }}><SavedRepliesLink /></div>
-    </div>
-  );
-}
-
 const MODULE_LABELS = {
   appointments: "Appointments",
   scheduler: "Scheduler",
@@ -704,6 +634,9 @@ function SecurityStatusView() {
       </article>
       <article className="company-setting-field">
         <div><strong>Session change log</strong><span>Every connect/disconnect during a verified session is recorded and shown to you when you finish — see Channels tab, "Done — show what changed".</span></div>
+      </article>
+      <article className="company-setting-field">
+        <div><strong>Backup</strong><span>Not built yet — there is no self-service backup/restore control in T-ZONE. Contact support if you need a restore.</span></div>
       </article>
     </div>
   );
@@ -740,5 +673,5 @@ export default function CompanySettingsPage() {
   const allowedSections = useMemo(() => SECTIONS.filter(([, , , , requiredPermission]) => !requiredPermission || isAdmin), [isAdmin]);
   const visible = useMemo(() => allowedSections.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [allowedSections, query]);
   const selected = allowedSections.find(([id]) => id === active) || visible[0] || allowedSections[0];
-  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowAndSavedReplies /> : active === "roles" ? <RolesPermissionsLink /> : active === "security" ? <SecurityStatusView /> : active === "departments" ? <DepartmentsManager /> : (active === "api" || active === "backup") ? null : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
+  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <SecureChannelsPanel /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowsListPage /> : active === "roles" ? <RolesPermissionsPage /> : active === "activity_log" ? <ActivityLogPage /> : active === "instructions" ? <InstructionsPage /> : active === "knowledge" ? <KnowledgePage /> : active === "security" ? <SecurityStatusView /> : <p className="text-muted">This section isn't wired up yet.</p>}</div></main></section>;
 }

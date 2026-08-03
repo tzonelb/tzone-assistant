@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.reply_flow_service import reply_flow_service
+from core.reply_flow_triggers import TRIGGER_TYPES
 
 
 router = APIRouter(prefix="/api/reply-flows", tags=["Reply Flows"])
@@ -30,6 +31,8 @@ class CreateFlowRequest(BaseModel):
     channels: list[str] = Field(default_factory=list)
     departments: list[str] = Field(default_factory=list)
     reply_modes: list[str] = Field(default_factory=list)
+    trigger_type: str | None = None
+    trigger_config: dict[str, Any] | None = None
 
 
 class UpdateFlowRequest(BaseModel):
@@ -37,6 +40,8 @@ class UpdateFlowRequest(BaseModel):
     channels: list[str] | None = None
     departments: list[str] | None = None
     reply_modes: list[str] | None = None
+    trigger_type: str | None = None
+    trigger_config: dict[str, Any] | None = None
     status: str | None = None
     nodes: list[dict] | None = None
     edges: list[dict] | None = None
@@ -51,6 +56,19 @@ def list_flows(current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = _company_id(current_user)
     _require_manage(current_user, company_id)
     return {"flows": reply_flow_service.list_for_company(company_id=company_id)}
+
+
+@router.get("/trigger-types")
+def list_trigger_types(current_user: dict[str, Any] = Depends(get_current_user)):
+    # Admin-only, same as everything else here — this still reveals how
+    # Reply Flows can be wired up company-wide.
+    company_id = _company_id(current_user)
+    _require_manage(current_user, company_id)
+    return {
+        "trigger_types": [
+            {"key": key, **info} for key, info in TRIGGER_TYPES.items()
+        ]
+    }
 
 
 @router.get("/{flow_id}")
@@ -71,6 +89,7 @@ def create_flow(payload: CreateFlowRequest, current_user: dict[str, Any] = Depen
         return reply_flow_service.create(
             company_id=company_id, name=payload.name, channels=payload.channels,
             departments=payload.departments, reply_modes=payload.reply_modes,
+            trigger_type=payload.trigger_type, trigger_config=payload.trigger_config,
             actor_user_id=current_user.get("id"),
         )
     except ValueError as exc:
@@ -85,6 +104,7 @@ def update_flow(flow_id: int, payload: UpdateFlowRequest, current_user: dict[str
         return reply_flow_service.update(
             company_id=company_id, flow_id=flow_id, name=payload.name, channels=payload.channels,
             departments=payload.departments, reply_modes=payload.reply_modes,
+            trigger_type=payload.trigger_type, trigger_config=payload.trigger_config,
             status=payload.status, nodes=payload.nodes, edges=payload.edges,
         )
     except KeyError:

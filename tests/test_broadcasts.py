@@ -260,6 +260,94 @@ def test_stuck_sending_broadcast_can_be_resumed_without_double_sending(client_an
     assert mock_send.call_args.kwargs["recipient_id"] == "b"
 
 
+def test_concurrent_resume_is_blocked_while_a_send_is_already_in_progress(client_and_db):
+    """Regression test: before send_lock_acquired_at existed, TWO
+    overlapping requests to resume a 'sending' broadcast both matched the
+    status IN ('draft','sending') guard and both proceeded to dispatch,
+    duplicating messages to any not-yet-confirmed recipient. Simulates a
+    send already actively in progress (a fresh lock timestamp) and
+    confirms a second call is rejected rather than double-sending."""
+    from database.database import db
+    from datetime import datetime, timezone
+
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "In Flight", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast_id = create_resp.json()["id"]
+
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE broadcasts SET status = 'sending', send_lock_acquired_at = ? WHERE id = ?",
+            (datetime.now(timezone.utc).isoformat(), broadcast_id),
+        )
+        conn.commit()
+
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}) as mock_send:
+        resp = client.post(f"/api/broadcasts/{broadcast_id}/send")
+
+    assert resp.status_code == 400
+    assert "already being sent" in resp.json()["detail"].lower()
+    mock_send.assert_not_called()
+
+
+def test_stale_send_lock_can_be_reclaimed_after_a_crash(client_and_db):
+    """A lock older than the staleness window (its owning process presumably
+    crashed without releasing it) must not permanently strand the
+    broadcast — a later resume attempt can still reclaim it."""
+    from database.database import db
+    from datetime import datetime, timedelta, timezone
+
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Crashed Send", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast_id = create_resp.json()["id"]
+
+    stale_lock = (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE broadcasts SET status = 'sending', send_lock_acquired_at = ? WHERE id = ?",
+            (stale_lock, broadcast_id),
+        )
+        conn.commit()
+
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}) as mock_send:
+        resp = client.post(f"/api/broadcasts/{broadcast_id}/send")
+
+    assert resp.status_code == 200, resp.text
+    mock_send.assert_called_once()
+
+
+def test_send_lock_is_released_after_a_successful_send(client_and_db):
+    """The lock must not outlive the send it protects — otherwise every
+    broadcast would need a 10-minute cooldown before it could ever be
+    resent/resumed again, even after finishing normally."""
+    from database.database import db
+
+    client = client_and_db
+    _make_contact(external_user_id="a", display_name="A")
+
+    create_resp = client.post(
+        "/api/broadcasts",
+        json={"name": "Clean Send", "message_text": "Hi there!", "channel": "telegram"},
+    )
+    broadcast_id = create_resp.json()["id"]
+
+    with patch("backend.services.broadcast_service.send_telegram_text", return_value={"ok": True}):
+        client.post(f"/api/broadcasts/{broadcast_id}/send")
+
+    with db.connect() as conn:
+        row = conn.execute("SELECT send_lock_acquired_at FROM broadcasts WHERE id = ?", (broadcast_id,)).fetchone()
+    assert row["send_lock_acquired_at"] is None
+
+
 def test_send_returns_400_on_already_sent_broadcast(client_and_db):
     client = client_and_db
     _make_contact(external_user_id="a", display_name="A")

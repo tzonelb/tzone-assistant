@@ -23,6 +23,17 @@ STATUSES = ["active", "archived"]
 DEFAULT_STATUS = "active"
 
 
+def _log_activity(*, company_id: int, actor_user_id: int | None, action: str, entity_id: int | None, description: str) -> None:
+    try:
+        from backend.services.activity_log_service import activity_log_service
+        activity_log_service.record(
+            company_id=company_id, actor_user_id=actor_user_id, action=action,
+            entity_type="product", entity_id=entity_id, description=description,
+        )
+    except Exception:
+        pass
+
+
 class CatalogueService:
     def __init__(self) -> None:
         # Schema setup happens explicitly via main.py's lifespan (after
@@ -155,6 +166,10 @@ class CatalogueService:
             product_id = int(cursor.lastrowid)
             conn.commit()
 
+        _log_activity(
+            company_id=company_id, actor_user_id=actor_user_id, action="product_created",
+            entity_id=product_id, description=f'Created product "{clean_name}"',
+        )
         return self.get_product(company_id=company_id, product_id=product_id)
 
     def get_product(self, *, company_id: int, product_id: int) -> dict[str, Any]:
@@ -268,8 +283,12 @@ class CatalogueService:
 
         return self.get_product(company_id=company_id, product_id=product_id)
 
-    def delete_product(self, *, company_id: int, product_id: int) -> None:
+    def delete_product(self, *, company_id: int, product_id: int, actor_user_id: int | None = None) -> None:
         with db.connect() as conn:
+            existing = conn.execute(
+                "SELECT name FROM products WHERE id = ? AND company_id = ?",
+                (product_id, company_id),
+            ).fetchone()
             cursor = conn.execute(
                 "DELETE FROM products WHERE id = ? AND company_id = ?",
                 (product_id, company_id),
@@ -277,6 +296,11 @@ class CatalogueService:
             conn.commit()
         if cursor.rowcount == 0:
             raise KeyError("Product not found")
+
+        _log_activity(
+            company_id=company_id, actor_user_id=actor_user_id, action="product_deleted",
+            entity_id=product_id, description=f'Deleted product "{existing["name"] if existing else product_id}"',
+        )
 
     def _upsert_import_row(
         self, conn, *, company_id: int, name: str, sku: str | None, description: str | None,

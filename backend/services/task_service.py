@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from database.database import db
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -20,6 +23,28 @@ TASK_TYPES = ["follow_up", "complaint", "service_request", "sales_inquiry", "int
 DEFAULT_STATUS = "open"
 DEFAULT_PRIORITY = "normal"
 DEFAULT_TASK_TYPE = "other"
+
+
+def _log_activity(*, company_id: int, actor_user_id: int | None, action: str, entity_id: int | None, description: str) -> None:
+    try:
+        from backend.services.activity_log_service import activity_log_service
+        activity_log_service.record(
+            company_id=company_id, actor_user_id=actor_user_id, action=action,
+            entity_type="task", entity_id=entity_id, description=description,
+        )
+    except Exception:
+        logger.exception("Could not record activity log entry for task #%s", entity_id)
+
+
+def _fire_task_reply_flow_trigger(*, company_id: int, customer_id: int | None) -> None:
+    """Same fire-and-forget contract as appointment_service/call_log_service's
+    equivalent hooks — never raises. A task with no linked customer (a purely
+    internal to-do) is a no-op inside fire_event_for_customer itself."""
+    try:
+        from core.reply_flow_engine import reply_flow_engine
+        reply_flow_engine.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type="task_completed")
+    except Exception:
+        logger.exception("task_completed reply flow trigger failed for customer #%s", customer_id)
 
 
 class TaskService:
@@ -149,6 +174,10 @@ class TaskService:
             task_id = int(cursor.lastrowid)
             conn.commit()
 
+        _log_activity(
+            company_id=company_id, actor_user_id=actor_user_id, action="task_created",
+            entity_id=task_id, description=f'Created task "{clean_title}"',
+        )
         return self.get_task(company_id=company_id, task_id=task_id)
 
     @staticmethod
@@ -269,7 +298,7 @@ class TaskService:
         now = utc_now_iso()
         with db.connect() as conn:
             existing = conn.execute(
-                "SELECT id, status FROM tasks WHERE id = ? AND company_id = ?",
+                "SELECT id, status, customer_id FROM tasks WHERE id = ? AND company_id = ?",
                 (task_id, company_id),
             ).fetchone()
             if not existing:
@@ -285,11 +314,13 @@ class TaskService:
             if customer_requested:
                 cleaned["customer_id"] = customer_id
 
+            just_completed = False
             if status_requested:
                 cleaned["status"] = new_status
                 was_done = existing["status"] == "done"
                 if new_status == "done" and not was_done:
                     cleaned["completed_at"] = now
+                    just_completed = True
                 elif new_status != "done" and was_done:
                     cleaned["completed_at"] = None
 
@@ -300,10 +331,24 @@ class TaskService:
             )
             conn.commit()
 
+        if just_completed:
+            resolved_customer_id = cleaned.get("customer_id", existing["customer_id"])
+            _fire_task_reply_flow_trigger(company_id=company_id, customer_id=resolved_customer_id)
+
+        if status_requested:
+            _log_activity(
+                company_id=company_id, actor_user_id=actor_user_id, action="task_status_changed",
+                entity_id=task_id, description=f'Changed task #{task_id} status to "{new_status}"',
+            )
+
         return self.get_task(company_id=company_id, task_id=task_id)
 
-    def delete_task(self, *, company_id: int, task_id: int) -> None:
+    def delete_task(self, *, company_id: int, task_id: int, actor_user_id: int | None = None) -> None:
         with db.connect() as conn:
+            existing = conn.execute(
+                "SELECT title FROM tasks WHERE id = ? AND company_id = ?",
+                (task_id, company_id),
+            ).fetchone()
             cursor = conn.execute(
                 "DELETE FROM tasks WHERE id = ? AND company_id = ?",
                 (task_id, company_id),
@@ -311,6 +356,11 @@ class TaskService:
             conn.commit()
         if cursor.rowcount == 0:
             raise KeyError("Task not found")
+
+        _log_activity(
+            company_id=company_id, actor_user_id=actor_user_id, action="task_deleted",
+            entity_id=task_id, description=f'Deleted task "{existing["title"] if existing else task_id}"',
+        )
 
 
 task_service = TaskService()

@@ -11,6 +11,7 @@ from backend.api.schemas.auth import (
     LoginRequest,
     LoginResponse,
     LogoutResponse,
+    SuperAdminLoginRequest,
     TwoFactorDisableRequest,
     TwoFactorEnrollConfirmRequest,
     TwoFactorVerifyRequest,
@@ -67,6 +68,58 @@ def login(
     user_agent = request.headers.get(
         "user-agent"
     )
+
+    session_data = auth_service.create_session(
+        user_id=user["id"],
+        ip_address=ip_address,
+        user_agent=user_agent,
+        company_id=user.get("active_company_id"),
+    )
+
+    return {
+        "access_token": session_data["access_token"],
+        "token_type": "bearer",
+        "expires_in": session_data["expires_in"],
+        "user": user,
+    }
+
+
+@router.post(
+    "/super-admin-login",
+    response_model=LoginResponse,
+)
+def super_admin_login(
+    payload: SuperAdminLoginRequest,
+    request: Request,
+):
+    """Dedicated, company-free entry point for the Super Admin portal —
+    separate from the normal per-company /login form on purpose, so a super
+    admin never has to type an arbitrary workspace code just to reach
+    platform-wide tools. Rejects any account that isn't is_super_admin=1,
+    even with a correct password."""
+    user = auth_service.authenticate_super_admin(
+        email=payload.email,
+        password=payload.password,
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email or password is incorrect.",
+        )
+
+    if auth_service.user_has_2fa(user["id"]):
+        pending_token = auth_service.create_pending_2fa_token(
+            user_id=user["id"],
+            company_id=user.get("active_company_id"),
+        )
+        return {
+            "twofa_required": True,
+            "pending_token": pending_token,
+        }
+
+    ip_address = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
 
     session_data = auth_service.create_session(
         user_id=user["id"],

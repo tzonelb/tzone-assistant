@@ -1,13 +1,27 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from database.database import db
 
+logger = logging.getLogger(__name__)
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _fire_call_logged_trigger(*, company_id: int, customer_id: int | None) -> None:
+    """Lazy import breaks the natural import cycle, same pattern as
+    appointment_service.py's and conversation_control_service.py's
+    equivalent hooks — never raises."""
+    try:
+        from core.reply_flow_engine import reply_flow_engine
+        reply_flow_engine.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type="call_logged")
+    except Exception:
+        logger.exception("call_logged reply flow trigger failed for customer #%s", customer_id)
 
 
 # This is a call LOG — recording calls that already happened (phone,
@@ -95,6 +109,7 @@ class CallLogService:
             )
             call_id = int(cursor.lastrowid)
             conn.commit()
+        _fire_call_logged_trigger(company_id=company_id, customer_id=customer_id)
         return self.get_call_log(company_id=company_id, call_id=call_id)
 
     def list_call_logs(

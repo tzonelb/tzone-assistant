@@ -11,6 +11,13 @@
   flex-wrap: wrap;
 }
 
+/* Embedded inside Company Settings: no local title/description anymore
+   (see ReplyFlowsListPage.jsx), so the header is just the action button,
+   right-aligned same as before. */
+.reply-flows-header-embedded {
+  justify-content: flex-end;
+}
+
 .reply-flows-header h2 {
   margin: 0 0 4px;
 }

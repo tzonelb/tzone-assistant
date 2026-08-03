@@ -55,7 +55,6 @@ import {
 import { useConversationLive } from "../../contexts/ConversationLiveContext";
 
 import {
-  AppButton,
   ErrorState,
   LoadingState,
   StatusBadge,
@@ -1188,9 +1187,9 @@ export default function ConversationDetailPage({
           title="Conversation could not load"
           description={error}
           action={
-            <AppButton variant="primary" onClick={() => loadConversation()}>
+            <button type="button" className="btn btn-primary" onClick={() => loadConversation()}>
               Retry
-            </AppButton>
+            </button>
           }
         />
       </div>
@@ -1264,45 +1263,43 @@ export default function ConversationDetailPage({
           </button>
 
           {canTakeOver && !canReply ? (
-            <AppButton
-              variant="danger"
-              size="small"
-              loading={changingMode}
-              icon={<PauseCircleOutlineOutlined />}
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={changingMode}
               onClick={handleTakeOver}
             >
-              Take over
-            </AppButton>
+              <PauseCircleOutlineOutlined fontSize="small" /> {changingMode ? "Working…" : "Take over"}
+            </button>
           ) : null}
 
           {canManage && !aiIsHandling && assignedUserId != null ? (
-            <AppButton
-              variant="secondary"
-              size="small"
-              loading={changingMode}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={changingMode}
               onClick={handleRelease}
             >
-              Release
-            </AppButton>
+              {changingMode ? "Working…" : "Release"}
+            </button>
           ) : null}
 
           {canManage && !aiIsHandling ? (
-            <AppButton
-              variant="success"
-              size="small"
-              loading={changingMode}
-              icon={<AutoAwesomeOutlined />}
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={changingMode}
               onClick={handleReturnToAi}
             >
-              Return to AI
-            </AppButton>
+              <AutoAwesomeOutlined fontSize="small" /> {changingMode ? "Working…" : "Return to AI"}
+            </button>
           ) : null}
 
           {canMarkRead ? (
             Number(control?.unread_count || 0) > 0 ? (
-              <AppButton
-                variant="secondary"
-                size="small"
+              <button
+                type="button"
+                className="btn btn-secondary"
                 disabled={saving}
                 onClick={() => handleControlUpdate(
                   { is_unread: false },
@@ -1310,11 +1307,11 @@ export default function ConversationDetailPage({
                 )}
               >
                 Mark as read
-              </AppButton>
+              </button>
             ) : (
-              <AppButton
-                variant="secondary"
-                size="small"
+              <button
+                type="button"
+                className="btn btn-secondary"
                 disabled={saving}
                 onClick={() => handleControlUpdate(
                   { is_unread: true },
@@ -1322,7 +1319,7 @@ export default function ConversationDetailPage({
                 )}
               >
                 Mark as unread
-              </AppButton>
+              </button>
             )
           ) : null}
         </div>
@@ -1432,12 +1429,12 @@ export default function ConversationDetailPage({
               <FiberManualRecordOutlined style={{ color: "#e53935", fontSize: 16 }} />
               <span style={{ fontSize: 13, fontWeight: 600 }}>Recording... {formatTimer(recordingSeconds)}</span>
               <div style={{ flex: 1 }} />
-              <AppButton type="button" variant="secondary" size="small" onClick={cancelVoiceRecording}>
+              <button type="button" className="btn btn-secondary" onClick={cancelVoiceRecording}>
                 Cancel
-              </AppButton>
-              <AppButton type="button" variant="primary" size="small" icon={<StopCircleOutlined fontSize="small" />} onClick={stopVoiceRecording}>
-                Stop
-              </AppButton>
+              </button>
+              <button type="button" className="btn btn-primary" onClick={stopVoiceRecording}>
+                <StopCircleOutlined fontSize="small" /> Stop
+              </button>
             </div>
           ) : pendingMedia ? (
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 14px", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, marginBottom: 6 }}>
@@ -1612,9 +1609,9 @@ export default function ConversationDetailPage({
                       placeholder="Add an internal name..."
                       onChange={(event) => setAliasDraft(event.target.value)}
                     />
-                    <AppButton
-                      variant="secondary"
-                      size="small"
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
                       disabled={saving}
                       onClick={() => handleControlUpdate(
                         { customer_alias: aliasDraft },
@@ -1622,7 +1619,7 @@ export default function ConversationDetailPage({
                       )}
                     >
                       Save
-                    </AppButton>
+                    </button>
                   </div>
                 </label>
 
@@ -1728,14 +1725,14 @@ export default function ConversationDetailPage({
                       }}
                     />
 
-                    <AppButton
-                      variant="secondary"
-                      size="small"
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
                       disabled={saving || !tagDraft.trim()}
                       onClick={saveTag}
                     >
                       {editingTag ? "Save" : "Add"}
-                    </AppButton>
+                    </button>
 
                     {editingTag ? (
                       <button
@@ -1776,9 +1773,9 @@ export default function ConversationDetailPage({
                       disabled={saving}
                       onChange={(event) => setReminderDraft(event.target.value)}
                     />
-                    <AppButton
-                      variant="secondary"
-                      size="small"
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
                       disabled={
                         saving ||
                         !reminderDraft ||
@@ -1787,7 +1784,7 @@ export default function ConversationDetailPage({
                       onClick={saveReminder}
                     >
                       {control?.reminder_at ? "Update" : "Set"}
-                    </AppButton>
+                    </button>
                   </div>
                   {control?.reminder_at ? (
                     <small className="conversation-muted">
@@ -1870,9 +1867,9 @@ export default function ConversationDetailPage({
               open={notesPanelOpen}
               onToggle={() => setNotesPanelOpen((current) => !current)}
             >
-              <AppButton type="button" variant="secondary" size="small" onClick={createTaskFromConversation} style={{ marginBottom: 10 }}>
+              <button type="button" className="btn btn-secondary" onClick={createTaskFromConversation} style={{ marginBottom: 10 }}>
                 + Create task from this conversation
-              </AppButton>
+              </button>
 
               {canManage || canReply ? (
                 <form className="conversation-note-form" onSubmit={handleNoteSubmit} style={{ position: "relative" }}>
@@ -1894,9 +1891,9 @@ export default function ConversationDetailPage({
                     placeholder="Write an internal note... use @ to tag a colleague"
                     onChange={handleNoteDraftChange}
                   />
-                  <AppButton type="submit" variant="primary" size="small" disabled={!noteDraft.trim()}>
+                  <button type="submit" className="btn btn-primary" disabled={!noteDraft.trim()}>
                     Add note
-                  </AppButton>
+                  </button>
                 </form>
               ) : null}
 
@@ -1939,14 +1936,14 @@ export default function ConversationDetailPage({
                   </select>
                 </label>
 
-                <AppButton
-                  variant="primary"
-                  size="small"
-                  loading={exporting}
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={exporting}
                   onClick={handleExport}
                 >
-                  Download export
-                </AppButton>
+                  {exporting ? "Exporting…" : "Download export"}
+                </button>
 
                 <small>
                   Full report includes the chat, internal notes and conversation metadata.

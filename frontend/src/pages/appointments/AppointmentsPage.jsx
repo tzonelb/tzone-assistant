@@ -8,7 +8,7 @@ import {
   listCustomersRequest,
   updateAppointmentRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
 import { useAuth } from "../../contexts/AuthContext";
 import "../customers/CustomersPage.css";
 import "./AppointmentsPage.css";
@@ -130,8 +130,8 @@ function NewAppointmentDialog({ open, statuses, employees, saving, error, onCanc
           {error ? <p className="customer-segment-error">{error}</p> : null}
         </div>
         <footer className="tz-dialog-actions">
-          <AppButton type="button" variant="secondary" disabled={saving} onClick={onCancel}>Cancel</AppButton>
-          <AppButton type="submit" variant="primary" loading={saving} disabled={!title.trim() || !scheduledAt}>Save</AppButton>
+          <button type="button" className="btn btn-secondary" disabled={saving} onClick={onCancel}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !title.trim() || !scheduledAt}>{saving ? "Saving…" : "Save"}</button>
         </footer>
       </form>
     </div>
@@ -271,12 +271,12 @@ export default function AppointmentsPage() {
     },
     {
       key: "_actions", label: "", align: "right",
-      render: (_value, row) => <AppButton variant="danger" size="small" onClick={() => setToDelete(row)}>Delete</AppButton>,
+      render: (_value, row) => <button type="button" className="btn btn-primary" onClick={() => setToDelete(row)}>Delete</button>,
     },
   ], [statuses, savingRowId]);
 
   if (loading) return <LoadingState title="Loading appointments..." />;
-  if (error) return <ErrorState title="Could not load appointments" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
+  if (error) return <ErrorState title="Could not load appointments" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />;
 
   return (
     <section className="customers-page">
@@ -292,7 +292,7 @@ export default function AppointmentsPage() {
               {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
             </select>
           ) : null}
-          <AppButton variant="secondary" onClick={() => setDialogOpen(true)}>+ New appointment</AppButton>
+          <button type="button" className="btn btn-secondary" onClick={() => setDialogOpen(true)}>+ New appointment</button>
         </div>
       </AppCard>
 

@@ -7,7 +7,7 @@ import {
   getCustomerTimelineRequest,
   updateCustomerRequest,
 } from "../../api/client";
-import { AppButton, AppCard, ErrorState, LoadingState } from "../../components/common";
+import { AppCard, ErrorState, LoadingState } from "../../components/common";
 import "./CustomersPage.css";
 import "./CustomerDetailPage.css";
 
@@ -66,7 +66,7 @@ function CustomFieldsEditor({ fields, disabled, onAdd, onUpdate, onRemove }) {
       <form className="client-file-kv-add-form" onSubmit={submit}>
         <input placeholder="Field name (e.g. ID number)" value={draftKey} disabled={disabled} onChange={(event) => setDraftKey(event.target.value)} />
         <input placeholder="Value" value={draftValue} disabled={disabled} onChange={(event) => setDraftValue(event.target.value)} />
-        <AppButton type="submit" variant="secondary" size="small" disabled={disabled || !draftKey.trim()}>Add field</AppButton>
+        <button type="submit" className="btn btn-secondary" disabled={disabled || !draftKey.trim()}>Add field</button>
       </form>
     </div>
   );
@@ -101,7 +101,7 @@ function DocumentsEditor({ documents, disabled, onAdd, onRemove }) {
       <form className="client-file-kv-add-form" onSubmit={submit}>
         <input placeholder="Document label (e.g. ID photo)" value={label} disabled={disabled} onChange={(event) => setLabel(event.target.value)} />
         <input placeholder="URL" value={url} disabled={disabled} onChange={(event) => setUrl(event.target.value)} />
-        <AppButton type="submit" variant="secondary" size="small" disabled={disabled || !label.trim() || !url.trim()}>Add document</AppButton>
+        <button type="submit" className="btn btn-secondary" disabled={disabled || !label.trim() || !url.trim()}>Add document</button>
       </form>
     </div>
   );
@@ -251,7 +251,7 @@ export default function CustomerDetailPage() {
   const title = useMemo(() => customer?.display_name || customer?.internal_name || "Unnamed contact", [customer]);
 
   if (loading) return <LoadingState title="Loading client file..." />;
-  if (error && !customer) return <ErrorState title="Could not load this contact" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />;
+  if (error && !customer) return <ErrorState title="Could not load this contact" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />;
   if (!customer) return null;
 
   return (
@@ -313,7 +313,7 @@ export default function CustomerDetailPage() {
                   onChange={(event) => setProfileForm((current) => ({ ...current, notes: event.target.value }))}
                 />
               </label>
-              <AppButton type="submit" variant="primary" loading={saving}>Save profile</AppButton>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "Save profile"}</button>
             </form>
           </AppCard>
 

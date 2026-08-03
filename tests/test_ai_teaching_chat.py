@@ -233,3 +233,38 @@ def test_test_reply_returns_502_when_ai_unavailable(client_and_db):
         resp = client.post("/api/ai-teaching-chat/test", json={"message": "hi"})
 
     assert resp.status_code == 502
+
+
+def test_chat_with_bot_works_for_regular_employee_without_permission(client_and_db):
+    """Unlike /test, /chat-with-bot needs no modules.ai_teaching_chat grant —
+    every employee (state["user_id"] = 1 here has no role/permissions at
+    all) can use it to see how the bot would answer a customer."""
+    client, _state = client_and_db
+
+    with patch(
+        "core.ai_router.ai_router.call_openai",
+        return_value={"reply": "You can reach us 9-5.", "department": "information", "language": "en", "confidence": 0.9},
+    ) as mock_call:
+        resp = client.post(
+            "/api/ai-teaching-chat/chat-with-bot",
+            json={"message": "What are your hours?", "channel": "website"},
+        )
+
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {"reply": "You can reach us 9-5."}
+    mock_call.assert_called_once()
+
+
+def test_chat_with_bot_persists_nothing(client_and_db):
+    client, _state = client_and_db
+
+    with patch(
+        "core.ai_router.ai_router.call_openai",
+        return_value={"reply": "Sure thing.", "department": "information", "language": "en", "confidence": 0.9},
+    ):
+        client.post("/api/ai-teaching-chat/chat-with-bot", json={"message": "hi"})
+
+    from database.database import db
+    with db.connect() as conn:
+        conv_count = conn.execute("SELECT COUNT(*) AS c FROM conversations WHERE company_id = 1").fetchone()["c"]
+    assert conv_count == 0

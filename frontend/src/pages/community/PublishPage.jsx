@@ -24,7 +24,7 @@ import {
   scheduledPostOptionsRequest,
   uploadMediaRequest,
 } from "../../api/client";
-import { AppButton, AppCard, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
+import { AppCard, ConfirmDialog, ErrorState, LoadingState, StatusBadge } from "../../components/common";
 import { channelIcon } from "./channelIcon";
 import "./PublishPage.css";
 
@@ -377,28 +377,27 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
           <div className="bp-footer-right">
             <button type="button" className="bp-next-available" disabled title="Not built yet — pick a date & time above instead"><EventOutlined fontSize="small" /> Next Available</button>
             {!customizeMode ? (
-              <AppButton
+              <button
                 type="button"
-                variant="primary"
-                className="bp-cta"
+                className="btn btn-primary bp-cta"
                 disabled={selectedAccountIds.length === 0}
                 onClick={() => setCustomizeMode(true)}
               >
                 Customize for each network →
-              </AppButton>
+              </button>
             ) : (
               <>
-                <AppButton
+                <button
                   type="button"
-                  variant="secondary"
+                  className="btn btn-secondary"
                   disabled={saving || (!text.trim() && !mediaUrl) || selectedAccountIds.length === 0}
                   onClick={submitDraft}
                 >
                   Save Drafts
-                </AppButton>
-                <AppButton type="submit" variant="primary" className="bp-cta" loading={saving} disabled={!canSave}>
-                  {when === "now" ? "Post now" : "Schedule Posts"}
-                </AppButton>
+                </button>
+                <button type="submit" className="btn btn-primary bp-cta" disabled={saving || !canSave}>
+                  {saving ? "Saving…" : (when === "now" ? "Post now" : "Schedule Posts")}
+                </button>
               </>
             )}
           </div>
@@ -529,12 +528,12 @@ export default function PublishPage() {
             </button>
           ))}
         </div>
-        <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={() => setDialogOpen(true)}>
-          New Post
-        </AppButton>
+        <button type="button" className="btn btn-primary" onClick={() => setDialogOpen(true)}>
+          <AddOutlined fontSize="small" /> New Post
+        </button>
       </div>
 
-      {error ? <ErrorState title="Could not load posts" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} /> : null}
+      {error ? <ErrorState title="Could not load posts" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} /> : null}
 
       {loading ? (
         <LoadingState label="Loading posts…" />
@@ -569,15 +568,14 @@ export default function PublishPage() {
               </div>
               <div className="publish-post-actions">
                 {post.status !== "sent" ? (
-                  <AppButton
-                    variant="secondary"
-                    size="small"
-                    icon={<SendOutlined fontSize="small" />}
-                    loading={publishingId === post.id}
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={publishingId === post.id}
                     onClick={() => publishNow(post)}
                   >
-                    Post now
-                  </AppButton>
+                    <SendOutlined fontSize="small" /> {publishingId === post.id ? "Posting…" : "Post now"}
+                  </button>
                 ) : null}
                 <button type="button" className="publish-post-delete" onClick={() => setToDelete(post)}>
                   <DeleteOutlineOutlined fontSize="small" />

@@ -1,5 +1,13 @@
-import { FacebookOutlined, Instagram } from "@mui/icons-material";
+import { FacebookOutlined, Instagram, Language, Telegram, WhatsApp } from "@mui/icons-material";
+
+const ICONS = {
+  instagram: Instagram,
+  whatsapp: WhatsApp,
+  telegram: Telegram,
+  website: Language,
+  messenger: FacebookOutlined,
+};
 
 export function channelIcon(channel) {
-  return channel === "instagram" ? Instagram : FacebookOutlined;
+  return ICONS[channel] || FacebookOutlined;
 }

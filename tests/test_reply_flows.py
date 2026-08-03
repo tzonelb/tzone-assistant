@@ -269,3 +269,128 @@ def test_plain_employee_cannot_manage_flows(client_and_db):
         async def _override_owner():
             return {"id": 1, "email": "agent@test.local", "is_super_admin": False, "active_company_id": COMPANY_ID}
         app.dependency_overrides[get_current_user] = _override_owner
+
+
+# -- trigger registry -------------------------------------------------------
+
+def test_new_flow_defaults_to_new_conversation_trigger(client_and_db):
+    """Every existing flow (and any flow that doesn't explicitly set a
+    trigger) must default to new_conversation — today's exact implicit
+    behavior — with zero config."""
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "Flow"}).json()
+    assert flow["trigger_type"] == "new_conversation"
+    assert flow["trigger_config"] == {}
+
+
+def test_trigger_type_and_config_round_trip_through_update(client_and_db):
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "Flow"}).json()
+    resp = client.patch(
+        f"/api/reply-flows/{flow['id']}",
+        json={"trigger_type": "appointment_reminder", "trigger_config": {"minutes_before": 45}},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["trigger_type"] == "appointment_reminder"
+    assert body["trigger_config"] == {"minutes_before": 45}
+
+    # Persisted, not just echoed back — a fresh GET must show the same thing.
+    get_resp = client.get(f"/api/reply-flows/{flow['id']}")
+    assert get_resp.json()["trigger_type"] == "appointment_reminder"
+    assert get_resp.json()["trigger_config"] == {"minutes_before": 45}
+
+
+def test_invalid_trigger_type_rejected(client_and_db):
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "Flow"}).json()
+    resp = client.patch(f"/api/reply-flows/{flow['id']}", json={"trigger_type": "not_a_real_trigger"})
+    assert resp.status_code == 400
+
+
+def test_create_accepts_trigger_type_directly(client_and_db):
+    client = client_and_db
+    resp = client.post(
+        "/api/reply-flows",
+        json={"name": "Closed Flow", "trigger_type": "conversation_closed"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["trigger_type"] == "conversation_closed"
+
+
+def test_duplicate_flow_carries_over_trigger(client_and_db):
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "Original", "trigger_type": "call_logged"}).json()
+    dup = client.post(f"/api/reply-flows/{flow['id']}/duplicate").json()
+    assert dup["trigger_type"] == "call_logged"
+
+
+def test_trigger_types_endpoint_lists_the_first_real_batch(client_and_db):
+    client = client_and_db
+    resp = client.get("/api/reply-flows/trigger-types")
+    assert resp.status_code == 200, resp.text
+    keys = {item["key"] for item in resp.json()["trigger_types"]}
+    assert keys == {
+        "new_conversation", "conversation_closed", "appointment_created",
+        "appointment_completed", "appointment_reminder", "call_logged", "task_completed",
+    }
+    reminder = next(item for item in resp.json()["trigger_types"] if item["key"] == "appointment_reminder")
+    assert reminder["config_fields"][0]["key"] == "minutes_before"
+
+
+def test_generate_from_text_also_sets_trigger(client_and_db):
+    from unittest.mock import patch, MagicMock
+
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "AI Written Flow"}).json()
+
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+    fake_response.json.return_value = {
+        "output_text": (
+            '{"trigger": {"type": "appointment_completed", "config": {}}, '
+            '"nodes": [{"id": "a", "nodeType": "canned_reply", "label": "Ask for rating", '
+            '"config": {"text": "Please rate us 1-5"}}], "edges": []}'
+        )
+    }
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value.post.return_value = fake_response
+
+    with patch("backend.services.reply_flow_service.config.OPENAI_API_KEY", "fake-key"), \
+         patch("backend.services.reply_flow_service.httpx.Client", return_value=mock_client):
+        resp = client.post(
+            f"/api/reply-flows/{flow['id']}/generate-from-text",
+            json={"text": "When an appointment finishes, ask the customer to rate 1 to 5."},
+        )
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["trigger_type"] == "appointment_completed"
+    assert len(body["nodes"]) == 1
+
+
+def test_generate_from_text_ignores_invalid_trigger_without_failing(client_and_db):
+    from unittest.mock import patch, MagicMock
+
+    client = client_and_db
+    flow = client.post("/api/reply-flows", json={"name": "AI Written Flow"}).json()
+
+    fake_response = MagicMock()
+    fake_response.status_code = 200
+    fake_response.json.return_value = {
+        "output_text": (
+            '{"trigger": {"type": "not_a_real_trigger", "config": {}}, '
+            '"nodes": [{"id": "a", "nodeType": "greeting", "label": "Hi", "config": {"text": "Hi!"}}], "edges": []}'
+        )
+    }
+    mock_client = MagicMock()
+    mock_client.__enter__.return_value.post.return_value = fake_response
+
+    with patch("backend.services.reply_flow_service.config.OPENAI_API_KEY", "fake-key"), \
+         patch("backend.services.reply_flow_service.httpx.Client", return_value=mock_client):
+        resp = client.post(f"/api/reply-flows/{flow['id']}/generate-from-text", json={"text": "Greet the customer."})
+
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["trigger_type"] == "new_conversation"  # unchanged default, generation still succeeded
+    assert len(body["nodes"]) == 1

@@ -1,11 +1,12 @@
-/* App shell rail (CLAUDE_CODE_UI_IMPLEMENTATION.md §2). Scoped --tzv2-*
-   variables instead of reusing --tz-sidebar/--tz-sidebar-hover on
-   purpose — those still drive the live v1 rail (light background) and
-   this rail is a deliberately different dark "paper" tone, only ever
-   rendered when ui_v2 is on. */
+/* App shell rail (CLAUDE_CODE_UI_IMPLEMENTATION.md §2). Colour comes
+   from ThemeContext's --tz-rail-bg/--tz-rail-text, which it computes
+   from the published theme's color.rail (paper|ink|accent) — this used
+   to hard-code a dark rail regardless of that setting; fixed so
+   Theme Studio's rail control actually does something. Falls back to
+   the "paper" look if the theme hasn't loaded yet. */
 .sidebar-v2 {
-  --tzv2-rail-bg: #111922;
-  --tzv2-rail-text: #f3f5f7;
+  --tzv2-rail-bg: var(--tz-rail-bg, #f8f7f5);
+  --tzv2-rail-text: var(--tz-rail-text, #201f1d);
   flex: none;
   width: var(--tz-rail-width, 236px);
   display: flex;
@@ -17,6 +18,29 @@
   overflow-y: auto;
   transition: width var(--tz-transition-fast, 140ms) ease;
   z-index: 40;
+  /* Scrollbar track matches the rail itself instead of the browser's
+     default white — only the draggable thumb stays a neutral gray. */
+  scrollbar-color: #8a8f98 var(--tzv2-rail-bg);
+}
+
+.sidebar-v2::-webkit-scrollbar {
+  width: 10px;
+}
+
+.sidebar-v2::-webkit-scrollbar-track {
+  background: var(--tzv2-rail-bg);
+}
+
+.sidebar-v2::-webkit-scrollbar-thumb {
+  background: #8a8f98;
+  border-radius: 999px;
+  border: 2px solid var(--tzv2-rail-bg);
+}
+
+.sidebar-v2::-webkit-scrollbar-button {
+  display: none;
+  height: 0;
+  width: 0;
 }
 
 .sidebar-v2-collapsed {

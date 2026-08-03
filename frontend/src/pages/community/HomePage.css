@@ -1,6 +1,6 @@
 .community-home-page {
   display: grid;
-  gap: var(--tz-space-4);
+  gap: var(--space-4);
   color: var(--buffer-text);
 }
 
@@ -17,7 +17,7 @@
 .community-home-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--tz-space-3);
+  gap: var(--space-3);
 }
 
 .community-home-stat-card.tz-card {
@@ -59,7 +59,7 @@
 .community-home-firststeps {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--tz-space-3);
+  gap: var(--space-3);
 }
 
 .community-home-step-card.tz-card {
@@ -84,7 +84,7 @@
 .community-home-columns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: var(--tz-space-3);
+  gap: var(--space-3);
 }
 
 .community-home-columns .tz-card {
@@ -95,7 +95,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--tz-space-3);
+  margin-bottom: var(--space-3);
 }
 
 .community-home-panel-head h3 {

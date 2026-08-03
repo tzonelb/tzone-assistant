@@ -685,6 +685,18 @@ class CustomerService:
                 (company_id, customer_id, actor_user_id, json.dumps(cleaned, ensure_ascii=False), now),
             )
             conn.commit()
+
+        try:
+            from backend.services.activity_log_service import activity_log_service
+            fields_changed = ", ".join(key for key in cleaned if key not in ("tags_json", "custom_fields_json", "documents_json"))
+            activity_log_service.record(
+                company_id=company_id, actor_user_id=actor_user_id, action="customer_updated",
+                entity_type="customer", entity_id=customer_id,
+                description=f"Updated customer #{customer_id}" + (f" ({fields_changed})" if fields_changed else ""),
+            )
+        except Exception:
+            pass
+
         return self.get_customer(company_id=company_id, customer_id=customer_id)
 
     # ---------------------------------------------------------------

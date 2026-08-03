@@ -6,13 +6,17 @@ from pydantic import BaseModel, Field
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.channel_account_service import channel_account_service
 from backend.services.comment_service import comment_service
+from backend.services.platform_admin_service import platform_admin_service
 
 
 router = APIRouter(prefix="/api/comments", tags=["Community Comments"])
 
 
 def _company_id(current_user: dict[str, Any]) -> int:
-    return auth_service.resolve_company_id(current_user)
+    company_id = int(auth_service.resolve_company_id(current_user))
+    if not current_user.get("is_super_admin") and not platform_admin_service.is_module_enabled(company_id=company_id, module="comments"):
+        raise HTTPException(status_code=403, detail="The Comments module is not enabled for this company.")
+    return company_id
 
 
 class ReplyRequest(BaseModel):

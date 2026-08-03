@@ -29,3 +29,12 @@ class UserAssignmentRequest(BaseModel):
     branch_id: int | None = None
     status: str = Field(default="active", pattern=r"^(active|disabled)$")
     departments: list[str] = []
+
+
+class PermissionOverrideItem(BaseModel):
+    permission_code: str
+    allowed: bool
+
+
+class PermissionOverridesUpdateRequest(BaseModel):
+    overrides: list[PermissionOverrideItem] = []

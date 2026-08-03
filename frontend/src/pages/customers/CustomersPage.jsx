@@ -11,7 +11,7 @@ import {
   listCustomersRequest,
   updateCustomerRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, SearchBar } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, SearchBar } from "../../components/common";
 import { useAuth } from "../../contexts/AuthContext";
 import "./CustomersPage.css";
 
@@ -512,21 +512,21 @@ export default function CustomersPage() {
             {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
           </select>
           <div className="customer-filter-actions">
-            <AppButton
-              variant="secondary"
-              icon={<AddOutlined fontSize="small" />}
+            <button
+              type="button"
+              className="btn btn-secondary"
               disabled={!activeFilters}
               onClick={() => setSegmentDialogOpen(true)}
             >
-              Save as segment
-            </AppButton>
-            <AppButton
-              variant="primary"
-              icon={<AddOutlined fontSize="small" />}
+              <AddOutlined fontSize="small" /> Save as segment
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
               onClick={() => setNewContactDialogOpen(true)}
             >
-              New contact
-            </AppButton>
+              <AddOutlined fontSize="small" /> New contact
+            </button>
           </div>
         </div>
       </AppCard>
@@ -558,19 +558,19 @@ export default function CustomersPage() {
                 disabled={bulkApplying}
                 onChange={(event) => setBulkTagDraft(event.target.value)}
               />
-              <AppButton type="submit" variant="secondary" size="small" disabled={bulkApplying || !bulkTagDraft.trim()}>
+              <button type="submit" className="btn btn-secondary" disabled={bulkApplying || !bulkTagDraft.trim()}>
                 Add
-              </AppButton>
+              </button>
             </div>
           </form>
-          <AppButton type="button" variant="secondary" size="small" disabled={bulkApplying} onClick={clearSelection}>
+          <button type="button" className="btn btn-secondary" disabled={bulkApplying} onClick={clearSelection}>
             Clear selection
-          </AppButton>
+          </button>
         </AppCard>
       ) : null}
 
       {error ? (
-        <ErrorState title="Could not load contacts" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />
+        <ErrorState title="Could not load contacts" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />
       ) : (
         <AppTable
           columns={columns}
@@ -611,8 +611,8 @@ export default function CustomersPage() {
               {segmentError ? <p className="customer-segment-error">{segmentError}</p> : null}
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton type="button" variant="secondary" disabled={segmentSaving} onClick={() => setSegmentDialogOpen(false)}>Cancel</AppButton>
-              <AppButton type="submit" variant="primary" loading={segmentSaving}>Save segment</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={segmentSaving} onClick={() => setSegmentDialogOpen(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={segmentSaving}>{segmentSaving ? "Saving…" : "Save segment"}</button>
             </footer>
           </form>
         </div>
@@ -647,8 +647,8 @@ export default function CustomersPage() {
               {newContactError ? <p className="customer-segment-error">{newContactError}</p> : null}
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton type="button" variant="secondary" disabled={newContactSaving} onClick={() => setNewContactDialogOpen(false)}>Cancel</AppButton>
-              <AppButton type="submit" variant="primary" loading={newContactSaving}>Create contact</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={newContactSaving} onClick={() => setNewContactDialogOpen(false)}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={newContactSaving}>{newContactSaving ? "Creating…" : "Create contact"}</button>
             </footer>
           </form>
         </div>

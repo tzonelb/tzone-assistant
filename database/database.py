@@ -167,6 +167,37 @@ class Database:
             )
         """)
 
+        # Per-user permission overrides — lets an owner grant or revoke a
+        # single permission code for one employee beyond their role's
+        # defaults (e.g. take away "channels.manage" from one Support
+        # agent even though the Support role normally grants it). A row
+        # here always wins over the role's own permission_codes; no rows
+        # means "use the role default" so every existing company is
+        # unaffected until an owner explicitly overrides someone.
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS user_permission_overrides (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                permission_code TEXT NOT NULL,
+                allowed INTEGER NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(company_id, user_id, permission_code),
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_user_permission_overrides_user
+            ON user_permission_overrides(company_id, user_id)
+        """)
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS channel_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

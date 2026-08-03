@@ -14,10 +14,11 @@ import {
   deleteBroadcastRequest,
   listBroadcastsRequest,
   listCustomerSegmentsRequest,
+  previewBroadcastRecipientCountRequest,
   sendBroadcastRequest,
   uploadMediaRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, StatusBadge } from "../../components/common";
 import { useAuth } from "../../contexts/AuthContext";
 import "./BroadcastPage.css";
 import "../analytics/AnalyticsPage.css";
@@ -131,6 +132,7 @@ export default function BroadcastPage() {
   const [lifecycleStages, setLifecycleStages] = useState([]);
 
   const [sendTarget, setSendTarget] = useState(null);
+  const [sendCountLoading, setSendCountLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
 
@@ -275,9 +277,20 @@ export default function BroadcastPage() {
     }
   }
 
-  function openSendConfirm(broadcast) {
+  async function openSendConfirm(broadcast) {
     setSendError("");
     setSendTarget(broadcast);
+    setSendCountLoading(true);
+    try {
+      const result = await previewBroadcastRecipientCountRequest(broadcast.id);
+      setSendTarget((current) => (
+        current && current.id === broadcast.id ? { ...current, recipient_count: result.recipient_count } : current
+      ));
+    } catch {
+      // Keep the stale snapshot if the live recount fails.
+    } finally {
+      setSendCountLoading(false);
+    }
   }
 
   async function confirmSend() {
@@ -364,11 +377,11 @@ export default function BroadcastPage() {
       align: "right",
       render: (_value, row) => (
         <div className="broadcast-row-actions">
-          <AppButton size="small" variant="secondary" onClick={() => navigate(`/broadcast/${row.id}`)}>View report</AppButton>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(`/broadcast/${row.id}`)}>View report</button>
           {canManageChannels && row.status === "draft" ? (
             <>
-              <AppButton size="small" variant="primary" onClick={() => openSendConfirm(row)}>Send</AppButton>
-              <AppButton size="small" variant="danger" onClick={() => openDeleteConfirm(row)}>Delete</AppButton>
+              <button type="button" className="btn btn-primary" onClick={() => openSendConfirm(row)}>Send</button>
+              <button type="button" className="btn btn-primary" onClick={() => openDeleteConfirm(row)}>Delete</button>
             </>
           ) : null}
           {canManageChannels && row.status === "sending" ? (
@@ -376,7 +389,7 @@ export default function BroadcastPage() {
             // partway through (e.g. a request/proxy timeout on a large
             // recipient list) - resuming picks up with whoever hasn't
             // been sent to yet instead of leaving it as a dead end.
-            <AppButton size="small" variant="primary" onClick={() => openSendConfirm(row)}>Resume send</AppButton>
+            <button type="button" className="btn btn-primary" onClick={() => openSendConfirm(row)}>Resume send</button>
           ) : null}
         </div>
       ),
@@ -388,9 +401,9 @@ export default function BroadcastPage() {
       <PageHeader
         actions={
           canManageChannels ? (
-            <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openCompose}>
-              Create Broadcast
-            </AppButton>
+            <button type="button" className="btn btn-primary" onClick={openCompose}>
+              <AddOutlined fontSize="small" /> Create Broadcast
+            </button>
           ) : null
         }
       />
@@ -417,7 +430,7 @@ export default function BroadcastPage() {
       </section>
 
       {listError ? (
-        <ErrorState title="Could not load broadcasts" description={listError} action={<AppButton variant="primary" onClick={loadBroadcasts}>Retry</AppButton>} />
+        <ErrorState title="Could not load broadcasts" description={listError} action={<button type="button" className="btn btn-primary" onClick={loadBroadcasts}>Retry</button>} />
       ) : (
         <AppTable
           columns={columns}
@@ -589,8 +602,8 @@ export default function BroadcastPage() {
               </div>
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton type="button" variant="secondary" disabled={creating} onClick={closeCompose}>Cancel</AppButton>
-              <AppButton type="submit" variant="primary" loading={creating}>Create draft</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={creating} onClick={closeCompose}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={creating}>{creating ? "Creating…" : "Create draft"}</button>
             </footer>
           </form>
         </div>
@@ -611,14 +624,14 @@ export default function BroadcastPage() {
             </header>
             <div className="tz-dialog-body">
               <p>
-                Send “{sendTarget.name}” to {sendTarget.recipient_count} contact{sendTarget.recipient_count === 1 ? "" : "s"} on{" "}
+                Send “{sendTarget.name}” to {sendCountLoading ? "…" : sendTarget.recipient_count} contact{sendTarget.recipient_count === 1 ? "" : "s"} on{" "}
                 {channelLabel(sendTarget.channel)}? This cannot be undone.
               </p>
               {sendError ? <p className="broadcast-error-text">{sendError}</p> : null}
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton variant="secondary" disabled={sending} onClick={() => setSendTarget(null)}>Cancel</AppButton>
-              <AppButton variant="primary" loading={sending} onClick={confirmSend}>Send now</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={sending} onClick={() => setSendTarget(null)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={sending} onClick={confirmSend}>{sending ? "Sending…" : "Send now"}</button>
             </footer>
           </section>
         </div>

@@ -316,6 +316,10 @@ export async function testAiReplyRequest({ message, channel, department }) {
   return apiRequest("/api/ai-teaching-chat/test", { method: "POST", body: { message, channel, department } });
 }
 
+export async function chatWithBotRequest({ message, channel, department }) {
+  return apiRequest("/api/ai-teaching-chat/chat-with-bot", { method: "POST", body: { message, channel, department } });
+}
+
 export async function createInstructionRequest(text, tags) {
   return apiRequest("/api/instructions", { method: "POST", body: { text, tags: tags || [] } });
 }
@@ -380,6 +384,39 @@ export async function sendTeamMessageRequest(payload) {
 
 export async function deleteTeamMessageRequest(messageId) {
   return apiRequest(`/api/team-chat/${messageId}`, { method: "DELETE" });
+}
+
+export async function listTeamRoomsRequest() {
+  return apiRequest("/api/team-chat/rooms");
+}
+
+export async function createTeamDmRequest(userId) {
+  return apiRequest("/api/team-chat/rooms/dm", { method: "POST", body: { user_id: userId } });
+}
+
+export async function createTeamGroupRequest({ name, memberUserIds, department }) {
+  return apiRequest("/api/team-chat/rooms/group", {
+    method: "POST",
+    body: { name, member_user_ids: memberUserIds || [], department: department || null },
+  });
+}
+
+export async function listTeamRoomMessagesRequest(roomId, { limit } = {}) {
+  const query = createQueryString({ limit });
+  return apiRequest(`/api/team-chat/rooms/${roomId}/messages${query}`);
+}
+
+export async function sendTeamRoomMessageRequest(roomId, payload) {
+  return apiRequest(`/api/team-chat/rooms/${roomId}/messages`, { method: "POST", body: payload });
+}
+
+export async function deleteTeamRoomMessageRequest(roomId, messageId) {
+  return apiRequest(`/api/team-chat/rooms/${roomId}/messages/${messageId}`, { method: "DELETE" });
+}
+
+export async function listActivityLogRequest({ actorUserId, action, beforeId, limit } = {}) {
+  const query = createQueryString({ actor_user_id: actorUserId, action, before_id: beforeId, limit });
+  return apiRequest(`/api/activity-log${query}`);
 }
 
 async function uploadFileRequest(path, file) {
@@ -670,6 +707,14 @@ export async function generateReplyFlowFromTextRequest(id, text) {
   return apiRequest(`/api/reply-flows/${id}/generate-from-text`, { method: "POST", body: { text } });
 }
 
+// Registry of available flow trigger types ({ key, label, category,
+// description, config_fields }), served by the backend's TRIGGER_TYPES
+// registry. Falls back gracefully (see ReplyFlowBuilderPage) while that
+// endpoint is still landing.
+export async function getReplyFlowTriggerTypesRequest() {
+  return apiRequest("/api/reply-flows/trigger-types");
+}
+
 export async function deleteSavedReplyRequest(id) {
   return apiRequest(`/api/saved-replies/${id}`, { method: "DELETE" });
 }
@@ -806,6 +851,22 @@ export async function createCompanyUserRequest(payload) {
 
 export async function updateCompanyUserRequest(userId, payload) {
   return apiRequest(`/api/admin/access/users/${userId}`, { method: "PATCH", body: payload });
+}
+
+export async function getUserPermissionOverridesRequest(userId) {
+  return apiRequest(`/api/admin/access/users/${userId}/overrides`);
+}
+
+export async function setUserPermissionOverridesRequest(userId, overrides) {
+  return apiRequest(`/api/admin/access/users/${userId}/overrides`, { method: "PUT", body: { overrides } });
+}
+
+export async function resetCompanyUserPasswordRequest(userId) {
+  return apiRequest(`/api/admin/access/users/${userId}/reset-password`, { method: "POST" });
+}
+
+export async function logoutCompanyUserRequest(userId) {
+  return apiRequest(`/api/admin/access/users/${userId}/logout`, { method: "POST" });
 }
 
 export async function logoutRequest() {
@@ -1191,6 +1252,10 @@ export async function listBroadcastsRequest() {
 
 export async function sendBroadcastRequest(broadcastId) {
   return apiRequest(`/api/broadcasts/${broadcastId}/send`, { method: "POST" });
+}
+
+export async function previewBroadcastRecipientCountRequest(broadcastId) {
+  return apiRequest(`/api/broadcasts/${broadcastId}/recipient-count`);
 }
 
 export async function deleteBroadcastRequest(broadcastId) {

@@ -7,18 +7,17 @@ import {
   ChatOutlined,
   DashboardOutlined,
   EventNoteOutlined,
+  ForumOutlined,
   GroupOutlined,
-  HubOutlined,
   Inventory2Outlined,
   NotificationsOutlined,
   PaletteOutlined,
   QueryStatsOutlined,
   QuickreplyOutlined,
-  SecurityOutlined,
+  SendOutlined,
   SettingsOutlined,
   TaskAltOutlined,
   TuneOutlined,
-  AccountTreeOutlined,
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
@@ -59,15 +58,15 @@ const NAV_GROUPS = [
   {
     label: "Intelligence",
     items: [
-      ["ai_teaching", "/ai-teaching", "AI Teaching", AutoAwesomeOutlined],
+      ["test_ai", "/test-ai", "Test & Train AI", AutoAwesomeOutlined],
       ["saved_replies", "/saved-replies", "Saved Replies", QuickreplyOutlined],
-      ["reply_flows", "/reply-flows", "Reply Flows", AccountTreeOutlined, ["users.manage"]],
     ],
   },
   {
     label: "Growth",
     items: [
-      ["community", "/community", "Community", HubOutlined, ["channels.view", "modules.comments"]],
+      ["publish", "/publish", "Publish", SendOutlined, ["channels.view"]],
+      ["comments", "/comments", "Comments", ForumOutlined, ["channels.view", "modules.comments"]],
       ["catalogue", "/catalogue", "Master Catalogue", Inventory2Outlined],
       ["analytics", "/analytics", "Analytics", QueryStatsOutlined, ["analytics.view"]],
     ],
@@ -76,7 +75,6 @@ const NAV_GROUPS = [
     label: "Administration",
     items: [
       ["company_settings", "/company-settings", "Company Settings", TuneOutlined],
-      ["roles_permissions", "/roles", "Roles & Permissions", SecurityOutlined, ["users.manage"]],
       ["settings", "/settings", "Settings", SettingsOutlined],
     ],
   },

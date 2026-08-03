@@ -5,7 +5,6 @@ import {
   listMyChannelsRequest,
   connectTelegramRequest,
   connectWhatsAppRequest,
-  connectInstagramRequest,
   disconnectChannelRequest,
   startFacebookOAuthRequest,
   getMySubscriptionRequest,
@@ -119,8 +118,6 @@ export default function SecureChannelsPanel() {
   const [telegramToken, setTelegramToken] = useState("");
   const [waPhoneId, setWaPhoneId] = useState("");
   const [waToken, setWaToken] = useState("");
-  const [igPageId, setIgPageId] = useState("");
-  const [igToken, setIgToken] = useState("");
 
   // Inline verification prompt state — appears only when an action needs it.
   const [verifyOpen, setVerifyOpen] = useState(false);
@@ -282,17 +279,14 @@ export default function SecureChannelsPanel() {
     setHasVerifiedSession(false);
   }
 
-  const inputStyle = { flex: 1, padding: "10px 12px", borderRadius: 8, border: "1px solid #d5dae5" };
-  const formStyle = { display: "flex", gap: 12, padding: "0 0 20px", flexWrap: "wrap" };
-
   return (
     <div className="company-setting-fields">
       {oauthMessage ? (
-        <p style={{ color: oauthMessage.type === "success" ? "#1e7e34" : "#c0392b", fontWeight: 600 }}>
+        <p className={`channels-oauth-message ${oauthMessage.type === "error" ? "is-error" : "is-success"}`}>
           {oauthMessage.text}
         </p>
       ) : null}
-      {error ? <p style={{ color: "#c0392b" }}>{error}</p> : null}
+      {error ? <p className="channels-error-text">{error}</p> : null}
 
       {hasVerifiedSession && !verifyOpen ? (
         <article className="company-setting-field channels-verify-inline">
@@ -300,7 +294,7 @@ export default function SecureChannelsPanel() {
             <strong>Verified session active</strong>
             <span>Connect or disconnect as many channels as you need — no new code required until this session ends.</span>
           </div>
-          <button type="button" onClick={showSessionChanges} disabled={changesLoading}>
+          <button type="button" className="btn btn-secondary" onClick={showSessionChanges} disabled={changesLoading}>
             {changesLoading ? "Loading…" : "Done — show what changed"}
           </button>
         </article>
@@ -314,21 +308,21 @@ export default function SecureChannelsPanel() {
             </header>
             <div className="tz-dialog-body">
               {sessionChanges.length ? (
-                <ul style={{ margin: 0, paddingLeft: 18, display: "flex", flexDirection: "column", gap: 8 }}>
+                <ul className="channels-changes-list">
                   {sessionChanges.map((change, index) => (
                     <li key={index}>
                       {change.description}
                       <br />
-                      <span style={{ fontSize: 12, color: "#6b7280" }}>{new Date(change.created_at).toLocaleString()}</span>
+                      <span className="channels-change-time">{new Date(change.created_at).toLocaleString()}</span>
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p style={{ color: "#6b7280" }}>No changes were made this session.</p>
+                <p className="channels-changes-empty">No changes were made this session.</p>
               )}
             </div>
             <footer className="tz-dialog-actions">
-              <button type="button" onClick={closeSessionChanges}>Close</button>
+              <button type="button" className="btn btn-secondary" onClick={closeSessionChanges}>Close</button>
             </footer>
           </div>
         </div>
@@ -342,23 +336,23 @@ export default function SecureChannelsPanel() {
               This will change a real channel connection. We'll email a one-time code to confirm it's you first.
             </span>
             {verifyStage === "send" ? (
-              <div style={{ marginTop: 10 }}>
-                <button type="button" onClick={handleSendCode} disabled={busy}>
+              <div className="channels-verify-actions">
+                <button type="button" className="btn btn-primary" onClick={handleSendCode} disabled={busy}>
                   {busy ? "Sending…" : "Send verification code"}
                 </button>
-                <button type="button" onClick={() => setVerifyOpen(false)} disabled={busy} style={{ marginLeft: 8 }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setVerifyOpen(false)} disabled={busy}>
                   Cancel
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleVerifyCode} style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+              <form onSubmit={handleVerifyCode} className="channels-verify-code-form">
                 <span>Code sent to {emailHint}. Enter it below:</span>
                 <input
                   type="text" value={code} onChange={(e) => setCode(e.target.value)}
                   placeholder="123456" maxLength={6} required
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid #d5dae5", width: 100 }}
+                  className="input channels-code-input"
                 />
-                <button type="submit" disabled={busy}>{busy ? "Verifying…" : "Verify"}</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Verifying…" : "Verify"}</button>
               </form>
             )}
           </div>
@@ -367,7 +361,7 @@ export default function SecureChannelsPanel() {
 
       <ChannelsOverview channels={channels} usage={usage} onConnect={handleConnectClick} />
 
-      <article className="company-setting-field" style={{ marginTop: 24 }} ref={(el) => (sectionRefs.current.facebook = el)}>
+      <article className="company-setting-field channels-facebook-block" ref={(el) => (sectionRefs.current.facebook = el)}>
         <div>
           <strong>Connect with Facebook</strong>
           <span>One click — automatically finds your Page(s) and connects Messenger and Instagram together, no manual token copying.</span>
@@ -375,7 +369,7 @@ export default function SecureChannelsPanel() {
       </article>
       <button
         type="button"
-        style={{ marginBottom: 24, padding: "10px 18px", background: "#1877f2", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+        className="btn channels-facebook-connect"
         disabled={busy}
         onClick={handleFacebookConnect}
       >
@@ -386,7 +380,7 @@ export default function SecureChannelsPanel() {
         <div><strong>Connect Telegram</strong><span>Paste your bot token from @BotFather.</span></div>
       </article>
       <form
-        style={formStyle}
+        className="channels-connect-form"
         ref={(el) => (sectionRefs.current.telegram = el)}
         onSubmit={(e) => {
           e.preventDefault();
@@ -396,15 +390,15 @@ export default function SecureChannelsPanel() {
           });
         }}
       >
-        <input style={inputStyle} value={telegramToken} onChange={(e) => setTelegramToken(e.target.value)} placeholder="Bot token" required />
-        <button type="submit" disabled={busy}>Connect</button>
+        <input className="input" value={telegramToken} onChange={(e) => setTelegramToken(e.target.value)} placeholder="Bot token" required />
+        <button type="submit" className="btn btn-primary" disabled={busy}>Connect</button>
       </form>
 
       <article className="company-setting-field">
         <div><strong>Connect WhatsApp</strong><span>Phone Number ID and access token from Meta Business.</span></div>
       </article>
       <form
-        style={formStyle}
+        className="channels-connect-form"
         ref={(el) => (sectionRefs.current.whatsapp = el)}
         onSubmit={(e) => {
           e.preventDefault();
@@ -414,27 +408,9 @@ export default function SecureChannelsPanel() {
           });
         }}
       >
-        <input style={inputStyle} value={waPhoneId} onChange={(e) => setWaPhoneId(e.target.value)} placeholder="Phone Number ID" required />
-        <input style={inputStyle} value={waToken} onChange={(e) => setWaToken(e.target.value)} placeholder="Access token" required />
-        <button type="submit" disabled={busy}>Connect</button>
-      </form>
-
-      <article className="company-setting-field">
-        <div><strong>Connect Instagram</strong><span>Facebook Page ID (with a linked Instagram professional account) and access token.</span></div>
-      </article>
-      <form
-        style={formStyle}
-        onSubmit={(e) => {
-          e.preventDefault();
-          withVerification(async (token) => {
-            await connectInstagramRequest(igPageId, igToken, null, token);
-            setIgPageId(""); setIgToken("");
-          });
-        }}
-      >
-        <input style={inputStyle} value={igPageId} onChange={(e) => setIgPageId(e.target.value)} placeholder="Facebook Page ID" required />
-        <input style={inputStyle} value={igToken} onChange={(e) => setIgToken(e.target.value)} placeholder="Access token" required />
-        <button type="submit" disabled={busy}>Connect</button>
+        <input className="input" value={waPhoneId} onChange={(e) => setWaPhoneId(e.target.value)} placeholder="Phone Number ID" required />
+        <input className="input" value={waToken} onChange={(e) => setWaToken(e.target.value)} placeholder="Access token" required />
+        <button type="submit" className="btn btn-primary" disabled={busy}>Connect</button>
       </form>
 
       <div className="users-table-wrap">
@@ -448,6 +424,7 @@ export default function SecureChannelsPanel() {
                   {c.status === "active" ? (
                     <button
                       type="button"
+                      className="btn btn-secondary"
                       onClick={() => withVerification((token) => disconnectChannelRequest(c.id, token))}
                       disabled={busy}
                     >

@@ -123,7 +123,10 @@ class AppConfig:
             origin.strip()
             for origin in os.getenv(
                 "ALLOWED_ORIGINS",
-                "http://localhost:5173,http://127.0.0.1:5173",
+                # https://localhost / http://localhost (no port) are the
+                # origins of the Capacitor Android app's WebView — they must
+                # stay allowed in production too, or the mobile app breaks.
+                "http://localhost:5173,http://127.0.0.1:5173,https://localhost,http://localhost",
             ).split(",")
             if origin.strip()
         ]

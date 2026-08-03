@@ -572,6 +572,8 @@ class Engine:
             ),
         )
 
+        prior_session_state = session.get(request.user_id) or {}
+
         ai_result = ai_router.route(
             message=request.message,
             channel=request.channel,
@@ -585,6 +587,7 @@ class Engine:
             match_result=match_result,
             company_id=request.company_id,
             instructions=instruction_service.list_texts_for_ai(request.company_id, context_tags=context_tags),
+            previously_needed_human=bool(prior_session_state.get("last_ai_needs_human")),
         )
 
         if not ai_result:
@@ -601,12 +604,14 @@ class Engine:
                 request=request,
                 user_session=user_session,
                 ai_result=safe_result,
+                previously_needed_human=bool(prior_session_state.get("last_ai_needs_human")),
             )
 
         return self.finalize_ai_response(
             request=request,
             user_session=user_session,
             ai_result=ai_result,
+            previously_needed_human=bool(prior_session_state.get("last_ai_needs_human")),
         )
 
     def collect_connector_results(
@@ -940,6 +945,7 @@ class Engine:
         request,
         user_session,
         ai_result,
+        previously_needed_human: bool = False,
     ):
         result_language = (
             ai_result.get("language")
@@ -1054,6 +1060,20 @@ class Engine:
             if support_label not in buttons:
                 buttons.append(support_label)
 
+            # Write the AI handoff summary exactly once per escalation — the
+            # transition from "AI still trying" to "AI needs a human" — not
+            # on every subsequent message while still stuck, and never on
+            # the premature first unmatched turn (that case never reaches
+            # here at all now: apply_guardrails only sets needs_human=True
+            # once previously_needed_human was already true).
+            if not previously_needed_human:
+                self.record_handoff_summary(
+                    request=request,
+                    ai_result=ai_result,
+                    user_session=user_session,
+                    language=result_language,
+                )
+
         if request.channel != "telegram":
             if result_language == "ar":
                 menu_label = (
@@ -1071,6 +1091,46 @@ class Engine:
             reply,
             buttons,
         )
+
+    def record_handoff_summary(
+        self,
+        request,
+        ai_result,
+        user_session,
+        language,
+    ):
+        """Writes a real, AI-generated summary as an internal note the
+        moment a conversation genuinely escalates to a human — so whichever
+        employee opens it doesn't have to re-read the whole thread. Never
+        raises: a summary failure must never break the customer's reply."""
+        try:
+            from backend.services.conversation_control_service import conversation_control_service
+
+            summary = ai_router.summarize_for_handoff(
+                conversation_history=(user_session or {}).get("conversation_history", []),
+                last_user_message=request.message,
+                topic=ai_result.get("topic"),
+                missing_information=ai_result.get("missing_information"),
+                language=language,
+            )
+            if not summary:
+                return
+
+            note = (
+                f"🤖 ملخص AI عند التحويل: {summary}"
+                if language == "ar"
+                else f"🤖 AI handoff summary: {summary}"
+            )
+
+            conversation_control_service.add_note(
+                company_id=request.company_id,
+                channel=request.channel,
+                external_user_id=request.user_id,
+                author_user_id=None,
+                note=note,
+            )
+        except Exception:
+            logger.exception("Could not record AI handoff summary")
 
     def handle_intent(
         self,

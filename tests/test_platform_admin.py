@@ -645,23 +645,43 @@ def test_non_super_admin_cannot_view_audit_logs(client_and_db):
 # ---- Revenue / MRR summary -------------------------------------------------
 
 
-def test_super_admin_can_view_revenue_summary(client_and_db):
+def test_new_trialing_company_does_not_count_toward_mrr(client_and_db):
+    """Regression test: total_mrr used to sum 'active' AND 'trialing'
+    subscriptions, so a batch of new trial signups inflated MRR before
+    anyone paid a cent. A brand-new company (created on a trial, per
+    create_company's own logic) must show up in trial_count only —
+    never in total_mrr or the by_plan breakdown (both real-revenue-only)."""
     client = client_and_db(1, is_super_admin=True)
-    all_plans = client.get("/api/platform/plans?active_only=false").json()["plans"]
-    starter_price = next(p["price_monthly"] for p in all_plans if p["code"] == "starter")
+    before = client.get("/api/platform/revenue").json()
+
     client.post("/api/platform/companies", json={"name": "Revenue Co", "slug": "revenue-co", "plan_id": 1})
 
     resp = client.get("/api/platform/revenue")
     assert resp.status_code == 200, resp.text
     body = resp.json()
+    assert body["total_mrr"] == before["total_mrr"]
+    assert body["trial_count"] >= before["trial_count"] + 1
+    assert not any(row["plan_code"] == "starter" for row in body["by_plan"])
+
+
+def test_active_paying_subscription_does_count_toward_mrr(client_and_db):
+    client = client_and_db(1, is_super_admin=True)
+    all_plans = client.get("/api/platform/plans?active_only=false").json()["plans"]
+    starter_price = next(p["price_monthly"] for p in all_plans if p["code"] == "starter")
+
+    create_resp = client.post("/api/platform/companies", json={"name": "Paying Co", "slug": "paying-co", "plan_id": 1})
+    company_id = create_resp.json()["id"]
+    client.post(f"/api/platform/companies/{company_id}/plan", json={"plan_id": 1, "duration_days": 30})
+
+    resp = client.get("/api/platform/revenue")
+    body = resp.json()
     assert body["total_mrr"] >= starter_price
-    assert body["trial_count"] >= 1
     starter_row = next(row for row in body["by_plan"] if row["plan_code"] == "starter")
     assert starter_row["active_subscriptions"] >= 1
     assert starter_row["mrr"] >= starter_price
 
 
-def test_revenue_summary_only_counts_active_and_trialing(client_and_db):
+def test_revenue_summary_excludes_cancelled_subscriptions(client_and_db):
     client = client_and_db(1, is_super_admin=True)
     from database.database import db
 

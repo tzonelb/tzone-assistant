@@ -39,6 +39,7 @@ class AIRouter:
         match_result: dict[str, Any] | None = None,
         company_id: int | None = None,
         instructions: list[str] | None = None,
+        previously_needed_human: bool = False,
     ) -> dict[str, Any] | None:
         if not config.AI_ENABLED:
             return None
@@ -80,6 +81,7 @@ class AIRouter:
                 message=message,
                 knowledge=knowledge,
                 connector_results=connector_results,
+                previously_needed_human=previously_needed_human,
             )
 
         except Exception:
@@ -296,6 +298,7 @@ The JSON must contain:
         message: str,
         knowledge: list[dict],
         connector_results: list[dict],
+        previously_needed_human: bool = False,
     ) -> dict[str, Any]:
         language = result.get("language") or "ar"
         lowered_message = message.lower()
@@ -353,12 +356,20 @@ The JSON must contain:
             result["needs_human"] = True
 
         if not knowledge and not connector_results:
-            result["needs_human"] = True
+            # Do not transfer to a human on the FIRST unmatched turn — the
+            # customer hasn't clarified what they need yet, and the model's
+            # own reply (per its system prompt) already asks a follow-up
+            # question. Only escalate once the customer's next message on
+            # this same stuck topic still matches nothing, i.e. we already
+            # hit this same guardrail last turn (previously_needed_human,
+            # sourced from the session's last_ai_needs_human).
+            if previously_needed_human:
+                result["needs_human"] = True
 
-            if not result.get("missing_information"):
-                result["missing_information"] = [
-                    "verified business information"
-                ]
+                if not result.get("missing_information"):
+                    result["missing_information"] = [
+                        "verified business information"
+                    ]
 
         reply = result.get("reply") or ""
 
@@ -381,6 +392,72 @@ The JSON must contain:
                 result["buttons"].append(support_label)
 
         return result
+
+    def summarize_for_handoff(
+        self,
+        *,
+        conversation_history: list[dict[str, Any]] | None = None,
+        last_user_message: str,
+        topic: str | None,
+        missing_information: list[str] | None,
+        language: str,
+    ) -> str | None:
+        """Called once, right when a conversation is genuinely escalated to
+        a human (never on the first unmatched turn — see the
+        previously_needed_human gate in apply_guardrails). Produces a short,
+        real AI-generated summary for the employee who picks this up, so
+        they don't have to re-read the whole thread to see what the
+        customer actually needs. Returns None (never raises) if the AI is
+        unavailable — a missing summary must never block the handoff
+        itself from being logged."""
+        if not config.AI_ENABLED or not config.OPENAI_API_KEY:
+            return None
+
+        history_lines = []
+        for turn in (conversation_history or [])[-10:]:
+            role = turn.get("role") or ("customer" if turn.get("from_customer") else "assistant")
+            text = turn.get("text") or turn.get("message") or ""
+            if text:
+                history_lines.append(f"{role}: {text}")
+
+        prompt = """
+Summarize this customer support conversation for the human employee about to
+take it over. Write 1-2 short sentences: what the customer wants, and why the
+AI could not resolve it. Reply in the same language as the conversation
+({language}). No preamble, no JSON — plain text only.
+""".strip().format(language=language)
+
+        user_payload = {
+            "recent_messages": history_lines,
+            "last_customer_message": last_user_message,
+            "topic": topic,
+            "why_stuck": missing_information or [],
+        }
+
+        payload = {
+            "model": config.OPENAI_MODEL,
+            "input": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
+            ],
+        }
+
+        headers = {
+            "Authorization": f"Bearer {config.OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            with httpx.Client(timeout=20) as client:
+                response = client.post(config.OPENAI_API_URL, headers=headers, json=payload)
+            if response.status_code >= 400:
+                logger.warning("Handoff summary call failed: %s %s", response.status_code, response.text)
+                return None
+            text = self.extract_output_text(response.json())
+            return text.strip() if text else None
+        except Exception:
+            logger.exception("Handoff summary generation failed")
+            return None
 
     def safe_reply(self, language: str) -> str:
         if language == "en":

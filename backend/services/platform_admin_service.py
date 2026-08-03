@@ -1,4 +1,5 @@
 import secrets
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -37,7 +38,7 @@ class PlatformAdminService:
                 "contact_phone": "TEXT",
                 "license_code": "TEXT",
                 "purchased_at": "TEXT",
-                "module_appointments_enabled": "INTEGER NOT NULL DEFAULT 0",
+                "module_appointments_enabled": "INTEGER NOT NULL DEFAULT 1",
                 "module_scheduler_enabled": "INTEGER NOT NULL DEFAULT 1",
                 "module_catalogue_enabled": "INTEGER NOT NULL DEFAULT 1",
                 "module_team_chat_enabled": "INTEGER NOT NULL DEFAULT 1",
@@ -161,6 +162,7 @@ class PlatformAdminService:
         main_admin_email: str | None = None,
         contact_phone: str | None = None,
         license_code: str | None = None,
+        actor_user_id: int | None = None,
     ) -> dict[str, Any]:
         now = utc_now_iso()
         resolved_license_code = license_code or _generate_license_code()
@@ -183,9 +185,10 @@ class PlatformAdminService:
                 INSERT INTO companies (
                     workspace_id, name, slug, country, currency, status,
                     main_admin_email, contact_phone, license_code, purchased_at,
+                    module_appointments_enabled,
                     created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, 1, ?, ?)
                 """,
                 (
                     config.DEFAULT_WORKSPACE_ID, name, slug, country, currency,
@@ -212,10 +215,10 @@ class PlatformAdminService:
 
             conn.execute(
                 """
-                INSERT INTO audit_logs (workspace_id, company_id, action, entity_type, created_at)
-                VALUES (?, ?, 'company_created', 'company', ?)
+                INSERT INTO audit_logs (workspace_id, company_id, user_id, action, entity_type, created_at)
+                VALUES (?, ?, ?, 'company_created', 'company', ?)
                 """,
-                (config.DEFAULT_WORKSPACE_ID, company_id, now),
+                (config.DEFAULT_WORKSPACE_ID, company_id, actor_user_id, now),
             )
             conn.commit()
 
@@ -285,6 +288,28 @@ class PlatformAdminService:
             conn.commit()
 
         return self.get_company_detail(company_id=company_id)
+
+    def is_module_enabled(self, *, company_id: int, module: str) -> bool:
+        """The actual enforcement side of update_modules() above — until
+        this existed, the Platform Admin "Modules" toggle only ever wrote
+        these columns and showed them back as a checkmark; no route for
+        catalogue/appointments/team chat/comments ever read them, so
+        suspending a module did nothing. Fails open (returns True) if the
+        company row is missing, or if these columns don't exist yet on
+        this DB (this migration is additive via ensure_schema(), so a
+        caller that hasn't run it — e.g. an isolated test DB — must not
+        get a hard crash or an incorrect lockout instead)."""
+        field = f"module_{module}_enabled"
+        if field not in self.MODULE_FIELDS:
+            return True
+        try:
+            with db.connect() as conn:
+                row = conn.execute(f"SELECT {field} FROM companies WHERE id = ?", (company_id,)).fetchone()
+        except sqlite3.OperationalError:
+            return True
+        if not row:
+            return True
+        return bool(row[field])
 
     def list_plans(self, *, active_only: bool = True) -> list[dict[str, Any]]:
         query = "SELECT * FROM plans"
@@ -413,7 +438,7 @@ class PlatformAdminService:
     # ---- Subscriptions -------------------------------------------------
 
     def change_plan(
-        self, *, company_id: int, plan_id: int, duration_days: int = 30,
+        self, *, company_id: int, plan_id: int, duration_days: int = 30, actor_user_id: int | None = None,
     ) -> dict[str, Any]:
         now = utc_now_iso()
         now_dt = datetime.now(timezone.utc)
@@ -463,10 +488,10 @@ class PlatformAdminService:
             )
             conn.execute(
                 """
-                INSERT INTO audit_logs (workspace_id, company_id, action, entity_type, created_at)
-                VALUES (?, ?, 'subscription_plan_changed', 'subscription', ?)
+                INSERT INTO audit_logs (workspace_id, company_id, user_id, action, entity_type, created_at)
+                VALUES (?, ?, ?, 'subscription_plan_changed', 'subscription', ?)
                 """,
-                (config.DEFAULT_WORKSPACE_ID, company_id, now),
+                (config.DEFAULT_WORKSPACE_ID, company_id, actor_user_id, now),
             )
             conn.commit()
 
@@ -565,7 +590,7 @@ class PlatformAdminService:
             conn.commit()
 
         if approve:
-            self.change_plan(company_id=request["company_id"], plan_id=request["plan_id"])
+            self.change_plan(company_id=request["company_id"], plan_id=request["plan_id"], actor_user_id=actor_user_id)
 
         return self.get_subscription_request(request_id=request_id)
 
@@ -614,8 +639,11 @@ class PlatformAdminService:
     # ---- Revenue / MRR -------------------------------------------------
 
     def revenue_summary(self) -> dict[str, Any]:
-        """MRR and plan breakdown computed only from real subscriptions rows
-        currently in 'active' or 'trialing' status — no estimation."""
+        """MRR is real recurring revenue — only 'active' (i.e. actually
+        paying) subscriptions count toward it or the per-plan breakdown.
+        A batch of new trial signups must not move this number; trial_count
+        below still reports them separately so nothing about trials is
+        hidden, it just isn't counted as money collected."""
         with db.connect() as conn:
             by_plan_rows = conn.execute(
                 """
@@ -625,7 +653,7 @@ class PlatformAdminService:
                        SUM(p.price_monthly) AS mrr
                 FROM subscriptions s
                 JOIN plans p ON p.id = s.plan_id
-                WHERE s.status IN ('active', 'trialing')
+                WHERE s.status = 'active'
                 GROUP BY p.id, p.name, p.code, p.price_monthly
                 ORDER BY mrr DESC
                 """

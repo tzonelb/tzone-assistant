@@ -1,13 +1,28 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
 from database.database import db
 
+logger = logging.getLogger(__name__)
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _fire_appointment_trigger(*, company_id: int, customer_id: int | None, trigger_type: str) -> None:
+    """Lazy import breaks the natural import cycle the same way
+    conversation_control_service.py's equivalent hook does — never raises,
+    since a broken/misconfigured trigger flow must never block a real
+    appointment being booked or completed."""
+    try:
+        from core.reply_flow_engine import reply_flow_engine
+        reply_flow_engine.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type=trigger_type)
+    except Exception:
+        logger.exception("%s reply flow trigger failed for appointment (customer #%s)", trigger_type, customer_id)
 
 
 STATUSES = ["scheduled", "completed", "cancelled", "no_show"]
@@ -40,6 +55,13 @@ class AppointmentService:
                 )
                 """
             )
+            existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(appointments)")}
+            if "flow_reminder_sent_at" not in existing_columns:
+                # Tracks whether the appointment_reminder Reply Flow trigger has
+                # already fired for this appointment, so main.py's reminder
+                # worker (via reply_flow_engine.check_appointment_reminders)
+                # never sends the same reminder twice.
+                conn.execute("ALTER TABLE appointments ADD COLUMN flow_reminder_sent_at TEXT")
             conn.commit()
 
     @staticmethod
@@ -121,6 +143,8 @@ class AppointmentService:
             )
             appointment_id = int(cursor.lastrowid)
             conn.commit()
+
+        _fire_appointment_trigger(company_id=company_id, customer_id=customer_id, trigger_type="appointment_created")
 
         return self.get_appointment(company_id=company_id, appointment_id=appointment_id)
 
@@ -240,11 +264,13 @@ class AppointmentService:
         now = utc_now_iso()
         with db.connect() as conn:
             existing = conn.execute(
-                "SELECT id FROM appointments WHERE id = ? AND company_id = ?",
+                "SELECT id, status, customer_id FROM appointments WHERE id = ? AND company_id = ?",
                 (appointment_id, company_id),
             ).fetchone()
             if not existing:
                 raise KeyError("Appointment not found")
+            previous_status = existing["status"]
+            existing_customer_id = existing["customer_id"]
 
             if employee_requested and employee_user_id is not None:
                 self._validate_employee(conn, company_id=company_id, employee_user_id=employee_user_id)
@@ -262,6 +288,10 @@ class AppointmentService:
                 [*cleaned.values(), now, appointment_id, company_id],
             )
             conn.commit()
+
+        if cleaned.get("status") == "completed" and previous_status != "completed":
+            final_customer_id = cleaned["customer_id"] if customer_requested else existing_customer_id
+            _fire_appointment_trigger(company_id=company_id, customer_id=final_customer_id, trigger_type="appointment_completed")
 
         return self.get_appointment(company_id=company_id, appointment_id=appointment_id)
 

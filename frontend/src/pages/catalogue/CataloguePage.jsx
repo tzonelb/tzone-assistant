@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AddOutlined, CloseOutlined, DeleteOutlineOutlined, EditOutlined, UploadFileOutlined } from "@mui/icons-material";
 import {
   catalogueOptionsRequest,
@@ -9,7 +10,7 @@ import {
   listProductsRequest,
   updateProductRequest,
 } from "../../api/client";
-import { AppButton, AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, SearchBar, StatusBadge } from "../../components/common";
+import { AppCard, AppTable, ConfirmDialog, ErrorState, PageHeader, SearchBar, StatusBadge } from "../../components/common";
 import "./CataloguePage.css";
 
 const STATUS_TONE = { active: "success", archived: "neutral" };
@@ -107,9 +108,9 @@ function ImportDialog({ open, onCancel, onImported }) {
                 <input value={catalogId} disabled={importing} onChange={(event) => setCatalogId(event.target.value)} placeholder="e.g. 1234567890" />
                 <span className="product-import-note">Uses your already-connected WhatsApp channel's access token — connect one first from Company Settings → Channels.</span>
               </label>
-              <AppButton type="submit" variant="primary" loading={importing} disabled={!catalogId.trim()} style={{ marginTop: 10 }}>
-                Import from WhatsApp
-              </AppButton>
+              <button type="submit" className="btn btn-primary" disabled={importing || !catalogId.trim()} style={{ marginTop: 10 }}>
+                {importing ? "Importing…" : "Import from WhatsApp"}
+              </button>
             </form>
           )}
 
@@ -123,7 +124,7 @@ function ImportDialog({ open, onCancel, onImported }) {
           ) : null}
         </div>
         <footer className="tz-dialog-actions">
-          <AppButton type="button" variant="secondary" onClick={onCancel}>Close</AppButton>
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>Close</button>
         </footer>
       </div>
     </div>
@@ -138,7 +139,10 @@ export default function CataloguePage() {
   const [statuses, setStatuses] = useState([]);
   const [categories, setCategories] = useState([]);
 
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  // Deep-link support for the topbar quick-search ("/catalogue?q=...") —
+  // mirrors CustomersPageV2's own ?q= handling.
+  const [search, setSearch] = useState(() => searchParams.get("q") || "");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
@@ -345,12 +349,12 @@ export default function CataloguePage() {
       <PageHeader
         actions={
           <>
-            <AppButton variant="secondary" icon={<UploadFileOutlined fontSize="small" />} onClick={() => setImportDialogOpen(true)}>
-              Import
-            </AppButton>
-            <AppButton variant="primary" icon={<AddOutlined fontSize="small" />} onClick={openDialog}>
-              New Product
-            </AppButton>
+            <button type="button" className="btn btn-secondary" onClick={() => setImportDialogOpen(true)}>
+              <UploadFileOutlined fontSize="small" /> Import
+            </button>
+            <button type="button" className="btn btn-primary" onClick={openDialog}>
+              <AddOutlined fontSize="small" /> New Product
+            </button>
           </>
         }
       />
@@ -370,7 +374,7 @@ export default function CataloguePage() {
       </AppCard>
 
       {error ? (
-        <ErrorState title="Could not load products" description={error} action={<AppButton variant="primary" onClick={load}>Retry</AppButton>} />
+        <ErrorState title="Could not load products" description={error} action={<button type="button" className="btn btn-primary" onClick={load}>Retry</button>} />
       ) : (
         <AppTable
           columns={columns}
@@ -481,8 +485,8 @@ export default function CataloguePage() {
               {formError ? <p className="product-form-error">{formError}</p> : null}
             </div>
             <footer className="tz-dialog-actions">
-              <AppButton type="button" variant="secondary" disabled={saving} onClick={closeDialog}>Cancel</AppButton>
-              <AppButton type="submit" variant="primary" loading={saving}>{editingProduct ? "Save changes" : "Create product"}</AppButton>
+              <button type="button" className="btn btn-secondary" disabled={saving} onClick={closeDialog}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : (editingProduct ? "Save changes" : "Create product")}</button>
             </footer>
           </form>
         </div>
