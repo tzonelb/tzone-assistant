@@ -1,7 +1,14 @@
+import logging
+
 import requests
 
 from config.settings import config
 from channels.meta.logger import log_meta_event
+from backend.services.token_crypto import decrypt_token
+from database.database import db
+
+
+logger = logging.getLogger(__name__)
 
 
 FAKE_TEST_IDS = {
@@ -18,10 +25,51 @@ def is_fake_meta_id(recipient_id: str) -> bool:
     return str(recipient_id) in FAKE_TEST_IDS
 
 
+def _resolve_access_token(company_id: int | None, channel: str) -> str:
+    """Resolve the Graph API access token to use for a send.
+
+    When company_id is provided, looks up an active channel_accounts row
+    for (company_id, channel) and decrypts its stored token. Falls back
+    to the legacy single-tenant config.META_PAGE_ACCESS_TOKEN when
+    company_id is None, no matching row exists, or decryption fails --
+    preserving 100% backward compatibility for existing callers that
+    don't pass company_id.
+    """
+    if company_id is None:
+        return config.META_PAGE_ACCESS_TOKEN
+
+    try:
+        with db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT access_token_encrypted
+                FROM channel_accounts
+                WHERE company_id = ? AND channel = ? AND status = 'active'
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (company_id, channel),
+            ).fetchone()
+    except Exception:
+        logger.exception(
+            "send_meta: failed to look up channel_accounts token for company_id=%s channel=%s",
+            company_id,
+            channel,
+        )
+        return config.META_PAGE_ACCESS_TOKEN
+
+    if not row or not row["access_token_encrypted"]:
+        return config.META_PAGE_ACCESS_TOKEN
+
+    decrypted = decrypt_token(row["access_token_encrypted"])
+    return decrypted or config.META_PAGE_ACCESS_TOKEN
+
+
 def send_meta_text(
     recipient_id: str,
     text: str,
     channel: str = "messenger",
+    company_id: int | None = None,
 ) -> dict:
     if is_fake_meta_id(recipient_id):
         result = {
@@ -34,7 +82,9 @@ def send_meta_text(
         log_meta_event("send_skipped", result)
         return result
 
-    if not config.META_PAGE_ACCESS_TOKEN:
+    access_token = _resolve_access_token(company_id, channel)
+
+    if not access_token:
         result = {
             "ok": False,
             "error": "META_PAGE_ACCESS_TOKEN is missing",
@@ -50,7 +100,7 @@ def send_meta_text(
     }
 
     params = {
-        "access_token": config.META_PAGE_ACCESS_TOKEN,
+        "access_token": access_token,
     }
 
     try:
@@ -83,6 +133,7 @@ def send_meta_buttons(
     text: str,
     buttons: list | None = None,
     channel: str = "messenger",
+    company_id: int | None = None,
 ) -> dict:
     if is_fake_meta_id(recipient_id):
         result = {
@@ -100,6 +151,7 @@ def send_meta_buttons(
             recipient_id=recipient_id,
             text=text,
             channel=channel,
+            company_id=company_id,
         )
 
     quick_replies = []
@@ -112,6 +164,8 @@ def send_meta_buttons(
             "payload": title,
         })
 
+    access_token = _resolve_access_token(company_id, channel)
+
     url = f"https://graph.facebook.com/{config.META_API_VERSION}/me/messages"
 
     payload = {
@@ -123,7 +177,7 @@ def send_meta_buttons(
     }
 
     params = {
-        "access_token": config.META_PAGE_ACCESS_TOKEN,
+        "access_token": access_token,
     }
 
     try:

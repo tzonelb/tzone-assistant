@@ -285,6 +285,7 @@ class BroadcastService:
                         recipient_id=external_user_id,
                         text=message_text,
                         channel=channel,
+                        company_id=company_id,
                     )
                     ok = bool(send_result.get("ok"))
                     error_message = self._extract_meta_error(send_result)

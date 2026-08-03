@@ -255,6 +255,7 @@ def send_manual_conversation_reply(
         recipient_id=normalized_user_id,
         text=message_text,
         channel=normalized_channel,
+        company_id=company_id,
     )
 
     if not send_result.get("ok"):
