@@ -511,6 +511,78 @@ class Database:
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS broadcasts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,
+                message_text TEXT NOT NULL,
+                target_department TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                estimated_recipient_count INTEGER NOT NULL DEFAULT 0,
+                actual_recipient_count INTEGER NOT NULL DEFAULT 0,
+                sent_count INTEGER NOT NULL DEFAULT 0,
+                failed_count INTEGER NOT NULL DEFAULT 0,
+                created_by_user_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP,
+                completed_at TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(created_by_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_broadcasts_company
+            ON broadcasts(
+                company_id,
+                created_at DESC
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS broadcast_recipients (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                broadcast_id INTEGER NOT NULL,
+                conversation_id INTEGER NOT NULL,
+                external_user_id TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                error TEXT,
+                sent_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(broadcast_id)
+                    REFERENCES broadcasts(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(conversation_id)
+                    REFERENCES conversations(id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_broadcast_recipients_unique
+            ON broadcast_recipients(
+                broadcast_id,
+                conversation_id
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_broadcast_recipients_status
+            ON broadcast_recipients(
+                broadcast_id,
+                status
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS tickets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 company_id INTEGER,
