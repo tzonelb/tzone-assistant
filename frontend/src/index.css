@@ -7,6 +7,7 @@
   color: var(--tz-text-primary);
   background: var(--tz-background);
   color-scheme: light;
+  --heading-scale: 1;
 }
 
 :root[data-theme="dark"] {
@@ -54,4 +55,22 @@ h6,
 p {
   margin-top: 0;
   color: inherit;
+}
+
+/* Base heading sizes (browser UA defaults expressed in rem) scaled by the
+   user's "Heading size" preference from Settings > Appearance. Only h1-h3
+   are used anywhere in this app (checked: no <h4>/<h5>/<h6> exist), so
+   only those get a scaled rule. Scoped selectors elsewhere with fixed px
+   sizes still take precedence via specificity; this affects headings that
+   don't set their own font-size. */
+h1 {
+  font-size: calc(2rem * var(--heading-scale, 1));
+}
+
+h2 {
+  font-size: calc(1.5rem * var(--heading-scale, 1));
+}
+
+h3 {
+  font-size: calc(1.17rem * var(--heading-scale, 1));
 }

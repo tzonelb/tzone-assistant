@@ -171,6 +171,7 @@ export default function AppLayout() {
     const applyAppearance = () => {
       const font = localStorage.getItem("tzone_ui_font");
       const size = localStorage.getItem("tzone_ui_font_size");
+      const headingScale = localStorage.getItem("tzone_ui_heading_scale");
       const density = localStorage.getItem("tzone_ui_density") || "comfortable";
       const preference = localStorage.getItem("tzone_ui_theme") || "light";
       const resolvedTheme = preference === "auto"
@@ -178,6 +179,7 @@ export default function AppLayout() {
         : preference;
       if (font) document.documentElement.style.fontFamily = font;
       if (size) document.documentElement.style.fontSize = `${size}%`;
+      if (headingScale) document.documentElement.style.setProperty("--heading-scale", headingScale);
       document.body.dataset.uiDensity = density;
       document.documentElement.dataset.theme = resolvedTheme;
       document.documentElement.style.colorScheme = resolvedTheme;

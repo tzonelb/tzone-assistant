@@ -1622,3 +1622,231 @@ body[data-ui-density="compact"] .app-content {
     grid-template-columns: 1fr;
   }
 }
+
+.settings-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 13px 15px;
+  border: 1px solid var(--tz-border);
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-banner span:not(.settings-banner-dismiss span) {
+  flex: 1;
+}
+
+.settings-banner.is-success {
+  color: var(--tz-success);
+  background: var(--tz-success-soft);
+  border-color: transparent;
+}
+
+.settings-banner.is-error {
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+  border-color: transparent;
+}
+
+.settings-banner-dismiss {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: inherit;
+  background: transparent;
+  opacity: .75;
+}
+
+.settings-banner-dismiss:hover {
+  opacity: 1;
+  background: rgb(0 0 0 / 8%);
+}
+
+.channel-connect-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 22px 0 0;
+  padding: 16px;
+  border: 1px solid var(--tz-border);
+  border-radius: 14px;
+  background: var(--tz-surface);
+}
+
+.channel-connect-card > div {
+  display: grid;
+  gap: 4px;
+}
+
+.channel-connect-card span {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.channel-connect-error {
+  color: var(--tz-danger);
+  font-weight: 700;
+}
+
+.channel-connect-card button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--tz-primary);
+  color: #fff;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.channel-connect-card button:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.reply-flow-list {
+  display: grid;
+  gap: 12px;
+  margin: 22px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reply-flow-card {
+  padding: 16px;
+  border: 1px solid var(--tz-border);
+  border-radius: 14px;
+  background: var(--tz-surface);
+}
+
+.reply-flow-card.is-off {
+  opacity: .6;
+}
+
+.reply-flow-card.is-conditional {
+  border-color: var(--tz-primary);
+  border-width: 2px;
+  background: var(--tz-primary-soft);
+}
+
+.reply-flow-card-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.reply-flow-card-order {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.reply-flow-card-order button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--tz-text-muted);
+  background: transparent;
+}
+
+.reply-flow-card-order button:hover:not(:disabled) {
+  color: var(--tz-primary);
+  background: var(--tz-primary-soft);
+}
+
+.reply-flow-card-order button:disabled {
+  opacity: .3;
+  cursor: not-allowed;
+}
+
+.reply-flow-card-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+}
+
+.reply-flow-card-copy strong {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.reply-flow-card-copy span {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.reply-flow-condition {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 12px 14px 14px;
+  border-top: 1px dashed var(--tz-border);
+}
+
+.reply-flow-condition > p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.reply-flow-condition-outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reply-flow-outcome {
+  display: grid;
+  gap: 3px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.reply-flow-outcome strong {
+  font-size: 12px;
+}
+
+.reply-flow-outcome.is-yes {
+  color: var(--tz-success);
+  background: var(--tz-success-soft);
+}
+
+.reply-flow-outcome.is-no {
+  color: var(--tz-text-muted);
+  background: var(--tz-surface-secondary);
+}
+
+.reply-flow-condition-note {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .channel-connect-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reply-flow-condition-outcomes {
+    grid-template-columns: 1fr;
+  }
+}
