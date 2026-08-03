@@ -37,6 +37,35 @@ class ConversationOwnershipConflict(RuntimeError):
         )
 
 
+class ConversationVersionConflict(ValueError):
+    """Raised when a control update's expected_control_version is stale.
+
+    This means another employee (or another tab/request) changed one of
+    this conversation's *control* fields (status/priority/department/
+    assignment/alias/folder/star/pin/tags/read-state) via update_state()
+    or update_workspace_state() since the caller last loaded it. The
+    comparison is against the dedicated `control_version` counter, which
+    only those two write paths increment — general conversation activity
+    (inbound customer messages, AI/employee replies, takeover-timeout
+    expiry, etc.) bumps the conversations row's `updated_at` but does not
+    touch `control_version`, so it can never trigger a false conflict here.
+    It is a ValueError so it fits the existing "raise on conflict" pattern
+    used by company_settings_service.update_section, but it is a distinct
+    subclass so routes can map it to HTTP 409 (stale version) instead of
+    the generic 422 used for plain validation errors.
+    """
+
+    def __init__(self, message: str | None = None) -> None:
+        super().__init__(
+            message
+            or (
+                "This conversation's control fields were updated by someone "
+                "else since you last loaded it. Reload the conversation "
+                "before saving."
+            )
+        )
+
+
 def _takeover_timeout_minutes(company_id: int) -> int:
     """Return the company-configured human takeover timeout safely.
 
@@ -204,6 +233,7 @@ class ConversationControlService:
                         is_starred INTEGER NOT NULL DEFAULT 0,
                         is_pinned INTEGER NOT NULL DEFAULT 0,
                         tags_json TEXT NOT NULL DEFAULT '[]',
+                        control_version INTEGER NOT NULL DEFAULT 0,
                         created_at TEXT NOT NULL,
                         updated_at TEXT NOT NULL
                     )
@@ -252,6 +282,8 @@ class ConversationControlService:
                         "INTEGER NOT NULL DEFAULT 0",
                     "tags_json":
                         "TEXT NOT NULL DEFAULT '[]'",
+                    "control_version":
+                        "INTEGER NOT NULL DEFAULT 0",
                 },
             )
 
@@ -810,6 +842,7 @@ class ConversationControlService:
         external_user_id: str,
         handled_by_ai: bool,
         actor_user_id: int,
+        expected_control_version: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_or_create(
             company_id=company_id,
@@ -850,6 +883,22 @@ class ConversationControlService:
                     int(current_owner) if current_owner is not None else None
                 )
 
+            # Optimistic-concurrency guard: Take Over / Return to AI mutate
+            # the same control fields (assigned_user_id, handled_by_ai,
+            # status, workflow_state, needs_human) that update_state()/
+            # update_workspace_state() guard with control_version, so they
+            # must participate in the same scheme -- otherwise a stale
+            # Take Over/Release/Return-to-AI click could silently clobber a
+            # concurrent change made through the generic control-update
+            # path (or another employee's take-over), and vice versa.
+            if (
+                expected_control_version is not None
+                and int(current_state.get("control_version") or 0)
+                != int(expected_control_version)
+            ):
+                conn.rollback()
+                raise ConversationVersionConflict()
+
             old_status = current_state.get("status") or (
                 "ai_handling"
                 if current_state.get("handled_by_ai", True)
@@ -857,9 +906,21 @@ class ConversationControlService:
             )
             new_status = "ai_handling" if handled_by_ai else "human_handling"
 
+            # Compare-and-swap: the WHERE clause re-checks control_version
+            # at UPDATE time (not just via the pre-check above), so two
+            # genuinely concurrent requests that both pass the pre-check
+            # cannot both succeed -- the second one's rowcount comes back 0
+            # and it is rejected as a conflict instead of silently
+            # clobbering the first.
+            version_clause = ""
+            version_params: tuple[Any, ...] = ()
+            if expected_control_version is not None:
+                version_clause = "AND control_version = ?"
+                version_params = (int(expected_control_version),)
+
             if handled_by_ai:
-                conn.execute(
-                    """
+                cursor = conn.execute(
+                    f"""
                     UPDATE conversations
                     SET handled_by_ai = 1,
                         ai_enabled = 1,
@@ -871,14 +932,18 @@ class ConversationControlService:
                         needs_human = 0,
                         assigned_user_id = NULL,
                         takeover_expires_at = NULL,
-                        updated_at = ?
-                    WHERE id = ? AND company_id = ?
+                        updated_at = ?,
+                        control_version = control_version + 1
+                    WHERE id = ? AND company_id = ? {version_clause}
                     """,
-                    (now, state["id"], company_id),
+                    (now, state["id"], company_id, *version_params),
                 )
+                if cursor.rowcount != 1:
+                    conn.rollback()
+                    raise ConversationVersionConflict()
             else:
                 cursor = conn.execute(
-                    """
+                    f"""
                     UPDATE conversations
                     SET handled_by_ai = 0,
                         ai_enabled = 0,
@@ -887,7 +952,8 @@ class ConversationControlService:
                         needs_human = 1,
                         assigned_user_id = ?,
                         takeover_expires_at = ?,
-                        updated_at = ?
+                        updated_at = ?,
+                        control_version = control_version + 1
                     WHERE id = ?
                       AND company_id = ?
                       AND (
@@ -895,18 +961,34 @@ class ConversationControlService:
                           OR assigned_user_id IS NULL
                           OR assigned_user_id = ?
                       )
+                      {version_clause}
                     """,
                     (
                         actor_user_id, expires_at, now,
                         state["id"], company_id, actor_user_id,
+                        *version_params,
                     ),
                 )
                 if cursor.rowcount != 1:
                     owner = conn.execute(
-                        "SELECT assigned_user_id FROM conversations WHERE id = ?",
+                        "SELECT assigned_user_id, control_version "
+                        "FROM conversations WHERE id = ?",
                         (state["id"],),
                     ).fetchone()
                     conn.rollback()
+                    # The pre-check above already confirmed ownership was
+                    # fine against this same snapshot, taken inside this
+                    # transaction, so a rowcount of 0 here can only mean
+                    # the version_clause didn't match -- unless
+                    # expected_control_version was never supplied, in
+                    # which case it's a genuine ownership race.
+                    if (
+                        expected_control_version is not None
+                        and owner
+                        and int(owner["control_version"] or 0)
+                        != int(expected_control_version)
+                    ):
+                        raise ConversationVersionConflict()
                     raise ConversationOwnershipConflict(
                         int(owner["assigned_user_id"])
                         if owner and owner["assigned_user_id"] is not None
@@ -1110,6 +1192,7 @@ class ConversationControlService:
         external_user_id: str,
         actor_user_id: int,
         force: bool = False,
+        expected_control_version: int | None = None,
     ) -> dict[str, Any]:
         """Release a human conversation back to the shared employee queue.
 
@@ -1121,14 +1204,31 @@ class ConversationControlService:
         over first, take-over resets this timer as usual.
         """
         state = self.get_state(company_id, channel, external_user_id)
+
+        if (
+            expected_control_version is not None
+            and int(state.get("control_version") or 0) != int(expected_control_version)
+        ):
+            raise ConversationVersionConflict()
+
         release_expiry = (
             utc_now() + timedelta(minutes=_takeover_timeout_minutes(company_id))
         ).isoformat()
+
+        # Compare-and-swap: re-check control_version in the WHERE clause
+        # itself (not just via the pre-check above) so two genuinely
+        # concurrent releases can't both succeed.
+        version_clause = ""
+        version_params: tuple[Any, ...] = ()
+        if expected_control_version is not None:
+            version_clause = "AND control_version = ?"
+            version_params = (int(expected_control_version),)
+
         with db.connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             if force:
                 cursor = conn.execute(
-                    """
+                    f"""
                     UPDATE conversations
                     SET assigned_user_id = NULL,
                         handled_by_ai = 0,
@@ -1137,17 +1237,19 @@ class ConversationControlService:
                         workflow_state = 'waiting_agent',
                         needs_human = 1,
                         takeover_expires_at = ?,
-                        updated_at = ?
+                        updated_at = ?,
+                        control_version = control_version + 1
                     WHERE id = ?
                       AND company_id = ?
                       AND handled_by_ai = 0
                       AND ai_enabled = 0
+                      {version_clause}
                     """,
-                    (release_expiry, utc_now_iso(), state["id"], company_id),
+                    (release_expiry, utc_now_iso(), state["id"], company_id, *version_params),
                 )
             else:
                 cursor = conn.execute(
-                    """
+                    f"""
                     UPDATE conversations
                     SET assigned_user_id = NULL,
                         handled_by_ai = 0,
@@ -1156,21 +1258,32 @@ class ConversationControlService:
                         workflow_state = 'waiting_agent',
                         needs_human = 1,
                         takeover_expires_at = ?,
-                        updated_at = ?
+                        updated_at = ?,
+                        control_version = control_version + 1
                     WHERE id = ?
                       AND company_id = ?
                       AND handled_by_ai = 0
                       AND ai_enabled = 0
                       AND assigned_user_id = ?
+                      {version_clause}
                     """,
-                    (release_expiry, utc_now_iso(), state["id"], company_id, actor_user_id),
+                    (
+                        release_expiry, utc_now_iso(), state["id"], company_id,
+                        actor_user_id, *version_params,
+                    ),
                 )
             if cursor.rowcount != 1:
                 current = conn.execute(
-                    "SELECT assigned_user_id FROM conversations WHERE id = ?",
+                    "SELECT assigned_user_id, control_version FROM conversations WHERE id = ?",
                     (state["id"],),
                 ).fetchone()
                 conn.rollback()
+                if (
+                    expected_control_version is not None
+                    and current
+                    and int(current["control_version"] or 0) != int(expected_control_version)
+                ):
+                    raise ConversationVersionConflict()
                 raise ConversationOwnershipConflict(
                     int(current["assigned_user_id"])
                     if current and current["assigned_user_id"] is not None
@@ -1386,6 +1499,7 @@ class ConversationControlService:
         department: str | None = None,
         assigned_user_id: int | None = None,
         is_admin: bool = False,
+        expected_control_version: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
@@ -1394,6 +1508,12 @@ class ConversationControlService:
                 external_user_id
             ),
         )
+
+        if (
+            expected_control_version is not None
+            and int(state.get("control_version") or 0) != int(expected_control_version)
+        ):
+            raise ConversationVersionConflict()
 
         if (
             status is not None
@@ -1508,18 +1628,34 @@ class ConversationControlService:
                 # instead of looking like a silent/normal reassignment.
                 admin_override = is_admin and is_reassign_away_from_someone_else
 
+            # Compare-and-swap: each UPDATE re-checks control_version at
+            # write time (not just via the pre-check above), so two
+            # genuinely concurrent requests that both passed the pre-check
+            # cannot both succeed -- the second one's rowcount comes back 0
+            # and it is rejected instead of silently clobbering the first.
+            # `running_version` tracks the value each successive UPDATE in
+            # this same transaction must match, since control_version
+            # advances by one after every field written here.
+            running_version = int(state.get("control_version") or 0)
+
             for (
                 field_name,
                 _,
                 new_value,
             ) in actual_changes:
+                version_clause = ""
+                version_params: tuple[Any, ...] = ()
+                if expected_control_version is not None:
+                    version_clause = "AND control_version = ?"
+                    version_params = (running_version,)
+
                 if field_name == "assigned_user_id":
                     expires_at = (
                         utc_now()
                         + timedelta(minutes=_takeover_timeout_minutes(company_id))
                     ).isoformat()
-                    conn.execute(
-                        """
+                    cursor = conn.execute(
+                        f"""
                         UPDATE conversations
                         SET assigned_user_id = ?,
                             handled_by_ai = 0,
@@ -1528,9 +1664,11 @@ class ConversationControlService:
                             workflow_state = 'human_active',
                             needs_human = 1,
                             takeover_expires_at = ?,
-                            updated_at = ?
+                            updated_at = ?,
+                            control_version = control_version + 1
                         WHERE id = ?
                           AND company_id = ?
+                          {version_clause}
                         """,
                         (
                             new_value,
@@ -1538,25 +1676,35 @@ class ConversationControlService:
                             utc_now_iso(),
                             state["id"],
                             company_id,
+                            *version_params,
                         ),
                     )
                 else:
-                    conn.execute(
+                    cursor = conn.execute(
                         f"""
                         UPDATE conversations
                         SET
                             {field_name} = ?,
-                            updated_at = ?
+                            updated_at = ?,
+                            control_version = control_version + 1
                         WHERE id = ?
                           AND company_id = ?
+                          {version_clause}
                         """,
                         (
                             new_value,
                             utc_now_iso(),
                             state["id"],
                             company_id,
+                            *version_params,
                         ),
                     )
+
+                if expected_control_version is not None:
+                    if cursor.rowcount != 1:
+                        conn.rollback()
+                        raise ConversationVersionConflict()
+                    running_version += 1
 
             for (
                 field_name,
@@ -1610,12 +1758,19 @@ class ConversationControlService:
         tags: list[str] | None = None,
         clear_assignment: bool = False,
         is_unread: bool | None = None,
+        expected_control_version: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
         )
+
+        if (
+            expected_control_version is not None
+            and int(state.get("control_version") or 0) != int(expected_control_version)
+        ):
+            raise ConversationVersionConflict()
 
         valid_folders = {
             "inbox",
@@ -1705,6 +1860,18 @@ class ConversationControlService:
             return state
 
         with db.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+
+            # Compare-and-swap: each UPDATE re-checks control_version at
+            # write time (not just via the pre-check above), so two
+            # genuinely concurrent requests that both passed the pre-check
+            # cannot both succeed -- the second one's rowcount comes back 0
+            # and it is rejected instead of silently clobbering the first.
+            # `running_version` tracks the value each successive UPDATE in
+            # this same transaction must match, since control_version
+            # advances by one after every field written here.
+            running_version = int(state.get("control_version") or 0)
+
             for field_name, old_value, new_value, event_type in updates:
                 stored_value = new_value
                 if field_name in {"is_starred", "is_pinned"}:
@@ -1715,21 +1882,36 @@ class ConversationControlService:
                         ensure_ascii=False,
                     )
 
-                conn.execute(
+                version_clause = ""
+                version_params: tuple[Any, ...] = ()
+                if expected_control_version is not None:
+                    version_clause = "AND control_version = ?"
+                    version_params = (running_version,)
+
+                cursor = conn.execute(
                     f"""
                     UPDATE conversations
                     SET {field_name} = ?,
-                        updated_at = ?
+                        updated_at = ?,
+                        control_version = control_version + 1
                     WHERE id = ?
                       AND company_id = ?
+                      {version_clause}
                     """,
                     (
                         stored_value,
                         utc_now_iso(),
                         state["id"],
                         company_id,
+                        *version_params,
                     ),
                 )
+
+                if expected_control_version is not None:
+                    if cursor.rowcount != 1:
+                        conn.rollback()
+                        raise ConversationVersionConflict()
+                    running_version += 1
 
                 self.insert_event(
                     conn=conn,
