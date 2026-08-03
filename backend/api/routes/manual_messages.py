@@ -186,6 +186,24 @@ def send_manual_conversation_reply(
         )
     )
 
+    # SECURITY (repair round): get_state() used to auto-vivify a
+    # company-scoped ownership row on first lookup for ANY channel/user_id,
+    # even though this endpoint immediately fails the reply for a
+    # freshly-created (AI-handled) conversation. That side effect alone was
+    # enough for one company's employee to manufacture ownership of another
+    # company's conversation and defeat the read_conversation /
+    # export_conversation cross-tenant gate. Gate on the read-only
+    # existence check first, before any conversation_control_service call.
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=normalized_channel,
+        external_user_id=normalized_user_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found.",
+        )
+
     conversation = (
         conversation_control_service.get_state(
             company_id=company_id,
