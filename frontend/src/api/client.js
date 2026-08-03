@@ -556,3 +556,7 @@ export async function updateCompanySettingSectionRequest(section, values) {
     body: { values },
   });
 }
+
+export async function facebookConnectRequest() {
+  return apiRequest("/api/channels/facebook/connect", { method: "POST" });
+}
