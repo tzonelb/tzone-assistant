@@ -71,14 +71,24 @@ export function NotificationProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const inFlightRef = useRef(false);
+  // Remembers the last explicitly-applied filter set so background refreshes
+  // (interval / focus / visibilitychange) keep respecting it instead of
+  // silently reverting to the unfiltered list. Only calls that pass a
+  // `filters` argument update this; calls that omit it (background polling,
+  // post-mutation refreshes) reuse whatever was last applied.
+  const lastFiltersRef = useRef({});
 
-  const refresh = useCallback(async ({ silent = false, filters = {} } = {}) => {
+  const refresh = useCallback(async ({ silent = false, filters } = {}) => {
     if (!authenticated || inFlightRef.current) return;
     inFlightRef.current = true;
     if (!silent) setLoading(true);
+    if (filters !== undefined) {
+      lastFiltersRef.current = filters;
+    }
+    const appliedFilters = lastFiltersRef.current;
     try {
       const [nextItems, summaryPayload] = await Promise.all([
-        getNotificationsRequest({ pageSize: 100, ...filters }),
+        getNotificationsRequest({ pageSize: 100, ...appliedFilters }),
         getNotificationSummaryRequest(),
       ]);
       const normalizedItems = Array.isArray(nextItems) ? nextItems : [];
@@ -99,6 +109,7 @@ export function NotificationProvider({ children }) {
     if (!authenticated) {
       setItems([]);
       setSummary({ unread: 0, total: 0, read: 0 });
+      lastFiltersRef.current = {};
       return undefined;
     }
 
