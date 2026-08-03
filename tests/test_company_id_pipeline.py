@@ -54,12 +54,14 @@ def fresh_db():
     way to isolate tests against this codebase's module layout.
     """
     from database.database import db
+    from backend.services.company_settings_service import company_settings_service
 
     tmp_path = tempfile.mktemp(suffix=".db")
     original_path = db.db_path
     db.db_path = Path(tmp_path)
 
     db.create_tables()
+    company_settings_service.ensure_schema()
 
     yield db
 
