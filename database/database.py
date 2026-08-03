@@ -988,15 +988,23 @@ class Database:
                 for row in cursor.fetchall()
             ]
 
-    def get_ticket(self, ticket_id):
+    def get_ticket(self, ticket_id, company_id: int | None = None):
         with self.connect() as conn:
             cursor = conn.cursor()
 
-            cursor.execute("""
-                SELECT *
-                FROM tickets
-                WHERE id = ?
-            """, (ticket_id,))
+            if company_id is not None:
+                cursor.execute("""
+                    SELECT *
+                    FROM tickets
+                    WHERE id = ?
+                      AND company_id = ?
+                """, (ticket_id, company_id))
+            else:
+                cursor.execute("""
+                    SELECT *
+                    FROM tickets
+                    WHERE id = ?
+                """, (ticket_id,))
 
             row = cursor.fetchone()
 
