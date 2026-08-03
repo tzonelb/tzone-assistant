@@ -625,6 +625,52 @@ class ConversationControlService:
                 row
             )
 
+    def conversation_exists(
+        self,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+    ) -> bool:
+        """Read-only tenant ownership check.
+
+        Returns True only if a `conversations` row already exists for
+        this exact (company_id, channel, external_user_id). Deliberately
+        does NOT go through get_or_create()/get_state() — those
+        auto-vivify a new row on first lookup, which would make this
+        check always return True for any caller and defeat its purpose
+        as a cross-tenant read gate. Callers must check this (or an
+        equivalent DB-backed ownership check) before returning any data
+        keyed only by (channel, external_user_id), such as the raw
+        conversation transcript from core.conversation_store, which has
+        no company_id concept of its own.
+        """
+        normalized_channel = (
+            channel.strip().lower()
+        )
+
+        normalized_user_id = (
+            external_user_id.strip()
+        )
+
+        with db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT 1
+                FROM conversations
+                WHERE company_id = ?
+                  AND channel = ?
+                  AND external_user_id = ?
+                LIMIT 1
+                """,
+                (
+                    company_id,
+                    normalized_channel,
+                    normalized_user_id,
+                ),
+            ).fetchone()
+
+        return row is not None
+
     def insert_event(
         self,
         conn,

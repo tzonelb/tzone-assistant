@@ -997,6 +997,25 @@ def read_conversation(
         get_current_user
     ),
 ):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        # Do not distinguish "no such conversation anywhere" from
+        # "this conversation belongs to a different company" -- both
+        # cases must return the same 404 so this endpoint cannot be used
+        # to confirm/deny another tenant's customers by probing channel
+        # + user_id combinations.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Conversation not found."
+            ),
+        )
+
     messages = get_conversation(
         channel,
         user_id,
@@ -1011,7 +1030,6 @@ def read_conversation(
             ),
         )
 
-    company_id = auth_service.resolve_company_id(current_user)
     conversation_control_service.record_opened(
         company_id=company_id,
         channel=channel,
@@ -1465,6 +1483,21 @@ def export_conversation(
             current_user
         )
     )
+
+    if not conversation_control_service.conversation_exists(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
+        # Same cross-tenant gate as read_conversation: a 404 here must
+        # not reveal whether the conversation exists for some other
+        # company.
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                "Conversation not found."
+            ),
+        )
 
     messages = get_conversation(
         channel,
