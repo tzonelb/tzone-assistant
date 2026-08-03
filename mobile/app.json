@@ -6,9 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "backgroundColor": "#F7F7FC",
+    "backgroundColor": "#f4f5f7",
     "splash": {
-      "backgroundColor": "#4F63F0",
+      "backgroundColor": "#f4f5f7",
       "resizeMode": "contain"
     },
     "ios": {
@@ -18,7 +18,7 @@
     "android": {
       "package": "com.tzone.app",
       "adaptiveIcon": {
-        "backgroundColor": "#4F63F0",
+        "backgroundColor": "#1b9be0",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -26,6 +26,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

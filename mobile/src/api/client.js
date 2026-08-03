@@ -146,6 +146,59 @@ export function returnToAiRequest(channel, userId) {
   });
 }
 
+export function getControlRequest(channel, userId) {
+  return apiRequest(`/conversations/${encodeURIComponent(channel)}/${encodeURIComponent(userId)}/control`);
+}
+
+export function updateControlRequest(channel, userId, patch) {
+  return apiRequest(`/conversations/${encodeURIComponent(channel)}/${encodeURIComponent(userId)}/control`, {
+    method: "PATCH",
+    body: patch,
+  });
+}
+
+export function getSavedRepliesRequest() {
+  return apiRequest("/api/saved-replies");
+}
+
+export function getNotificationsSummaryRequest() {
+  return apiRequest("/api/notifications/summary");
+}
+
+// ---- Customers ----
+export function listCustomersRequest({ search = "", limit = 100, offset = 0 } = {}) {
+  return apiRequest("/api/customers", { query: { search, limit, offset } });
+}
+
+export function getCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${customerId}`);
+}
+
+export function getCustomerTimelineRequest(customerId) {
+  return apiRequest(`/api/customers/${customerId}/timeline`);
+}
+
+// ---- Publish (scheduled posts + comment inbox) ----
+export function listScheduledPostsRequest(status = "scheduled") {
+  return apiRequest("/api/scheduled-posts", { query: { status } });
+}
+
+export function getScheduledPostOptionsRequest() {
+  return apiRequest("/api/scheduled-posts/options");
+}
+
+export function listCommentPostsRequest() {
+  return apiRequest("/api/comments/posts");
+}
+
+export function listPostCommentsRequest(postExternalId) {
+  return apiRequest(`/api/comments/posts/${encodeURIComponent(postExternalId)}/comments`);
+}
+
+export function replyToCommentRequest(commentId, text) {
+  return apiRequest(`/api/comments/${commentId}/reply`, { method: "POST", body: { text } });
+}
+
 export function sendReplyRequest(channel, userId, text) {
   return apiRequest(`/conversations/${encodeURIComponent(channel)}/${encodeURIComponent(userId)}/reply`, {
     method: "POST",

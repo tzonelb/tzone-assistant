@@ -4,10 +4,17 @@ import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import {
+  useFonts,
+  CormorantGaramond_400Regular,
+  CormorantGaramond_600SemiBold,
+} from "@expo-google-fonts/cormorant-garamond";
+import { Lora_400Regular, Lora_500Medium, Lora_600SemiBold } from "@expo-google-fonts/lora";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
 import LoginScreen from "./src/screens/LoginScreen";
-import InboxScreen from "./src/screens/InboxScreen";
+import MainScreen from "./src/screens/MainScreen";
 import ChatScreen from "./src/screens/ChatScreen";
+import CustomerScreen from "./src/screens/CustomerScreen";
 import { colors } from "./src/theme";
 
 const Stack = createNativeStackNavigator();
@@ -18,33 +25,43 @@ function Root() {
   if (initializing) {
     return (
       <View style={styles.splash}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTintColor: colors.textPrimary,
-        headerTitleStyle: { fontWeight: "700" },
-        headerShadowVisible: false,
-      }}
-    >
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       {authenticated ? (
         <>
-          <Stack.Screen name="Inbox" component={InboxScreen} options={{ headerShown: false }} />
-          <Stack.Screen name="Chat" component={ChatScreen} />
+          <Stack.Screen name="Main" component={MainScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} options={{ animation: "slide_from_bottom" }} />
+          <Stack.Screen name="Customer" component={CustomerScreen} options={{ animation: "slide_from_bottom" }} />
         </>
       ) : (
-        <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+        <Stack.Screen name="Login" component={LoginScreen} />
       )}
     </Stack.Navigator>
   );
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    CormorantGaramond_400Regular,
+    CormorantGaramond_600SemiBold,
+    Lora_400Regular,
+    Lora_500Medium,
+    Lora_600SemiBold,
+  });
+
+  if (!fontsLoaded) {
+    return (
+      <View style={styles.splash}>
+        <ActivityIndicator size="large" color={colors.accent} />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
@@ -62,6 +79,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
+    backgroundColor: colors.bg,
   },
 });

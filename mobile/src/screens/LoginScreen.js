@@ -9,10 +9,12 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { getServerUrl, setServerUrl } from "../api/client";
-import { colors, radius } from "../theme";
+import { colors, fonts, radius } from "../theme";
+import { Kick, Btn } from "../components/ui";
 
 export default function LoginScreen() {
   const { login, verify2fa } = useAuth();
@@ -68,19 +70,13 @@ export default function LoginScreen() {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.logoWrap}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoText}>T</Text>
-          </View>
-          <Text style={styles.title}>T-ZONE</Text>
-          <Text style={styles.subtitle}>
+          <Image source={require("../../assets/tzone-logo.png")} style={styles.logo} resizeMode="contain" />
+          <Kick color={colors.accent700} style={styles.subtitle}>
             {pendingToken ? "Two-factor verification" : "Sign in to your workspace"}
-          </Text>
+          </Kick>
         </View>
 
         <View style={styles.card}>
@@ -92,19 +88,15 @@ export default function LoginScreen() {
                 value={code}
                 onChangeText={setCode}
                 placeholder="123456"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.neutral500}
                 keyboardType="number-pad"
                 maxLength={6}
                 autoFocus
               />
               {error ? <Text style={styles.error}>{error}</Text> : null}
-              <TouchableOpacity style={styles.button} onPress={handleVerify} disabled={busy}>
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Verify</Text>
-                )}
-              </TouchableOpacity>
+              <Btn kind="primary" block onPress={handleVerify} disabled={busy} style={styles.submit}>
+                {busy ? <ActivityIndicator color={colors.accent} /> : "Verify"}
+              </Btn>
               <TouchableOpacity
                 style={styles.linkButton}
                 onPress={() => {
@@ -124,7 +116,7 @@ export default function LoginScreen() {
                 value={company}
                 onChangeText={setCompany}
                 placeholder="Company name or slug"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.neutral500}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -134,7 +126,7 @@ export default function LoginScreen() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@company.com"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.neutral500}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -145,17 +137,13 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Password"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.neutral500}
                 secureTextEntry
               />
               {error ? <Text style={styles.error}>{error}</Text> : null}
-              <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={busy}>
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Sign in</Text>
-                )}
-              </TouchableOpacity>
+              <Btn kind="primary" block onPress={handleLogin} disabled={busy} style={styles.submit}>
+                {busy ? <ActivityIndicator color={colors.accent} /> : "Sign in"}
+              </Btn>
 
               <TouchableOpacity style={styles.linkButton} onPress={() => setShowServer((v) => !v)}>
                 <Text style={styles.linkText}>{showServer ? "Hide server settings" : "Server settings"}</Text>
@@ -168,7 +156,7 @@ export default function LoginScreen() {
                     value={serverUrl}
                     onChangeText={setServerUrlState}
                     placeholder="http://192.168.1.10:8000"
-                    placeholderTextColor={colors.textMuted}
+                    placeholderTextColor={colors.neutral500}
                     autoCapitalize="none"
                     autoCorrect={false}
                     keyboardType="url"
@@ -184,54 +172,44 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1, backgroundColor: colors.bg },
   container: { flexGrow: 1, justifyContent: "center", padding: 24 },
-  logoWrap: { alignItems: "center", marginBottom: 28 },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.lg,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-  },
-  logoText: { color: "#fff", fontSize: 34, fontWeight: "800" },
-  title: { fontSize: 26, fontWeight: "800", color: colors.textPrimary, letterSpacing: 1 },
-  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  logoWrap: { alignItems: "center", marginBottom: 26 },
+  logo: { height: 40, width: 200 },
+  subtitle: { marginTop: 10 },
   card: {
-    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.divider,
     borderRadius: radius.lg,
     padding: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: "#1C1A42",
-    shadowOpacity: 0.07,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    backgroundColor: "transparent",
   },
-  label: { fontSize: 13, fontWeight: "600", color: colors.textSecondary, marginBottom: 6, marginTop: 10 },
+  label: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 12,
+    color: colors.text65,
+    marginBottom: 6,
+    marginTop: 12,
+  },
   input: {
-    backgroundColor: colors.surfaceSecondary,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.textPrimary,
+    borderColor: colors.divider,
+    borderRadius: radius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.text,
+    backgroundColor: "transparent",
   },
-  codeInput: { textAlign: "center", fontSize: 24, letterSpacing: 8, fontWeight: "700" },
-  error: { color: colors.danger, marginTop: 12, fontSize: 13 },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.sm,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginTop: 18,
+  codeInput: {
+    textAlign: "center",
+    fontSize: 24,
+    letterSpacing: 8,
+    fontFamily: fonts.bodySemi,
   },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  error: { color: "#b3372f", marginTop: 12, fontSize: 13, fontFamily: fonts.body },
+  submit: { marginTop: 20 },
   linkButton: { alignItems: "center", marginTop: 14 },
-  linkText: { color: colors.primary, fontSize: 13, fontWeight: "600" },
+  linkText: { color: colors.accent700, fontSize: 13, fontFamily: fonts.bodyMedium },
 });
