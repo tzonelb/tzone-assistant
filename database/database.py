@@ -751,6 +751,18 @@ class Database:
             """
         )
 
+        # Knowledge base FAQs (backend/api/routes/knowledge.py) need a
+        # separate Arabic title alongside the existing `title` column
+        # (used as the English title) — added via _ensure_column instead
+        # of the CREATE TABLE above so installations with an existing
+        # knowledge_items table still pick it up.
+        self._ensure_column(
+            cursor,
+            "knowledge_items",
+            "title_ar",
+            "TEXT",
+        )
+
         # The conversation/customer link and official profile metadata are
         # used by the Messenger processor and customer service.
         self._ensure_column(
