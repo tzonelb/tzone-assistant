@@ -15,6 +15,7 @@ from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
 from core.business_modules import business_modules
+from backend.services.company_settings_service import company_settings_service
 from database.database import db
 
 
@@ -446,6 +447,34 @@ class Engine:
 
         return Response(text, buttons)
 
+    # Default value of the "reply_flow" company setting (see
+    # backend/services/company_settings_service.py DEFAULT_SETTINGS).
+    # Used only as a last-resort fallback if a stored setting is somehow
+    # missing/malformed the canonical default always lives in
+    # company_settings_service so the two never drift apart on the happy
+    # path (get_section() already merges DEFAULT_SETTINGS in for us).
+    DEFAULT_REPLY_FLOW_STEPS = [
+        "welcome",
+        "language_detection",
+        "intent_detection",
+        "knowledge_lookup",
+        "answer",
+        "escalation",
+    ]
+
+    def get_reply_flow_steps(self, company_id):
+        section = company_settings_service.get_section(
+            company_id,
+            "reply_flow",
+        )
+
+        steps = section.get("values", {}).get("steps")
+
+        if not isinstance(steps, list) or not steps:
+            return list(self.DEFAULT_REPLY_FLOW_STEPS)
+
+        return steps
+
     def handle_ai(
         self,
         request,
@@ -458,10 +487,19 @@ class Engine:
         ):
             return None
 
+        steps = self.get_reply_flow_steps(
+            request.company_id
+        )
+
         user_session = session.get(
             request.user_id
         ) or {}
 
+        # Module-button shortcut: the user tapped a business-module menu
+        # button. This is a direct navigation action, not one of the
+        # reply_flow pipeline steps (welcome/language_detection/
+        # intent_detection/knowledge_lookup/answer/escalation), so it stays
+        # unconditional regardless of the configured steps.
         module = business_modules.get_module_by_button(
             request.message,
             language,
@@ -487,16 +525,154 @@ class Engine:
                 language,
             )
 
-        if self.is_greeting_only(request.message):
-            greeting_result = self.build_greeting_result(
-                language
+        welcome_response = self.step_welcome(
+            request=request,
+            language=language,
+            user_session=user_session,
+            steps=steps,
+        )
+
+        if welcome_response:
+            return welcome_response
+
+        # "language_detection" step: the effective language for this turn
+        # was already resolved by Engine.handle() (detect_language +
+        # session.set_language) before handle_ai() was ever called, and it
+        # is threaded through every step below (greeting text, department
+        # buttons, AI prompt, safe-fallback copy, welcome injection). There
+        # is no separate, independently-skippable "detect the language"
+        # action left inside handle_ai() itself -- it is a structural
+        # prerequisite for every other step, not an optional pipeline
+        # stage, so it cannot be safely gated off even if a company removes
+        # "language_detection" from its configured steps. It always runs.
+        language = self.step_language_detection(
+            request=request,
+            language=language,
+        )
+
+        current_department = self.step_intent_detection(
+            request=request,
+            steps=steps,
+            current_department=current_department,
+        )
+
+        memory_context = conversation_memory.build_context(
+            user_session
+        )
+
+        channel_policy = (
+            response_policy.get_channel_policy(
+                request.channel
+            )
+        )
+
+        selected_knowledge, match_result = self.step_knowledge_lookup(
+            request=request,
+            language=language,
+            steps=steps,
+            memory_context=memory_context,
+            channel_policy=channel_policy,
+        )
+
+        effective_department = (
+            match_result.get("department")
+            if match_result.get("department") != "unknown"
+            else current_department
+        )
+
+        connector_results = self.collect_connector_results(
+            message=request.message,
+            language=language,
+            department=effective_department,
+        )
+
+        ai_result = self.step_answer(
+            request=request,
+            language=language,
+            current_state=current_state,
+            steps=steps,
+            memory_context=memory_context,
+            selected_knowledge=selected_knowledge,
+            connector_results=connector_results,
+            channel_policy=channel_policy,
+            match_result=match_result,
+        )
+
+        if not ai_result:
+            safe_result = self.build_safe_result(
+                language=language,
+                current_department=effective_department,
             )
 
             return self.finalize_ai_response(
                 request=request,
                 user_session=user_session,
-                ai_result=greeting_result,
+                ai_result=safe_result,
+                steps=steps,
             )
+
+        return self.finalize_ai_response(
+            request=request,
+            user_session=user_session,
+            ai_result=ai_result,
+            steps=steps,
+        )
+
+    def step_welcome(
+        self,
+        request,
+        language,
+        user_session,
+        steps,
+    ):
+        """"welcome" reply_flow step: the greeting-only shortcut.
+
+        If a customer's message is nothing but a greeting, respond
+        immediately with the business overview instead of running
+        department detection / knowledge lookup / AI generation. Gated on
+        "welcome" being present in the company's configured steps -- when
+        excluded, a greeting-only message falls through to the rest of the
+        pipeline like any other message.
+        """
+        if "welcome" not in steps:
+            return None
+
+        if not self.is_greeting_only(request.message):
+            return None
+
+        greeting_result = self.build_greeting_result(
+            language
+        )
+
+        return self.finalize_ai_response(
+            request=request,
+            user_session=user_session,
+            ai_result=greeting_result,
+            steps=steps,
+        )
+
+    def step_language_detection(
+        self,
+        request,
+        language,
+    ):
+        """"language_detection" reply_flow step.
+
+        Structural prerequisite, not a skippable action -- see the
+        explanatory comment in handle_ai(). Always returns the
+        already-resolved language unchanged.
+        """
+        return language
+
+    def step_intent_detection(
+        self,
+        request,
+        steps,
+        current_department,
+    ):
+        """"intent_detection" reply_flow step: department detection."""
+        if "intent_detection" not in steps:
+            return current_department
 
         detected_department = (
             intent_transition_manager.detect_department(
@@ -511,17 +687,29 @@ class Engine:
                 detected_department,
             )
 
-            current_department = detected_department
+            return detected_department
 
-        memory_context = conversation_memory.build_context(
-            user_session
-        )
+        return current_department
 
-        channel_policy = (
-            response_policy.get_channel_policy(
-                request.channel
-            )
-        )
+    def step_knowledge_lookup(
+        self,
+        request,
+        language,
+        steps,
+        memory_context,
+        channel_policy,
+    ):
+        """"knowledge_lookup" reply_flow step.
+
+        Returns (selected_knowledge, match_result). When skipped, returns
+        an empty knowledge selection together with
+        ai_knowledge_matcher.empty_result() -- the matcher's own "nothing
+        matched" shape -- so downstream department-fallback logic and
+        ai_router.route() behave exactly as they already do for a
+        no-match turn, without needing special-cased branching.
+        """
+        if "knowledge_lookup" not in steps:
+            return [], ai_knowledge_matcher.empty_result()
 
         knowledge_items = knowledge_manager.list_for_ai(
             None
@@ -557,17 +745,32 @@ class Engine:
             )
         )
 
-        connector_results = self.collect_connector_results(
-            message=request.message,
-            language=language,
-            department=(
-                match_result.get("department")
-                if match_result.get("department") != "unknown"
-                else current_department
-            ),
-        )
+        return selected_knowledge, match_result
 
-        ai_result = ai_router.route(
+    def step_answer(
+        self,
+        request,
+        language,
+        current_state,
+        steps,
+        memory_context,
+        selected_knowledge,
+        connector_results,
+        channel_policy,
+        match_result,
+    ):
+        """"answer" reply_flow step: AI reply generation.
+
+        When "answer" is excluded from steps, no AI call is made and this
+        returns None -- handle_ai() already falls back to
+        build_safe_result() whenever ai_result is falsy, so a company that
+        disables "answer" still gets a safe, human-escalating reply
+        instead of silence.
+        """
+        if "answer" not in steps:
+            return None
+
+        return ai_router.route(
             message=request.message,
             channel=request.channel,
             user_id=request.user_id,
@@ -578,28 +781,6 @@ class Engine:
             connector_results=connector_results,
             response_policy=channel_policy,
             match_result=match_result,
-        )
-
-        if not ai_result:
-            safe_result = self.build_safe_result(
-                language=language,
-                current_department=(
-                    match_result.get("department")
-                    if match_result.get("department") != "unknown"
-                    else current_department
-                ),
-            )
-
-            return self.finalize_ai_response(
-                request=request,
-                user_session=user_session,
-                ai_result=safe_result,
-            )
-
-        return self.finalize_ai_response(
-            request=request,
-            user_session=user_session,
-            ai_result=ai_result,
         )
 
     def collect_connector_results(
@@ -933,7 +1114,11 @@ class Engine:
         request,
         user_session,
         ai_result,
+        steps=None,
     ):
+        if steps is None:
+            steps = self.DEFAULT_REPLY_FLOW_STEPS
+
         result_language = (
             ai_result.get("language")
             or self.detect_language(
@@ -1034,6 +1219,12 @@ class Engine:
             reply,
         )
 
+        # "escalation" reply_flow step: only surface the human-handoff
+        # button/state when the AI itself flagged needs_human AND the
+        # company's configured steps still include "escalation". Removing
+        # "escalation" from steps suppresses the button even when
+        # needs_human is true -- it does not change needs_human itself,
+        # which stays recorded on the session above.
         if ai_result.get("needs_human"):
             if result_language == "ar":
                 support_label = (
@@ -1044,8 +1235,25 @@ class Engine:
                     "Contact support"
                 )
 
-            if support_label not in buttons:
-                buttons.append(support_label)
+            if "escalation" in steps:
+                if support_label not in buttons:
+                    buttons.append(support_label)
+            else:
+                # build_safe_result() (and, potentially, the AI's own
+                # JSON response) can already bake the support label
+                # straight into ai_result["buttons"] whenever
+                # needs_human is true -- not just via the append above --
+                # so disabling "escalation" must also strip it from
+                # whatever compose_reply() already produced, in both
+                # languages, or the button would still leak through.
+                buttons = [
+                    button
+                    for button in buttons
+                    if button not in (
+                        "Contact support",
+                        "التواصل مع الدعم",
+                    )
+                ]
 
         if request.channel != "telegram":
             if result_language == "ar":
