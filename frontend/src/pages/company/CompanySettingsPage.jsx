@@ -46,28 +46,51 @@ function slugifyFieldLabel(label) {
     .replace(/^_+|_+$/g, "");
 }
 
+const WORKFLOW_DEFAULT_VALUES = { reply_access_mode: "take_required", return_to_ai_timeout_minutes: 5, auto_release_to_ai: true, auto_read_mode: "assigned_owner_only" };
+
 function WorkflowSettings() {
-  const [values, setValues] = useState({ reply_access_mode: "take_required", return_to_ai_timeout_minutes: 5, auto_release_to_ai: true, auto_read_mode: "assigned_owner_only" });
+  const [values, setValues] = useState(WORKFLOW_DEFAULT_VALUES);
+  const [savedValues, setSavedValues] = useState(WORKFLOW_DEFAULT_VALUES);
   const [locked, setLocked] = useState([]);
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     getCompanySettingSectionRequest("ai_behavior")
-      .then((result) => { setValues((current) => ({ ...current, ...(result?.values || {}) })); setLocked(result?.locked_keys || []); })
+      .then((result) => {
+        const loadedValues = { ...WORKFLOW_DEFAULT_VALUES, ...(result?.values || {}) };
+        setValues(loadedValues);
+        setSavedValues(loadedValues);
+        setLocked(result?.locked_keys || []);
+      })
       .catch((error) => setStatus(error.message || "Settings could not load."));
   }, []);
 
   async function save() {
     setSaving(true); setStatus("");
     try {
-      const result = await updateCompanySettingSectionRequest("ai_behavior", {
+      // Only submit keys the user actually changed -- same pattern as
+      // GenericSectionEditor.save(). The backend rejects the entire update
+      // if any submitted key is locked, so re-sending an untouched locked
+      // key's value would needlessly 409 the save of the other, unlocked
+      // AI Behavior fields.
+      const nextPayload = {
         reply_access_mode: values.reply_access_mode,
         return_to_ai_timeout_minutes: Math.max(1, Number(values.return_to_ai_timeout_minutes) || 5),
         auto_release_to_ai: Boolean(values.auto_release_to_ai),
         auto_read_mode: "assigned_owner_only",
+      };
+      const changedValues = {};
+      Object.keys(nextPayload).forEach((key) => {
+        if (nextPayload[key] !== savedValues[key]) {
+          changedValues[key] = nextPayload[key];
+        }
       });
-      setValues((current) => ({ ...current, ...(result?.values || {}) }));
+      const result = await updateCompanySettingSectionRequest("ai_behavior", changedValues);
+      const nextValues = result?.values ? { ...WORKFLOW_DEFAULT_VALUES, ...result.values } : { ...values, ...nextPayload };
+      setValues(nextValues);
+      setSavedValues(nextValues);
+      setLocked(result?.locked_keys || []);
       setStatus("Conversation workflow saved.");
     } catch (error) { setStatus(error.message || "Settings could not save."); }
     finally { setSaving(false); }
