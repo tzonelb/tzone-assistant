@@ -25,6 +25,7 @@ export default function UISettingsPage() {
   const [active, setActive] = useState("appearance");
   const [fontFamily, setFontFamily] = useState(() => localStorage.getItem("tzone_ui_font") || FONT_OPTIONS[0].value);
   const [fontSize, setFontSize] = useState(() => Number(localStorage.getItem("tzone_ui_font_size") || 100));
+  const [headingScale, setHeadingScale] = useState(() => Number(localStorage.getItem("tzone_ui_heading_scale") || 1));
   const [density, setDensity] = useState(() => localStorage.getItem("tzone_ui_density") || "comfortable");
   const [theme, setTheme] = useState(() => localStorage.getItem("tzone_ui_theme") || "light");
   const [language, setLanguage] = useState(() => localStorage.getItem("tzone_ui_language") || "en");
@@ -39,15 +40,17 @@ export default function UISettingsPage() {
       : theme;
     document.documentElement.style.fontFamily = fontFamily;
     document.documentElement.style.fontSize = `${fontSize}%`;
+    document.documentElement.style.setProperty("--heading-scale", String(headingScale));
     document.body.dataset.uiDensity = density;
     document.documentElement.dataset.theme = resolvedTheme;
     document.documentElement.style.colorScheme = resolvedTheme;
     localStorage.setItem("tzone_ui_font", fontFamily);
     localStorage.setItem("tzone_ui_font_size", String(fontSize));
+    localStorage.setItem("tzone_ui_heading_scale", String(headingScale));
     localStorage.setItem("tzone_ui_density", density);
     localStorage.setItem("tzone_ui_theme", theme);
     window.dispatchEvent(new CustomEvent("tzone:appearance-changed"));
-  }, [fontFamily, fontSize, density, theme]);
+  }, [fontFamily, fontSize, headingScale, density, theme]);
 
   const visibleSections = useMemo(() => SECTIONS.filter(([, label]) => label.toLowerCase().includes(query.toLowerCase())), [query]);
   function saveAll() {
@@ -83,7 +86,7 @@ export default function UISettingsPage() {
         <div className="user-settings-content-scroll">
           <header><span>USER SETTINGS</span><h2>{SECTIONS.find(([id]) => id === active)?.[1]}</h2><p>Personal preferences for your own account and workspace.</p></header>
 
-          {active === "appearance" ? <section className="settings-section-card"><h3>Appearance</h3><p>Theme, font and display density.</p><div className="settings-form-grid"><label><strong>Theme</strong><select value={theme} onChange={(e) => setTheme(e.target.value)}><option value="light">Light</option><option value="dark">Dark</option><option value="auto">System</option></select></label><label><strong>Font</strong><select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}>{FONT_OPTIONS.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label><label><strong>Text size: {fontSize}%</strong><input type="range" min="85" max="125" step="5" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /></label><label><strong>Density</strong><select value={density} onChange={(e) => setDensity(e.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label></div></section> : null}
+          {active === "appearance" ? <section className="settings-section-card"><h3>Appearance</h3><p>Theme, font and display density.</p><div className="settings-form-grid"><label><strong>Theme</strong><select value={theme} onChange={(e) => setTheme(e.target.value)}><option value="light">Light</option><option value="dark">Dark</option><option value="auto">System</option></select></label><label><strong>Font</strong><select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}>{FONT_OPTIONS.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label><label><strong>Text size: {fontSize}%</strong><input type="range" min="85" max="125" step="5" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /></label><label><strong>Heading size: {headingScale}x</strong><input type="range" min="0.85" max="1.5" step="0.05" value={headingScale} onChange={(e) => setHeadingScale(Math.round(Number(e.target.value) * 100) / 100)} /></label><label><strong>Density</strong><select value={density} onChange={(e) => setDensity(e.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label></div></section> : null}
 
           {active === "notifications" ? <section className="settings-section-card"><h3>Notifications & sound</h3><p>Choose which notifications appear and how they are delivered.</p><div className="settings-notification-list">{notificationRows.map(([key, title, description]) => <div className="settings-notification-row" key={key}><div><strong>{title}</strong><span>{description}</span></div><Toggle checked={notifications[key]} onChange={(value) => { setNotifications((current) => ({ ...current, [key]: value })); setSaved(false); }} /></div>)}</div><h3>Channels</h3><div className="settings-notification-list">{Object.entries({ messenger: "Messenger", whatsapp: "WhatsApp", instagram: "Instagram", telegram: "Telegram", website: "Website" }).map(([key, label]) => <div className="settings-notification-row" key={key}><div><strong>{label}</strong><span>Receive notifications from this channel.</span></div><Toggle checked={notifications.channels?.[key] !== false} onChange={(value) => { setNotifications((current) => ({ ...current, channels: { ...(current.channels || {}), [key]: value } })); setSaved(false); }} /></div>)}</div><button type="button" className="secondary-action" onClick={requestBrowserPermission}>Enable browser permission</button></section> : null}
 
