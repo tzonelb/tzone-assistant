@@ -1411,3 +1411,212 @@ body[data-ui-density="compact"] .app-content {
 [data-theme="dark"] .workflow-settings-footer button {
   color: #fff;
 }
+
+.broadcast-page {
+  display: grid;
+  gap: 22px;
+}
+
+.broadcast-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: var(--tz-text-primary);
+  font-size: 16px;
+}
+
+.broadcast-compose-card {
+  display: grid;
+  gap: 16px;
+}
+
+.broadcast-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.broadcast-field {
+  display: grid;
+  gap: 6px;
+}
+
+.broadcast-field > span {
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.broadcast-textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 13px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  outline: none;
+  resize: vertical;
+  color: var(--tz-text-primary);
+  background: var(--tz-surface);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.broadcast-textarea:focus {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 4px rgb(22 137 232 / 9%);
+}
+
+.broadcast-char-count {
+  justify-self: end;
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.broadcast-char-count.is-over {
+  color: var(--tz-danger);
+}
+
+.broadcast-inline-note {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: var(--tz-radius-sm);
+  color: var(--tz-warning);
+  background: var(--tz-warning-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.broadcast-inline-error {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: var(--tz-radius-sm);
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.broadcast-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.broadcast-active-card {
+  display: grid;
+  gap: 14px;
+}
+
+.broadcast-active-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.broadcast-active-kicker {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--tz-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.broadcast-active-head h3 {
+  margin: 0;
+  color: var(--tz-text-primary);
+  font-size: 17px;
+}
+
+.broadcast-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.broadcast-progress-stats > div {
+  display: grid;
+  gap: 3px;
+  padding: 13px 15px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  background: var(--tz-surface-secondary);
+}
+
+.broadcast-progress-stats span {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.broadcast-progress-stats strong {
+  color: var(--tz-text-primary);
+  font-size: 22px;
+}
+
+.broadcast-progress-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-surface-secondary);
+}
+
+.broadcast-progress-bar > div {
+  height: 100%;
+  border-radius: var(--tz-radius-round);
+  background: linear-gradient(135deg, var(--tz-primary), var(--tz-secondary));
+  transition: width var(--tz-transition-normal);
+}
+
+.broadcast-history-section {
+  display: grid;
+  gap: 12px;
+}
+
+.broadcast-table-message {
+  display: -webkit-box;
+  max-width: 320px;
+  overflow: hidden;
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.broadcast-confirm-body {
+  display: grid;
+  gap: 10px;
+}
+
+.broadcast-confirm-body p {
+  margin: 0;
+}
+
+.broadcast-confirm-estimate {
+  color: var(--tz-text-primary);
+}
+
+.broadcast-confirm-message {
+  margin: 0;
+  padding: 11px 13px;
+  border-left: 3px solid var(--tz-primary);
+  border-radius: var(--tz-radius-sm);
+  color: var(--tz-text-secondary);
+  background: var(--tz-surface-secondary);
+  font-size: 13px;
+  font-style: normal;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 760px) {
+  .broadcast-form-grid,
+  .broadcast-progress-stats {
+    grid-template-columns: 1fr;
+  }
+}
