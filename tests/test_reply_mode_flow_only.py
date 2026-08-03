@@ -52,10 +52,22 @@ MESSAGE = "Do you have iPhone 15 in stock?"
 @pytest.fixture()
 def fresh_db():
     """Point the shared db singleton at a throwaway SQLite file per test
-    (engine.handle() calls db.create_tables() on every request)."""
+    (engine.handle() calls db.create_tables() on every request).
+
+    Engine.handle_ai() now also reads the "reply_flow" company setting on
+    every call (company_settings_service.get_section()), so the
+    company_settings table must exist in this throwaway DB too -- the
+    module-level company_settings_service singleton already ran its own
+    ensure_schema() once at import time, against whatever db.db_path was
+    at that point, not against this per-test file. Re-run it here,
+    matching the same fresh_db + ensure_schema() pattern used by
+    tests/test_meta_company_resolution.py."""
+    from backend.services.company_settings_service import company_settings_service
+
     tmp_path = tempfile.mktemp(suffix=".db")
     original_path = db.db_path
     db.db_path = Path(tmp_path)
+    company_settings_service.ensure_schema()
 
     yield
 
