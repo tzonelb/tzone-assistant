@@ -534,7 +534,8 @@ class Engine:
         )
 
         knowledge_items = knowledge_manager.list_for_ai(
-            None
+            None,
+            company_id=request.company_id,
         )
 
         try:
