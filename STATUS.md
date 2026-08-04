@@ -54,7 +54,8 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 - **Customers** — real list/search/detail/edit UI wired to the (now RBAC + optimistic-concurrency-protected) customers API.
 - **AI Teaching** — real knowledge/FAQ management UI (bilingual ar/en) wired to the company-scoped knowledge API.
 - **Tasks** — company-scoped task/follow-up management (backend `tasks` table + `/api/tasks` CRUD + optimistic concurrency, `tasks.view`/`tasks.manage` RBAC) with a real filterable/paginated UI, assignee picker, mark-done, delete. Built as a clean retry from current HEAD after the first attempt's stale-base crash; 13 new tests (207/207 suite total), lint/build clean.
-- **Master Catalogue** — company-scoped product CRUD (`/api/catalogue`, `catalogue.view`/`catalogue.manage` RBAC, optimistic concurrency) built on the existing `products` table, with a real filterable/paginated UI. Built by hand directly on the main checkout after the background worktree-provisioning tool repeatedly failed (see lesson below); 220/220 suite, lint/build clean.
+- **Master Catalogue** — company-scoped product CRUD (`/api/catalogue`, `catalogue.view`/`catalogue.manage` RBAC, optimistic concurrency) built on the existing `products` table, with a real filterable/paginated UI. Built by hand directly on the main checkout after the background worktree-provisioning tool repeatedly failed (see lesson below); 220/220 suite, lint/build clean. Independently verified PASS.
+- **Appointments** — company-scoped booking calendar (new `appointments` table, `/api/appointments` CRUD, `appointments.view`/`appointments.manage` RBAC, optimistic concurrency) with a double-booking guard (rejects overlapping "scheduled" appointments for the same assignee; back-to-back allowed) and a real UI (datetime pickers, assignee + customer selection). 229/229 suite, lint/build clean.
 
 ### Security hardening (2 full audit sweeps' worth of findings, all fixed)
 - Cross-tenant conversation transcript leak (read/export/list/SSE) → ownership gate + closed the auto-vivification bypass.
@@ -93,7 +94,6 @@ Nothing at the moment — Round-1's 23/23 findings are fixed and merged, and all
 | **Triggers (remaining ~23 types)** | ~7 exist | Build the rest on the existing pattern. |
 | **Calls page** | not started | Needs a calling provider. **Interim decision: Twilio-style provider abstraction** so it can be swapped; confirm provider before wiring real credentials. |
 | **Scheduler** | placeholder `ModulePage` | Social post scheduling. |
-| **Appointments** | placeholder `ModulePage` | Booking module. |
 | **Team Chat** | placeholder `ModulePage` | Internal team messaging. |
 
 ---
