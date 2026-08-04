@@ -93,6 +93,16 @@ class AppConfig:
         "",
     )
 
+    # Used to verify the X-Hub-Signature-256 header on incoming webhook
+    # POSTs (Messenger/Instagram via channels/meta and WhatsApp Cloud API
+    # via channels/whatsapp -- both live under the same Meta developer
+    # app in a typical setup, so they share this one secret). Found in
+    # the Meta App Dashboard under App Settings > Basic > App Secret.
+    FACEBOOK_APP_SECRET: str = os.getenv(
+        "FACEBOOK_APP_SECRET",
+        "",
+    )
+
     META_API_VERSION: str = os.getenv(
         "META_API_VERSION",
         "v21.0",
