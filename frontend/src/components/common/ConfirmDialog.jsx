@@ -18,13 +18,21 @@ export default function ConfirmDialog({
     return null;
   }
 
+  function handleCancel() {
+    if (loading) {
+      return;
+    }
+
+    onCancel?.();
+  }
+
   return (
     <div
       className="tz-dialog-backdrop"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
-          onCancel?.();
+          handleCancel();
         }
       }}
     >
@@ -43,7 +51,8 @@ export default function ConfirmDialog({
             type="button"
             className="tz-dialog-close"
             aria-label="Close dialog"
-            onClick={onCancel}
+            disabled={loading}
+            onClick={handleCancel}
           >
             <CloseOutlined fontSize="small" />
           </button>
@@ -57,7 +66,7 @@ export default function ConfirmDialog({
           <AppButton
             variant="secondary"
             disabled={loading}
-            onClick={onCancel}
+            onClick={handleCancel}
           >
             {cancelLabel}
           </AppButton>
