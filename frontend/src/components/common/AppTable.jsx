@@ -34,15 +34,26 @@ export default function AppTable({
   onPageChange,
   renderMobileCard,
 }) {
-  const calculatedTotalRows =
-    typeof totalRows === "number"
-      ? totalRows
-      : rows.length;
+  // Two pagination contracts:
+  // - External/server pagination: the caller passes a `totalRows` count and
+  //   hands us just the current page's rows already sliced. We render them as-is.
+  // - Internal/client pagination: the caller passes the full `rows` array and no
+  //   `totalRows`. AppTable owns pagination and slices to the current page here,
+  //   so the footer controls actually page through the data.
+  const isExternallyPaginated = typeof totalRows === "number";
+
+  const calculatedTotalRows = isExternallyPaginated
+    ? totalRows
+    : rows.length;
 
   const totalPages = Math.max(
     1,
     Math.ceil(calculatedTotalRows / pageSize),
   );
+
+  const visibleRows = isExternallyPaginated
+    ? rows
+    : rows.slice((page - 1) * pageSize, page * pageSize);
 
   if (loading) {
     return (
@@ -118,7 +129,7 @@ export default function AppTable({
           </thead>
 
           <tbody>
-            {rows.map((row, rowIndex) => (
+            {visibleRows.map((row, rowIndex) => (
               <tr
                 key={
                   row[rowKey] ??
@@ -155,7 +166,7 @@ export default function AppTable({
       </div>
 
       <div className="tz-table-mobile">
-        {rows.map((row, rowIndex) => (
+        {visibleRows.map((row, rowIndex) => (
           <article
             className="tz-mobile-record"
             key={

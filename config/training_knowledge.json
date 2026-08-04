@@ -1,24 +1,6 @@
 {
   "items": [
     {
-      "id": "phones_general",
-      "department": "sales",
-      "question_ar": "عندكم تلفونات؟",
-      "answer_ar": "عنا تلفونات حسب التوفر. لنأكدلك السعر والموديل المناسب، ابعتلنا النوع أو الميزانية المطلوبة.",
-      "question_en": "Do you have phones?",
-      "answer_en": "We have phones depending on availability. To confirm the right model and price, please send the model or your budget.",
-      "instructions": "Do not invent phone models, prices, or stock."
-    },
-    {
-      "id": "laptops_general",
-      "department": "sales",
-      "question_ar": "عندكم لابتوبات؟",
-      "answer_ar": "عنا لابتوبات حسب التوفر. لنأكدلك السعر والموديل المناسب، ابعتلنا الميزانية أو المواصفات المطلوبة.",
-      "question_en": "Do you have laptops?",
-      "answer_en": "We have laptops depending on availability. To confirm the right model and price, please send your budget or required specs.",
-      "instructions": "Do not invent laptop models, prices, or stock."
-    },
-    {
       "id": "gaming_laptops",
       "department": "sales",
       "question_ar": "بدي لابتوب ألعاب",
@@ -28,15 +10,6 @@
       "instructions": "Never confirm a model, price, or availability unless product data confirms it."
     },
     {
-      "id": "maintenance_general",
-      "department": "maintenance",
-      "question_ar": "بدي صيانة أو تصليح جهاز",
-      "answer_ar": "أكيد. ابعتلنا نوع الجهاز والمشكلة التي تظهر معك لنحدد الخطوة المناسبة.",
-      "question_en": "I need device maintenance or repair",
-      "answer_en": "Sure. Send us the device type and the problem you are facing so we can determine the right next step.",
-      "instructions": "Do not estimate repair cost before inspection or confirmed pricing."
-    },
-    {
       "id": "phone_screen_repair",
       "department": "maintenance",
       "question_ar": "شاشة تلفوني مكسورة",
@@ -44,24 +17,6 @@
       "question_en": "My phone screen is broken",
       "answer_en": "Sure, we can help. Send us the phone brand and model, and a photo of the damage if possible, so we can check the part and cost.",
       "instructions": "Do not give an exact price before confirming model and part availability."
-    },
-    {
-      "id": "iptv_support",
-      "department": "iptv",
-      "question_ar": "ممكن مساعدة بالـ IPTV؟",
-      "answer_ar": "أكيد. ابعتلنا نوع التطبيق والجهاز والمشكلة التي تظهر معك حتى نساعدك بشكل أدق.",
-      "question_en": "Can you help with IPTV?",
-      "answer_en": "Sure. Send us the app name, device type, and the issue you are facing so we can help accurately.",
-      "instructions": "Use for IPTV support outside a dedicated Telegram flow."
-    },
-    {
-      "id": "account_balance",
-      "department": "accounting",
-      "question_ar": "شو عليي أو شو حسابي؟",
-      "answer_ar": "فينا نساعدك بموضوع الحساب، لكن لازم نتأكد من هويتك قبل عرض أي معلومات مالية.",
-      "question_en": "What do I owe or what is my balance?",
-      "answer_en": "We can help with your account, but your identity must be verified before showing any financial information.",
-      "instructions": "Never expose financial information without identity verification."
     }
   ]
 }
