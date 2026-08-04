@@ -151,6 +151,18 @@ class AppConfig:
         os.getenv("AI_ENABLED", "true").lower() == "true"
     )
 
+    # Telephony (Dialer) provider credentials. All empty by default: the
+    # Dialer page shows a "not configured" state and refuses to place
+    # calls until these are set. Currently the only implemented provider
+    # is Twilio.
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+    # Public base URL of THIS backend, used to build Twilio webhook
+    # callback URLs (e.g. https://api.example.com). Required for live
+    # calling; webhooks are signature-verified with TWILIO_AUTH_TOKEN.
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "")
+
     OPENAI_API_KEY: str = os.getenv(
         "OPENAI_API_KEY",
         "",

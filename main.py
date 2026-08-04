@@ -18,6 +18,7 @@ from backend.api.routes import (
     customers,
     conversation_tags,
     developer_center,
+    dialer,
     dashboard,
     health,
     knowledge,
@@ -168,6 +169,7 @@ app.include_router(scheduler.router)
 app.include_router(team_chat.router)
 app.include_router(calls.router)
 app.include_router(triggers.router)
+app.include_router(dialer.router)
 
 app.include_router(
     whatsapp_webhook.router

@@ -15,6 +15,7 @@ import {
   QueryStatsOutlined,
   ScheduleSendOutlined,
   SettingsOutlined,
+  SettingsPhoneOutlined,
   TaskAltOutlined,
   TuneOutlined,
 } from "@mui/icons-material";
@@ -37,6 +38,7 @@ const navigationItems = [
   ["/scheduler", "Scheduler", ScheduleSendOutlined, "scheduler.view"],
   ["/appointments", "Appointments", CalendarMonthOutlined, "appointments.view"],
   ["/calls", "Calls", LocalPhoneOutlined, "calls.view"],
+  ["/dialer", "Dialer", SettingsPhoneOutlined, "calls.view"],
   ["/analytics", "Analytics", QueryStatsOutlined, "dashboard.view"],
   ["/team-chat", "Team Chat", EventNoteOutlined, "team_chat.view"],
   ["/settings", "Settings", SettingsOutlined],

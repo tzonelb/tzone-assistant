@@ -916,6 +916,54 @@ class Database:
             ON bot_trigger_firings(company_id, dedupe_key)
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS telephony_calls (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                provider TEXT NOT NULL,
+                provider_call_id TEXT,
+                direction TEXT NOT NULL DEFAULT 'outbound',
+                to_number TEXT,
+                from_number TEXT,
+                customer_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'queued',
+                transferred_to_user_id INTEGER,
+                ai_answered INTEGER NOT NULL DEFAULT 0,
+                recording_url TEXT,
+                duration_seconds INTEGER,
+                error_detail TEXT,
+                started_at TEXT,
+                ended_at TEXT,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(customer_id)
+                    REFERENCES customers(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(transferred_to_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(created_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_telephony_calls_company_status
+            ON telephony_calls(company_id, status)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_telephony_calls_provider_id
+            ON telephony_calls(provider_call_id)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1294,6 +1342,7 @@ class Database:
             ("calls.manage", "Manage Calls"),
             ("triggers.view", "View Bot Triggers"),
             ("triggers.manage", "Manage Bot Triggers"),
+            ("dialer.use", "Use Dialer"),
         ]
 
         cursor.executemany("""

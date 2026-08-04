@@ -866,3 +866,29 @@ export async function getTriggerFiringsRequest({ triggerId = null, limit = 100, 
   const query = createQueryString({ trigger_id: triggerId, limit, offset });
   return apiRequest(`/api/triggers/firings${query}`);
 }
+
+export async function getDialerStatusRequest() {
+  return apiRequest("/api/dialer/status");
+}
+
+export async function getDialerCallsRequest({ activeOnly = false, limit = 50, offset = 0 } = {}) {
+  const query = createQueryString({ active_only: activeOnly, limit, offset });
+  return apiRequest(`/api/dialer/calls${query}`);
+}
+
+export async function placeDialerCallRequest(payload) {
+  return apiRequest("/api/dialer/calls", { method: "POST", body: payload });
+}
+
+export async function transferDialerCallRequest(callId, payload) {
+  return apiRequest(`/api/dialer/calls/${encodeURIComponent(callId)}/transfer`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function hangupDialerCallRequest(callId) {
+  return apiRequest(`/api/dialer/calls/${encodeURIComponent(callId)}/hangup`, {
+    method: "POST",
+  });
+}

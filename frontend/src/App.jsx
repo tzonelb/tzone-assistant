@@ -13,6 +13,7 @@ import SchedulerPage from "./pages/scheduler/SchedulerPage";
 import TeamChatPage from "./pages/team-chat/TeamChatPage";
 import CallsPage from "./pages/calls/CallsPage";
 import TriggersPage from "./pages/triggers/TriggersPage";
+import DialerPage from "./pages/dialer/DialerPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/calls" element={<CallsPage />} />
         <Route path="/triggers" element={<TriggersPage />} />
+        <Route path="/dialer" element={<DialerPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<TeamChatPage />} />
         <Route path="/settings" element={<UISettingsPage />} />
