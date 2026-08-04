@@ -28,9 +28,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @pytest.fixture()
 def legacy_db_path():
-    """A throwaway SQLite file pre-seeded with the OLD broadcast_recipients
-    shape (no conversation_id / external_user_id), exactly like the
-    affected dev machine."""
+    """A throwaway SQLite file pre-seeded with OLD shapes of BOTH tables
+    that actually broke a real dev machine: broadcast_recipients without
+    conversation_id, and tasks without assignee_user_id."""
     tmp_path = tempfile.mktemp(suffix=".db")
 
     conn = sqlite3.connect(tmp_path)
@@ -48,6 +48,19 @@ def legacy_db_path():
     conn.execute(
         "INSERT INTO broadcast_recipients (broadcast_id, phone_number) "
         "VALUES (1, '+96170000000')"
+    )
+    conn.execute(
+        """
+        CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'open'
+        )
+        """
+    )
+    conn.execute(
+        "INSERT INTO tasks (company_id, title) VALUES (1, 'old-shape task')"
     )
     conn.commit()
     conn.close()
@@ -99,6 +112,17 @@ def test_create_tables_self_heals_old_broadcast_recipients(legacy_db_path):
                 "SELECT * FROM broadcast_recipients_legacy_backup"
             ).fetchall()
             assert len(backup_rows) == 1
+
+            # The old-shape tasks table (the second real-machine failure,
+            # 'no such column: assignee_user_id') was healed the same way.
+            task_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(tasks)")
+            }
+            assert "assignee_user_id" in task_columns
+            task_backup_rows = conn.execute(
+                "SELECT * FROM tasks_legacy_backup"
+            ).fetchall()
+            assert len(task_backup_rows) == 1
 
         # Boot must also be idempotent: a second create_tables() run on
         # the healed database succeeds without touching the backup.

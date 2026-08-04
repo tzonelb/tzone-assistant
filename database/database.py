@@ -76,44 +76,69 @@ class Database:
         )
 
     @staticmethod
-    def _heal_legacy_broadcast_recipients_table(cursor):
-        """Rename away a broadcast_recipients table created by an early,
-        pre-release iteration of the Broadcast feature whose shape lacked
-        the `conversation_id` (and possibly `external_user_id`) column.
-        CREATE TABLE IF NOT EXISTS skips recreation for existing tables,
-        so on such a database the CREATE UNIQUE INDEX below fails with
-        "no such column: conversation_id" on every boot (seen on a real
-        dev machine 2026-08-04). Rows in the old shape are unreadable by
-        the current broadcast_service anyway (it selects columns the old
+    def _heal_table_missing_columns(cursor, table_name, required_columns):
+        """Rename away `table_name` when it exists but lacks any of
+        `required_columns` -- the signature of a table created by an
+        early, pre-release iteration of a feature. CREATE TABLE IF NOT
+        EXISTS skips recreation for existing tables, so on such a
+        database the CREATE INDEX statements below fail with "no such
+        column: ..." on every boot (seen on a real dev machine
+        2026-08-04, first with broadcast_recipients.conversation_id and
+        then tasks.assignee_user_id). Rows in an old shape are unreadable
+        by the current services anyway (they select columns the old
         table doesn't have), so renaming it aside -- keeping the data as
-        a backup rather than dropping it -- is safe; the correct table is
-        then created fresh."""
+        a `{table}_legacy_backup` rather than dropping it -- is safe; the
+        correct table is then created fresh by the schema below.
+
+        Deliberately NOT applied to core conversation/message/customer
+        tables: those evolve via additive _ensure_column-style migrations
+        and hold real data that must never be renamed aside."""
         row = cursor.execute(
-            """
-            SELECT name FROM sqlite_master
-            WHERE type = 'table' AND name = 'broadcast_recipients'
-            """
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table_name,),
         ).fetchone()
         if row is None:
             return
 
         columns = {
-            r[1] for r in cursor.execute("PRAGMA table_info(broadcast_recipients)")
+            r[1] for r in cursor.execute(f"PRAGMA table_info({table_name})")
         }
-        if "conversation_id" in columns and "external_user_id" in columns:
+        if set(required_columns).issubset(columns):
             return
 
-        cursor.execute(
-            "DROP TABLE IF EXISTS broadcast_recipients_legacy_backup"
-        )
-        cursor.execute(
-            "ALTER TABLE broadcast_recipients "
-            "RENAME TO broadcast_recipients_legacy_backup"
-        )
+        backup_name = f"{table_name}_legacy_backup"
+        cursor.execute(f"DROP TABLE IF EXISTS {backup_name}")
+        cursor.execute(f"ALTER TABLE {table_name} RENAME TO {backup_name}")
+
+    # Module tables whose indexes reference these columns. A dev database
+    # created mid-development may hold an older shape of any of them;
+    # each is self-healed (renamed aside + recreated) when required
+    # columns are missing. Table names and columns here are hardcoded
+    # constants, never user input.
+    _MODULE_TABLE_REQUIRED_COLUMNS = {
+        "products": ("company_id", "status", "category"),
+        "broadcasts": ("company_id", "created_at"),
+        "broadcast_recipients": (
+            "broadcast_id",
+            "conversation_id",
+            "external_user_id",
+            "status",
+        ),
+        "tasks": ("company_id", "status", "assignee_user_id"),
+        "appointments": ("company_id", "starts_at", "assignee_user_id"),
+        "scheduled_posts": ("company_id", "status"),
+        "team_chat_rooms": ("company_id", "is_default"),
+        "team_chat_messages": ("company_id", "room_id"),
+        "call_logs": ("company_id", "called_at"),
+        "bot_triggers": ("company_id", "trigger_type", "enabled"),
+        "bot_trigger_firings": ("company_id", "dedupe_key"),
+        "telephony_calls": ("company_id", "status", "provider_call_id"),
+    }
 
     def _create_platform_tables(self, cursor):
         self._heal_legacy_channel_accounts_table(cursor)
-        self._heal_legacy_broadcast_recipients_table(cursor)
+        for table_name, required in self._MODULE_TABLE_REQUIRED_COLUMNS.items():
+            self._heal_table_missing_columns(cursor, table_name, required)
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS workspaces (
