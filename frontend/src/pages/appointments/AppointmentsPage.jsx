@@ -258,20 +258,30 @@ export default function AppointmentsPage() {
       await load();
     } catch (err) {
       if (err?.status === 409) {
-        const current = err?.data?.detail?.current;
-        if (current) {
-          setForm(appointmentToForm(current));
-          setBaseUpdatedAt(current?.updated_at ?? null);
+        const detail = err?.data?.detail;
+        // The two 409 causes are distinguished by the *shape* of `detail`,
+        // not by whether a "current" record came back: the concurrency
+        // conflict always sends an object ({message, current}), even when
+        // `current` is null because the record was deleted by someone else
+        // in the same race; the overlap conflict always sends a plain
+        // string. Branching on `current` truthiness would misclassify that
+        // null-current race as an overlap and show the wrong message.
+        if (detail && typeof detail === "object" && !Array.isArray(detail)) {
+          const current = detail.current;
+          if (current) {
+            setForm(appointmentToForm(current));
+            setBaseUpdatedAt(current?.updated_at ?? null);
+          }
           setFormError(
-            err?.data?.detail?.message ||
+            detail.message ||
               "This appointment was changed elsewhere. It has been reloaded — review and save again.",
           );
         } else {
           // Overlap conflict: the service raised a plain string detail, no
           // "current" record to reload (nothing on this record changed).
           setFormError(
-            typeof err?.data?.detail === "string"
-              ? err.data.detail
+            typeof detail === "string"
+              ? detail
               : "This time slot conflicts with another scheduled appointment for this assignee.",
           );
         }

@@ -31,7 +31,7 @@ const navigationItems = [
   ["/catalogue", "Master Catalogue", Inventory2Outlined, "catalogue.view"],
   ["/ai-teaching", "AI Teaching", AutoAwesomeOutlined, "knowledge.view"],
   ["/tasks", "Tasks", TaskAltOutlined, "tasks.view"],
-  ["/scheduler", "Scheduler", ScheduleSendOutlined],
+  ["/scheduler", "Scheduler", ScheduleSendOutlined, "scheduler.view"],
   ["/appointments", "Appointments", CalendarMonthOutlined, "appointments.view"],
   ["/analytics", "Analytics", QueryStatsOutlined, "dashboard.view"],
   ["/team-chat", "Team Chat", EventNoteOutlined],

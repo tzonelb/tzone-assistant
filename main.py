@@ -23,6 +23,7 @@ from backend.api.routes import (
     manual_messages,
     notifications,
     roles,
+    scheduler,
     tasks,
     test_whatsapp,
     tickets,
@@ -135,6 +136,7 @@ app.include_router(analytics.router)
 app.include_router(tasks.router)
 app.include_router(catalogue.router)
 app.include_router(appointments.router)
+app.include_router(scheduler.router)
 
 app.include_router(
     whatsapp_webhook.router

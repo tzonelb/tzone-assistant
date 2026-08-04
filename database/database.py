@@ -749,6 +749,39 @@ class Database:
             ON appointments(company_id, assignee_user_id)
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_posts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                media_url TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                scheduled_at TEXT,
+                published_at TEXT,
+                created_by INTEGER,
+                approved_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(created_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(approved_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_scheduled_posts_company_status
+            ON scheduled_posts(company_id, status)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1118,6 +1151,8 @@ class Database:
             ("catalogue.manage", "Manage Catalogue"),
             ("appointments.view", "View Appointments"),
             ("appointments.manage", "Manage Appointments"),
+            ("scheduler.view", "View Scheduler"),
+            ("scheduler.manage", "Manage Scheduler"),
         ]
 
         cursor.executemany("""

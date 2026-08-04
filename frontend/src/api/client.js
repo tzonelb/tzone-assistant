@@ -731,3 +731,42 @@ export async function deleteAppointmentRequest(appointmentId) {
 export async function getAssignableAppointmentUsersRequest() {
   return apiRequest("/api/appointments/assignable-users");
 }
+
+export async function getScheduledPostsRequest({
+  status = "all",
+  channel = "all",
+  search = "",
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({ status, channel, search, limit, offset });
+  return apiRequest(`/api/scheduler${query}`);
+}
+
+export async function getScheduledPostRequest(postId) {
+  return apiRequest(`/api/scheduler/${encodeURIComponent(postId)}`);
+}
+
+export async function createScheduledPostRequest(payload) {
+  return apiRequest("/api/scheduler", { method: "POST", body: payload });
+}
+
+export async function updateScheduledPostRequest(postId, payload) {
+  return apiRequest(`/api/scheduler/${encodeURIComponent(postId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function changeScheduledPostStatusRequest(postId, payload) {
+  return apiRequest(`/api/scheduler/${encodeURIComponent(postId)}/status`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteScheduledPostRequest(postId) {
+  return apiRequest(`/api/scheduler/${encodeURIComponent(postId)}`, {
+    method: "DELETE",
+  });
+}
