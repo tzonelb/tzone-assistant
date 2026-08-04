@@ -108,8 +108,9 @@ Nothing at the moment — Round-1's 23/23 findings are fixed and merged, and all
 Any confirmed finding → fix it → counter resets to 0.
 
 **Clean-streak: 0 / 5.**
-- Round 1: NOT clean — 23 real findings (0 false positives). **23/23 now fixed and merged.**
-- A fresh, full re-audit is needed once all remaining features (Triggers/Calls/Catalogue/Scheduler/Appointments/Team Chat) are also merged — only then does a "clean round" attempt actually count toward the 5. Round 1 does not count toward the streak since it wasn't clean.
+- Round 1: NOT clean — 23 real findings (0 false positives). 23/23 fixed and merged.
+- Per-module reviews (Catalogue, Appointments, Scheduler/TeamChat/Calls) found 4 more real bugs (a 409-misclassification, a both-contact-fields-clearable PUT, a clearable scheduled_at on approved posts, a default-room seed race) — all fixed and merged (`115f16e`).
+- All features are now built, so the formal streak can start: **Round 2 (first potential clean round) is next.** Any confirmed finding resets the counter.
 
 ---
 
