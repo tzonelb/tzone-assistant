@@ -770,3 +770,29 @@ export async function deleteScheduledPostRequest(postId) {
     method: "DELETE",
   });
 }
+
+export async function getTeamChatRoomsRequest() {
+  return apiRequest("/api/team-chat/rooms");
+}
+
+export async function createTeamChatRoomRequest(payload) {
+  return apiRequest("/api/team-chat/rooms", { method: "POST", body: payload });
+}
+
+export async function deleteTeamChatRoomRequest(roomId) {
+  return apiRequest(`/api/team-chat/rooms/${encodeURIComponent(roomId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getTeamChatMessagesRequest(roomId, { afterId = null, beforeId = null, limit = 50 } = {}) {
+  const query = createQueryString({ after_id: afterId, before_id: beforeId, limit });
+  return apiRequest(`/api/team-chat/rooms/${encodeURIComponent(roomId)}/messages${query}`);
+}
+
+export async function postTeamChatMessageRequest(roomId, payload) {
+  return apiRequest(`/api/team-chat/rooms/${encodeURIComponent(roomId)}/messages`, {
+    method: "POST",
+    body: payload,
+  });
+}

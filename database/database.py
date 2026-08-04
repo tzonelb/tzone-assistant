@@ -782,6 +782,51 @@ class Database:
             ON scheduled_posts(company_id, status)
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS team_chat_rooms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(created_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS team_chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                room_id INTEGER NOT NULL,
+                sender_user_id INTEGER,
+                body TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(room_id)
+                    REFERENCES team_chat_rooms(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(sender_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_team_chat_messages_room
+            ON team_chat_messages(company_id, room_id, id)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1153,6 +1198,9 @@ class Database:
             ("appointments.manage", "Manage Appointments"),
             ("scheduler.view", "View Scheduler"),
             ("scheduler.manage", "Manage Scheduler"),
+            ("team_chat.view", "View Team Chat"),
+            ("team_chat.post", "Post in Team Chat"),
+            ("team_chat.manage", "Manage Team Chat Rooms"),
         ]
 
         cursor.executemany("""

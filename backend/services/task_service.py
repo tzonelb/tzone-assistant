@@ -100,7 +100,11 @@ class TaskService:
         row = conn.execute(
             """
             SELECT 1 FROM company_users
-            WHERE company_id = ? AND user_id = ? AND status = 'active'
+            JOIN users ON users.id = company_users.user_id
+            WHERE company_users.company_id = ?
+              AND company_users.user_id = ?
+              AND company_users.status = 'active'
+              AND users.status = 'active'
             LIMIT 1
             """,
             (company_id, assignee_user_id),

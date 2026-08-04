@@ -10,12 +10,12 @@ import CustomersPage from "./pages/customers/CustomersPage";
 import CatalogueMasterPage from "./pages/catalogue/CatalogueMasterPage";
 import AppointmentsPage from "./pages/appointments/AppointmentsPage";
 import SchedulerPage from "./pages/scheduler/SchedulerPage";
+import TeamChatPage from "./pages/team-chat/TeamChatPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AiTeachingPage from "./pages/ai-teaching/AiTeachingPage";
-import ModulePage from "./pages/modules/ModulePage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import TasksPage from "./pages/tasks/TasksPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -39,7 +39,7 @@ export default function App() {
         <Route path="/scheduler" element={<SchedulerPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/team-chat" element={<ModulePage title="Team Chat" description="Internal messages, follow-ups, mentions, shared files and instructions without private WhatsApp groups." />} />
+        <Route path="/team-chat" element={<TeamChatPage />} />
         <Route path="/settings" element={<UISettingsPage />} />
         <Route path="/company-settings/*" element={<CompanySettingsPage />} />
         <Route path="/roles" element={<RolesPermissionsPage />} />
