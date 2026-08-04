@@ -87,9 +87,16 @@ def get_me(
         None,
     )
 
+    permissions = auth_service.get_permission_codes(
+        current_user["id"],
+        current_user.get("active_company_id"),
+        bool(current_user.get("is_super_admin")),
+    )
+
     return {
         "user": safe_user,
         "companies": companies,
+        "permissions": permissions,
     }
 
 
