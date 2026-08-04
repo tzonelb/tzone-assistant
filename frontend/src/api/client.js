@@ -560,3 +560,12 @@ export async function updateCompanySettingSectionRequest(section, values) {
 export async function facebookConnectRequest() {
   return apiRequest("/api/channels/facebook/connect", { method: "POST" });
 }
+
+export async function getAnalyticsRequest(params = {}) {
+  const query = createQueryString({
+    from: params.from,
+    to: params.to,
+  });
+
+  return apiRequest(`/api/analytics${query}`);
+}

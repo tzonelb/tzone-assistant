@@ -15,6 +15,7 @@ import "./styles/global.css";
 import "./styles/ui-kit.css";
 import "./styles/table.css";
 import "./styles/chat.css";
+import "./styles/analytics.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

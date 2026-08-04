@@ -1,0 +1,95 @@
+.analytics-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tz-space-6);
+}
+
+.analytics-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--tz-space-5);
+}
+
+.analytics-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tz-space-2);
+}
+
+.analytics-range-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--tz-space-3);
+}
+
+.analytics-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tz-space-1);
+}
+
+.analytics-field span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tz-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.analytics-field .tz-input {
+  padding: 9px 12px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  min-width: 150px;
+  transition: border-color var(--tz-transition-fast);
+}
+
+.analytics-field .tz-input:focus {
+  outline: none;
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 3px var(--tz-primary-soft);
+}
+
+.analytics-range-note {
+  margin: 0;
+  width: 100%;
+  font-size: 13px;
+  color: var(--tz-text-muted);
+}
+
+.analytics-inline-error {
+  margin: 0;
+  padding: var(--tz-space-3) var(--tz-space-4);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-danger-soft);
+  color: var(--tz-danger);
+  font-size: 14px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: var(--tz-space-5);
+}
+
+.analytics-chart-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.analytics-chart-body {
+  width: 100%;
+  min-height: 280px;
+}
+
+/* Recharts legend/label text should follow the theme token, not the SVG
+   default black, so it stays legible in dark mode. */
+.analytics-chart-body .recharts-legend-item-text,
+.analytics-chart-body .recharts-cartesian-axis-tick-value {
+  fill: var(--tz-text-secondary) !important;
+  color: var(--tz-text-secondary) !important;
+}
