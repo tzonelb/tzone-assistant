@@ -32,7 +32,7 @@ const navigationItems = [
   ["/ai-teaching", "AI Teaching", AutoAwesomeOutlined, "knowledge.view"],
   ["/tasks", "Tasks", TaskAltOutlined, "tasks.view"],
   ["/scheduler", "Scheduler", ScheduleSendOutlined],
-  ["/appointments", "Appointments", CalendarMonthOutlined],
+  ["/appointments", "Appointments", CalendarMonthOutlined, "appointments.view"],
   ["/analytics", "Analytics", QueryStatsOutlined, "dashboard.view"],
   ["/team-chat", "Team Chat", EventNoteOutlined],
   ["/settings", "Settings", SettingsOutlined],

@@ -685,3 +685,49 @@ export async function deleteCatalogueProductRequest(productId) {
     method: "DELETE",
   });
 }
+
+export async function getAppointmentsRequest({
+  status = "all",
+  assigneeUserId = null,
+  startsAfter = null,
+  startsBefore = null,
+  search = "",
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({
+    status,
+    assignee_user_id: assigneeUserId,
+    starts_after: startsAfter,
+    starts_before: startsBefore,
+    search,
+    limit,
+    offset,
+  });
+  return apiRequest(`/api/appointments${query}`);
+}
+
+export async function getAppointmentRequest(appointmentId) {
+  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`);
+}
+
+export async function createAppointmentRequest(payload) {
+  return apiRequest("/api/appointments", { method: "POST", body: payload });
+}
+
+export async function updateAppointmentRequest(appointmentId, payload) {
+  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteAppointmentRequest(appointmentId) {
+  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getAssignableAppointmentUsersRequest() {
+  return apiRequest("/api/appointments/assignable-users");
+}

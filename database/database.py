@@ -707,6 +707,48 @@ class Database:
             ON tasks(company_id, assignee_user_id)
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS appointments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                customer_id INTEGER,
+                assignee_user_id INTEGER,
+                starts_at TEXT NOT NULL,
+                ends_at TEXT,
+                location TEXT,
+                status TEXT NOT NULL DEFAULT 'scheduled',
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(customer_id)
+                    REFERENCES customers(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(assignee_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(created_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_appointments_company_starts_at
+            ON appointments(company_id, starts_at)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_appointments_company_assignee
+            ON appointments(company_id, assignee_user_id)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1074,6 +1116,8 @@ class Database:
             ("tasks.manage", "Manage Tasks"),
             ("catalogue.view", "View Catalogue"),
             ("catalogue.manage", "Manage Catalogue"),
+            ("appointments.view", "View Appointments"),
+            ("appointments.manage", "Manage Appointments"),
         ]
 
         cursor.executemany("""
