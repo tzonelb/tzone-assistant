@@ -75,8 +75,45 @@ class Database:
             "ALTER TABLE channel_accounts RENAME TO channel_accounts_legacy_backup"
         )
 
+    @staticmethod
+    def _heal_legacy_broadcast_recipients_table(cursor):
+        """Rename away a broadcast_recipients table created by an early,
+        pre-release iteration of the Broadcast feature whose shape lacked
+        the `conversation_id` (and possibly `external_user_id`) column.
+        CREATE TABLE IF NOT EXISTS skips recreation for existing tables,
+        so on such a database the CREATE UNIQUE INDEX below fails with
+        "no such column: conversation_id" on every boot (seen on a real
+        dev machine 2026-08-04). Rows in the old shape are unreadable by
+        the current broadcast_service anyway (it selects columns the old
+        table doesn't have), so renaming it aside -- keeping the data as
+        a backup rather than dropping it -- is safe; the correct table is
+        then created fresh."""
+        row = cursor.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'broadcast_recipients'
+            """
+        ).fetchone()
+        if row is None:
+            return
+
+        columns = {
+            r[1] for r in cursor.execute("PRAGMA table_info(broadcast_recipients)")
+        }
+        if "conversation_id" in columns and "external_user_id" in columns:
+            return
+
+        cursor.execute(
+            "DROP TABLE IF EXISTS broadcast_recipients_legacy_backup"
+        )
+        cursor.execute(
+            "ALTER TABLE broadcast_recipients "
+            "RENAME TO broadcast_recipients_legacy_backup"
+        )
+
     def _create_platform_tables(self, cursor):
         self._heal_legacy_channel_accounts_table(cursor)
+        self._heal_legacy_broadcast_recipients_table(cursor)
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS workspaces (
