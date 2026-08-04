@@ -54,6 +54,7 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 - **Customers** — real list/search/detail/edit UI wired to the (now RBAC + optimistic-concurrency-protected) customers API.
 - **AI Teaching** — real knowledge/FAQ management UI (bilingual ar/en) wired to the company-scoped knowledge API.
 - **Tasks** — company-scoped task/follow-up management (backend `tasks` table + `/api/tasks` CRUD + optimistic concurrency, `tasks.view`/`tasks.manage` RBAC) with a real filterable/paginated UI, assignee picker, mark-done, delete. Built as a clean retry from current HEAD after the first attempt's stale-base crash; 13 new tests (207/207 suite total), lint/build clean.
+- **Master Catalogue** — company-scoped product CRUD (`/api/catalogue`, `catalogue.view`/`catalogue.manage` RBAC, optimistic concurrency) built on the existing `products` table, with a real filterable/paginated UI. Built by hand directly on the main checkout after the background worktree-provisioning tool repeatedly failed (see lesson below); 220/220 suite, lint/build clean.
 
 ### Security hardening (2 full audit sweeps' worth of findings, all fixed)
 - Cross-tenant conversation transcript leak (read/export/list/SSE) → ownership gate + closed the auto-vivification bypass.
@@ -73,6 +74,8 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 - Legacy `admin/api/app.py` (unauthenticated Flask app, `debug=True`, dead knowledge-manager calls) deleted — confirmed orphaned, zero references anywhere in the repo.
 - **Investigated and correctly left unchanged:** `business_connectors.py`'s per-company DB override was flagged as needing the same file-is-a-ceiling AND-combination as `automation_policy.py`, but this was a false premise — its DB row is a genuine per-company opt-in/opt-out that can go either direction from the static file default, and is already covered by a passing test (`test_connectors_uses_db_row_when_configured`) that would break if "fixed". Not a bug.
 
+**New lesson (Master Catalogue build):** the Workflow tool's `isolation: 'worktree'` option failed 3 consecutive times, every time rooting the new worktree at the same stale `ad14366` commit instead of the current branch tip — traced to the local `main` branch pointer also being stuck at `ad14366` (worktree provisioning appears to seed from `main`, not the checked-out branch). Fixed the local `main` ref to match current HEAD as a precaution, but the 3rd attempt still failed identically, so this is a deeper infra issue, not something fixable via local git refs. Workaround that worked: build directly on the main checkout (no worktree isolation) using Read/Write/Edit tools, following the existing Tasks-module pattern closely, then use a single non-isolated verify-only agent (which correctly operates against the real current HEAD) for an adversarial second look. Prefer this approach for remaining features until worktree isolation is confirmed fixed.
+
 **Recurring lesson (now standard practice):** several parallel-built fixes landed on worktrees forked from stale/old commits, which caused (a) silent merge duplication that only an AST scan + full test run catches, and (b) whole reimplementations of infra (e.g. AuthContext's permission system) that already existed on the real branch head, requiring careful manual reconciliation, not blind `git merge`. Every merge in this effort is now: resolve conflicts by understanding both sides' intent → `py_compile` + AST dup-arg/kwarg scan → full `pytest` run → frontend lint/vitest/build → only then commit + push. **A second lesson from the final Round-1 repair batch:** even when a background agent is told to "read current code, not an older description," its *worktree itself* can still be silently rooted at a stale ancestor commit (seen repeatedly at `ad14366`) — the agent faithfully reads its own (stale) reality and can reach confidently wrong conclusions (e.g. "this file doesn't exist" for a file that exists on the real branch head). Any finding that contradicts known current state must be independently re-verified against the actual current HEAD before being trusted, not merged on the agent's say-so.
 
 ---
@@ -89,7 +92,6 @@ Nothing at the moment — Round-1's 23/23 findings are fixed and merged, and all
 |---|---|---|
 | **Triggers (remaining ~23 types)** | ~7 exist | Build the rest on the existing pattern. |
 | **Calls page** | not started | Needs a calling provider. **Interim decision: Twilio-style provider abstraction** so it can be swapped; confirm provider before wiring real credentials. |
-| **Master Catalogue** | placeholder `ModulePage` | Product catalogue UI. |
 | **Scheduler** | placeholder `ModulePage` | Social post scheduling. |
 | **Appointments** | placeholder `ModulePage` | Booking module. |
 | **Team Chat** | placeholder `ModulePage` | Internal team messaging. |
