@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest } from "../../api/client";
 
 const SECTIONS = [
@@ -56,8 +56,21 @@ function WorkflowSettings() {
   </div>;
 }
 
+function sectionFromPath(pathname) {
+  const segment = pathname.split("/company-settings/")[1]?.split("/")[0];
+  return SECTIONS.some(([id]) => id === segment) ? segment : null;
+}
+
 export default function CompanySettingsPage() {
-  const navigate = useNavigate(); const [active, setActive] = useState("profile"); const [query, setQuery] = useState("");
+  const navigate = useNavigate(); const location = useLocation();
+  const [active, setActive] = useState(() => sectionFromPath(location.pathname) || "profile");
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    const section = sectionFromPath(location.pathname);
+    if (section) setActive(section);
+  }, [location.pathname]);
+
   const visible = useMemo(() => SECTIONS.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [query]);
   const selected = SECTIONS.find(([id]) => id === active) || visible[0] || SECTIONS[0];
   return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : <><div className="company-setting-fields">{selected[3].map((field,index)=><article className="company-setting-field" key={field}><div><strong>{field}</strong><span>{index===0?"Configured from this company workspace.":"Ready for company-wide configuration."}</span></div><button type="button">Configure</button></article>)}</div><div className="settings-card-grid"><article className="settings-card"><h3>Company-wide setting</h3><p>Changes in this section apply to authorized users across the company.</p></article><article className="settings-card"><h3>Super Admin policy</h3><p>Availability, labels and locked defaults can be controlled by the separate Super Admin control plane.</p></article></div></>}</div></main></section>;
