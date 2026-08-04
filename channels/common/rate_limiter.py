@@ -43,14 +43,15 @@ class SlidingWindowRateLimiter:
 
 
 def get_client_ip(request) -> str:
-    """Best-effort client IP extraction, honoring a proxy-set
-    X-Forwarded-For header (first hop) before falling back to the
-    direct socket peer.
-    """
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Client IP for rate-limiting keys: the real socket-level peer.
 
+    Deliberately does NOT honor X-Forwarded-For: this app has no
+    trusted-proxy allowlist, so that header is fully attacker-controlled
+    and trusting it would let anyone bypass the rate limit by rotating
+    it. If a trusted reverse proxy is introduced in front of this app,
+    add an explicit trusted-proxy allowlist before reading that header
+    again.
+    """
     if request.client:
         return request.client.host
 
