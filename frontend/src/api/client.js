@@ -649,3 +649,39 @@ export async function deleteTaskRequest(taskId) {
 export async function getAssignableTaskUsersRequest() {
   return apiRequest("/api/tasks/assignable-users");
 }
+
+export async function getCatalogueProductsRequest({
+  status = "all",
+  category = "all",
+  search = "",
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({ status, category, search, limit, offset });
+  return apiRequest(`/api/catalogue${query}`);
+}
+
+export async function getCatalogueCategoriesRequest() {
+  return apiRequest("/api/catalogue/categories");
+}
+
+export async function getCatalogueProductRequest(productId) {
+  return apiRequest(`/api/catalogue/${encodeURIComponent(productId)}`);
+}
+
+export async function createCatalogueProductRequest(payload) {
+  return apiRequest("/api/catalogue", { method: "POST", body: payload });
+}
+
+export async function updateCatalogueProductRequest(productId, payload) {
+  return apiRequest(`/api/catalogue/${encodeURIComponent(productId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteCatalogueProductRequest(productId) {
+  return apiRequest(`/api/catalogue/${encodeURIComponent(productId)}`, {
+    method: "DELETE",
+  });
+}

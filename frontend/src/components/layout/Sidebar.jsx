@@ -28,7 +28,7 @@ const navigationItems = [
   ["/comments", "Comments", CommentOutlined],
   ["/broadcast", "Broadcast", CampaignOutlined, "channels.view"],
   ["/customers", "Customers", GroupOutlined, "conversations.view"],
-  ["/catalogue", "Master Catalogue", Inventory2Outlined],
+  ["/catalogue", "Master Catalogue", Inventory2Outlined, "catalogue.view"],
   ["/ai-teaching", "AI Teaching", AutoAwesomeOutlined, "knowledge.view"],
   ["/tasks", "Tasks", TaskAltOutlined, "tasks.view"],
   ["/scheduler", "Scheduler", ScheduleSendOutlined],

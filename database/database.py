@@ -447,6 +447,18 @@ class Database:
         """)
 
         cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_products_company_status
+            ON products(company_id, status)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_products_company_category
+            ON products(company_id, category)
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS business_connectors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 company_id INTEGER NOT NULL,
@@ -1060,6 +1072,8 @@ class Database:
             ("subscriptions.manage", "Manage Subscription"),
             ("tasks.view", "View Tasks"),
             ("tasks.manage", "Manage Tasks"),
+            ("catalogue.view", "View Catalogue"),
+            ("catalogue.manage", "Manage Catalogue"),
         ]
 
         cursor.executemany("""

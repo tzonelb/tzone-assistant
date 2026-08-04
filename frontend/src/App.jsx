@@ -7,6 +7,7 @@ import ConversationsPage from "./pages/conversations/ConversationsPage";
 import CommentsPage from "./pages/comments/CommentsPage";
 import BroadcastPage from "./pages/broadcast/BroadcastPage";
 import CustomersPage from "./pages/customers/CustomersPage";
+import CatalogueMasterPage from "./pages/catalogue/CatalogueMasterPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
@@ -30,7 +31,7 @@ export default function App() {
         <Route path="/comments" element={<CommentsPage />} />
         <Route path="/broadcast" element={<BroadcastPage />} />
         <Route path="/customers" element={<CustomersPage />} />
-        <Route path="/catalogue" element={<ModulePage title="Master Catalogue" description="One product catalogue synchronized with WhatsApp, websites, accounting systems and future sales channels." />} />
+        <Route path="/catalogue" element={<CatalogueMasterPage />} />
         <Route path="/ai-teaching" element={<AiTeachingPage />} />
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />

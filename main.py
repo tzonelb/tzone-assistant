@@ -9,6 +9,7 @@ from backend.api.routes import (
     analytics,
     auth,
     broadcasts,
+    catalogue,
     channel_oauth,
     conversations,
     company_settings,
@@ -131,6 +132,7 @@ app.include_router(broadcasts.router)
 app.include_router(channel_oauth.router)
 app.include_router(analytics.router)
 app.include_router(tasks.router)
+app.include_router(catalogue.router)
 
 app.include_router(
     whatsapp_webhook.router
