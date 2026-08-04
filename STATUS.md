@@ -107,10 +107,10 @@ Nothing at the moment — Round-1's 23/23 findings are fixed and merged, and all
 **Rule:** 5 consecutive full-codebase audit rounds with ZERO confirmed findings.
 Any confirmed finding → fix it → counter resets to 0.
 
-**Clean-streak: 0 / 5.**
+**Clean-streak: 0 / 5. Audit PAUSED by user instruction (2026-08-04) — resume on request.**
 - Round 1: NOT clean — 23 real findings (0 false positives). 23/23 fixed and merged.
 - Per-module reviews (Catalogue, Appointments, Scheduler/TeamChat/Calls) found 4 more real bugs (a 409-misclassification, a both-contact-fields-clearable PUT, a clearable scheduled_at on approved posts, a default-room seed race) — all fixed and merged (`115f16e`).
-- All features are now built, so the formal streak can start: **Round 2 (first potential clean round) is next.** Any confirmed finding resets the counter.
+- Round 2 was started and then stopped mid-run on user instruction ("خلص بناء كل المميزات و وقف فحص حاليا و مؤقتا"). Before it was stopped it had confirmed: all suites green (252 backend tests, frontend lint 0 errors, build clean, 14 vitest). No findings were confirmed or ruled out — Round 2 must be re-run in full when auditing resumes; the partial run does not count toward the streak.
 
 ---
 
