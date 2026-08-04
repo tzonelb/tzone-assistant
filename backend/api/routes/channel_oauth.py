@@ -199,6 +199,33 @@ def facebook_callback(
         return _frontend_redirect("error", "unexpected_error")
 
 
+def _existing_owner_company_id(
+    conn, channel: str, external_account_id: str
+) -> int | None:
+    """Return the company_id currently owning this (channel,
+    external_account_id) pair, or None if no row exists yet.
+
+    This guard prevents a second, different company from silently taking
+    over a Facebook Page / Instagram Business Account that another company
+    already connected (e.g. an ex-employee who still holds Facebook admin
+    access to a page they used to manage). Without it, the upsert's
+    ON CONFLICT ... DO UPDATE SET company_id = excluded.company_id would
+    reassign the channel_account -- and all of the original company's past
+    and future conversation routing tied to it -- with no warning,
+    confirmation, or audit trail.
+    """
+    row = conn.execute(
+        """
+        SELECT company_id FROM channel_accounts
+        WHERE channel = ? AND external_account_id = ?
+        """,
+        (channel, external_account_id),
+    ).fetchone()
+    if row is None:
+        return None
+    return row["company_id"]
+
+
 def _run_callback_exchange(code: str, company_id: int) -> RedirectResponse:
     try:
         token_response = httpx.get(
@@ -256,42 +283,119 @@ def _run_callback_exchange(code: str, company_id: int) -> RedirectResponse:
     if not pages:
         return _frontend_redirect("error", "no_pages_found")
 
-    connected_count = 0
+    # Resolve every channel account this connect would create or update --
+    # each Facebook Page plus its linked Instagram Business Account -- up
+    # front, so we can atomically pre-check every (channel,
+    # external_account_id) pair for a cross-company ownership conflict
+    # BEFORE writing anything.
+    planned_accounts: list[dict[str, Any]] = []
+
+    for page in pages:
+        page_id = page.get("id")
+        page_token = page.get("access_token")
+        page_name = page.get("name") or f"Facebook Page {page_id}"
+
+        if not page_id or not page_token:
+            continue
+
+        encrypted_token = encrypt_token(page_token)
+
+        planned_accounts.append({
+            "channel": "messenger",
+            "external_account_id": page_id,
+            "name": page_name,
+            "page_id": page_id,
+            "instagram_business_id": None,
+            "encrypted_token": encrypted_token,
+        })
+
+        instagram_business_id = _lookup_instagram_business_id(page_id, page_token)
+
+        if instagram_business_id:
+            planned_accounts.append({
+                "channel": "instagram",
+                "external_account_id": instagram_business_id,
+                "name": f"{page_name} (Instagram)",
+                "page_id": None,
+                "instagram_business_id": instagram_business_id,
+                "encrypted_token": encrypted_token,
+            })
+
+    if not planned_accounts:
+        return _frontend_redirect("error", "no_pages_connected")
 
     with db.connect() as conn:
-        for page in pages:
-            page_id = page.get("id")
-            page_token = page.get("access_token")
-            page_name = page.get("name") or f"Facebook Page {page_id}"
-
-            if not page_id or not page_token:
-                continue
-
-            encrypted_token = encrypt_token(page_token)
-
-            conn.execute(
-                """
-                INSERT INTO channel_accounts (
-                    company_id, channel, name, external_account_id,
-                    page_id, access_token_encrypted, status
-                ) VALUES (?, 'messenger', ?, ?, ?, ?, 'active')
-                ON CONFLICT(channel, external_account_id)
-                WHERE external_account_id IS NOT NULL
-                DO UPDATE SET
-                    company_id = excluded.company_id,
-                    name = excluded.name,
-                    page_id = excluded.page_id,
-                    access_token_encrypted = excluded.access_token_encrypted,
-                    status = excluded.status,
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (company_id, page_name, page_id, page_id, encrypted_token),
+        # --- Cross-company ownership guard ---
+        # If ANY page / Instagram account in this batch already belongs to a
+        # DIFFERENT company, block the ENTIRE connect instead of silently
+        # reassigning it. Silent reassignment would move that company's past
+        # and future conversation routing to the connecting company with no
+        # warning or audit trail. This is deliberately atomic and refuses
+        # rather than partially applying: a genuine ownership dispute must be
+        # resolved out of band -- the original company disconnecting the
+        # account first -- before any part of this connect can proceed.
+        #
+        # FOLLOW-UP: there is currently no self-service disconnect endpoint
+        # for channel_accounts, so a legitimate ownership transfer requires a
+        # super-admin to remove the old row manually. A "disconnect channel"
+        # flow (channels.manage permission) should be added so companies can
+        # release accounts without operator involvement.
+        conflicts = [
+            (acct, existing_owner)
+            for acct in planned_accounts
+            if (
+                existing_owner := _existing_owner_company_id(
+                    conn, acct["channel"], acct["external_account_id"]
+                )
             )
-            connected_count += 1
+            is not None
+            and existing_owner != company_id
+        ]
 
-            instagram_business_id = _lookup_instagram_business_id(page_id, page_token)
+        if conflicts:
+            for acct, existing_owner in conflicts:
+                logger.warning(
+                    "facebook oauth: BLOCKED cross-company channel takeover -- "
+                    "%s account %s is already connected to company_id=%s; "
+                    "company_id=%s attempted to connect it via OAuth. Refusing "
+                    "silent reassignment; the original company must disconnect "
+                    "this account first.",
+                    acct["channel"],
+                    acct["external_account_id"],
+                    existing_owner,
+                    company_id,
+                )
+            return _frontend_redirect("error", "already_connected_elsewhere")
 
-            if instagram_business_id:
+        connected_count = 0
+
+        for acct in planned_accounts:
+            if acct["channel"] == "messenger":
+                conn.execute(
+                    """
+                    INSERT INTO channel_accounts (
+                        company_id, channel, name, external_account_id,
+                        page_id, access_token_encrypted, status
+                    ) VALUES (?, 'messenger', ?, ?, ?, ?, 'active')
+                    ON CONFLICT(channel, external_account_id)
+                    WHERE external_account_id IS NOT NULL
+                    DO UPDATE SET
+                        company_id = excluded.company_id,
+                        name = excluded.name,
+                        page_id = excluded.page_id,
+                        access_token_encrypted = excluded.access_token_encrypted,
+                        status = excluded.status,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        company_id,
+                        acct["name"],
+                        acct["external_account_id"],
+                        acct["page_id"],
+                        acct["encrypted_token"],
+                    ),
+                )
+            else:
                 conn.execute(
                     """
                     INSERT INTO channel_accounts (
@@ -310,12 +414,13 @@ def _run_callback_exchange(code: str, company_id: int) -> RedirectResponse:
                     """,
                     (
                         company_id,
-                        f"{page_name} (Instagram)",
-                        instagram_business_id,
-                        instagram_business_id,
-                        encrypted_token,
+                        acct["name"],
+                        acct["external_account_id"],
+                        acct["instagram_business_id"],
+                        acct["encrypted_token"],
                     ),
                 )
+            connected_count += 1
 
         conn.commit()
 
