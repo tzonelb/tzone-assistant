@@ -1,10 +1,17 @@
+import json
+import logging
+
 from fastapi import APIRouter, Request, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
+from channels.common.rate_limiter import get_client_ip, whatsapp_webhook_rate_limiter
+from channels.meta.verifier import verify_meta_signature
 from config.settings import config
 from gateway.message_gateway import message_gateway
 from channels.whatsapp.sender import send_whatsapp_text
 from channels.whatsapp.session import whatsapp_options
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook/whatsapp", tags=["WhatsApp"])
 
@@ -23,7 +30,34 @@ def verify_webhook(
 
 @router.post("/")
 async def receive_message(request: Request):
-    data = await request.json()
+    if not whatsapp_webhook_rate_limiter.allow(get_client_ip(request)):
+        print("WHATSAPP RATE LIMITED:", get_client_ip(request))
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    raw_body = await request.body()
+    signature_header = request.headers.get("x-hub-signature-256")
+
+    if config.FACEBOOK_APP_SECRET:
+        if not verify_meta_signature(raw_body, signature_header, config.FACEBOOK_APP_SECRET):
+            print("WHATSAPP SIGNATURE INVALID OR MISSING")
+            raise HTTPException(status_code=403, detail="Invalid signature")
+    elif config.DEBUG:
+        # No app secret configured (real possibility in local dev). Allow
+        # through but log loudly so this never silently ships to prod.
+        logger.warning(
+            "FACEBOOK_APP_SECRET is not configured -- accepting WhatsApp "
+            "webhook POST WITHOUT signature verification because "
+            "DEBUG=true. This must never happen in production."
+        )
+    else:
+        print("WHATSAPP SIGNATURE REJECTED: app secret not configured")
+        raise HTTPException(status_code=403, detail="Webhook not configured")
+
+    try:
+        data = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return {"status": "ignored", "reason": "invalid_json"}
+
     print("WHATSAPP POST RECEIVED")
     print(data)
 
