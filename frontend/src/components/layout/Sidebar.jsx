@@ -29,7 +29,7 @@ const navigationItems = [
   ["/broadcast", "Broadcast", CampaignOutlined, "channels.view"],
   ["/customers", "Customers", GroupOutlined, "conversations.view"],
   ["/catalogue", "Master Catalogue", Inventory2Outlined],
-  ["/ai-teaching", "AI Teaching", AutoAwesomeOutlined],
+  ["/ai-teaching", "AI Teaching", AutoAwesomeOutlined, "knowledge.view"],
   ["/tasks", "Tasks", TaskAltOutlined],
   ["/scheduler", "Scheduler", ScheduleSendOutlined],
   ["/appointments", "Appointments", CalendarMonthOutlined],

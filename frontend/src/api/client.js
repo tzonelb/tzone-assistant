@@ -589,3 +589,21 @@ export async function updateCustomerRequest(customerId, payload) {
     body: payload,
   });
 }
+
+export async function getKnowledgeFaqsRequest() {
+  return apiRequest("/knowledge/faqs");
+}
+
+export async function saveKnowledgeFaqRequest(department, payload) {
+  return apiRequest(`/knowledge/${encodeURIComponent(department)}/faqs`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteKnowledgeFaqRequest(department, faqId) {
+  return apiRequest(
+    `/knowledge/${encodeURIComponent(department)}/faqs/${encodeURIComponent(faqId)}`,
+    { method: "DELETE" },
+  );
+}
