@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Any
 
+from backend.services.auth_service import get_current_user
 from channels.meta.processor import process_meta_payload
 
 router = APIRouter(tags=["Meta Tester"])
@@ -12,12 +13,12 @@ class MetaPayloadTest(BaseModel):
 
 
 @router.post("/test/meta-payload")
-def test_meta_payload(body: MetaPayloadTest):
+def test_meta_payload(body: MetaPayloadTest, current_user: dict = Depends(get_current_user)):
     return process_meta_payload(body.payload)
 
 
 @router.post("/test/meta-message")
-def test_meta_message():
+def test_meta_message(current_user: dict = Depends(get_current_user)):
     payload = {
         "object": "page",
         "entry": [
