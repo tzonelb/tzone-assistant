@@ -113,6 +113,29 @@ def env():
         _create_user(conn, 5, "super@test.local", None, is_super_admin=1)
         conn.commit()
 
+    # Permission gating is additive on top of the existing company-scoped
+    # ownership gate (conversation_exists) -- a permission-successful call
+    # must still find a real conversation, or it 404s before the permission
+    # assertions below even run. Seed one for every customer id this suite
+    # exercises.
+    from core.conversation_store import save_conversation_message
+
+    def _seed(external_user_id):
+        conversation_control_service.get_or_create(
+            company_id=COMPANY_ID,
+            channel=CHANNEL,
+            external_user_id=external_user_id,
+        )
+        save_conversation_message(
+            channel=CHANNEL,
+            user_id=external_user_id,
+            direction="inbound",
+            text="hello",
+        )
+
+    for cust in (CUSTOMER_ID, "owner_cust", "super_cust"):
+        _seed(cust)
+
     yield
 
     db.db_path = original_path

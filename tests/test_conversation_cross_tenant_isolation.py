@@ -92,15 +92,32 @@ def fresh_db():
                 (uid, email, email),
             )
 
+        # This suite tests tenant isolation, not permission tiers, so both
+        # employees get the "owner" role (bypasses conversations.view/reply
+        # checks, same as every other employee-facing permission gate) --
+        # company 1's owner role is already seeded by db.create_tables();
+        # company 2 needs its own.
+        owner_role_a = conn.execute(
+            "SELECT id FROM roles WHERE company_id = 1 AND code = 'owner'"
+        ).fetchone()["id"]
+        owner_role_b = conn.execute(
+            """
+            INSERT INTO roles (company_id, name, code, description, is_system)
+            VALUES (2, 'Owner', 'owner', 'Full access to the company', 1)
+            """
+        ).lastrowid
+
         # Employee 101 belongs only to company 1 ("Company A").
         conn.execute(
-            "INSERT INTO company_users (company_id, user_id, status) "
-            "VALUES (1, 101, 'active')"
+            "INSERT INTO company_users (company_id, user_id, role_id, status) "
+            "VALUES (1, 101, ?, 'active')",
+            (owner_role_a,),
         )
         # Employee 202 belongs only to company 2 ("Company B").
         conn.execute(
-            "INSERT INTO company_users (company_id, user_id, status) "
-            "VALUES (2, 202, 'active')"
+            "INSERT INTO company_users (company_id, user_id, role_id, status) "
+            "VALUES (2, 202, ?, 'active')",
+            (owner_role_b,),
         )
 
         conn.commit()
