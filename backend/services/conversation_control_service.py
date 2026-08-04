@@ -625,9 +625,29 @@ class ConversationControlService:
                 (conversation_id,),
             ).fetchone()
 
-            return self.row_to_dict(
-                row
+            created_state = self.row_to_dict(row)
+
+        # Bot Triggers hook: a brand-new customer conversation was just
+        # created. Fired outside the connection context, after commit;
+        # fire_event never raises (lazy import avoids a startup cycle).
+        try:
+            from backend.services.trigger_service import trigger_service
+
+            trigger_service.fire_event(
+                company_id=company_id,
+                trigger_type="new_conversation",
+                dedupe_suffix=f"new_conversation:conv:{conversation_id}",
+                context={
+                    "conversation_id": conversation_id,
+                    "channel": normalized_channel,
+                    "external_user_id": normalized_user_id,
+                    "summary": f"New conversation on {normalized_channel}",
+                },
             )
+        except Exception as exc:
+            print("TRIGGER HOOK ERROR (new_conversation):", exc)
+
+        return created_state
 
     def conversation_exists(
         self,

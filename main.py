@@ -27,6 +27,7 @@ from backend.api.routes import (
     scheduler,
     tasks,
     team_chat,
+    triggers,
     test_whatsapp,
     tickets,
 )
@@ -63,6 +64,22 @@ async def takeover_timeout_worker() -> None:
         await asyncio.sleep(10)
 
 
+async def bot_triggers_worker() -> None:
+    """Evaluates time-based Bot Triggers (customer_no_reply,
+    team_no_reply, appointment_reminder) once a minute. The sweep is
+    synchronous SQLite work; it is pushed off the event loop with
+    asyncio.to_thread so a slow scan can't stall request handling."""
+    from backend.services.trigger_service import trigger_service
+
+    while True:
+        try:
+            await asyncio.to_thread(trigger_service.run_time_checks)
+        except Exception as exc:
+            print("BOT TRIGGERS WORKER ERROR:", exc)
+
+        await asyncio.sleep(60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.create_tables()
@@ -76,16 +93,25 @@ async def lifespan(app: FastAPI):
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
     )
+    triggers_task = asyncio.create_task(
+        bot_triggers_worker()
+    )
 
     try:
         yield
     finally:
         timeout_task.cancel()
+        triggers_task.cancel()
 
         with suppress(
             asyncio.CancelledError
         ):
             await timeout_task
+
+        with suppress(
+            asyncio.CancelledError
+        ):
+            await triggers_task
 
 
 app = FastAPI(
@@ -141,6 +167,7 @@ app.include_router(appointments.router)
 app.include_router(scheduler.router)
 app.include_router(team_chat.router)
 app.include_router(calls.router)
+app.include_router(triggers.router)
 
 app.include_router(
     whatsapp_webhook.router

@@ -236,6 +236,25 @@ class CallLogService:
             call_id = int(cursor.lastrowid)
             conn.commit()
 
+        # Bot Triggers hook: a call was just logged. fire_event never raises.
+        try:
+            from backend.services.trigger_service import trigger_service
+
+            trigger_service.fire_event(
+                company_id=company_id,
+                trigger_type="call_logged",
+                dedupe_suffix=f"call_logged:call:{call_id}",
+                context={
+                    "customer_id": cleaned.get("customer_id"),
+                    "reference_id": call_id,
+                    "summary": (
+                        f"Call logged ({direction}, {outcome})"
+                    ),
+                },
+            )
+        except Exception as exc:
+            print("TRIGGER HOOK ERROR (call_logged):", exc)
+
         return self.get_call(company_id=company_id, call_id=call_id)
 
     def update_call(

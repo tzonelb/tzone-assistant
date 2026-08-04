@@ -296,6 +296,23 @@ class AppointmentService:
             appointment_id = int(cursor.lastrowid)
             conn.commit()
 
+        # Bot Triggers hook: appointment booked. fire_event never raises.
+        try:
+            from backend.services.trigger_service import trigger_service
+
+            trigger_service.fire_event(
+                company_id=company_id,
+                trigger_type="appointment_booked",
+                dedupe_suffix=f"appointment_booked:appt:{appointment_id}",
+                context={
+                    "customer_id": cleaned.get("customer_id"),
+                    "reference_id": appointment_id,
+                    "summary": f"Appointment booked: {title} at {starts_at}",
+                },
+            )
+        except Exception as exc:
+            print("TRIGGER HOOK ERROR (appointment_booked):", exc)
+
         return self.get_appointment(company_id=company_id, appointment_id=appointment_id)
 
     def update_appointment(
@@ -369,6 +386,32 @@ class AppointmentService:
                 [*cleaned.values(), now, appointment_id, company_id],
             )
             conn.commit()
+
+            became_completed = (
+                merged_status == "completed"
+                and existing["status"] != "completed"
+            )
+
+        # Bot Triggers hook: appointment just transitioned to completed
+        # (follow-up trigger). fire_event never raises.
+        if became_completed:
+            try:
+                from backend.services.trigger_service import trigger_service
+
+                trigger_service.fire_event(
+                    company_id=company_id,
+                    trigger_type="appointment_completed",
+                    dedupe_suffix=f"appointment_completed:appt:{appointment_id}",
+                    context={
+                        "customer_id": cleaned.get(
+                            "customer_id", existing["customer_id"]
+                        ),
+                        "reference_id": appointment_id,
+                        "summary": f"Appointment completed: {existing['title']}",
+                    },
+                )
+            except Exception as exc:
+                print("TRIGGER HOOK ERROR (appointment_completed):", exc)
 
         return self.get_appointment(company_id=company_id, appointment_id=appointment_id)
 

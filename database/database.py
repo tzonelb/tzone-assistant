@@ -859,6 +859,63 @@ class Database:
             ON call_logs(company_id, called_at)
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_triggers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                trigger_type TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                delay_minutes INTEGER,
+                channel TEXT,
+                message_text TEXT,
+                notify_team INTEGER NOT NULL DEFAULT 1,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(created_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_bot_triggers_company_type
+            ON bot_triggers(company_id, trigger_type, enabled)
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bot_trigger_firings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                trigger_id INTEGER NOT NULL,
+                trigger_type TEXT NOT NULL,
+                dedupe_key TEXT NOT NULL,
+                conversation_id INTEGER,
+                customer_id INTEGER,
+                reference_id INTEGER,
+                action_taken TEXT NOT NULL,
+                detail TEXT,
+                fired_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(trigger_id)
+                    REFERENCES bot_triggers(id)
+                    ON DELETE CASCADE
+            )
+        """)
+
+        cursor.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS
+            idx_bot_trigger_firings_dedupe
+            ON bot_trigger_firings(company_id, dedupe_key)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1235,6 +1292,8 @@ class Database:
             ("team_chat.manage", "Manage Team Chat Rooms"),
             ("calls.view", "View Calls"),
             ("calls.manage", "Manage Calls"),
+            ("triggers.view", "View Bot Triggers"),
+            ("triggers.manage", "Manage Bot Triggers"),
         ]
 
         cursor.executemany("""

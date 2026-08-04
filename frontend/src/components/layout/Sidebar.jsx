@@ -1,6 +1,7 @@
 import {
   AdminPanelSettingsOutlined,
   AutoAwesomeOutlined,
+  BoltOutlined,
   CalendarMonthOutlined,
   CampaignOutlined,
   ChatOutlined,
@@ -31,6 +32,7 @@ const navigationItems = [
   ["/customers", "Customers", GroupOutlined, "conversations.view"],
   ["/catalogue", "Master Catalogue", Inventory2Outlined, "catalogue.view"],
   ["/ai-teaching", "AI Teaching", AutoAwesomeOutlined, "knowledge.view"],
+  ["/triggers", "Bot Triggers", BoltOutlined, "triggers.view"],
   ["/tasks", "Tasks", TaskAltOutlined, "tasks.view"],
   ["/scheduler", "Scheduler", ScheduleSendOutlined, "scheduler.view"],
   ["/appointments", "Appointments", CalendarMonthOutlined, "appointments.view"],

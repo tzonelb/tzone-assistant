@@ -295,6 +295,32 @@ class TaskService:
             )
             conn.commit()
 
+            became_done = (
+                cleaned.get("status") == "done"
+                and conn.execute(
+                    "SELECT 1 FROM tasks WHERE id = ? AND status = 'done'",
+                    (task_id,),
+                ).fetchone()
+                is not None
+            )
+
+        # Bot Triggers hook: task just completed. fire_event never raises.
+        if became_done:
+            try:
+                from backend.services.trigger_service import trigger_service
+
+                trigger_service.fire_event(
+                    company_id=company_id,
+                    trigger_type="task_completed",
+                    dedupe_suffix=f"task_completed:task:{task_id}",
+                    context={
+                        "reference_id": task_id,
+                        "summary": "Task completed",
+                    },
+                )
+            except Exception as exc:
+                print("TRIGGER HOOK ERROR (task_completed):", exc)
+
         return self.get_task(company_id=company_id, task_id=task_id)
 
     def delete_task(self, *, company_id: int, task_id: int) -> bool:

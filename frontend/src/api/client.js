@@ -836,3 +836,33 @@ export async function deleteCallRequest(callId) {
     method: "DELETE",
   });
 }
+
+export async function getTriggerTypesRequest() {
+  return apiRequest("/api/triggers/types");
+}
+
+export async function getTriggersRequest() {
+  return apiRequest("/api/triggers");
+}
+
+export async function createTriggerRequest(payload) {
+  return apiRequest("/api/triggers", { method: "POST", body: payload });
+}
+
+export async function updateTriggerRequest(triggerId, payload) {
+  return apiRequest(`/api/triggers/${encodeURIComponent(triggerId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteTriggerRequest(triggerId) {
+  return apiRequest(`/api/triggers/${encodeURIComponent(triggerId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getTriggerFiringsRequest({ triggerId = null, limit = 100, offset = 0 } = {}) {
+  const query = createQueryString({ trigger_id: triggerId, limit, offset });
+  return apiRequest(`/api/triggers/firings${query}`);
+}
