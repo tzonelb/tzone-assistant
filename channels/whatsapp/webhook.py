@@ -105,6 +105,12 @@ async def receive_message(request: Request):
             message=resolved_text,
         )
 
+        # engine.handle() returns None when the channel is disabled via
+        # the ops-level automation_policy kill switch -- stay silent
+        # rather than crash on response.buttons/response.text.
+        if response is None:
+            return {"status": "ignored", "reason": "channel_disabled"}
+
         whatsapp_options.save_options(user_id, response.buttons)
 
         send_result = send_whatsapp_text(

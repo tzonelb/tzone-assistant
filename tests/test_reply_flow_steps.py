@@ -241,6 +241,21 @@ def test_knowledge_lookup_present_calls_matcher(fresh_db, monkeypatch):
     assert calls, "ai_knowledge_matcher.match should have been called"
 
 
+def test_explicit_empty_steps_list_runs_zero_steps(fresh_db):
+    """CONFIRMED BUG regression guard: get_reply_flow_steps() must treat
+    an explicitly-saved empty steps list ("steps": []) as "run zero
+    steps", not silently substitute the full default sequence -- the two
+    are different company intents (never configured vs. deliberately
+    disabled the entire pipeline) and were previously indistinguishable
+    because `not steps` is True for both a missing key and an empty
+    list."""
+    from core.engine import engine
+
+    _set_reply_flow_steps([])
+
+    assert engine.get_reply_flow_steps(COMPANY_ID) == []
+
+
 def test_answer_removed_still_produces_safe_reply(fresh_db):
     """If "answer" is excluded from steps, no AI call is made, but the
     engine must still produce a reply via the existing safe-fallback

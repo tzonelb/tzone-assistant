@@ -39,6 +39,20 @@ def test_whatsapp_message(
         company_id=company_id,
     )
 
+    # engine.handle() returns None when the channel is disabled via the
+    # ops-level automation_policy kill switch.
+    if response is None:
+        print("Reply: <channel disabled>")
+        print("=" * 50)
+
+        return {
+            "incoming": payload.message,
+            "reply": None,
+            "buttons": [],
+            "company_id": company_id,
+            "status": "channel_disabled",
+        }
+
     print("Reply:")
     print(response.text)
     print("Buttons:")

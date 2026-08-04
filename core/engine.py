@@ -103,6 +103,20 @@ class Engine:
     def handle(self, request):
         try:
             db.create_tables()
+
+            # Ops-level kill switch (config/automation_policy.json's
+            # per-channel bot_enabled). Deliberately checked WITHOUT
+            # company_id: this is the file-level "this channel is
+            # disabled for everyone" gate, distinct from a company's own
+            # ai_behavior.enabled choice (which only gates the AI branch
+            # via should_auto_reply_with_ai/is_ai_enabled below). Must
+            # stop both the AI-generation branch and the rule-based
+            # flow/menu state machine -- previously only the AI branch
+            # was gated, so a "disabled" channel kept auto-replying via
+            # the scripted flow.
+            if not automation_policy.is_bot_enabled(request.channel):
+                return None
+
             user_session = session.create(request.user_id)
 
             if self.is_reset_message(request.message):
@@ -477,9 +491,18 @@ class Engine:
             "reply_flow",
         )
 
-        steps = section.get("values", {}).get("steps")
+        values = section.get("values", {})
 
-        if not isinstance(steps, list) or not steps:
+        # Distinguish "steps" missing/malformed (never configured, or a
+        # corrupt value) from an explicitly-saved empty list, which means
+        # "run zero steps" and must not be silently replaced with the
+        # full default sequence.
+        if "steps" not in values:
+            return list(self.DEFAULT_REPLY_FLOW_STEPS)
+
+        steps = values.get("steps")
+
+        if not isinstance(steps, list):
             return list(self.DEFAULT_REPLY_FLOW_STEPS)
 
         return steps

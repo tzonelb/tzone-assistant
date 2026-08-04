@@ -27,6 +27,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         message="start"
     )
 
+    # engine.handle() returns None when the channel is disabled via the
+    # ops-level automation_policy kill switch -- stay silent rather than
+    # crash on response.text.
+    if response is None:
+        return
+
     await update.message.reply_text(
         response.text,
         reply_markup=keyboard(response.buttons)
@@ -41,6 +47,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id=update.effective_user.id,
         message=user_message
     )
+
+    if response is None:
+        return
 
     await update.message.reply_text(
         response.text,

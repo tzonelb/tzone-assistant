@@ -431,3 +431,33 @@ def test_engine_handle_uses_company_scoped_ai_gate(fresh_db):
     # not just telegram) -- the same marker
     # tests/test_reply_mode_flow_only.py uses to prove the flow path ran.
     assert "T-ZONE IPTV" in other_response.text
+
+
+def test_file_level_kill_switch_stops_rule_based_flow_too(
+    fresh_db, monkeypatch, tmp_path
+):
+    """CONFIRMED BUG regression guard: the ops-level file kill switch
+    (config/automation_policy.json's per-channel bot_enabled=False) must
+    stop BOTH the AI-generation branch AND the rule-based flow/menu state
+    machine. Before this fix, is_bot_enabled() was defined but never
+    consulted by Engine.handle() at all -- only is_ai_enabled() gated the
+    AI branch, so a channel "disabled" at the ops level kept auto-replying
+    via the scripted flow (proven here by the "T-ZONE IPTV" menu marker
+    that would otherwise appear, exactly as in
+    test_engine_handle_uses_company_scoped_ai_gate above)."""
+    _write_automation_policy_file(
+        monkeypatch, tmp_path, "website_chat", bot_enabled=False
+    )
+
+    session.sessions.pop("kill_switch_flow_user", None)
+
+    request = Request(
+        channel="website_chat",
+        user_id="kill_switch_flow_user",
+        message="hi",
+        company_id=1,
+    )
+
+    response = engine.handle(request)
+
+    assert response is None
