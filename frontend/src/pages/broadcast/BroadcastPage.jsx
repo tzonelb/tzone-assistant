@@ -84,6 +84,7 @@ export default function BroadcastPage() {
   const [broadcasts, setBroadcasts] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
 
   const sendInFlightRef = useRef(null);
   const pollRef = useRef(null);
@@ -143,6 +144,7 @@ export default function BroadcastPage() {
       const result = await getBroadcastsRequest();
       const list = Array.isArray(result) ? result : result?.broadcasts || [];
       setBroadcasts(list);
+      if (!silent) setHistoryPage(1);
 
       const inProgress = list.find((item) => item.status === "sending");
       if (inProgress && !pollRef.current) {
@@ -514,6 +516,8 @@ export default function BroadcastPage() {
             emptyTitle="No broadcasts yet"
             emptyDescription="Broadcasts you send will appear here with live delivery counts."
             rowKey="id"
+            page={historyPage}
+            onPageChange={setHistoryPage}
           />
         )}
       </section>
