@@ -28,6 +28,10 @@ class LoginResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     user: dict
     companies: list[dict]
+    # Effective permission codes for the caller's active company. "*" means
+    # all-access (owner role or super admin). Lets the frontend hide/disable
+    # UI the same way the backend gates routes.
+    permissions: list[str] = []
 
 
 class LogoutResponse(BaseModel):

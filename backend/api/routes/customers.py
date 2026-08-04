@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.api.schemas.customers import CustomerUpdateRequest
 from backend.services.auth_service import auth_service, get_current_user
-from backend.services.customer_service import customer_service
+from backend.services.customer_service import CustomerConflictError, customer_service
 
 
 router = APIRouter(prefix="/api/customers", tags=["Customers"])
@@ -15,6 +15,37 @@ def current_context(current_user=Depends(get_current_user)):
     return current_user, int(company_id)
 
 
+# RBAC notes: there is no dedicated "customers.*" permission code seeded in
+# database.py, and this feature does not invent a new one. Customer records
+# (phone/email/notes) are the PII captured from conversations, so:
+#  - viewing them is gated behind "conversations.view" (the closest existing
+#    view-level code -- anyone allowed to see conversations is already exposed
+#    to this same data through them).
+#  - editing them is gated behind "users.manage", the codebase's existing
+#    de-facto "elevated admin action" permission (already reused this way for
+#    role/user administration in roles.py), since there is no
+#    "conversations.manage"-equivalent write permission today.
+# Follows the _require_access_admin pattern in roles.py: super_admin and the
+# owner role always bypass (owner bypass is handled inside has_permission).
+def _require_customer_access(
+    current_user: dict,
+    company_id: int,
+    permission_code: str,
+) -> None:
+    allowed = auth_service.has_permission(
+        user_id=current_user["id"],
+        company_id=company_id,
+        permission_code=permission_code,
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    )
+
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to customer records.",
+        )
+
+
 @router.get("")
 def list_customers(
     search: str | None = Query(default=None),
@@ -22,7 +53,8 @@ def list_customers(
     offset: int = Query(default=0, ge=0),
     context=Depends(current_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+    _require_customer_access(current_user, company_id, "conversations.view")
     return customer_service.list_customers(
         company_id=company_id, search=search, limit=limit, offset=offset
     )
@@ -30,7 +62,8 @@ def list_customers(
 
 @router.get("/{customer_id}")
 def get_customer(customer_id: int, context=Depends(current_context)):
-    _, company_id = context
+    current_user, company_id = context
+    _require_customer_access(current_user, company_id, "conversations.view")
     try:
         return customer_service.get_customer(company_id=company_id, customer_id=customer_id)
     except KeyError as exc:
@@ -44,12 +77,31 @@ def update_customer(
     context=Depends(current_context),
 ):
     current_user, company_id = context
+    _require_customer_access(current_user, company_id, "users.manage")
+    values = payload.model_dump(exclude_unset=True)
+    # The concurrency token is not a customer field -- pull it out before the
+    # service filters the remaining editable fields.
+    expected_updated_at = values.pop("expected_updated_at", None)
     try:
         return customer_service.update_customer(
             company_id=company_id,
             customer_id=customer_id,
-            values=payload.model_dump(exclude_unset=True),
+            values=values,
             actor_user_id=current_user.get("id"),
+            expected_updated_at=expected_updated_at,
         )
+    except CustomerConflictError as exc:
+        # Mirror ConversationDetailPage's 409 contract: a structured detail the
+        # UI can act on, carrying the current record so it can offer a reload.
+        try:
+            current = customer_service.get_customer(
+                company_id=company_id, customer_id=customer_id
+            )
+        except KeyError:
+            current = None
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"message": str(exc), "current": current},
+        ) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

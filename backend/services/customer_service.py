@@ -10,6 +10,11 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+class CustomerConflictError(Exception):
+    """Raised when an update's optimistic-concurrency token is stale, i.e. the
+    customer record was changed by someone else since the client loaded it."""
+
+
 class CustomerService:
     def __init__(self) -> None:
         self.ensure_schema()
@@ -268,23 +273,32 @@ class CustomerService:
         customer_id: int,
         values: dict[str, Any],
         actor_user_id: int | None,
+        expected_updated_at: str | None = None,
     ) -> dict[str, Any]:
         allowed = {
             "display_name", "internal_name", "phone", "email",
             "language", "country", "timezone", "notes",
         }
         cleaned = {key: self._clean(value) for key, value in values.items() if key in allowed}
-        if not cleaned:
-            return self.get_customer(company_id=company_id, customer_id=customer_id)
         now = utc_now_iso()
         assignments = ", ".join(f"{key} = ?" for key in cleaned)
         with db.connect() as conn:
             existing = conn.execute(
-                "SELECT id FROM customers WHERE id = ? AND company_id = ?",
+                "SELECT id, updated_at FROM customers WHERE id = ? AND company_id = ?",
                 (customer_id, company_id),
             ).fetchone()
             if not existing:
                 raise KeyError("Customer not found")
+            # Optimistic concurrency: if the caller told us which version they
+            # were editing, refuse to overwrite a record that has since moved
+            # on. This runs even for a no-op save so a stale editor is always
+            # told to reload rather than silently "succeeding".
+            if expected_updated_at is not None and str(existing["updated_at"]) != str(expected_updated_at):
+                raise CustomerConflictError(
+                    "This customer was changed elsewhere. Reload to see the latest details before editing."
+                )
+            if not cleaned:
+                return self.get_customer(company_id=company_id, customer_id=customer_id)
             conn.execute(
                 f"UPDATE customers SET {assignments}, updated_at = ? WHERE id = ? AND company_id = ?",
                 [*cleaned.values(), now, customer_id, company_id],

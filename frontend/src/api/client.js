@@ -519,3 +519,23 @@ export async function updateCompanySettingSectionRequest(section, values) {
     body: { values },
   });
 }
+
+export async function getCustomersRequest({
+  search = "",
+  limit = 25,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({ search, limit, offset });
+  return apiRequest(`/api/customers${query}`);
+}
+
+export async function getCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${encodeURIComponent(customerId)}`);
+}
+
+export async function updateCustomerRequest(customerId, payload) {
+  return apiRequest(`/api/customers/${encodeURIComponent(customerId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}

@@ -448,6 +448,46 @@ class AuthService:
                 for row in rows
             ]
 
+    def get_user_permission_codes(
+        self,
+        user_id: int,
+        company_id: int,
+    ) -> list[str]:
+        """Resolve the effective permission codes a user has in one company.
+
+        Mirrors has_permission's model so the frontend can gate UI the same
+        way the backend gates routes: the owner role is all-access and is
+        represented by the "*" wildcard; every other role reports the exact
+        codes granted to it.
+        """
+        with db.connect() as conn:
+            role = conn.execute("""
+                SELECT roles.id, roles.code
+                FROM company_users
+                JOIN roles ON roles.id = company_users.role_id
+                WHERE company_users.user_id = ?
+                  AND company_users.company_id = ?
+                  AND company_users.status = 'active'
+                LIMIT 1
+            """, (user_id, company_id)).fetchone()
+
+            if not role:
+                return []
+
+            if role["code"] == "owner":
+                return ["*"]
+
+            rows = conn.execute("""
+                SELECT permissions.code
+                FROM role_permissions
+                JOIN permissions
+                    ON permissions.id = role_permissions.permission_id
+                WHERE role_permissions.role_id = ?
+                ORDER BY permissions.code
+            """, (role["id"],)).fetchall()
+
+            return [row["code"] for row in rows]
+
     def resolve_company_id(
         self,
         current_user: dict[str, Any],

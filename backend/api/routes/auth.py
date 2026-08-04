@@ -87,9 +87,24 @@ def get_me(
         None,
     )
 
+    # Effective permissions for the caller's active company, so the frontend
+    # can gate UI consistently with the backend's route guards. Super admins
+    # are all-access regardless of company membership.
+    if current_user.get("is_super_admin"):
+        permissions = ["*"]
+    else:
+        try:
+            company_id = auth_service.resolve_company_id(current_user)
+            permissions = auth_service.get_user_permission_codes(
+                current_user["id"], company_id
+            )
+        except HTTPException:
+            permissions = []
+
     return {
         "user": safe_user,
         "companies": companies,
+        "permissions": permissions,
     }
 
 
