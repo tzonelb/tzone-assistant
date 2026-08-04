@@ -30,6 +30,47 @@ def _require_access_admin(current_user: dict, company_id: int) -> None:
     )
 
 
+def _role_is_admin_capable(conn, role_id: int | None) -> bool:
+    """Mirrors the definition _require_access_admin uses for "admin access":
+    the owner role (which auth_service.has_permission always allows), or any
+    role explicitly granted the users.manage permission."""
+    if role_id is None:
+        return False
+    role = conn.execute("SELECT code FROM roles WHERE id = ?", (role_id,)).fetchone()
+    if role and role["code"] == "owner":
+        return True
+    permission = conn.execute("""
+        SELECT 1
+        FROM role_permissions
+        JOIN permissions ON permissions.id = role_permissions.permission_id
+        WHERE role_permissions.role_id = ? AND permissions.code = 'users.manage'
+        LIMIT 1
+    """, (role_id,)).fetchone()
+    return permission is not None
+
+
+def _other_admin_capable_users_remain(conn, company_id: int, excluding_user_id: int) -> bool:
+    row = conn.execute("""
+        SELECT COUNT(DISTINCT company_users.user_id) AS cnt
+        FROM company_users
+        JOIN roles ON roles.id = company_users.role_id
+        WHERE company_users.company_id = ?
+          AND company_users.status = 'active'
+          AND company_users.user_id != ?
+          AND (
+                roles.code = 'owner'
+                OR EXISTS (
+                    SELECT 1
+                    FROM role_permissions
+                    JOIN permissions ON permissions.id = role_permissions.permission_id
+                    WHERE role_permissions.role_id = roles.id
+                      AND permissions.code = 'users.manage'
+                )
+          )
+    """, (company_id, excluding_user_id)).fetchone()
+    return bool(row and row["cnt"] > 0)
+
+
 @router.get("/overview")
 def overview(current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
@@ -196,6 +237,28 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+
+        if user_id == current_user["id"]:
+            current_membership = conn.execute("""
+                SELECT role_id FROM company_users WHERE company_id = ? AND user_id = ?
+            """, (company_id, user_id)).fetchone()
+            current_role_id = current_membership["role_id"] if current_membership else None
+
+            if current_role_id != payload.role_id:
+                losing_admin_access = (
+                    _role_is_admin_capable(conn, current_role_id)
+                    and not _role_is_admin_capable(conn, payload.role_id)
+                )
+                if losing_admin_access and not _other_admin_capable_users_remain(conn, company_id, user_id):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "You cannot change your own role away from an administrator role "
+                            "while you are the only user who can manage users, roles and settings. "
+                            "Promote another user to an admin-capable role first."
+                        ),
+                    )
+
         cursor = conn.execute("""
             UPDATE company_users
             SET role_id = ?, branch_id = ?, status = ?

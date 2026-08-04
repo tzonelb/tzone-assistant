@@ -23,6 +23,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
+  const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadCurrentUser = useCallback(async () => {
@@ -31,6 +32,7 @@ export function AuthProvider({ children }) {
     if (!token) {
       setUser(null);
       setCompanies([]);
+      setPermissions([]);
       setLoading(false);
       return;
     }
@@ -40,6 +42,7 @@ export function AuthProvider({ children }) {
 
       setUser(result?.user || null);
       setCompanies(result?.companies || []);
+      setPermissions(result?.permissions || []);
     } catch (error) {
       if (error.status === 401) {
         clearAccessToken();
@@ -47,6 +50,7 @@ export function AuthProvider({ children }) {
 
       setUser(null);
       setCompanies([]);
+      setPermissions([]);
     } finally {
       setLoading(false);
     }
@@ -69,6 +73,7 @@ export function AuthProvider({ children }) {
 
     setUser(currentUser?.user || result?.user || null);
     setCompanies(currentUser?.companies || []);
+    setPermissions(currentUser?.permissions || []);
 
     return result;
   }, []);
@@ -84,50 +89,40 @@ export function AuthProvider({ children }) {
       clearAccessToken();
       setUser(null);
       setCompanies([]);
+      setPermissions([]);
     }
   }, []);
-
-  const activeCompany = useMemo(() => {
-    if (!companies?.length) return null;
-    const activeCompanyId = user?.active_company_id;
-    return (
-      companies.find((company) => company.id === activeCompanyId)
-      || companies[0]
-    );
-  }, [companies, user]);
 
   const hasPermission = useCallback(
     (code) => {
       if (!user) return false;
       if (user.is_super_admin) return true;
-      if (!activeCompany) return false;
-      if (activeCompany.role_code === "owner") return true;
-      return Boolean(activeCompany.permission_codes?.includes(code));
+      return permissions.includes("*") || permissions.includes(code);
     },
-    [user, activeCompany],
+    [user, permissions],
   );
 
   const value = useMemo(
     () => ({
       user,
       companies,
-      activeCompany,
+      permissions,
       loading,
       authenticated: Boolean(user),
       login,
       logout,
-      refreshUser: loadCurrentUser,
       hasPermission,
+      refreshUser: loadCurrentUser,
     }),
     [
       user,
       companies,
-      activeCompany,
+      permissions,
       loading,
       login,
       logout,
-      loadCurrentUser,
       hasPermission,
+      loadCurrentUser,
     ],
   );
 

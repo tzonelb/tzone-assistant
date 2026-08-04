@@ -28,6 +28,7 @@ class LoginResponse(BaseModel):
 class CurrentUserResponse(BaseModel):
     user: dict
     companies: list[dict]
+    permissions: list[str] = []
 
 
 class LogoutResponse(BaseModel):

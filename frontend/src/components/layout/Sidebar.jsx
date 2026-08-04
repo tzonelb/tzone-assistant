@@ -37,7 +37,7 @@ const navigationItems = [
   ["/team-chat", "Team Chat", EventNoteOutlined],
   ["/settings", "Settings", SettingsOutlined],
   ["/company-settings", "Company Settings", TuneOutlined, "settings.view"],
-  ["/roles", "Roles & Permissions", AdminPanelSettingsOutlined],
+  ["/roles", "Roles & Permissions", AdminPanelSettingsOutlined, "users.manage"],
 ];
 
 export default function Sidebar({ open, collapsed, companyName, onClose, onToggleCollapsed }) {

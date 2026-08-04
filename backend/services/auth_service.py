@@ -561,6 +561,47 @@ class AuthService:
 
             return permission is not None
 
+    def get_permission_codes(
+        self,
+        user_id: int,
+        company_id: int | None,
+        is_super_admin: bool = False,
+    ) -> list[str]:
+        """Full list of permission codes the user holds for the given
+        company. Super admins and the owner role hold every permission
+        (mirrors the bypasses in has_permission), returned as "*"."""
+        if is_super_admin:
+            return ["*"]
+
+        if company_id is None:
+            return []
+
+        with db.connect() as conn:
+            role = conn.execute("""
+                SELECT roles.id, roles.code
+                FROM company_users
+                JOIN roles ON roles.id = company_users.role_id
+                WHERE company_users.user_id = ?
+                  AND company_users.company_id = ?
+                  AND company_users.status = 'active'
+                LIMIT 1
+            """, (user_id, company_id)).fetchone()
+
+            if not role:
+                return []
+
+            if role["code"] == "owner":
+                return ["*"]
+
+            rows = conn.execute("""
+                SELECT permissions.code
+                FROM role_permissions
+                JOIN permissions ON permissions.id = role_permissions.permission_id
+                WHERE role_permissions.role_id = ?
+            """, (role["id"],)).fetchall()
+
+            return [row["code"] for row in rows]
+
     def create_user(
         self,
         email: str,
