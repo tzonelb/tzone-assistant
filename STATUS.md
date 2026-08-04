@@ -6,10 +6,11 @@
 > from a different machine: `git pull origin claude/tzone-release-timeout-fixes-pesy2r`
 > then read this file top to bottom.
 
-**Last updated:** 2026-08-04 (session running as Claude)
+**Last updated:** 2026-08-04
 **Active branch:** `claude/tzone-release-timeout-fixes-pesy2r`
 **Run command:** `uvicorn main:app` (root `main.py` is canonical — `backend/main.py` is legacy/dead, see docs/DECISION_LOG.md D-001)
 **Target launch:** Thursday 2026-08-06
+**Working practice:** multi-agent batches are capped at 4–6 agents at a time (per user instruction).
 
 ---
 
@@ -37,43 +38,43 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 ## ✅ DONE — merged & pushed & verified
 
 ### Original reported bugs (all fixed)
-- Company Settings tabs shown/editable without permission → real per-section permission gating (frontend + backend).
+- Company Settings tabs shown/editable without permission → real per-section permission gating.
 - Dead "Configure" button → real generic per-section settings editor.
 - Channels description said 6 channels, only 4 real → corrected + honest copy.
-- Notification filter silently cleared on background refresh → race fixed in NotificationContext.
+- Notification filter silently cleared on background refresh → race fixed.
 - Customer/conversation detail silent overwrite → optimistic-concurrency (control_version CAS) + 409 handling.
 - Reply "reply_mode" setting saved but never read by engine → engine now honors it.
 
-### Missing features that were built from scratch
-- **Broadcast** — compose, accurate recipient count, resume-safe send (idempotent, double-send-guarded), history + live progress.
-- **Facebook OAuth connect** — real connect/callback flow, Fernet-encrypted per-company Page/IG tokens, inbound message company-routing, frontend Connect button + result banner.
-- **Reply Flow Builder** — step editor with toggle/reorder + a clearly-labeled Escalation condition (Yes→human / No→AI), wired into the engine.
-- **Theme Studio** — working "Heading scale" control applied via CSS variable.
+### Missing features built from scratch
+- **Broadcast** — compose, accurate recipient count, resume-safe send, history + live progress.
+- **Facebook OAuth connect** — real connect/callback flow, encrypted per-company tokens, inbound company-routing.
+- **Reply Flow Builder** — step editor with a labeled Escalation condition, wired into the engine.
+- **Theme Studio** — working "Heading scale" control.
+- **Analytics** — real BI page (KPIs, channel/status/department/AI-vs-human breakdowns, employee activity) over real DB data, `dashboard.view`-gated.
+- **Customers** — real list/search/detail/edit UI wired to the (now RBAC + optimistic-concurrency-protected) customers API.
+- **AI Teaching** — real knowledge/FAQ management UI (bilingual ar/en) wired to the company-scoped knowledge API.
 
-### Security hardening (audit sweep #1 — 26 findings, all fixed)
-- Cross-tenant conversation transcript leak (read + export + list/SSE) → company-ownership gate + closed the auto-vivification bypass.
-- `tickets.py` fully unauthenticated + unscoped → auth + company scoping + RBAC.
-- `knowledge.py` broken (called nonexistent methods) → real company-scoped CRUD.
-- `dashboard.get_subscription` missing permission check → added.
-- `customers.py` no RBAC → permission-gated.
-- `test_whatsapp.py` unauthenticated → auth required.
-- Meta/WhatsApp webhooks had **no signature verification** → HMAC-SHA256 (X-Hub-Signature-256) + rate limiting.
+### Security hardening (2 full audit sweeps' worth of findings, all fixed)
+- Cross-tenant conversation transcript leak (read/export/list/SSE) → ownership gate + closed the auto-vivification bypass.
+- `tickets.py`, `knowledge.py`, `customers.py`, `dashboard.get_subscription`, `test_whatsapp.py` → auth + company scoping + RBAC.
+- Meta/WhatsApp webhooks had **no signature verification** → HMAC-SHA256 + rate limiting.
 - Meta debug/tester/logs routes unauthenticated → auth + super-admin for destructive ops.
-- Admin self-lockout risk (role reassignment) → last-admin protection.
-- `automation_policy` silent kill-switch defeat → file AND db (ops ceiling).
-- Per-company bot brain: `automation_policy` / `knowledge_manager` / `profile_loader` / `business_connectors` now read per-company DB with safe static-file fallback.
-- Schema-creation race that crashed on a fresh DB → fixed.
+- Admin self-lockout risk (role reassignment **and** role-permission editing) → last-admin protection + TOCTOU-safe transaction.
+- `automation_policy` silent kill-switch defeat → file AND db (ops ceiling), not override.
+- Per-company bot brain: `automation_policy` / `knowledge_manager` / `profile_loader` / `business_connectors` now read per-company DB with safe static-file fallback; `company_id` plumbing verified end-to-end through the real pipeline.
+- Facebook OAuth reconnect could silently steal a channel_account (and its conversation history) from another company → fixed.
+- Conversations feature (the actual inbox) never checked `conversations.view/reply` RBAC at all → now enforced, additive on top of existing ownership checks.
+- AppTable had no real pagination (silently showed unpaginated full lists); ConfirmDialog's cancel-guard was bypassable via backdrop/X-button while an action was in-flight → both fixed.
+- Schema-creation race that crashed the app on a fresh DB → fixed.
+
+**Recurring lesson (now standard practice):** several parallel-built fixes landed on worktrees forked from stale/old commits, which caused (a) silent merge duplication that only an AST scan + full test run catches, and (b) whole reimplementations of infra (e.g. AuthContext's permission system) that already existed on the real branch head, requiring careful manual reconciliation, not blind `git merge`. Every merge in this effort is now: resolve conflicts by understanding both sides' intent → `py_compile` + AST dup-arg/kwarg scan → full `pytest` run → frontend lint/vitest/build → only then commit + push.
 
 ---
 
 ## 🔧 IN PROGRESS
 
-- **Round-1 audit fixes (23 findings)** — fix workflow running; not yet merged.
-  Key items: conversations feature never checks `conversations.view/reply`;
-  role-permission-edit self-lockout + TOCTOU race; reply_flow empty-list
-  mishandling; kill-switch scope; business_connectors OR-vs-AND; OAuth
-  cross-tenant page hijack; legacy `admin/` Flask app removal; several
-  frontend component/data-quality fixes.
+- **Round-1 audit fixes, final 3 of 23** — repair batch running (`wf_1cacb7b9-e12`). The other 20 are merged. Remaining: reply_flow/kill-switch follow-up (a missed caller crash), test_whatsapp.py company-scoping retry (prior attempt broke the endpoint), legacy `admin/` Flask app deletion + rate-limiter IP-trust hardening (prior worktree was too stale to reach these files).
+- **Tasks module** — first attempt crashed the whole app shell (built against a stale base without the `hasPermission` infra). Needs a clean retry against current head.
 
 ---
 
@@ -81,16 +82,13 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 
 | Feature | State | Notes |
 |---|---|---|
-| **Analytics (BI report)** | placeholder `ModulePage` | Needs real metrics page from existing DB data (channels/employees/AI/customers). |
+| **Tasks** | build failed once, retry queued | Task/follow-up management — backend + UI. |
 | **Triggers (remaining ~23 types)** | ~7 exist | Build the rest on the existing pattern. |
-| **Calls page** | not built | Needs a calling provider. **Interim decision: Twilio-style provider abstraction** so it can be swapped; confirm provider before wiring real credentials. |
-| **Customers page** | placeholder | Real customer DB UI (backend `customers.py` exists). |
-| **Master Catalogue** | placeholder | Product catalogue UI. |
-| **AI Teaching** | placeholder | Instructions/knowledge management UI. |
-| **Tasks** | placeholder | Task/follow-up management. |
-| **Scheduler** | placeholder | Social post scheduling. |
-| **Appointments** | placeholder | Booking module. |
-| **Team Chat** | placeholder | Internal team messaging. |
+| **Calls page** | not started | Needs a calling provider. **Interim decision: Twilio-style provider abstraction** so it can be swapped; confirm provider before wiring real credentials. |
+| **Master Catalogue** | placeholder `ModulePage` | Product catalogue UI. |
+| **Scheduler** | placeholder `ModulePage` | Social post scheduling. |
+| **Appointments** | placeholder `ModulePage` | Booking module. |
+| **Team Chat** | placeholder `ModulePage` | Internal team messaging. |
 
 ---
 
@@ -100,7 +98,8 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 Any confirmed finding → fix it → counter resets to 0.
 
 **Clean-streak: 0 / 5.**
-- Round 1: NOT clean — 23 real findings (0 false positives). Fixes in progress.
+- Round 1: NOT clean — 23 real findings (0 false positives). 20/23 fixed and merged; final 3 in repair.
+- A fresh, full re-audit is needed once Round-1 fixes + all remaining features are merged (only then does a "clean round" attempt actually count toward the 5).
 
 ---
 
