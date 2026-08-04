@@ -607,3 +607,45 @@ export async function deleteKnowledgeFaqRequest(department, faqId) {
     { method: "DELETE" },
   );
 }
+
+export async function getTasksRequest({
+  status = "all",
+  assigneeUserId = null,
+  search = "",
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({
+    status,
+    assignee_user_id: assigneeUserId,
+    search,
+    limit,
+    offset,
+  });
+  return apiRequest(`/api/tasks${query}`);
+}
+
+export async function getTaskRequest(taskId) {
+  return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`);
+}
+
+export async function createTaskRequest(payload) {
+  return apiRequest("/api/tasks", { method: "POST", body: payload });
+}
+
+export async function updateTaskRequest(taskId, payload) {
+  return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteTaskRequest(taskId) {
+  return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getAssignableTaskUsersRequest() {
+  return apiRequest("/api/tasks/assignable-users");
+}

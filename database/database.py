@@ -654,6 +654,47 @@ class Database:
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                status TEXT NOT NULL DEFAULT 'open',
+                priority TEXT NOT NULL DEFAULT 'normal',
+                assignee_user_id INTEGER,
+                due_date TEXT,
+                related_customer_id INTEGER,
+                created_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(assignee_user_id)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(related_customer_id)
+                    REFERENCES customers(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(created_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_tasks_company_status
+            ON tasks(company_id, status)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_tasks_company_assignee
+            ON tasks(company_id, assignee_user_id)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1017,6 +1058,8 @@ class Database:
             ("settings.manage", "Manage Settings"),
             ("subscriptions.view", "View Subscription"),
             ("subscriptions.manage", "Manage Subscription"),
+            ("tasks.view", "View Tasks"),
+            ("tasks.manage", "Manage Tasks"),
         ]
 
         cursor.executemany("""

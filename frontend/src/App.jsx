@@ -14,6 +14,7 @@ import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AiTeachingPage from "./pages/ai-teaching/AiTeachingPage";
 import ModulePage from "./pages/modules/ModulePage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
+import TasksPage from "./pages/tasks/TasksPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 export default function App() {
@@ -31,7 +32,7 @@ export default function App() {
         <Route path="/customers" element={<CustomersPage />} />
         <Route path="/catalogue" element={<ModulePage title="Master Catalogue" description="One product catalogue synchronized with WhatsApp, websites, accounting systems and future sales channels." />} />
         <Route path="/ai-teaching" element={<AiTeachingPage />} />
-        <Route path="/tasks" element={<ModulePage title="Tasks" description="Tasks, follow-ups, payments, services and internal cases assigned to the team." />} />
+        <Route path="/tasks" element={<TasksPage />} />
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
         <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
