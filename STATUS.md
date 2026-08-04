@@ -58,6 +58,7 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 - **Appointments** — company-scoped booking calendar (new `appointments` table, `/api/appointments` CRUD, `appointments.view`/`appointments.manage` RBAC, optimistic concurrency) with a double-booking guard (rejects overlapping "scheduled" appointments for the same assignee; back-to-back allowed) and a real UI (datetime pickers, assignee + customer selection). 229/229 suite, lint/build clean. Independently verified; one subtle 409-discrimination bug found in review and fixed.
 - **Scheduler** — social post drafting/approval workflow (new `scheduled_posts` table, `/api/scheduler`, `scheduler.view`/`scheduler.manage` RBAC): draft → approve (requires a scheduled time) → mark-published / cancel, illegal transitions rejected, published posts locked. NOTE: no external auto-publish integration exists — "published" is a manual confirmation; wiring a real Facebook/Instagram publish API is a separate future decision. 236/236 suite, lint/build clean.
 - **Team Chat** — company-scoped internal messaging (new `team_chat_rooms`/`team_chat_messages` tables, `/api/team-chat`): auto-seeded undeletable "General" room per company, room create/delete, 4s-polling message pane with cursor pagination, three-tier RBAC (`team_chat.view`/`team_chat.post`/`team_chat.manage`). The last `ModulePage` placeholder is now deleted — every sidebar entry is a real page. 244/244 suite, lint/build clean.
+- **Calls** — company-scoped call log (new `call_logs` table, `/api/calls`, `calls.view`/`calls.manage` RBAC, optimistic concurrency): direction/outcome/duration/notes per call, linked to a customer profile or raw phone number, cross-tenant customer references rejected, new `/calls` route + sidebar entry. NOTE: manual log only — an in-platform dialer needs a telephony provider (e.g. Twilio) + paid account/numbers, a separate future decision. 252/252 suite, lint/build clean.
 
 ### Security hardening (2 full audit sweeps' worth of findings, all fixed)
 - Cross-tenant conversation transcript leak (read/export/list/SSE) → ownership gate + closed the auto-vivification bypass.
@@ -89,12 +90,15 @@ Nothing at the moment — Round-1's 23/23 findings are fixed and merged, and all
 
 ---
 
-## ❌ NOT BUILT YET — remaining features (user requested: build all, ASAP)
+## ❌ NOT BUILT YET — remaining features
 
 | Feature | State | Notes |
 |---|---|---|
-| **Triggers** | blocked on clarification | No feature by this name exists anywhere in this repo (searched backend, frontend, docs). The term came from a report produced by a different session that does not match this codebase (it referenced files like `call_log_service.py` that have never existed here). Asked the user to define what "Triggers (~23/30 types)" means; no answer yet. Do NOT build speculatively. |
-| **Calls page** | in progress | Building the buildable part now: a call-log module (manual record of calls linked to customers) — a real dialer needs a paid provider (e.g. Twilio) decision + credentials, documented as future work. |
+| **Triggers** | blocked on clarification | No feature by this name exists anywhere in this repo (searched backend, frontend, docs). The term came from a report produced by a different session that does not match this codebase. Asked the user to define what "Triggers (~23/30 types)" means; no answer yet. Do NOT build speculatively. |
+| **Calls dialer** | future decision | The call LOG is built (see DONE). Actually placing calls in-platform needs a telephony provider (e.g. Twilio) + paid account/numbers — a business decision with monthly costs. |
+| **Scheduler auto-publish** | future decision | The drafting/approval workflow is built (see DONE). Auto-publishing to Facebook/Instagram needs their publish APIs wired with real credentials. |
+
+**Everything else the user requested is built.** All sidebar entries now lead to real, working, permission-gated, company-scoped pages.
 
 ---
 
