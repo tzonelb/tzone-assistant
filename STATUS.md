@@ -10,7 +10,7 @@
 **Active branch:** `claude/tzone-release-timeout-fixes-pesy2r`
 **Run command:** `uvicorn main:app` (root `main.py` is canonical — `backend/main.py` is legacy/dead, see docs/DECISION_LOG.md D-001)
 **Target launch:** Thursday 2026-08-06
-**Working practice:** multi-agent batches are capped at 4–6 agents at a time (per user instruction).
+**Working practice:** work batches now run strictly one build agent + one verify agent at a time (never more than 2 concurrent agents), per user instruction.
 
 ---
 
@@ -53,6 +53,7 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 - **Analytics** — real BI page (KPIs, channel/status/department/AI-vs-human breakdowns, employee activity) over real DB data, `dashboard.view`-gated.
 - **Customers** — real list/search/detail/edit UI wired to the (now RBAC + optimistic-concurrency-protected) customers API.
 - **AI Teaching** — real knowledge/FAQ management UI (bilingual ar/en) wired to the company-scoped knowledge API.
+- **Tasks** — company-scoped task/follow-up management (backend `tasks` table + `/api/tasks` CRUD + optimistic concurrency, `tasks.view`/`tasks.manage` RBAC) with a real filterable/paginated UI, assignee picker, mark-done, delete. Built as a clean retry from current HEAD after the first attempt's stale-base crash; 13 new tests (207/207 suite total), lint/build clean.
 
 ### Security hardening (2 full audit sweeps' worth of findings, all fixed)
 - Cross-tenant conversation transcript leak (read/export/list/SSE) → ownership gate + closed the auto-vivification bypass.
@@ -73,8 +74,7 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 
 ## 🔧 IN PROGRESS
 
-- **Round-1 audit fixes, final 3 of 23** — repair batch running (`wf_1cacb7b9-e12`). The other 20 are merged. Remaining: reply_flow/kill-switch follow-up (a missed caller crash), test_whatsapp.py company-scoping retry (prior attempt broke the endpoint), legacy `admin/` Flask app deletion + rate-limiter IP-trust hardening (prior worktree was too stale to reach these files).
-- **Tasks module** — first attempt crashed the whole app shell (built against a stale base without the `hasPermission` infra). Needs a clean retry against current head.
+- **Round-1 audit fixes, final 3 of 23** — repair batch relaunched sequentially (1 build agent → 1 verify agent → next cluster, no overlap, per updated agent-concurrency instruction). The other 20 are merged. Remaining: reply_flow/kill-switch follow-up (a missed caller crash), test_whatsapp.py company-scoping retry (prior attempt broke the endpoint), legacy `admin/` Flask app deletion + rate-limiter IP-trust hardening (prior worktree was too stale to reach these files).
 
 ---
 
@@ -82,7 +82,6 @@ Before production: set `FACEBOOK_APP_SECRET` and `TOKEN_ENCRYPTION_KEY` in `.env
 
 | Feature | State | Notes |
 |---|---|---|
-| **Tasks** | build failed once, retry queued | Task/follow-up management — backend + UI. |
 | **Triggers (remaining ~23 types)** | ~7 exist | Build the rest on the existing pattern. |
 | **Calls page** | not started | Needs a calling provider. **Interim decision: Twilio-style provider abstraction** so it can be swapped; confirm provider before wiring real credentials. |
 | **Master Catalogue** | placeholder `ModulePage` | Product catalogue UI. |
