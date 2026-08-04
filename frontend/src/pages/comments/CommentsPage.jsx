@@ -152,37 +152,41 @@ export default function CommentsPage() {
                 className="comment-reply-bar comment-reply-bar-approved"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  setReply("");
                 }}
               >
                 <label className="composer-tool-button" title="Attach file">
                   <AttachFileOutlined />
-                  <input type="file" hidden />
+                  <input type="file" hidden disabled />
                 </label>
                 <label className="composer-tool-button" title="Attach image">
                   <ImageOutlined />
-                  <input type="file" accept="image/*" hidden />
+                  <input type="file" accept="image/*" hidden disabled />
                 </label>
                 <textarea
                   value={reply}
                   onChange={(event) => setReply(event.target.value)}
-                  placeholder="Write a public reply..."
+                  placeholder="Public reply sending isn't connected yet..."
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
-                      event.currentTarget.form?.requestSubmit();
                     }
                   }}
                 />
                 <button
                   type="submit"
                   className="composer-send-circle"
-                  aria-label="Send reply"
-                  disabled={!reply.trim()}
+                  aria-label="Send reply (not yet connected)"
+                  title="Public reply sending isn't connected to a channel yet"
+                  disabled
                 >
                   <SendOutlined />
                 </button>
               </form>
+
+              <p className="comment-composer-note">
+                This is a UI preview only — public comment replies are not
+                yet wired to a live channel, so sending is disabled.
+              </p>
             </>
           ) : (
             <div className="comments-empty">Select a comment</div>

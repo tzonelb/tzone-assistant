@@ -10,7 +10,7 @@ import {
   LockOutlined,
   SearchOutlined,
 } from "@mui/icons-material";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   facebookConnectRequest,
   getCompanySettingSectionRequest,
@@ -34,6 +34,13 @@ const SECTIONS = [
   ["backup", "Backup", "Backup policy, retention and restoration.", ["Automatic backup", "Retention", "Last backup", "Restore point"]],
   ["subscription", "Subscription", "Plan, limits, usage and billing.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
 ];
+
+// Reads the section id from a "/company-settings/{section}" path so links
+// like the Dashboard's "Add channel" button land on the right tab.
+function sectionFromPath(pathname) {
+  const segment = pathname.split("/company-settings/")[1]?.split("/")[0];
+  return SECTIONS.some(([id]) => id === segment) ? segment : null;
+}
 
 // Sections that expose billing, security or credential-adjacent data.
 // Viewing these (not just editing them) requires "settings.manage", not just
@@ -440,11 +447,20 @@ function ReplyFlowEditor({ canManage }) {
 
 export default function CompanySettingsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { hasPermission } = useAuth();
-  const [active, setActive] = useState("profile");
+  const [active, setActive] = useState(() => sectionFromPath(location.pathname) || "profile");
   const [query, setQuery] = useState("");
   const [searchParams, setSearchParams] = useSearchParams();
   const [channelBanner, setChannelBanner] = useState(null);
+
+  // Keep the active tab in sync with the URL (e.g. navigating to
+  // /company-settings/channels from the Dashboard's "Add channel" button)
+  // even when this component is already mounted and doesn't remount.
+  useEffect(() => {
+    const section = sectionFromPath(location.pathname);
+    if (section) setActive(section);
+  }, [location.pathname]);
 
   // Facebook's OAuth callback redirects the raw browser back here with
   // ?connected=facebook&status=ok|error(&reason=...). Read that once on
