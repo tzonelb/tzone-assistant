@@ -49,6 +49,26 @@ class ManualReplyResponse(BaseModel):
     provider_result: dict[str, Any]
 
 
+def _require_conversations_reply(
+    current_user: dict[str, Any],
+    company_id: int,
+) -> None:
+    # Sending a manual reply requires the "conversations.reply" permission
+    # (owner role / super admin bypass handled inside has_permission). This
+    # is additive: the ownership/reply-lease checks below still apply.
+    allowed = auth_service.has_permission(
+        user_id=int(current_user["id"]),
+        company_id=company_id,
+        permission_code="conversations.reply",
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to reply to conversations.",
+        )
+
+
 def _validate_channel(
     channel: str,
 ) -> str:
@@ -185,6 +205,8 @@ def send_manual_conversation_reply(
             current_user
         )
     )
+
+    _require_conversations_reply(current_user, company_id)
 
     conversation = (
         conversation_control_service.get_state(

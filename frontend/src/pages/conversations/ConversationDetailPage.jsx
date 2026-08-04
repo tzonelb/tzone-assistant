@@ -213,6 +213,11 @@ export default function ConversationDetailPage({
   const [employees, setEmployees] = useState([]);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
+  // Whether the signed-in employee holds the "conversations.reply" RBAC code
+  // (owner role / super admin bypass resolved server-side). Reply, manage,
+  // mark-read and take-over controls are all additionally gated on this so
+  // the UI never offers an action the backend will reject with 403.
+  const [canReplyPermission, setCanReplyPermission] = useState(false);
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -297,6 +302,7 @@ export default function ConversationDetailPage({
             : null,
         );
         setCurrentUserIsAdmin(Boolean(controlResult?.current_user_is_admin));
+        setCanReplyPermission(Boolean(controlResult?.can_reply_permission));
         setPermissions(controlResult?.permissions || {});
         setAliasDraft(controlResult?.conversation?.customer_alias || "");
       } catch (requestError) {
@@ -372,10 +378,10 @@ export default function ConversationDetailPage({
       takeover_expires_at: matching.takeover_expires_at || null,
     }));
     setPermissions({
-      can_reply: Boolean(nextIsOwner && !nextAiHandling),
-      can_manage: Boolean(currentUserIsAdmin || nextIsOwner),
-      can_mark_read: Boolean(currentUserIsAdmin || nextIsOwner),
-      can_take_over: Boolean(nextOwnerId == null || nextIsOwner),
+      can_reply: Boolean(canReplyPermission && nextIsOwner && !nextAiHandling),
+      can_manage: Boolean(canReplyPermission && (currentUserIsAdmin || nextIsOwner)),
+      can_mark_read: Boolean(canReplyPermission && (currentUserIsAdmin || nextIsOwner)),
+      can_take_over: Boolean(canReplyPermission && (nextOwnerId == null || nextIsOwner)),
     });
     loadConversation({ silent: true });
   }), [
@@ -385,6 +391,7 @@ export default function ConversationDetailPage({
     loadConversation,
     currentUserId,
     currentUserIsAdmin,
+    canReplyPermission,
   ]);
 
 
@@ -532,8 +539,8 @@ export default function ConversationDetailPage({
       }));
       setPermissions({
         can_reply: false,
-        can_manage: Boolean(currentUserIsAdmin),
-        can_mark_read: Boolean(currentUserIsAdmin),
+        can_manage: Boolean(canReplyPermission && currentUserIsAdmin),
+        can_mark_read: Boolean(canReplyPermission && currentUserIsAdmin),
         can_take_over: false,
       });
       setActionError(`${ownerUserName} owns this conversation. You have read-only access.`);

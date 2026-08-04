@@ -289,6 +289,58 @@ def _is_conversation_admin(
     )
 
 
+def _has_conversations_view(
+    current_user: dict[str, Any],
+    company_id: int,
+) -> bool:
+    # has_permission already grants the "owner" role and super admins
+    # unconditional access, so this covers those bypasses too.
+    return auth_service.has_permission(
+        user_id=int(current_user["id"]),
+        company_id=company_id,
+        permission_code="conversations.view",
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    )
+
+
+def _has_conversations_reply(
+    current_user: dict[str, Any],
+    company_id: int,
+) -> bool:
+    return auth_service.has_permission(
+        user_id=int(current_user["id"]),
+        company_id=company_id,
+        permission_code="conversations.reply",
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    )
+
+
+def _require_conversations_view(
+    current_user: dict[str, Any],
+    company_id: int,
+) -> None:
+    if not _has_conversations_view(current_user, company_id):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to view conversations.",
+        )
+
+
+def _require_conversations_reply(
+    current_user: dict[str, Any],
+    company_id: int,
+) -> None:
+    # Replying/mutating a conversation is additive on top of the existing
+    # ownership + company-scoping rules: the caller must hold the
+    # "conversations.reply" permission (owner role / super admin bypass via
+    # has_permission), AND still satisfy the ownership checks that follow.
+    if not _has_conversations_reply(current_user, company_id):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to reply to conversations.",
+        )
+
+
 def _conversation_owner_detail(
     company_id: int,
     owner_user_id: int | None,
@@ -711,6 +763,8 @@ def list_conversations(
         )
     )
 
+    _require_conversations_view(current_user, company_id)
+
     all_rows = (
         _load_all_conversations(
             company_id
@@ -895,6 +949,8 @@ def conversation_options(
         )
     )
 
+    _require_conversations_view(current_user, company_id)
+
     return {
         "status": "ok",
         "departments": DEPARTMENTS,
@@ -915,6 +971,8 @@ async def live_conversation_events(
     company_id = auth_service.resolve_company_id(
         current_user
     )
+
+    _require_conversations_view(current_user, company_id)
 
     async def event_stream():
         last_signature = ""
@@ -1012,6 +1070,7 @@ def read_conversation(
         )
 
     company_id = auth_service.resolve_company_id(current_user)
+    _require_conversations_view(current_user, company_id)
     conversation_control_service.record_opened(
         company_id=company_id,
         channel=channel,
@@ -1045,6 +1104,8 @@ def read_control(
             current_user
         )
     )
+
+    _require_conversations_view(current_user, company_id)
 
     result = (
         conversation_control_service
@@ -1088,15 +1149,25 @@ def read_control(
         assigned_user_id is not None
         and int(assigned_user_id) == current_user_id
     )
+    can_reply_permission = _has_conversations_reply(current_user, company_id)
     result["current_user_id"] = current_user_id
     result["current_user_is_admin"] = is_admin
+    result["can_reply_permission"] = can_reply_permission
+    # Every mutating/reply control is additionally gated on the
+    # "conversations.reply" permission so the UI never offers an action the
+    # backend will reject with 403. Read-only viewers keep the timeline open
+    # but see no reply/take-over/manage controls.
     result["permissions"] = {
-        "can_reply": bool(is_owner and not conversation.get("handled_by_ai", True)),
-        "can_manage": bool(is_admin or is_owner),
-        "can_mark_read": bool(is_admin or is_owner),
+        "can_reply": bool(
+            can_reply_permission
+            and is_owner
+            and not conversation.get("handled_by_ai", True)
+        ),
+        "can_manage": bool(can_reply_permission and (is_admin or is_owner)),
+        "can_mark_read": bool(can_reply_permission and (is_admin or is_owner)),
         "can_take_over": bool(
-            assigned_user_id is None
-            or is_owner
+            can_reply_permission
+            and (assigned_user_id is None or is_owner)
         ),
     }
 
@@ -1121,6 +1192,8 @@ def take_over(
             current_user
         )
     )
+
+    _require_conversations_reply(current_user, company_id)
 
     try:
         conversation = (
@@ -1165,6 +1238,7 @@ def release_conversation(
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    _require_conversations_reply(current_user, company_id)
     is_admin = _is_conversation_admin(current_user, company_id)
     try:
         conversation = conversation_control_service.release(
@@ -1208,6 +1282,8 @@ def return_to_ai(
             current_user
         )
     )
+
+    _require_conversations_reply(current_user, company_id)
 
     _assert_can_control_conversation(
         current_user=current_user,
@@ -1254,6 +1330,8 @@ def update_control(
             current_user
         )
     )
+
+    _require_conversations_reply(current_user, company_id)
 
     _control_state, _is_admin = _assert_can_control_conversation(
         current_user=current_user,
@@ -1398,6 +1476,8 @@ def add_note(
         )
     )
 
+    _require_conversations_reply(current_user, company_id)
+
     _assert_can_control_conversation(
         current_user=current_user,
         company_id=company_id,
@@ -1465,6 +1545,8 @@ def export_conversation(
             current_user
         )
     )
+
+    _require_conversations_view(current_user, company_id)
 
     messages = get_conversation(
         channel,
