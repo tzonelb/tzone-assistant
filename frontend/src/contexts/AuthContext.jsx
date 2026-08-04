@@ -20,6 +20,18 @@ import {
 const AuthContext = createContext(null);
 
 
+function derivePermissions(user, companies) {
+  if (!user) return [];
+  if (user.is_super_admin) return ["*"];
+
+  const activeCompanyId = user.active_company_id;
+  const activeCompany =
+    (companies || []).find((company) => company.id === activeCompanyId) ||
+    (companies || [])[0];
+
+  return activeCompany?.permission_codes || [];
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -87,22 +99,40 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const permissions = useMemo(
+    () => derivePermissions(user, companies),
+    [user, companies],
+  );
+
+  const hasPermission = useCallback(
+    (code) => {
+      if (!user) return false;
+      if (user.is_super_admin) return true;
+      return permissions.includes("*") || permissions.includes(code);
+    },
+    [user, permissions],
+  );
+
   const value = useMemo(
     () => ({
       user,
       companies,
+      permissions,
       loading,
       authenticated: Boolean(user),
       login,
       logout,
+      hasPermission,
       refreshUser: loadCurrentUser,
     }),
     [
       user,
       companies,
+      permissions,
       loading,
       login,
       logout,
+      hasPermission,
       loadCurrentUser,
     ],
   );

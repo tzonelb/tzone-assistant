@@ -519,3 +519,12 @@ export async function updateCompanySettingSectionRequest(section, values) {
     body: { values },
   });
 }
+
+export async function getAnalyticsRequest(params = {}) {
+  const query = createQueryString({
+    from: params.from,
+    to: params.to,
+  });
+
+  return apiRequest(`/api/analytics${query}`);
+}

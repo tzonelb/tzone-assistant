@@ -8,6 +8,7 @@ import CommentsPage from "./pages/comments/CommentsPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
+import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import ModulePage from "./pages/modules/ModulePage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
@@ -29,7 +30,7 @@ export default function App() {
         <Route path="/tasks" element={<ModulePage title="Tasks" description="Tasks, follow-ups, payments, services and internal cases assigned to the team." />} />
         <Route path="/scheduler" element={<ModulePage title="Scheduler" description="Create, approve and schedule social posts from one place." />} />
         <Route path="/appointments" element={<ModulePage title="Appointments" description="Optional booking module connected to calendars, employees and customer profiles." />} />
-        <Route path="/analytics" element={<ModulePage title="Analytics" description="Channel, employee, AI, customer and business performance." />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<ModulePage title="Team Chat" description="Internal messages, follow-ups, mentions, shared files and instructions without private WhatsApp groups." />} />
         <Route path="/settings" element={<UISettingsPage />} />
         <Route path="/company-settings/*" element={<CompanySettingsPage />} />
