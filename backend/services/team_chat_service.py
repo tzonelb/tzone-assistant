@@ -42,14 +42,23 @@ class TeamChatService:
         if row:
             return
         now = utc_now_iso()
+        # INSERT ... SELECT ... WHERE NOT EXISTS re-checks atomically at
+        # write time: two requests hitting a company's very first listing
+        # concurrently would otherwise both pass the check above and seed
+        # two undeletable "General" rooms (there is no UNIQUE constraint
+        # on (company_id, name) to stop the second insert).
         conn.execute(
             """
             INSERT INTO team_chat_rooms (
                 company_id, name, description, is_default,
                 created_by, created_at, updated_at
-            ) VALUES (?, ?, 'Company-wide chat for the whole team.', 1, NULL, ?, ?)
+            )
+            SELECT ?, ?, 'Company-wide chat for the whole team.', 1, NULL, ?, ?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM team_chat_rooms WHERE company_id = ?
+            )
             """,
-            (company_id, self.DEFAULT_ROOM_NAME, now, now),
+            (company_id, self.DEFAULT_ROOM_NAME, now, now, company_id),
         )
 
     def list_rooms(self, *, company_id: int) -> list[dict[str, Any]]:

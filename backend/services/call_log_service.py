@@ -251,7 +251,8 @@ class CallLogService:
 
         with db.connect() as conn:
             existing = conn.execute(
-                "SELECT id, updated_at FROM call_logs WHERE id = ? AND company_id = ?",
+                "SELECT id, updated_at, customer_id, phone_number "
+                "FROM call_logs WHERE id = ? AND company_id = ?",
                 (call_id, company_id),
             ).fetchone()
             if not existing:
@@ -271,6 +272,24 @@ class CallLogService:
 
             if not cleaned:
                 return self.get_call(company_id=company_id, call_id=call_id)
+
+            # The create-time invariant (a call references a customer OR a
+            # phone number) must survive edits: reject an update that would
+            # leave both empty.
+            resulting_customer_id = (
+                cleaned["customer_id"]
+                if "customer_id" in cleaned
+                else existing["customer_id"]
+            )
+            resulting_phone_number = (
+                cleaned["phone_number"]
+                if "phone_number" in cleaned
+                else existing["phone_number"]
+            )
+            if not resulting_customer_id and not resulting_phone_number:
+                raise CallLogValidationError(
+                    "Either a customer or a phone number is required."
+                )
 
             if "customer_id" in cleaned:
                 self._validate_customer(conn, company_id, cleaned["customer_id"])

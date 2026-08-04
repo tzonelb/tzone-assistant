@@ -235,6 +235,18 @@ class SchedulerService:
                 raise SchedulerValidationError("content cannot be empty")
             if "channel" in cleaned and not cleaned["channel"]:
                 raise SchedulerValidationError("channel cannot be empty")
+            # An approved (scheduled) post must keep a scheduled time --
+            # the same precondition transition_status enforces when
+            # approving. Move it back to draft first to clear the time.
+            if (
+                existing["status"] == "scheduled"
+                and "scheduled_at" in cleaned
+                and not cleaned["scheduled_at"]
+            ):
+                raise SchedulerValidationError(
+                    "A scheduled post must keep a scheduled_at time. "
+                    "Move it back to draft to clear the schedule."
+                )
 
             if not cleaned:
                 return self.get_post(company_id=company_id, post_id=post_id)
