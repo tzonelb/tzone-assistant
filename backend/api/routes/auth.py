@@ -87,11 +87,18 @@ def get_me(
         None,
     )
 
-    permissions = auth_service.get_permission_codes(
-        current_user["id"],
-        auth_service.resolve_company_id(current_user),
-        bool(current_user.get("is_super_admin")),
-    )
+    # Effective permissions for the caller's active company, so the frontend
+    # can gate UI consistently with the backend's route guards. A user with
+    # no active/resolvable company (e.g. removed mid-session) still gets a
+    # valid response with no permissions, instead of /me hard-erroring.
+    try:
+        permissions = auth_service.get_permission_codes(
+            current_user["id"],
+            auth_service.resolve_company_id(current_user),
+            bool(current_user.get("is_super_admin")),
+        )
+    except HTTPException:
+        permissions = ["*"] if current_user.get("is_super_admin") else []
 
     return {
         "user": safe_user,
