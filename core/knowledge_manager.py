@@ -193,9 +193,34 @@ class KnowledgeManager:
             "title_en": row.get("title"),
             "body_ar": row.get("content_ar"),
             "body_en": row.get("content_en"),
+            "department": row.get("department"),
             "category": self._category_name(conn, row.get("category_id")),
             "enabled": row.get("status") == "active",
         }
+
+    def list_all_faqs(self, company_id: int) -> list[dict]:
+        """Every FAQ item for a single company, across all departments.
+
+        The per-department list_faqs() only answers "what is in this one
+        department"; the AI Teaching management UI needs the whole
+        company-scoped set at once so it can group items by department and
+        category. Strictly scoped to the given company_id -- it never returns
+        another tenant's rows."""
+        from database.database import db
+
+        with db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM knowledge_items
+                WHERE company_id = ?
+                  AND item_type = ?
+                ORDER BY department ASC, priority DESC, id ASC
+                """,
+                (company_id, self.FAQ_ITEM_TYPE),
+            ).fetchall()
+
+            return [self._row_to_faq(conn, dict(row)) for row in rows]
 
     def list_faqs(self, company_id: int, service: str) -> list[dict]:
         from database.database import db

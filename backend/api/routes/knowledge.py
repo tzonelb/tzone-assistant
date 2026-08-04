@@ -39,6 +39,20 @@ def _require_knowledge_access(
         )
 
 
+@router.get("/faqs")
+def list_all_faqs(
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    """Every FAQ/knowledge item for the caller's company, across all
+    departments. Powers the AI Teaching management page, which groups the
+    whole company-scoped set by department and category. Scoped to the
+    caller's resolved company_id -- never another tenant's rows."""
+    company_id = auth_service.resolve_company_id(current_user)
+    _require_knowledge_access(current_user, company_id, "knowledge.view")
+
+    return knowledge_manager.list_all_faqs(company_id)
+
+
 @router.get("/{service}/faqs")
 def list_faqs(
     service: str,
