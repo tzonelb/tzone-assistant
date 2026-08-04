@@ -262,8 +262,15 @@ export default function AppLayout() {
       ],
     );
 
+  const activeCompany =
+    companies?.find(
+      (company) =>
+        company.id === user?.active_company_id,
+    )
+    || companies?.[0];
+
   const companyName =
-    companies?.[0]?.name
+    activeCompany?.name
     || "T-ZONE";
 
   const toggleSidebarCollapsed =
