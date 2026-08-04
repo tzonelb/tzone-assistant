@@ -11,6 +11,7 @@ import CatalogueMasterPage from "./pages/catalogue/CatalogueMasterPage";
 import AppointmentsPage from "./pages/appointments/AppointmentsPage";
 import SchedulerPage from "./pages/scheduler/SchedulerPage";
 import TeamChatPage from "./pages/team-chat/TeamChatPage";
+import CallsPage from "./pages/calls/CallsPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/scheduler" element={<SchedulerPage />} />
         <Route path="/appointments" element={<AppointmentsPage />} />
+        <Route path="/calls" element={<CallsPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/team-chat" element={<TeamChatPage />} />
         <Route path="/settings" element={<UISettingsPage />} />

@@ -827,6 +827,38 @@ class Database:
             ON team_chat_messages(company_id, room_id, id)
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS call_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER NOT NULL,
+                customer_id INTEGER,
+                phone_number TEXT,
+                direction TEXT NOT NULL DEFAULT 'outbound',
+                outcome TEXT NOT NULL DEFAULT 'answered',
+                duration_seconds INTEGER,
+                notes TEXT,
+                called_at TEXT NOT NULL,
+                logged_by INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(company_id)
+                    REFERENCES companies(id)
+                    ON DELETE CASCADE,
+                FOREIGN KEY(customer_id)
+                    REFERENCES customers(id)
+                    ON DELETE SET NULL,
+                FOREIGN KEY(logged_by)
+                    REFERENCES users(id)
+                    ON DELETE SET NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS
+            idx_call_logs_company_called_at
+            ON call_logs(company_id, called_at)
+        """)
+
     def _migrate_legacy_tables(self, cursor):
         self._ensure_column(
             cursor,
@@ -1201,6 +1233,8 @@ class Database:
             ("team_chat.view", "View Team Chat"),
             ("team_chat.post", "Post in Team Chat"),
             ("team_chat.manage", "Manage Team Chat Rooms"),
+            ("calls.view", "View Calls"),
+            ("calls.manage", "Manage Calls"),
         ]
 
         cursor.executemany("""

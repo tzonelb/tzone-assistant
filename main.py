@@ -10,6 +10,7 @@ from backend.api.routes import (
     appointments,
     auth,
     broadcasts,
+    calls,
     catalogue,
     channel_oauth,
     conversations,
@@ -139,6 +140,7 @@ app.include_router(catalogue.router)
 app.include_router(appointments.router)
 app.include_router(scheduler.router)
 app.include_router(team_chat.router)
+app.include_router(calls.router)
 
 app.include_router(
     whatsapp_webhook.router

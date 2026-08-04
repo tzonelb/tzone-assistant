@@ -1,0 +1,184 @@
+.calls-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+
+.calls-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.calls-toolbar .tz-search {
+  flex: 1 1 240px;
+}
+
+.calls-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.calls-filter > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tz-text-muted);
+}
+
+.calls-filter select {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font: inherit;
+}
+
+.calls-inline-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface-secondary, var(--tz-surface));
+  color: var(--tz-text-muted);
+  font-size: 0.83rem;
+}
+
+.calls-customer-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.calls-customer-cell strong {
+  color: var(--tz-text-primary);
+}
+
+.calls-customer-cell span {
+  font-size: 0.78rem;
+  color: var(--tz-text-muted);
+}
+
+.calls-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--tz-text-primary);
+  font-size: 0.85rem;
+}
+
+.calls-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.calls-mobile-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Editor dialog */
+.calls-dialog {
+  width: min(640px, 100%);
+  max-height: 88dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.calls-dialog .tz-dialog-body {
+  overflow-y: auto;
+}
+
+.calls-dialog h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.calls-form {
+  display: grid;
+  gap: 16px;
+}
+
+.calls-field {
+  display: grid;
+  gap: 6px;
+}
+
+.calls-field > span {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--tz-text-primary);
+}
+
+.calls-field input,
+.calls-field select,
+.calls-field textarea {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font: inherit;
+}
+
+.calls-field textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.calls-field input:focus,
+.calls-field select:focus,
+.calls-field textarea:focus {
+  outline: none;
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 3px var(--tz-primary-soft);
+}
+
+.calls-field input:disabled,
+.calls-field select:disabled,
+.calls-field textarea:disabled {
+  background: var(--tz-surface-secondary, var(--tz-surface));
+  cursor: not-allowed;
+}
+
+.calls-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.calls-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.calls-form-error {
+  padding: 10px 12px;
+  border-radius: var(--tz-radius-md, 10px);
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .calls-grid-3,
+  .calls-grid-2 {
+    grid-template-columns: 1fr;
+  }
+}

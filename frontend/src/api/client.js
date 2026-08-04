@@ -796,3 +796,43 @@ export async function postTeamChatMessageRequest(roomId, payload) {
     body: payload,
   });
 }
+
+export async function getCallsRequest({
+  direction = "all",
+  outcome = "all",
+  customerId = null,
+  search = "",
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({
+    direction,
+    outcome,
+    customer_id: customerId,
+    search,
+    limit,
+    offset,
+  });
+  return apiRequest(`/api/calls${query}`);
+}
+
+export async function getCallRequest(callId) {
+  return apiRequest(`/api/calls/${encodeURIComponent(callId)}`);
+}
+
+export async function createCallRequest(payload) {
+  return apiRequest("/api/calls", { method: "POST", body: payload });
+}
+
+export async function updateCallRequest(callId, payload) {
+  return apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+    method: "PUT",
+    body: payload,
+  });
+}
+
+export async function deleteCallRequest(callId) {
+  return apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+    method: "DELETE",
+  });
+}
