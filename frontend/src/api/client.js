@@ -369,6 +369,27 @@ export async function deleteCallLogRequest(callId) {
   return apiRequest(`/api/calls/${callId}`, { method: "DELETE" });
 }
 
+export async function dialerStatusRequest() {
+  return apiRequest("/api/dialer/status");
+}
+
+export async function listDialerCallsRequest({ activeOnly = false, limit = 50, offset = 0 } = {}) {
+  const query = createQueryString({ active_only: activeOnly, limit, offset });
+  return apiRequest(`/api/dialer/calls${query}`);
+}
+
+export async function placeDialerCallRequest(payload) {
+  return apiRequest("/api/dialer/calls", { method: "POST", body: payload });
+}
+
+export async function transferDialerCallRequest(callId, payload) {
+  return apiRequest(`/api/dialer/calls/${callId}/transfer`, { method: "POST", body: payload });
+}
+
+export async function hangupDialerCallRequest(callId) {
+  return apiRequest(`/api/dialer/calls/${callId}/hangup`, { method: "POST" });
+}
+
 export async function teamChatOptionsRequest() {
   return apiRequest("/api/team-chat/options");
 }

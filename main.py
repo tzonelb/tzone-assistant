@@ -15,6 +15,7 @@ from backend.api.routes import (
     auth,
     broadcasts,
     calls,
+    dialer,
     catalogue,
     channel_connections,
     conversations,
@@ -55,6 +56,7 @@ from backend.services.broadcast_service import broadcast_service
 from backend.services.media_upload_service import media_upload_service, UPLOAD_ROOT
 from backend.services.scheduled_post_service import scheduled_post_service
 from backend.services.call_log_service import call_log_service
+from backend.services.telephony_service import telephony_service
 from backend.services.catalogue_service import catalogue_service
 from backend.services.team_chat_service import team_chat_service
 from backend.services.team_chat_rooms_service import team_chat_rooms_service
@@ -223,6 +225,7 @@ async def lifespan(app: FastAPI):
     task_service.ensure_schema()
     catalogue_service.ensure_schema()
     call_log_service.ensure_schema()
+    telephony_service.ensure_schema()
     team_chat_service.ensure_schema()
     team_chat_rooms_service.ensure_schema()
     activity_log_service.ensure_schema()
@@ -405,6 +408,7 @@ app.include_router(security_verification.router)
 app.include_router(tasks.router)
 app.include_router(catalogue.router)
 app.include_router(calls.router)
+app.include_router(dialer.router)
 app.include_router(team_chat.router)
 app.include_router(activity_log.router)
 app.include_router(appointments.router)

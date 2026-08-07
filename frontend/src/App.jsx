@@ -17,6 +17,7 @@ import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import CataloguePage from "./pages/catalogue/CataloguePage";
 import CallsPage from "./pages/calls/CallsPage";
+import DialerPage from "./pages/dialer/DialerPage";
 import TeamChatPage from "./pages/team-chat/TeamChatPage";
 import TeamChatPageV2 from "./pages/team-chat/TeamChatPageV2";
 import AppointmentsPage from "./pages/appointments/AppointmentsPage";
@@ -88,6 +89,7 @@ export default function App() {
         <Route path="/broadcast/:broadcastId" element={<BroadcastDetailRoute />} />
         <Route path="/catalogue" element={<CataloguePage />} />
         <Route path="/calls" element={<CallsPage />} />
+        <Route path="/dialer" element={<DialerPage />} />
         <Route path="/tasks" element={<TasksRoute />} />
         <Route path="/saved-replies" element={<SavedRepliesPage />} />
         <Route path="/reply-flows/:id" element={<ReplyFlowBuilderPage />} />
