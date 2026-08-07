@@ -103,6 +103,17 @@ class Engine:
     def handle(self, request):
         try:
             db.create_tables()
+
+            # Ops-level kill switch (config/automation_policy.json's
+            # per-channel bot_enabled). Previously is_bot_enabled() was
+            # defined but never consulted anywhere — only the AI branch
+            # was gated (via should_auto_reply_with_ai), so a channel
+            # "disabled" at the ops level kept auto-replying through the
+            # scripted flow/menu state machine. Must stop BOTH branches.
+            # Callers treat a None response as "stay silent".
+            if not automation_policy.is_bot_enabled(request.channel):
+                return None
+
             user_session = session.create(request.user_id)
 
             if self.is_reset_message(request.message):

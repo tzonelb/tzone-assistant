@@ -150,6 +150,54 @@ def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_cur
     return {"success": True, "role_id": role_id}
 
 
+def _admin_capable_user_exists(
+    conn,
+    company_id: int,
+    *,
+    exclude_user_id: int | None = None,
+    treat_role_as_non_admin: int | None = None,
+) -> bool:
+    """SECURITY: last-admin lockout guard. True if at least one ACTIVE
+    company member (optionally excluding one user, or treating one role
+    as if it had lost its admin power) would still be able to manage
+    users — via the owner role, or a role carrying users.manage. Without
+    this, an admin could demote the last admin (or strip users.manage
+    from the last admin-carrying role) and permanently lock the company
+    out of its own user management."""
+    rows = conn.execute(
+        """
+        SELECT cu.user_id, cu.role_id, r.code AS role_code
+        FROM company_users cu
+        JOIN roles r ON r.id = cu.role_id
+        WHERE cu.company_id = ? AND cu.status = 'active'
+        """,
+        (company_id,),
+    ).fetchall()
+
+    for row in rows:
+        if exclude_user_id is not None and row["user_id"] == exclude_user_id:
+            continue
+        if row["role_code"] == "owner":
+            return True
+        if (
+            treat_role_as_non_admin is not None
+            and row["role_id"] == treat_role_as_non_admin
+        ):
+            continue
+        has_manage = conn.execute(
+            """
+            SELECT 1 FROM role_permissions rp
+            JOIN permissions p ON p.id = rp.permission_id
+            WHERE rp.role_id = ? AND p.code = 'users.manage'
+            LIMIT 1
+            """,
+            (row["role_id"],),
+        ).fetchone()
+        if has_manage:
+            return True
+    return False
+
+
 def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> None:
     conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
     codes = sorted(set(permission_codes))
@@ -175,6 +223,23 @@ def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = D
             raise HTTPException(status_code=404, detail="Role not found.")
         if role["code"] == "owner" and payload.permission_codes is not None:
             raise HTTPException(status_code=400, detail="The Owner role always has full access.")
+        # Last-admin guard: stripping users.manage from this role must not
+        # leave the company with no active member able to manage users.
+        if (
+            payload.permission_codes is not None
+            and "users.manage" not in payload.permission_codes
+            and not _admin_capable_user_exists(
+                conn, company_id, treat_role_as_non_admin=role_id
+            )
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "This change would leave the company with no "
+                    "administrator able to manage users. Grant another "
+                    "role users.manage (or keep it here) first."
+                ),
+            )
         conn.execute("""
             UPDATE roles
             SET name = COALESCE(?, name), description = COALESCE(?, description)
@@ -254,6 +319,40 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        # Last-admin guard: demoting/deactivating this user must not leave
+        # the company with no active member able to manage users. The
+        # check excludes the user being changed, then verifies someone
+        # ELSE still holds admin capability (owner role or users.manage).
+        if not _admin_capable_user_exists(conn, company_id, exclude_user_id=user_id):
+            new_role_is_admin = False
+            if payload.status == "active":
+                new_role_code = conn.execute(
+                    "SELECT code FROM roles WHERE id = ?", (payload.role_id,)
+                ).fetchone()
+                if new_role_code and new_role_code["code"] == "owner":
+                    new_role_is_admin = True
+                else:
+                    new_role_is_admin = (
+                        conn.execute(
+                            """
+                            SELECT 1 FROM role_permissions rp
+                            JOIN permissions p ON p.id = rp.permission_id
+                            WHERE rp.role_id = ? AND p.code = 'users.manage'
+                            LIMIT 1
+                            """,
+                            (payload.role_id,),
+                        ).fetchone()
+                        is not None
+                    )
+            if not new_role_is_admin:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "This change would leave the company with no "
+                        "administrator able to manage users. Promote "
+                        "another member first."
+                    ),
+                )
         cursor = conn.execute("""
             UPDATE company_users
             SET role_id = ?, branch_id = ?, status = ?, departments_json = ?

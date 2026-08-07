@@ -52,6 +52,32 @@ class ChannelAccountService:
                 f"Contact your platform administrator to upgrade."
             )
 
+    @staticmethod
+    def _assert_not_owned_by_another_company(
+        conn, *, company_id: int, channel: str, column: str, value: str
+    ) -> None:
+        """SECURITY: a page/phone/IG/bot identity may only be connected to
+        ONE company. Without this check, any company could 'connect' an
+        identity that already belongs to another tenant — and because
+        inbound webhook routing resolves the owning company by this very
+        identity (resolve_meta_account), that would silently reroute or
+        split the other company's customer messages. Cross-tenant
+        takeover, not a convenience issue. Checks the identity globally
+        (any status except disabled) rather than within the caller's own
+        company like the duplicate checks below."""
+        row = conn.execute(
+            f"SELECT company_id FROM channel_accounts "
+            f"WHERE channel = ? AND {column} = ? AND status != 'disabled' "
+            f"LIMIT 1",
+            (channel, value),
+        ).fetchone()
+        if row and int(row["company_id"]) != int(company_id):
+            raise ChannelAccountError(
+                "This account is already connected to another company on "
+                "this platform. If you believe this is a mistake, contact "
+                "your platform administrator."
+            )
+
     def connect_telegram(self, *, company_id: int, bot_token: str, name: str | None = None) -> dict[str, Any]:
         bot_token = (bot_token or "").strip()
         if not bot_token:
@@ -78,6 +104,10 @@ class ChannelAccountService:
         self._assert_within_channel_limit(company_id=company_id)
 
         with db.connect() as conn:
+            self._assert_not_owned_by_another_company(
+                conn, company_id=company_id, channel="telegram",
+                column="external_account_id", value=external_account_id,
+            )
             existing = conn.execute(
                 "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'telegram' "
                 "AND external_account_id = ?",
@@ -163,6 +193,10 @@ class ChannelAccountService:
         self._assert_within_channel_limit(company_id=company_id)
 
         with db.connect() as conn:
+            self._assert_not_owned_by_another_company(
+                conn, company_id=company_id, channel="whatsapp",
+                column="phone_number_id", value=phone_number_id,
+            )
             existing = conn.execute(
                 "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'whatsapp' AND phone_number_id = ?",
                 (company_id, phone_number_id),
@@ -208,6 +242,10 @@ class ChannelAccountService:
         self._assert_within_channel_limit(company_id=company_id)
 
         with db.connect() as conn:
+            self._assert_not_owned_by_another_company(
+                conn, company_id=company_id, channel="messenger",
+                column="page_id", value=page_id,
+            )
             existing = conn.execute(
                 "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'messenger' AND page_id = ?",
                 (company_id, page_id),
@@ -259,6 +297,10 @@ class ChannelAccountService:
         self._assert_within_channel_limit(company_id=company_id)
 
         with db.connect() as conn:
+            self._assert_not_owned_by_another_company(
+                conn, company_id=company_id, channel="instagram",
+                column="instagram_business_id", value=instagram_business_id,
+            )
             existing = conn.execute(
                 "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'instagram' AND instagram_business_id = ?",
                 (company_id, instagram_business_id),

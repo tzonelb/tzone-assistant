@@ -238,6 +238,20 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
             company_id=company_id,
         )
 
+        # engine.handle() returns None when the channel is disabled via
+        # the ops-level automation_policy kill switch — stay silent
+        # rather than crash on response.text below.
+        if response is None:
+            diagnostics_service.record(
+                event_type="ai_reply_cancelled_after_generation",
+                company_id=company_id,
+                channel=channel,
+                external_user_id=user_id,
+                status="cancelled",
+                data={"reason": "channel_disabled", "message_count": len(messages)},
+            )
+            return
+
         # A human may take over while the model is generating. Do not send an AI
         # reply in that case; retain the conversation under human control.
         if not conversation_control_service.is_ai_handling(
