@@ -1,12 +1,48 @@
 from fastapi import APIRouter, Request, HTTPException
 import json
+import logging
 
+from channels.common.rate_limiter import get_client_ip, meta_webhook_rate_limiter
 from channels.meta.processor import process_meta_payload
 from channels.meta.logger import log_meta_event
+from channels.meta.verifier import verify_meta_signature
 from config.settings import config
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webhook", tags=["Meta Webhook"])
+
+
+def enforce_webhook_security(body: bytes, signature_header: str | None, source: str) -> None:
+    """Shared Meta/WhatsApp webhook POST gate: HMAC signature first,
+    with a dev-only escape hatch.
+
+    - META_APP_SECRET configured -> the X-Hub-Signature-256 header MUST
+      verify against the raw body (403 otherwise).
+    - No secret + development/DEBUG -> allowed, with a loud warning so
+      it can never silently ship like this.
+    - No secret + production -> rejected outright.
+    """
+    if config.META_APP_SECRET:
+        if not verify_meta_signature(body, signature_header, config.META_APP_SECRET):
+            log_meta_event(
+                "signature_invalid",
+                {"source": source, "reason": "hmac_mismatch_or_missing_header"},
+            )
+            raise HTTPException(status_code=403, detail="Invalid signature")
+    elif config.DEBUG or config.APP_ENV == "development":
+        logger.warning(
+            "META_APP_SECRET is not configured -- accepting %s webhook POST "
+            "WITHOUT signature verification because this is a development "
+            "environment. This must never happen in production.",
+            source,
+        )
+    else:
+        log_meta_event(
+            "signature_rejected",
+            {"source": source, "reason": "app_secret_not_configured"},
+        )
+        raise HTTPException(status_code=403, detail="Webhook not configured")
 
 
 @router.get("/meta")
@@ -26,7 +62,16 @@ async def verify_meta_webhook(request: Request):
 
 @router.post("/meta")
 async def receive_meta_webhook(request: Request):
+    # Defense-in-depth rate limit on the real socket peer; the primary
+    # defense is the HMAC signature check right after.
+    if not meta_webhook_rate_limiter.allow(get_client_ip(request)):
+        log_meta_event("rate_limited", {"ip": get_client_ip(request)})
+        raise HTTPException(status_code=429, detail="Too many requests")
+
     body = await request.body()
+    enforce_webhook_security(
+        body, request.headers.get("x-hub-signature-256"), "meta"
+    )
 
     if not body:
         log_meta_event("empty_post", {"reason": "empty_body"})

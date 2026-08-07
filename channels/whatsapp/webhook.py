@@ -1,3 +1,4 @@
+import json
 import logging
 
 from fastapi import APIRouter, Request, HTTPException, Query
@@ -92,7 +93,28 @@ def verify_webhook(
 
 @router.post("/")
 async def receive_message(request: Request):
-    data = await request.json()
+    from channels.common.rate_limiter import (
+        get_client_ip,
+        whatsapp_webhook_rate_limiter,
+    )
+    from channels.meta.webhook import enforce_webhook_security
+
+    # Defense-in-depth rate limit on the real socket peer; the primary
+    # defense is the HMAC signature check right after (WhatsApp Cloud API
+    # signs with the same Meta app secret / X-Hub-Signature-256 scheme).
+    if not whatsapp_webhook_rate_limiter.allow(get_client_ip(request)):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    body = await request.body()
+    enforce_webhook_security(
+        body, request.headers.get("x-hub-signature-256"), "whatsapp"
+    )
+
+    try:
+        data = json.loads(body) if body else {}
+    except json.JSONDecodeError:
+        return {"status": "ignored", "reason": "invalid_json"}
+
     print("WHATSAPP POST RECEIVED")
     print(data)
 
