@@ -30,11 +30,108 @@ class Database:
         with self.connect() as conn:
             cursor = conn.cursor()
 
+            self._heal_module_table_shapes(cursor)
             self._create_platform_tables(cursor)
             self._migrate_legacy_tables(cursor)
             self._seed_platform_defaults(cursor)
 
             conn.commit()
+
+    # Module tables (owned by backend/services/*_service.ensure_schema)
+    # and the columns this branch's code requires of each. A dev database
+    # that ran a DIFFERENT development branch may hold an incompatible
+    # shape of any of them (seen on a real dev machine 2026-08-04, where
+    # a parallel branch's boot renamed this branch's tables aside to
+    # {table}_legacy_backup and created its own shapes in their place).
+    # Table/column names here are hardcoded constants, never user input.
+    _MODULE_TABLE_REQUIRED_COLUMNS = {
+        "tasks": (
+            "company_id", "title", "status", "priority",
+            "assigned_user_id", "due_at", "created_by_user_id",
+        ),
+        "appointments": (
+            "company_id", "title", "customer_id",
+            "employee_user_id", "scheduled_at",
+        ),
+        "scheduled_posts": (
+            "company_id", "media_urls_json", "channel_account_ids_json",
+        ),
+        "team_chat_rooms": ("company_id", "kind", "created_by_user_id"),
+        "team_messages": ("company_id", "sender_user_id", "text"),
+        "call_logs": (
+            "company_id", "direction", "duration_seconds",
+            "status", "called_by_user_id",
+        ),
+        "broadcasts": ("company_id", "name", "message_text", "channel"),
+        "broadcast_recipients": (
+            "broadcast_id", "channel", "external_user_id", "send_status",
+        ),
+    }
+
+    @staticmethod
+    def _table_exists(cursor, table_name: str) -> bool:
+        return (
+            cursor.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+                (table_name,),
+            ).fetchone()
+            is not None
+        )
+
+    @staticmethod
+    def _table_columns(cursor, table_name: str) -> set:
+        return {
+            row[1] for row in cursor.execute(f"PRAGMA table_info({table_name})")
+        }
+
+    @classmethod
+    def _free_table_name(cls, cursor, base: str) -> str:
+        if not cls._table_exists(cursor, base):
+            return base
+        suffix = 2
+        while cls._table_exists(cursor, f"{base}_{suffix}"):
+            suffix += 1
+        return f"{base}_{suffix}"
+
+    def _heal_module_table_shapes(self, cursor):
+        """Self-heal module tables whose on-disk shape doesn't match this
+        branch's code, without ever dropping data:
+
+        1. A live table missing required columns (created by another
+           branch) is renamed aside to a fresh
+           {table}_wrongshape_backup[_N] -- existing backups are never
+           overwritten or dropped.
+        2. If the live table is then absent but a {table}_legacy_backup
+           with the CORRECT shape exists (i.e. this branch's original
+           table, renamed aside by the other branch's own heal), it is
+           restored -- bringing the original rows straight back.
+
+        After this runs, each service's CREATE TABLE IF NOT EXISTS
+        either finds the restored real table or creates a fresh one."""
+        for table_name, required in self._MODULE_TABLE_REQUIRED_COLUMNS.items():
+            required_set = set(required)
+
+            if self._table_exists(cursor, table_name):
+                if required_set.issubset(self._table_columns(cursor, table_name)):
+                    continue
+                backup_name = self._free_table_name(
+                    cursor, f"{table_name}_wrongshape_backup"
+                )
+                cursor.execute(
+                    f"ALTER TABLE {table_name} RENAME TO {backup_name}"
+                )
+
+            legacy_backup = f"{table_name}_legacy_backup"
+            if (
+                not self._table_exists(cursor, table_name)
+                and self._table_exists(cursor, legacy_backup)
+                and required_set.issubset(
+                    self._table_columns(cursor, legacy_backup)
+                )
+            ):
+                cursor.execute(
+                    f"ALTER TABLE {legacy_backup} RENAME TO {table_name}"
+                )
 
     def _create_platform_tables(self, cursor):
         cursor.execute("""
