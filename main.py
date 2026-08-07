@@ -121,8 +121,11 @@ async def reminder_worker() -> None:
             # Time-based appointment_reminder Reply Flow flows piggyback on
             # this exact same 30s cadence rather than a second worker loop —
             # see reply_flow_engine.check_appointment_reminders for the scan/
-            # claim/fire logic.
+            # claim/fire logic. The two no-reply triggers (customer went
+            # silent / team hasn't replied) share the same cadence and the
+            # same claim-then-act discipline.
             reply_flow_engine.check_appointment_reminders()
+            reply_flow_engine.check_no_reply_triggers()
 
             fired = conversation_control_service.check_due_reminders()
             for reminder in fired:

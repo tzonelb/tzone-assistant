@@ -107,6 +107,24 @@ class ReplyFlowEngine:
                 )
                 """
             )
+            # Claim markers for the two time-based no-reply triggers (same
+            # claim-then-act discipline as appointments.flow_reminder_sent_at):
+            # each stores the conversation-activity value it last fired for,
+            # so one silence/waiting period fires at most once and fresh
+            # activity re-arms the trigger naturally.
+            existing = {
+                row[1] for row in conn.execute("PRAGMA table_info(conversations)")
+            }
+            if "customer_no_reply_fired_for" not in existing:
+                conn.execute(
+                    "ALTER TABLE conversations "
+                    "ADD COLUMN customer_no_reply_fired_for TEXT"
+                )
+            if "team_no_reply_fired_for" not in existing:
+                conn.execute(
+                    "ALTER TABLE conversations "
+                    "ADD COLUMN team_no_reply_fired_for TEXT"
+                )
             conn.commit()
 
     # -- flow selection -----------------------------------------------
@@ -304,6 +322,134 @@ class ReplyFlowEngine:
 
             for customer_id in claimed_customer_ids:
                 self.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type="appointment_reminder")
+
+    def check_no_reply_triggers(self) -> None:
+        """Called periodically by main.py's reminder_worker() loop, right
+        alongside check_appointment_reminders() — same cadence, same
+        fire-and-forget contract. Two time-based conversation triggers:
+
+        - customer_no_reply: the ball is in the customer's court
+          (unread_count = 0 — nothing pending from them) and the
+          conversation has had no activity for trigger_config.
+          minutes_of_silence minutes. Claim marker stores the updated_at
+          value fired for, so one silence period fires once and any new
+          activity (which changes updated_at) re-arms it.
+        - team_no_reply: the customer is waiting on a human
+          (workflow_state = 'waiting_agent') and their last message is
+          trigger_config.minutes_waiting minutes old. Claim marker
+          stores the last_message_at fired for.
+
+        Claim-then-act (UPDATE ... WHERE marker IS NULL OR marker != ?)
+        exactly like check_appointment_reminders' flow_reminder_sent_at,
+        so a slow send can never double-fire."""
+        self._scan_no_reply_trigger(
+            trigger_type="customer_no_reply",
+            config_key="minutes_of_silence",
+            default_minutes=60,
+            marker_column="customer_no_reply_fired_for",
+            activity_column="updated_at",
+            extra_where="COALESCE(unread_count, 0) = 0",
+        )
+        self._scan_no_reply_trigger(
+            trigger_type="team_no_reply",
+            config_key="minutes_waiting",
+            default_minutes=30,
+            marker_column="team_no_reply_fired_for",
+            activity_column="last_message_at",
+            extra_where="workflow_state = 'waiting_agent'",
+        )
+
+    def _scan_no_reply_trigger(
+        self,
+        *,
+        trigger_type: str,
+        config_key: str,
+        default_minutes: int,
+        marker_column: str,
+        activity_column: str,
+        extra_where: str,
+    ) -> None:
+        try:
+            with db.connect() as conn:
+                flow_rows = conn.execute(
+                    "SELECT company_id, trigger_config FROM reply_flows "
+                    "WHERE status = 'active' AND trigger_type = ?",
+                    (trigger_type,),
+                ).fetchall()
+        except Exception:
+            logger.exception("%s flow scan failed", trigger_type)
+            return
+
+        now = datetime.now(timezone.utc)
+        for flow_row in flow_rows:
+            company_id = flow_row["company_id"]
+            try:
+                trigger_config = json.loads(flow_row["trigger_config"] or "{}")
+                minutes = int(trigger_config.get(config_key) or default_minutes)
+            except (TypeError, ValueError):
+                minutes = default_minutes
+            minutes = max(1, minutes)
+
+            cutoff = (now - timedelta(minutes=minutes)).isoformat()
+            # Safety bound mirroring check_appointment_reminders': never
+            # resurrect a "no reply" nudge for a conversation dead for
+            # over a week (e.g. the worker was down for days).
+            floor = (now - timedelta(days=7)).isoformat()
+
+            try:
+                claimed: list[dict] = []
+                with db.connect() as conn:
+                    candidates = conn.execute(
+                        f"""
+                        SELECT id, channel, external_user_id, department,
+                               {activity_column} AS activity_marker
+                        FROM conversations
+                        WHERE company_id = ?
+                          AND status NOT IN ('closed', 'archived')
+                          AND {extra_where}
+                          AND {activity_column} IS NOT NULL
+                          AND {activity_column} <= ?
+                          AND {activity_column} >= ?
+                          AND (
+                              {marker_column} IS NULL
+                              OR {marker_column} != {activity_column}
+                          )
+                        LIMIT 200
+                        """,
+                        (company_id, cutoff, floor),
+                    ).fetchall()
+                    for row in candidates:
+                        cursor = conn.execute(
+                            f"""
+                            UPDATE conversations SET {marker_column} = ?
+                            WHERE id = ? AND (
+                                {marker_column} IS NULL
+                                OR {marker_column} != ?
+                            )
+                            """,
+                            (
+                                row["activity_marker"],
+                                row["id"],
+                                row["activity_marker"],
+                            ),
+                        )
+                        if cursor.rowcount:
+                            claimed.append(dict(row))
+                    conn.commit()
+            except Exception:
+                logger.exception(
+                    "%s claim failed for company %s", trigger_type, company_id
+                )
+                continue
+
+            for row in claimed:
+                self.fire_event(
+                    company_id=company_id,
+                    trigger_type=trigger_type,
+                    channel=row["channel"],
+                    external_user_id=row["external_user_id"],
+                    department=row["department"],
+                )
 
     # -- graph helpers --------------------------------------------------
 

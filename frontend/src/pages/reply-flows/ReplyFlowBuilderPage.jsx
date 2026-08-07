@@ -34,6 +34,16 @@ const FALLBACK_TRIGGER_TYPES = [
   },
   { key: "call_logged", label: "Call logged", category: "Calls", description: "Starts when a call is logged.", config_fields: [] },
   { key: "task_completed", label: "Task completed", category: "Tasks", description: "Starts when a task linked to this customer is marked done.", config_fields: [] },
+  {
+    key: "customer_no_reply", label: "Customer went silent", category: "Conversation",
+    description: "Starts when the customer has not replied for a set number of minutes after our last message.",
+    config_fields: [{ key: "minutes_of_silence", label: "Minutes of customer silence", type: "number", placeholder: "60" }],
+  },
+  {
+    key: "team_no_reply", label: "Team hasn't replied", category: "Conversation",
+    description: "Starts when a customer has been waiting on a human reply for a set number of minutes.",
+    config_fields: [{ key: "minutes_waiting", label: "Minutes the customer has been waiting", type: "number", placeholder: "30" }],
+  },
 ];
 const DEFAULT_TRIGGER_TYPE = "new_conversation";
 

@@ -333,9 +333,12 @@ def test_trigger_types_endpoint_lists_the_first_real_batch(client_and_db):
     assert keys == {
         "new_conversation", "conversation_closed", "appointment_created",
         "appointment_completed", "appointment_reminder", "call_logged", "task_completed",
+        "customer_no_reply", "team_no_reply",
     }
     reminder = next(item for item in resp.json()["trigger_types"] if item["key"] == "appointment_reminder")
     assert reminder["config_fields"][0]["key"] == "minutes_before"
+    no_reply = next(item for item in resp.json()["trigger_types"] if item["key"] == "customer_no_reply")
+    assert no_reply["config_fields"][0]["key"] == "minutes_of_silence"
 
 
 def test_generate_from_text_also_sets_trigger(client_and_db):

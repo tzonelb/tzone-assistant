@@ -88,4 +88,39 @@ TRIGGER_TYPES: dict[str, dict] = {
         ),
         "config_fields": [],
     },
+    "customer_no_reply": {
+        "label": "Customer went silent",
+        "category": "Conversation",
+        "description": (
+            "Starts when the customer has not replied for a set number of "
+            "minutes after our last message — e.g. to nudge them about an "
+            "unanswered quote. Fires once per silence period (a new customer "
+            "message re-arms it)."
+        ),
+        "config_fields": [
+            {
+                "key": "minutes_of_silence",
+                "label": "Minutes of customer silence",
+                "type": "number",
+                "placeholder": "60",
+            },
+        ],
+    },
+    "team_no_reply": {
+        "label": "Team hasn't replied",
+        "category": "Conversation",
+        "description": (
+            "Starts when a customer has been waiting on a human reply for a "
+            "set number of minutes — e.g. to apologize for the delay and "
+            "offer self-service options. Fires once per waiting period."
+        ),
+        "config_fields": [
+            {
+                "key": "minutes_waiting",
+                "label": "Minutes the customer has been waiting",
+                "type": "number",
+                "placeholder": "30",
+            },
+        ],
+    },
 }
