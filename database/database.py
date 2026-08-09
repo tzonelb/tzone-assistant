@@ -18,14 +18,22 @@ class _PooledConnection:
     contention). Reusing one connection per thread amortizes that to near
     zero.
 
-    Safe because every call site uses `with db.connect() as conn:` (verified:
-    306 of 306). The proxy tracks nesting depth so a nested `with` block (an
-    operation that calls another operation which also opens a connection on
-    the same thread) shares the one connection and only the OUTERMOST scope
-    commits/rolls back — making nested operations atomic rather than
-    prematurely committing. Never closes the underlying connection (that's
-    what makes it reusable); `with` on a sqlite3 connection manages the
-    transaction, not the handle.
+    NESTING CONTRACT (important — not merely "everyone uses `with`"):
+    A nested `with db.connect()` (operation A, mid-transaction, calls operation
+    B which also opens a connection on the SAME thread) shares this one
+    connection. Commits are deferred so only the OUTERMOST scope commits — the
+    nested unit is atomic. But a raw SQLite connection has ONE transaction, so
+    a nested inner `rollback()` (or `BEGIN`) would act on the OUTER transaction,
+    not just the inner work — silently discarding the outer's uncommitted
+    writes. Rather than let that corrupt data silently, the proxy FAILS FAST:
+    calling `rollback()` while nested (depth > 1) raises. Today no call path
+    nests a rollback-bearing operation inside another open transaction, so this
+    never fires; it exists so any future code that introduces such nesting
+    breaks loudly at the seam instead of losing data. If real nested-partial
+    rollback is ever needed, implement it with SQLite SAVEPOINTs here.
+
+    Never closes the underlying connection (that's what makes it reusable);
+    `with` on a sqlite3 connection manages the transaction, not the handle.
     """
 
     __slots__ = ("_raw", "_depth")
@@ -55,6 +63,16 @@ class _PooledConnection:
             self._raw.commit()
 
     def rollback(self):
+        # A rollback while nested would discard the OUTER transaction too (one
+        # transaction per connection). Fail fast instead of silently losing the
+        # outer scope's writes. See the NESTING CONTRACT above.
+        if self._depth > 1:
+            raise RuntimeError(
+                "rollback() called on a pooled DB connection while nested inside "
+                "another open transaction on the same thread — this would discard "
+                "the outer transaction. Refactor so the rollback-bearing operation "
+                "runs at the top level, or add SAVEPOINT support to _PooledConnection."
+            )
         self._raw.rollback()
 
     def execute(self, *args, **kwargs):
@@ -121,6 +139,14 @@ class Database:
         proxy = getattr(self._local, "proxy", None)
         if proxy is None or getattr(self._local, "key", None) != key:
             if proxy is not None:
+                # Never swap the DB out from under an in-flight transaction on
+                # this thread (would lose its uncommitted writes). Only tests
+                # change db_path, and only between operations (depth 0).
+                if proxy._depth > 0:
+                    raise RuntimeError(
+                        "db_path changed while a pooled transaction is open on this "
+                        "thread (depth > 0) — cannot rebind the connection safely."
+                    )
                 try:
                     proxy._raw.close()
                 except Exception:

@@ -251,7 +251,13 @@ def get_me(
         current_user["id"]
     )
 
-    safe_user = dict(current_user)
+    # current_user comes straight from the auth_sessions/users join and still
+    # carries password_hash + totp_secret — every other user-serializing
+    # endpoint strips these via sanitize_user(); this one (called on nearly
+    # every page load) did not, shipping them to the browser on every session
+    # check. sanitize_user() doesn't know about _raw_token (not a DB column),
+    # so still pop it explicitly.
+    safe_user = auth_service.sanitize_user(current_user)
     safe_user.pop(
         "_raw_token",
         None,
