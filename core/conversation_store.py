@@ -35,9 +35,6 @@ def save_conversation_message(
         "metadata": metadata or {},
     }
 
-    print("SAVE CONVERSATION CALLED")
-    print("CONVERSATION FILE:", file_path.resolve())
-
     with open(file_path, "a", encoding="utf-8") as file:
         file.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -49,8 +46,6 @@ def get_conversation(channel: str, user_id: str, limit: int = 50):
     user_id = _safe_name(user_id)
 
     file_path = BASE_DIR / channel / f"{user_id}.jsonl"
-
-    print("READ CONVERSATION FILE:", file_path.resolve())
 
     if not file_path.exists():
         return []

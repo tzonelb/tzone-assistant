@@ -103,12 +103,10 @@ def send_whatsapp_text(to, text, buttons=None, company_id=None):
 
     response = httpx.post(url, json=payload, headers=headers, timeout=20)
 
-    print("STATUS:", response.status_code)
-    print("BODY:", response.text)
     return {
-    "sent": response.status_code < 400,
-    "status_code": response.status_code,
-    "response": response.json() if response.text else {}
+        "sent": response.status_code < 400,
+        "status_code": response.status_code,
+        "response": response.json() if response.text else {},
     }
 
 
