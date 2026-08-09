@@ -97,6 +97,17 @@ class AppConfig:
     # the var is present-but-blank.
     WA_BRIDGE_SECRET: str = os.getenv("WA_BRIDGE_SECRET") or "tzone-local-bridge-secret"
 
+    # Fast-ack ingestion queue (burst absorption). Off by default — when true,
+    # inbound webhooks enqueue message processing and return immediately, and a
+    # worker pool drains it at DB speed. See core/ingest_queue.py.
+    INGEST_ASYNC: bool = os.getenv("INGEST_ASYNC", "false").lower() == "true"
+    INGEST_QUEUE_MAX: int = int(os.getenv("INGEST_QUEUE_MAX", "10000"))
+    # Default 1 worker: the DB is a single writer, so extra workers do NOT raise
+    # throughput (they serialize on the write lock) but DO let two messages from
+    # the same customer be persisted out of order. One worker preserves ordering
+    # at the same ~200/s ceiling. Only raise this with per-customer sharding.
+    INGEST_WORKERS: int = int(os.getenv("INGEST_WORKERS", "1"))
+
     META_VERIFY_TOKEN: str = os.getenv(
         "META_VERIFY_TOKEN",
         "tzone_meta_verify_token",

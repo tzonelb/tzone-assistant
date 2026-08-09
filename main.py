@@ -244,6 +244,10 @@ async def lifespan(app: FastAPI):
     media_upload_service.ensure_storage()
     scheduled_post_service.ensure_schema()
 
+    # Start the fast-ack ingestion queue workers (no-op unless INGEST_ASYNC).
+    from core.ingest_queue import ingest_queue
+    ingest_queue.start()
+
     timeout_task = asyncio.create_task(
         takeover_timeout_worker()
     )

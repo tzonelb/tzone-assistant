@@ -116,10 +116,17 @@ async def receive_bridge_message(
         logger.warning("WhatsApp QR message for unknown session %s ignored", session_key)
         return {"status": "unknown_session"}
 
-    result = process_whatsapp_qr_message(
+    kwargs = dict(
         company_id=int(account["company_id"]),
         user_id=sender,
         text=text,
         customer_name=payload.get("name"),
     )
+    # Burst absorption: enqueue and ack fast when the async queue is enabled and
+    # has room; otherwise process inline (unchanged behaviour / backpressure).
+    from core.ingest_queue import ingest_queue
+    if ingest_queue.submit(process_whatsapp_qr_message, **kwargs):
+        return {"status": "queued"}
+
+    result = process_whatsapp_qr_message(**kwargs)
     return {"status": "ok", "conversation_id": result["state"].get("id")}
