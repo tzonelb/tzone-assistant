@@ -113,3 +113,40 @@ listed above is present on this branch and verified — so "missing" is now almo
 2. Read this file + `docs/DECISION_LOG.md`.
 3. Run backend + frontend (commands at the top). Hard-refresh the browser.
 4. Everything committed here is on GitHub — nothing lives only in a chat session.
+
+---
+
+## 🆕 Session additions (2026-08-09, later batch) — new channels, notifications, hardening
+
+Committed on top of `d3c8146`. 669 backend tests pass; frontend build clean.
+
+**New channels (no Meta developer app required):**
+- **WhatsApp via QR pairing** — `channels/whatsapp_qr/` (a small Node "bridge" speaking the
+  WhatsApp Web protocol + a Python client/webhook). Company Settings → Channels → "WhatsApp
+  (QR scan)": scan from the phone's Linked Devices. Messages flow through the SAME unified
+  inbox pipeline as Cloud API WhatsApp. Run the bridge with `start-wa-bridge.bat`
+  (first time: `cd channels/whatsapp_qr/bridge && npm install`). Env: `WA_BRIDGE_URL`,
+  `WA_BRIDGE_SECRET` (default works locally; set a strong value in production).
+- **Instagram direct login** (instagrapi) + **Facebook cookie download** (facebook-scraper)
+  feeding the Comments module — `backend/services/social_session_service.py`. IG can reply;
+  FB is read-only. "Sync now" button on the Comments page.
+
+**Notification Center expanded** — bell notifications now also fire for: new comments,
+post published/failed, task assigned/completed/due, appointment created/reminder (in
+addition to customer messages and conversation reminders). Deduped; time-based ones use
+`due_notified_at` / `reminder_notified_at` claim markers so they fire once.
+
+**Module gating fixed** — Dialer added to the v2 sidebar; Theme Studio module keys aligned;
+per-company module flags now hide sidebar items and enforce on the scheduler route; new
+`RequireAccess` route guards so hidden modules aren't reachable by direct URL.
+
+**Hardening (multi-round deep review + concurrency/perf audit):** WhatsApp QR bridge rate
+limit + secret hardening + path-traversal guards + fixed reconnect (pairing completes) +
+revoke-old-device-on-re-pair; single-shot task completion (no duplicate customer message);
+IntegrityError-safe `notification_service.create()` and `connect_whatsapp_qr`; background
+worker DB work offloaded via `asyncio.to_thread` (no event-loop stalls under write-lock);
+canonical UTC timestamp normalization; bounded due-scan with indexes.
+
+**In progress:** load/stress testing the platform at ~10k+ simultaneous inbound+outbound
+messages across ~100 companies to find and fix scaling bottlenecks (SQLite write
+contention is the prime suspect).

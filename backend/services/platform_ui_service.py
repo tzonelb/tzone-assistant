@@ -17,11 +17,24 @@ SCOPE_TYPES = ("platform", "plan", "company")
 # Keys match the groups in CLAUDE_CODE_UI_IMPLEMENTATION.md §2.
 MODULE_KEYS = (
     "dashboard", "conversations", "notifications", "tasks", "appointments", "team_chat",
-    "customers", "broadcast", "calls",
-    "ai_teaching", "saved_replies", "reply_flows",
-    "community", "catalogue", "analytics",
+    "customers", "broadcast", "calls", "dialer",
+    "ai_teaching", "test_ai", "saved_replies", "reply_flows",
+    "community", "publish", "comments", "catalogue", "analytics",
     "company_settings", "roles_permissions", "settings", "platform_admin", "theme_studio",
 )
+
+# Per-company Platform Admin "Modules" toggles (companies.module_*_enabled
+# columns) overlaid onto the resolved theme so the sidebar hides a module
+# the moment a super admin suspends it for that company — previously these
+# columns were enforced by the API routes (403) but the nav item stayed
+# visible, which read as a broken page rather than a disabled module.
+COMPANY_MODULE_FLAG_MAP = {
+    "appointments": ("appointments",),
+    "scheduler": ("publish",),
+    "catalogue": ("catalogue",),
+    "team_chat": ("team_chat",),
+    "comments": ("comments",),
+}
 
 ALLOWED_FONTS = ("Inter", "Cormorant Garamond", "Lora", "IBM Plex Sans", "Manrope", "Cairo")
 ALLOWED_MODES = ("light", "dark")
@@ -236,6 +249,14 @@ class PlatformUiService:
             tokens = _merge_tokens_patch(tokens, json.loads(published["tokens_json"]))
             modules = _merge_modules_patch(modules, json.loads(published["modules_json"]))
             version = published["version"]
+
+        if company_id is not None:
+            from backend.services.platform_admin_service import platform_admin_service
+
+            for flag, module_keys in COMPANY_MODULE_FLAG_MAP.items():
+                if not platform_admin_service.is_module_enabled(company_id=company_id, module=flag):
+                    for key in module_keys:
+                        modules.setdefault(key, {})["visible"] = False
 
         return {
             "version": version,

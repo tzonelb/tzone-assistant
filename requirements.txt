@@ -24,3 +24,7 @@ python-bidi>=0.6.0
 cryptography>=42.0.0
 gunicorn>=22.0.0
 imageio-ffmpeg>=0.5.1
+# Direct social sessions (no Meta developer app):
+instagrapi>=2.18            # Instagram username/password login for Comments
+facebook-scraper>=0.2.59    # Facebook Page posts/comments download via cookies
+lxml_html_clean>=0.4        # required by facebook-scraper's requests-html

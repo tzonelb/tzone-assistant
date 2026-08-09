@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChatBubbleOutlined, SendOutlined, GridViewOutlined } from "@mui/icons-material";
-import { listCommentPostsRequest, listPostCommentsRequest, replyToCommentRequest, scheduledPostOptionsRequest } from "../../api/client";
+import { listCommentPostsRequest, listPostCommentsRequest, replyToCommentRequest, scheduledPostOptionsRequest, syncCommentsRequest, listMyChannelsRequest } from "../../api/client";
 import { channelIcon } from "./channelIcon";
 import "./InboxPage.css";
+
+const DIRECT_CHANNELS = ["instagram_direct", "facebook_direct"];
 
 function timeAgo(value) {
   if (!value) return "";
@@ -23,6 +25,7 @@ export default function InboxPage() {
   const channelFilter = searchParams.get("channel");
 
   const [channelAccounts, setChannelAccounts] = useState([]);
+  const [hasDirectSessions, setHasDirectSessions] = useState(false);
   const [posts, setPosts] = useState([]);
   const [unansweredTotal, setUnansweredTotal] = useState(0);
   const [selectedPost, setSelectedPost] = useState(null);
@@ -33,6 +36,35 @@ export default function InboxPage() {
   const [replyingTo, setReplyingTo] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [syncing, setSyncing] = useState(false);
+  const [syncNote, setSyncNote] = useState("");
+
+  async function handleSync() {
+    setSyncing(true);
+    setSyncNote("");
+    setError("");
+    try {
+      const result = await syncCommentsRequest();
+      const accounts = Array.isArray(result?.accounts) ? result.accounts : [];
+      if (!accounts.length) {
+        setSyncNote("No direct Instagram/Facebook sessions connected — connect one in Company Settings → Channels.");
+      } else {
+        const failures = accounts.filter((a) => a.error);
+        const posts = accounts.reduce((sum, a) => sum + (a.posts_synced || 0), 0);
+        const commentsCount = accounts.reduce((sum, a) => sum + (a.comments_synced || 0), 0);
+        setSyncNote(
+          failures.length
+            ? `Synced with problems: ${failures.map((f) => f.error).join(" · ")}`
+            : `Synced ${posts} posts and ${commentsCount} comments.`
+        );
+      }
+      await loadPosts();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function loadPosts() {
     setLoadingPosts(true);
@@ -52,6 +84,14 @@ export default function InboxPage() {
   useEffect(() => {
     scheduledPostOptionsRequest()
       .then((result) => setChannelAccounts(Array.isArray(result?.channel_accounts) ? result.channel_accounts : []))
+      .catch(() => {});
+    // "Sync now" only makes sense for direct-login sessions (Graph API
+    // comments arrive automatically by webhook). Detect whether any exist.
+    listMyChannelsRequest()
+      .then((result) => {
+        const list = Array.isArray(result?.channels) ? result.channels : [];
+        setHasDirectSessions(list.some((c) => DIRECT_CHANNELS.includes(c.channel) && c.status === "active"));
+      })
       .catch(() => {});
   }, []);
 
@@ -116,6 +156,12 @@ export default function InboxPage() {
           <GridViewOutlined fontSize="small" />
           <h2>All Channels</h2>
           {unansweredTotal ? <span className="community-inbox-badge">{unansweredTotal}</span> : null}
+          {hasDirectSessions ? (
+            <button type="button" className="btn btn-secondary" onClick={handleSync} disabled={syncing}>
+              {syncing ? "Syncing…" : "Sync now"}
+            </button>
+          ) : null}
+          {syncNote ? <span className="community-inbox-sync-note">{syncNote}</span> : null}
         </div>
         {channelAccounts.length > 0 ? (
           <div className="community-inbox-channel-filter">
@@ -154,9 +200,9 @@ export default function InboxPage() {
               <ChatBubbleOutlined fontSize="large" />
               <p>No comments yet</p>
               <span>
-                Comments on your Facebook and Instagram posts appear here. This activates once the
-                platform is deployed on your domain and the Meta comment webhook is connected — a
-                one-time setup, then comments flow in automatically.
+                {hasDirectSessions
+                  ? "Click “Sync now” above to pull in the latest posts and comments from your connected Instagram/Facebook account."
+                  : "Comments on your Facebook and Instagram posts appear here. For the official connection this activates once the Meta comment webhook is set up; or connect Instagram/Facebook by direct login in Company Settings → Channels and use “Sync now.”"}
               </span>
             </div>
           ) : (
@@ -239,7 +285,9 @@ export default function InboxPage() {
                           </div>
                         ))}
 
-                        {replyingTo === comment.id ? (
+                        {selectedPost?.channel === "facebook_direct" ? (
+                          <span className="community-inbox-hint">Read-only — reply from the Facebook app or connect Facebook via the official login to reply here.</span>
+                        ) : replyingTo === comment.id ? (
                           <div className="community-inbox-reply-box">
                             <textarea
                               rows={2}

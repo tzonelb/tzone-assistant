@@ -335,13 +335,16 @@ export default function DialerPage() {
           <div className="dialer-setup-notice">
             <SettingsPhoneOutlined />
             <div>
-              <strong>Telephony is not connected yet.</strong>
+              <strong>Calling isn’t set up yet.</strong>
               <p>
-                Live calling needs a telephony provider account (Twilio), a
-                phone number, and these settings on the server:{" "}
+                Live calling needs a telephony provider (Twilio) connected by your
+                workspace owner or administrator. If that’s not you, ask them to set
+                it up. Once connected, this page dials, transfers, records and
+                AI-answers automatically — everything below is already wired and waiting.
+              </p>
+              <p className="dialer-setup-admin-hint">
+                Admin setup: a Twilio account, a phone number, and these server settings —{" "}
                 {(status?.missing || []).join(", ") || "TWILIO_* + PUBLIC_BASE_URL"}.
-                Once set, this page dials, transfers, records and AI-answers
-                automatically — everything below is already wired and waiting.
               </p>
             </div>
           </div>

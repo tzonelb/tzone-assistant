@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -120,22 +121,41 @@ class NotificationService:
                 if existing:
                     return self._row_to_dict(existing)
 
-            cursor = conn.execute(
-                """
-                INSERT INTO notifications (
-                    company_id, recipient_user_id, notification_type,
-                    title, body, channel, external_user_id,
-                    conversation_id, actor_user_id, severity,
-                    data_json, dedupe_key, is_read, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-                """,
-                (
-                    company_id, recipient_user_id, notification_type.strip(), title.strip(),
-                    body, channel, external_user_id, conversation_id, actor_user_id,
-                    severity, payload, dedupe_key, created_at,
-                ),
-            )
-            conn.commit()
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO notifications (
+                        company_id, recipient_user_id, notification_type,
+                        title, body, channel, external_user_id,
+                        conversation_id, actor_user_id, severity,
+                        data_json, dedupe_key, is_read, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    """,
+                    (
+                        company_id, recipient_user_id, notification_type.strip(), title.strip(),
+                        body, channel, external_user_id, conversation_id, actor_user_id,
+                        severity, payload, dedupe_key, created_at,
+                    ),
+                )
+                conn.commit()
+            except (sqlite3.IntegrityError, sqlite3.OperationalError):
+                # A concurrent create() with the same dedupe_key won the race.
+                # The unique index idx_notifications_dedupe rejects the loser's
+                # INSERT — under WAL that surfaces as IntegrityError, or as a
+                # SQLITE_BUSY_SNAPSHOT OperationalError from the loser's stale
+                # read snapshot. Either way, if the winner's row now exists,
+                # return it (the intended dedupe result). Only swallow when the
+                # row is actually there — a genuine operational error with no
+                # existing row still propagates. Makes create() self-healing so
+                # callers don't each have to guard the dedupe race.
+                if dedupe_key:
+                    existing = conn.execute(
+                        "SELECT * FROM notifications WHERE company_id = ? AND dedupe_key = ? LIMIT 1",
+                        (company_id, dedupe_key),
+                    ).fetchone()
+                    if existing:
+                        return self._row_to_dict(existing)
+                raise
             row = conn.execute("SELECT * FROM notifications WHERE id = ?", (cursor.lastrowid,)).fetchone()
             return self._row_to_dict(row)
 

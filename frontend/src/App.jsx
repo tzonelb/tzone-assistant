@@ -40,6 +40,7 @@ import NotificationsPage from "./pages/notifications/NotificationsPage";
 import NotificationsPageV2 from "./pages/notifications/NotificationsPageV2";
 import ThemePreviewPage from "./pages/theme-preview/ThemePreviewPage";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import RequireAccess from "./routes/RequireAccess";
 
 // Renders V2Component when the ui_v2 flag is on, V1Component otherwise —
 // same switch AppLayout.jsx uses for Sidebar/Topbar, generalized here
@@ -85,19 +86,19 @@ export default function App() {
         <Route path="/conversations/:channel/:userId" element={<ConversationsRoute />} />
         <Route path="/customers" element={<CustomersRoute />} />
         <Route path="/customers/:customerId" element={<CustomerDetailRoute />} />
-        <Route path="/broadcast" element={<BroadcastRoute />} />
-        <Route path="/broadcast/:broadcastId" element={<BroadcastDetailRoute />} />
-        <Route path="/catalogue" element={<CataloguePage />} />
+        <Route path="/broadcast" element={<RequireAccess permissions={["channels.view"]} moduleKey="broadcast"><BroadcastRoute /></RequireAccess>} />
+        <Route path="/broadcast/:broadcastId" element={<RequireAccess permissions={["channels.view"]} moduleKey="broadcast"><BroadcastDetailRoute /></RequireAccess>} />
+        <Route path="/catalogue" element={<RequireAccess moduleKey="catalogue"><CataloguePage /></RequireAccess>} />
         <Route path="/calls" element={<CallsPage />} />
-        <Route path="/dialer" element={<DialerPage />} />
+        <Route path="/dialer" element={<RequireAccess permissions={["dialer.use"]} moduleKey="dialer"><DialerPage /></RequireAccess>} />
         <Route path="/tasks" element={<TasksRoute />} />
         <Route path="/saved-replies" element={<SavedRepliesPage />} />
         <Route path="/reply-flows/:id" element={<ReplyFlowBuilderPage />} />
-        <Route path="/appointments" element={<AppointmentsRoute />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/team-chat" element={<TeamChatRoute />} />
-        <Route path="/publish" element={<PublishStandalonePage />} />
-        <Route path="/comments" element={<CommentsPage />} />
+        <Route path="/appointments" element={<RequireAccess permissions={["modules.appointments"]} moduleKey="appointments"><AppointmentsRoute /></RequireAccess>} />
+        <Route path="/analytics" element={<RequireAccess permissions={["analytics.view"]} moduleKey="analytics"><AnalyticsPage /></RequireAccess>} />
+        <Route path="/team-chat" element={<RequireAccess permissions={["modules.team_chat"]} moduleKey="team_chat"><TeamChatRoute /></RequireAccess>} />
+        <Route path="/publish" element={<RequireAccess permissions={["channels.view"]} moduleKey="publish"><PublishStandalonePage /></RequireAccess>} />
+        <Route path="/comments" element={<RequireAccess permissions={["modules.comments"]} moduleKey="comments"><CommentsPage /></RequireAccess>} />
         <Route path="/test-ai" element={<TrainAndTestPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

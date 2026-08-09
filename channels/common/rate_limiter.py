@@ -64,3 +64,7 @@ def get_client_ip(request) -> str:
 # source.
 meta_webhook_rate_limiter = SlidingWindowRateLimiter(max_requests=60, window_seconds=60.0)
 whatsapp_webhook_rate_limiter = SlidingWindowRateLimiter(max_requests=60, window_seconds=60.0)
+# The WhatsApp Web bridge forwards one call per inbound customer message
+# from the local machine; 120/min tolerates a legitimate burst while
+# still capping abuse if the shared secret ever leaks.
+whatsapp_qr_bridge_rate_limiter = SlidingWindowRateLimiter(max_requests=120, window_seconds=60.0)

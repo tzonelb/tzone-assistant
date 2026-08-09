@@ -9,6 +9,12 @@
       "autoPort": true
     },
     {
+      "name": "backend",
+      "runtimeExecutable": "C:\\PROJECTS\\tzone-assistant\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "port": 8000
+    },
+    {
       "name": "backend-smoketest",
       "runtimeExecutable": "C:\\Users\\T-ZONE~1.006\\AppData\\Local\\Temp\\claude\\C--PROJECTS\\5c9c483c-ee43-4a8a-8aeb-16f94dde0a41\\scratchpad\\run_backend_smoketest.bat",
       "runtimeArgs": [],

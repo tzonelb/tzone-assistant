@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
@@ -138,6 +139,126 @@ class ChannelAccountService:
             conn.commit()
 
         return self.get_account(account_id=channel_account_id)
+
+    def connect_whatsapp_qr(
+        self, *, company_id: int, session_key: str, phone: str | None = None, name: str | None = None,
+    ) -> dict[str, Any]:
+        """Store a paired WhatsApp Web bridge session as a channel account.
+        No token is stored — the bridge holds the WhatsApp Web credentials
+        on disk; the session key (external_account_id) is how outbound
+        sends and inbound routing find the session. Idempotent per session
+        key so the connect page's status polling can call it safely."""
+        session_key = (session_key or "").strip()
+        if not session_key:
+            raise ChannelAccountError("Session key is required.")
+
+        with db.connect() as conn:
+            self._assert_not_owned_by_another_company(
+                conn, company_id=company_id, channel="whatsapp_qr",
+                column="external_account_id", value=session_key,
+            )
+            existing = conn.execute(
+                "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'whatsapp_qr' "
+                "AND external_account_id = ?",
+                (company_id, session_key),
+            ).fetchone()
+            if existing:
+                return self.get_account(account_id=int(existing["id"]))
+            # A re-pair (new key replacing this company's existing active QR
+            # session) is net-zero on channel count, so it must not be blocked
+            # by the plan limit even when the company is exactly at the cap.
+            already_has_qr = conn.execute(
+                "SELECT 1 FROM channel_accounts WHERE company_id = ? AND channel = 'whatsapp_qr' "
+                "AND status = 'active' LIMIT 1",
+                (company_id,),
+            ).fetchone()
+
+        if not already_has_qr:
+            self._assert_within_channel_limit(company_id=company_id)
+
+        # Revoke any older active QR session on the bridge BEFORE we retire
+        # its DB row — otherwise the old phone stays a live "linked device"
+        # forever with no in-app way to unlink it (a real privacy leak: the
+        # old device keeps receiving the business's WhatsApp).
+        with db.connect() as conn:
+            stale = conn.execute(
+                "SELECT external_account_id FROM channel_accounts "
+                "WHERE company_id = ? AND channel = 'whatsapp_qr' AND status = 'active'",
+                (company_id,),
+            ).fetchall()
+        for row in stale:
+            old_key = row["external_account_id"]
+            if old_key and old_key != session_key:
+                try:
+                    from channels.whatsapp_qr import service as wa_bridge
+                    wa_bridge.delete_session(old_key)
+                except Exception:
+                    # Bridge down or already gone — the DB row is retired
+                    # regardless; the operator can re-scan cleanly.
+                    pass
+
+        with db.connect() as conn:
+            now = utc_now_iso()
+            display_name = name or (f"WhatsApp {phone}" if phone else "WhatsApp (QR)")
+            # Retire any older active QR session for this company: a re-pair
+            # supersedes the previous one, and leaving stale rows active
+            # would count against the plan channel limit and confuse
+            # get_qr_account. Only one live QR session per company.
+            conn.execute(
+                "UPDATE channel_accounts SET status = 'disabled', updated_at = ? "
+                "WHERE company_id = ? AND channel = 'whatsapp_qr' AND status = 'active'",
+                (now, company_id),
+            )
+            try:
+                cursor = conn.execute(
+                    """
+                    INSERT INTO channel_accounts (
+                        company_id, channel, name, external_account_id, phone_number_id,
+                        status, ai_enabled, created_at, updated_at
+                    ) VALUES (?, 'whatsapp_qr', ?, ?, ?, 'active', 1, ?, ?)
+                    """,
+                    (company_id, display_name, session_key, phone, now, now),
+                )
+                channel_account_id = int(cursor.lastrowid)
+                conn.commit()
+            except sqlite3.IntegrityError:
+                # A concurrent status-poll already inserted this exact session
+                # (the unique index on (channel, external_account_id) caught
+                # the loser). Roll back and return the winner's row — the
+                # intended idempotent result, not an HTTP 500.
+                conn.rollback()
+                existing = conn.execute(
+                    "SELECT id FROM channel_accounts WHERE company_id = ? AND channel = 'whatsapp_qr' "
+                    "AND external_account_id = ?",
+                    (company_id, session_key),
+                ).fetchone()
+                if existing:
+                    return self.get_account(account_id=int(existing["id"]))
+                raise
+
+        return self.get_account(account_id=channel_account_id)
+
+    def resolve_qr_session(self, *, session_key: str) -> dict[str, Any] | None:
+        """Inbound routing: bridge session key -> owning channel account."""
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT id, company_id, name, phone_number_id FROM channel_accounts "
+                "WHERE channel = 'whatsapp_qr' AND external_account_id = ? AND status = 'active' "
+                "LIMIT 1",
+                (session_key,),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def get_qr_account(self, *, company_id: int) -> dict[str, Any] | None:
+        """Outbound routing: the company's active QR session, if any."""
+        with db.connect() as conn:
+            row = conn.execute(
+                "SELECT id, company_id, external_account_id, phone_number_id FROM channel_accounts "
+                "WHERE company_id = ? AND channel = 'whatsapp_qr' AND status = 'active' "
+                "ORDER BY created_at DESC LIMIT 1",
+                (company_id,),
+            ).fetchone()
+        return dict(row) if row else None
 
     def get_account(self, *, account_id: int) -> dict[str, Any]:
         with db.connect() as conn:

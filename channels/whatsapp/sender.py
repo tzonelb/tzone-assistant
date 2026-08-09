@@ -44,7 +44,37 @@ def _resolve_whatsapp_credentials(company_id=None):
     return phone_number_id, access_token
 
 
+def _resolve_qr_session_key(company_id=None):
+    """A company that paired WhatsApp by QR (WhatsApp Web bridge — no
+    Meta developer app) sends through the bridge. The company's own
+    Cloud API account wins when both are connected (official transport),
+    but a QR session beats the platform-wide .env fallback — otherwise a
+    QR-only company's replies would silently go out from the platform's
+    default number."""
+    if company_id is None:
+        return None
+    from backend.services.channel_account_service import channel_account_service
+    with __import__("database.database", fromlist=["db"]).db.connect() as conn:
+        cloud = conn.execute(
+            "SELECT id FROM channel_accounts "
+            "WHERE company_id = ? AND channel = 'whatsapp' AND status = 'active' "
+            "AND access_token_encrypted IS NOT NULL AND phone_number_id IS NOT NULL LIMIT 1",
+            (company_id,),
+        ).fetchone()
+    if cloud:
+        # A usable Cloud API account exists (matches _resolve_whatsapp_credentials'
+        # own requirements) — official transport wins.
+        return None
+    account = channel_account_service.get_qr_account(company_id=company_id)
+    return account["external_account_id"] if account else None
+
+
 def send_whatsapp_text(to, text, buttons=None, company_id=None):
+    session_key = _resolve_qr_session_key(company_id)
+    if session_key:
+        from channels.whatsapp_qr import service as wa_bridge
+        return wa_bridge.send_text(session_key, to, format_whatsapp_message(text, buttons))
+
     phone_number_id, access_token = _resolve_whatsapp_credentials(company_id)
 
     if not access_token or not phone_number_id:
@@ -89,6 +119,14 @@ def send_whatsapp_text(to, text, buttons=None, company_id=None):
 # only included for the types that use it. Documents also take an
 # optional "filename" shown in the chat bubble instead of the raw URL.
 def send_whatsapp_media(to, media_url, media_type, caption=None, company_id=None, filename=None):
+    session_key = _resolve_qr_session_key(company_id)
+    if session_key:
+        # Bridge v1 is text-only: deliver media as a link with the
+        # caption, which WhatsApp renders with a preview.
+        from channels.whatsapp_qr import service as wa_bridge
+        text = f"{caption}\n{media_url}" if caption else media_url
+        return wa_bridge.send_text(session_key, to, text)
+
     phone_number_id, access_token = _resolve_whatsapp_credentials(company_id)
 
     if not access_token or not phone_number_id:

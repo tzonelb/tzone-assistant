@@ -784,6 +784,39 @@ export async function connectWhatsAppRequest(phoneNumberId, accessToken, name, e
   });
 }
 
+export async function connectInstagramDirectRequest(username, password, verificationCode, elevatedToken) {
+  return apiRequest("/api/channels/instagram-direct/connect", {
+    method: "POST",
+    body: { username, password, verification_code: verificationCode || null },
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function connectFacebookDirectRequest(page, cUser, xs, elevatedToken) {
+  return apiRequest("/api/channels/facebook-direct/connect", {
+    method: "POST",
+    body: { page, c_user: cUser, xs },
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function syncCommentsRequest() {
+  return apiRequest("/api/comments/sync", { method: "POST" });
+}
+
+export async function startWhatsAppQrRequest(elevatedToken) {
+  return apiRequest("/api/channels/whatsapp-qr/start", {
+    method: "POST",
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function whatsAppQrStatusRequest(sessionKey, elevatedToken) {
+  return apiRequest(`/api/channels/whatsapp-qr/status/${sessionKey}`, {
+    headers: elevatedToken ? { "X-Elevated-Token": elevatedToken } : {},
+  });
+}
+
 export async function connectInstagramRequest(pageId, accessToken, name, elevatedToken) {
   return apiRequest("/api/channels/instagram/connect", {
     method: "POST",

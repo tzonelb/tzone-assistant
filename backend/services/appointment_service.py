@@ -13,6 +13,24 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def normalize_dt(value: Any) -> str | None:
+    """Canonicalize to UTC ISO (+00:00 offset) so string comparisons in
+    scan_upcoming_reminders and the double-booking overlap check are correct
+    regardless of the client's timezone representation."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
 def _fire_appointment_trigger(*, company_id: int, customer_id: int | None, trigger_type: str) -> None:
     """Lazy import breaks the natural import cycle the same way
     conversation_control_service.py's equivalent hook does — never raises,
@@ -23,6 +41,27 @@ def _fire_appointment_trigger(*, company_id: int, customer_id: int | None, trigg
         reply_flow_engine.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type=trigger_type)
     except Exception:
         logger.exception("%s reply flow trigger failed for appointment (customer #%s)", trigger_type, customer_id)
+
+
+def _notify_appointment_created(
+    *, company_id: int, appointment_id: int, title: str, scheduled_at: str, employee_user_id: int | None,
+) -> None:
+    """Bell notification when an appointment is booked. Targets the assigned
+    employee if there is one, otherwise the whole team. Never raises."""
+    try:
+        from backend.services.notification_service import notification_service
+        notification_service.create(
+            company_id=company_id,
+            notification_type="appointment_created",
+            title=f'Appointment booked: "{title}"',
+            body=f"Scheduled for {scheduled_at}",
+            recipient_user_id=employee_user_id,
+            severity="info",
+            data={"appointment_id": appointment_id, "scheduled_at": scheduled_at},
+            dedupe_key=f"appointment_created:{appointment_id}",
+        )
+    except Exception:
+        logger.exception("appointment_created notification failed for appointment #%s", appointment_id)
 
 
 STATUSES = ["scheduled", "completed", "cancelled", "no_show"]
@@ -62,6 +101,15 @@ class AppointmentService:
                 # worker (via reply_flow_engine.check_appointment_reminders)
                 # never sends the same reminder twice.
                 conn.execute("ALTER TABLE appointments ADD COLUMN flow_reminder_sent_at TEXT")
+            # Separate claim marker for the INTERNAL team bell reminder (this
+            # service's scan_upcoming_reminders) so an imminent appointment is
+            # alerted once, not re-scanned every 30s until it starts.
+            if "reminder_notified_at" not in existing_columns:
+                conn.execute("ALTER TABLE appointments ADD COLUMN reminder_notified_at TEXT")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_appointments_reminder_scan "
+                "ON appointments(status, scheduled_at)"
+            )
             conn.commit()
 
     @staticmethod
@@ -112,6 +160,9 @@ class AppointmentService:
             datetime.fromisoformat(parsed)
         except ValueError as exc:
             raise ValueError("Scheduled date/time must be a valid ISO date/time.") from exc
+        # Store a canonical UTC value so overlap checks and reminder scans
+        # compare like-for-like regardless of the client's tz representation.
+        clean_scheduled_at = normalize_dt(clean_scheduled_at)
 
         if duration_minutes <= 0:
             raise ValueError("Duration must be a positive number of minutes.")
@@ -145,6 +196,10 @@ class AppointmentService:
             conn.commit()
 
         _fire_appointment_trigger(company_id=company_id, customer_id=customer_id, trigger_type="appointment_created")
+        _notify_appointment_created(
+            company_id=company_id, appointment_id=appointment_id, title=clean_title,
+            scheduled_at=clean_scheduled_at, employee_user_id=employee_user_id,
+        )
 
         return self.get_appointment(company_id=company_id, appointment_id=appointment_id)
 
@@ -158,6 +213,57 @@ class AppointmentService:
             FROM appointments a
             WHERE {where_clause}
         """
+
+    def scan_upcoming_reminders(self, *, minutes_before: int = 30) -> int:
+        """Reminder-worker cadence: raise a one-time bell alert for every
+        scheduled appointment now within `minutes_before` of its start. The
+        dedupe_key (appointment_reminder:<id>) fires it exactly once. This is
+        the INTERNAL team alert — separate from the optional customer-facing
+        appointment_reminder Reply Flow. Never raises; returns count fired."""
+        from datetime import timedelta
+
+        now = datetime.now(timezone.utc)
+        window_end = (now + timedelta(minutes=minutes_before)).isoformat()
+        now_iso = now.isoformat()
+        try:
+            with db.connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, company_id, title, scheduled_at, employee_user_id FROM appointments
+                    WHERE status = 'scheduled' AND scheduled_at > ? AND scheduled_at <= ?
+                      AND reminder_notified_at IS NULL
+                    """,
+                    (now_iso, window_end),
+                ).fetchall()
+        except Exception:
+            logger.exception("scan_upcoming_reminders query failed")
+            return 0
+
+        fired = 0
+        from backend.services.notification_service import notification_service
+        for row in rows:
+            try:
+                # Claim first (fires once); dedupe_key is the second guard.
+                with db.connect() as conn:
+                    conn.execute(
+                        "UPDATE appointments SET reminder_notified_at = ? WHERE id = ?",
+                        (now.isoformat(), row["id"]),
+                    )
+                    conn.commit()
+                notification_service.create(
+                    company_id=row["company_id"],
+                    notification_type="appointment_reminder",
+                    title=f'Upcoming appointment: "{row["title"]}"',
+                    body=f"Starts at {row['scheduled_at']}",
+                    recipient_user_id=row["employee_user_id"],
+                    severity="warning",
+                    data={"appointment_id": row["id"], "scheduled_at": row["scheduled_at"]},
+                    dedupe_key=f"appointment_reminder:{row['id']}",
+                )
+                fired += 1
+            except Exception:
+                logger.exception("appointment_reminder notification failed for appointment #%s", row["id"])
+        return fired
 
     def get_appointment(self, *, company_id: int, appointment_id: int) -> dict[str, Any]:
         with db.connect() as conn:
@@ -238,7 +344,9 @@ class AppointmentService:
                 datetime.fromisoformat(parsed)
             except ValueError as exc:
                 raise ValueError("Scheduled date/time must be a valid ISO date/time.") from exc
-            cleaned["scheduled_at"] = clean_scheduled_at
+            cleaned["scheduled_at"] = normalize_dt(clean_scheduled_at)
+            # A reschedule re-arms the internal reminder bell.
+            cleaned["reminder_notified_at"] = None
 
         if "duration_minutes" in values and values["duration_minutes"] is not None:
             duration_minutes = int(values["duration_minutes"])

@@ -367,6 +367,11 @@
   font-size: 13px;
 }
 
+.community-inbox-sync-note {
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  font-size: 13px;
+}
+
 .community-inbox-error {
   padding: 8px 10px;
   border-radius: var(--radius-md);

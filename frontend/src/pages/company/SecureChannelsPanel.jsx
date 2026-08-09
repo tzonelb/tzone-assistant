@@ -6,6 +6,10 @@ import {
   connectTelegramRequest,
   connectWhatsAppRequest,
   disconnectChannelRequest,
+  startWhatsAppQrRequest,
+  whatsAppQrStatusRequest,
+  connectInstagramDirectRequest,
+  connectFacebookDirectRequest,
   startFacebookOAuthRequest,
   getMySubscriptionRequest,
   getSessionChangesRequest,
@@ -17,12 +21,15 @@ import "./SecureChannelsPanel.css";
 const PURPOSE = "channels_access";
 
 function ChannelsOverview({ channels, usage, onConnect }) {
-  const connectedByKey = channels.reduce((map, ch) => {
+  // Retired QR sessions (superseded by a re-pair) are already revoked and
+  // shouldn't show in the connected directory/list or inflate counts.
+  const visibleChannels = channels.filter((c) => !(c.channel === "whatsapp_qr" && c.status !== "active"));
+  const connectedByKey = visibleChannels.reduce((map, ch) => {
     (map[ch.channel] ||= []).push(ch);
     return map;
   }, {});
 
-  const used = usage?.used ?? channels.filter((c) => c.status === "active").length;
+  const used = usage?.used ?? visibleChannels.filter((c) => c.status === "active").length;
   const max = usage?.max ?? null;
   const pct = max ? Math.min(100, Math.round((used / max) * 100)) : 0;
 
@@ -47,9 +54,9 @@ function ChannelsOverview({ channels, usage, onConnect }) {
         ) : null}
       </div>
 
-      {channels.length ? (
+      {visibleChannels.length ? (
         <div className="channels-connected-list">
-          {channels.map((c) => (
+          {visibleChannels.map((c) => (
             <div className="channels-connected-row" key={c.id}>
               <div className="channels-connected-row-main">
                 <strong>{c.name}</strong>
@@ -119,6 +126,18 @@ export default function SecureChannelsPanel() {
   const [waPhoneId, setWaPhoneId] = useState("");
   const [waToken, setWaToken] = useState("");
 
+  // WhatsApp QR pairing: session key set on start, then polled until the
+  // phone scans the code and the bridge reports "connected".
+  const [waqrSession, setWaqrSession] = useState(null);
+  const [waqrState, setWaqrState] = useState(null);
+
+  const [igUsername, setIgUsername] = useState("");
+  const [igPassword, setIgPassword] = useState("");
+  const [igCode, setIgCode] = useState("");
+  const [fbPage, setFbPage] = useState("");
+  const [fbCUser, setFbCUser] = useState("");
+  const [fbXs, setFbXs] = useState("");
+
   // Inline verification prompt state — appears only when an action needs it.
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyStage, setVerifyStage] = useState("send"); // send -> code_sent
@@ -129,8 +148,16 @@ export default function SecureChannelsPanel() {
   const [hasVerifiedSession, setHasVerifiedSession] = useState(false);
   const [sessionChanges, setSessionChanges] = useState(null);
   const [changesLoading, setChangesLoading] = useState(false);
+  // Success hint after a direct social login (comments don't auto-import).
+  const [connectHint, setConnectHint] = useState("");
 
   const sectionRefs = useRef({});
+
+  // Both WhatsApp transports connected → replies go out on the Cloud API
+  // number, not the QR-linked one. Warn the owner so a customer isn't
+  // answered from a different number than they messaged.
+  const hasCloudWhatsApp = channels.some((c) => c.channel === "whatsapp" && c.status === "active");
+  const hasQrWhatsApp = channels.some((c) => c.channel === "whatsapp_qr" && c.status === "active");
 
   async function loadChannels() {
     try {
@@ -162,9 +189,64 @@ export default function SecureChannelsPanel() {
     }
   }, []);
 
+  // Poll the pairing session until it connects (or the panel unmounts).
+  useEffect(() => {
+    if (!waqrSession) return undefined;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const status = await whatsAppQrStatusRequest(waqrSession, elevatedTokenRef.current);
+        if (cancelled) return;
+        setWaqrState(status);
+        if (status.status === "connected") {
+          clearInterval(timer);
+          setWaqrSession(null);
+          await loadChannels();
+        } else if (status.status === "disconnected") {
+          // Terminal: the QR expired unscanned (or the session ended).
+          // Stop polling a session that will never connect; the user can
+          // press "Start QR pairing" again for a fresh code.
+          clearInterval(timer);
+          setWaqrSession(null);
+          setError("The QR code expired before it was scanned. Please start again.");
+        }
+      } catch (e) {
+        if (cancelled) return;
+        clearInterval(timer);
+        setWaqrSession(null);
+        setWaqrState(null);
+        setError(e.message);
+      }
+    }, 2500);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [waqrSession]);
+
+  function handleWhatsAppQrStart() {
+    withVerification(async (token) => {
+      let result;
+      try {
+        result = await startWhatsAppQrRequest(token);
+      } catch (e) {
+        const msg = String(e?.message || "");
+        if (e?.status === 503 || e?.status === 502 || /bridge is not running|temporarily/i.test(msg)) {
+          throw new Error("WhatsApp QR pairing is temporarily unavailable. Please try again shortly, or use one of the other WhatsApp options below.");
+        }
+        throw e;
+      }
+      setWaqrState({ status: "starting", qr: null });
+      setWaqrSession(result.session_key);
+    });
+  }
+
   function goToConnectSection(connectKey) {
     if (connectKey === "facebook") {
       handleFacebookConnect();
+      return;
+    }
+    if (connectKey === "whatsapp_qr") {
+      const el = sectionRefs.current.whatsapp_qr;
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      handleWhatsAppQrStart();
       return;
     }
     const el = sectionRefs.current[connectKey];
@@ -287,6 +369,14 @@ export default function SecureChannelsPanel() {
         </p>
       ) : null}
       {error ? <p className="channels-error-text">{error}</p> : null}
+      {connectHint ? <p className="channels-oauth-message is-success">{connectHint}</p> : null}
+      {hasCloudWhatsApp && hasQrWhatsApp ? (
+        <p className="channels-oauth-message is-error">
+          You have both WhatsApp (Cloud API) and WhatsApp (QR) connected. Replies are sent from your Cloud API
+          number, so a customer who messaged your QR-linked number will be answered from a different number.
+          Keep only one WhatsApp connection to avoid confusing customers.
+        </p>
+      ) : null}
 
       {hasVerifiedSession && !verifyOpen ? (
         <article className="company-setting-field channels-verify-inline">
@@ -394,6 +484,39 @@ export default function SecureChannelsPanel() {
         <button type="submit" className="btn btn-primary" disabled={busy}>Connect</button>
       </form>
 
+      <article className="company-setting-field" ref={(el) => (sectionRefs.current.whatsapp_qr = el)}>
+        <div>
+          <strong>Connect WhatsApp by QR scan</strong>
+          <span>
+            No Meta developer account needed — open WhatsApp on your phone, go to Settings → Linked Devices →
+            Link a Device, and scan the code below.
+          </span>
+          <div className="channels-verify-actions">
+            <button type="button" className="btn btn-primary" onClick={handleWhatsAppQrStart} disabled={busy || Boolean(waqrSession)}>
+              {waqrSession ? "Waiting for scan…" : "Start QR pairing"}
+            </button>
+            {waqrSession ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setWaqrSession(null); setWaqrState(null); }}
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+          {waqrState?.qr ? (
+            <img src={waqrState.qr} alt="WhatsApp pairing QR code" width={240} height={240} style={{ marginTop: "var(--space-3)" }} />
+          ) : null}
+          {waqrState && !waqrState.qr && waqrState.status !== "connected" ? (
+            <span>Preparing the QR code…</span>
+          ) : null}
+          {waqrState?.status === "connected" ? (
+            <span>Connected{waqrState.phone ? ` as +${waqrState.phone}` : ""}. This number now receives and sends through T-ZONE.</span>
+          ) : null}
+        </div>
+      </article>
+
       <article className="company-setting-field">
         <div><strong>Connect WhatsApp</strong><span>Phone Number ID and access token from Meta Business.</span></div>
       </article>
@@ -413,11 +536,71 @@ export default function SecureChannelsPanel() {
         <button type="submit" className="btn btn-primary" disabled={busy}>Connect</button>
       </form>
 
+      <article className="company-setting-field">
+        <div>
+          <strong>Connect Instagram by direct login</strong>
+          <span>
+            Your Instagram username and password — used once to log in, never stored. Brings your posts and
+            comments into the Comments page and lets the team reply. If your account has two-factor
+            authentication, add the current 6-digit code.
+          </span>
+        </div>
+      </article>
+      <form
+        className="channels-connect-form"
+        ref={(el) => (sectionRefs.current.instagram_direct = el)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          withVerification(async (token) => {
+            await connectInstagramDirectRequest(igUsername, igPassword, igCode || null, token);
+            setIgUsername(""); setIgPassword(""); setIgCode("");
+            setConnectHint("Instagram connected. Go to Comments → “Sync now” to pull in your posts and comments.");
+          });
+        }}
+      >
+        <input className="input" value={igUsername} onChange={(e) => setIgUsername(e.target.value)} placeholder="Instagram username" required />
+        <input className="input" type="password" value={igPassword} onChange={(e) => setIgPassword(e.target.value)} placeholder="Password" required />
+        <input className="input" value={igCode} onChange={(e) => setIgCode(e.target.value)} placeholder="2FA code (required if 2FA is on)" maxLength={8} />
+        <button type="submit" className="btn btn-primary" disabled={busy}>Connect</button>
+      </form>
+
+      <article className="company-setting-field">
+        <div>
+          <strong>Connect Facebook by cookie download</strong>
+          <span>
+            Download your Page's posts and comments without a Meta developer account (read-only). While logged
+            in to Facebook in your browser, copy the "c_user" and "xs" cookies (DevTools → Application →
+            Cookies) and paste them with your Page name.
+          </span>
+        </div>
+      </article>
+      <form
+        className="channels-connect-form"
+        ref={(el) => (sectionRefs.current.facebook_direct = el)}
+        onSubmit={(e) => {
+          e.preventDefault();
+          withVerification(async (token) => {
+            await connectFacebookDirectRequest(fbPage, fbCUser, fbXs, token);
+            setFbPage(""); setFbCUser(""); setFbXs("");
+            setConnectHint("Facebook connected (read-only). Go to Comments → “Sync now” to download your posts and comments.");
+          });
+        }}
+      >
+        <input className="input" value={fbPage} onChange={(e) => setFbPage(e.target.value)} placeholder="Page name (from its URL)" required />
+        <input className="input" value={fbCUser} onChange={(e) => setFbCUser(e.target.value)} placeholder="c_user cookie" required />
+        <input className="input" value={fbXs} onChange={(e) => setFbXs(e.target.value)} placeholder="xs cookie" required />
+        <button type="submit" className="btn btn-primary" disabled={busy}>Connect</button>
+      </form>
+
       <div className="users-table-wrap">
         <table className="users-table">
           <thead><tr><th>Channel</th><th>Name</th><th>Status</th><th></th></tr></thead>
           <tbody>
-            {channels.map((c) => (
+            {channels
+              // Retired QR sessions (superseded by a re-pair) are already
+              // revoked on the phone and have no action — don't clutter.
+              .filter((c) => !(c.channel === "whatsapp_qr" && c.status !== "active"))
+              .map((c) => (
               <tr key={c.id}>
                 <td>{c.channel}</td><td>{c.name}</td><td>{c.status}</td>
                 <td>

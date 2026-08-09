@@ -146,3 +146,6 @@ collect_patch9_debug.py
 gather_project.py
 
 *_DEBUG.zip
+
+# WhatsApp Web bridge runtime session credentials
+channels/whatsapp_qr/bridge/sessions/

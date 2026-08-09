@@ -92,6 +92,9 @@ from channels.meta import (
 from channels.whatsapp import (
     webhook as whatsapp_webhook,
 )
+from channels.whatsapp_qr import (
+    webhook as whatsapp_qr_webhook,
+)
 from config.settings import config
 from database.database import db
 
@@ -99,7 +102,7 @@ from database.database import db
 async def takeover_timeout_worker() -> None:
     while True:
         try:
-            conversation_control_service.expire_overdue_takeovers()
+            await asyncio.to_thread(conversation_control_service.expire_overdue_takeovers)
         except Exception as exc:
             print(
                 "TAKEOVER TIMEOUT WORKER ERROR:",
@@ -117,68 +120,76 @@ _AUTO_SEND_SKIP_REASON_TEXT = {
 }
 
 
+def _reminder_cycle() -> None:
+    """One synchronous pass of the reminder worker. Run via asyncio.to_thread
+    so its blocking SQLite work (including a possible WAL write-lock wait of up
+    to busy_timeout) never stalls the event loop / all HTTP handling."""
+    # Time-based appointment_reminder Reply Flow flows piggyback on this exact
+    # same 30s cadence rather than a second worker loop — see
+    # reply_flow_engine.check_appointment_reminders for the scan/claim/fire
+    # logic. The two no-reply triggers (customer went silent / team hasn't
+    # replied) share the same cadence and the same claim-then-act discipline.
+    reply_flow_engine.check_appointment_reminders()
+    reply_flow_engine.check_no_reply_triggers()
+
+    # Internal team bell alerts (deduped, fire-once) for due tasks and
+    # imminent appointments — same cadence, same fire-and-forget contract.
+    task_service.scan_due_tasks()
+    appointment_service.scan_upcoming_reminders()
+
+    fired = conversation_control_service.check_due_reminders()
+    for reminder in fired:
+        display_name = (
+            reminder.get("official_customer_name")
+            or reminder.get("customer_alias")
+            or f"{reminder['channel']} customer"
+        )
+
+        # Build title/body from the auto-send outcome (sent / skipped-with-
+        # reason / failed / not requested) so the notification reflects what
+        # actually happened. See conversation_control_service.check_due_reminders.
+        auto_send_status = reminder.get("auto_send_status", "not_requested")
+        if auto_send_status == "sent":
+            title = f"Auto follow-up sent to {display_name}"
+            body = (
+                reminder.get("reminder_note")
+                or "The pre-authored follow-up message was sent automatically."
+            )
+        elif auto_send_status == "skipped":
+            reason_text = _AUTO_SEND_SKIP_REASON_TEXT.get(
+                reminder.get("auto_send_skip_reason"),
+                "the safety checks did not pass",
+            )
+            title = f"Reminder due for {display_name}"
+            body = f"Auto follow-up skipped — {reason_text}."
+        elif auto_send_status == "failed":
+            title = f"Reminder due for {display_name}"
+            body = "Auto follow-up failed to send — you may need to follow up manually."
+        else:
+            title = f"Follow up with {display_name}"
+            body = reminder.get("reminder_note") or "You set a reminder to follow up on this conversation."
+
+        notification_service.create(
+            company_id=reminder["company_id"],
+            notification_type="conversation_reminder",
+            title=title,
+            body=body,
+            channel=reminder["channel"],
+            external_user_id=reminder["external_user_id"],
+            conversation_id=reminder["id"],
+            severity="info",
+            data={
+                "user_id": reminder.get("reminder_set_by_user_id"),
+                "auto_send_status": auto_send_status,
+                "auto_send_skip_reason": reminder.get("auto_send_skip_reason"),
+            },
+        )
+
+
 async def reminder_worker() -> None:
     while True:
         try:
-            # Time-based appointment_reminder Reply Flow flows piggyback on
-            # this exact same 30s cadence rather than a second worker loop —
-            # see reply_flow_engine.check_appointment_reminders for the scan/
-            # claim/fire logic. The two no-reply triggers (customer went
-            # silent / team hasn't replied) share the same cadence and the
-            # same claim-then-act discipline.
-            reply_flow_engine.check_appointment_reminders()
-            reply_flow_engine.check_no_reply_triggers()
-
-            fired = conversation_control_service.check_due_reminders()
-            for reminder in fired:
-                display_name = (
-                    reminder.get("official_customer_name")
-                    or reminder.get("customer_alias")
-                    or f"{reminder['channel']} customer"
-                )
-
-                # Additive: build title/body from the new auto-send outcome
-                # (sent / skipped-with-reason / failed / not requested) so
-                # the notification reflects what actually happened, instead
-                # of always showing the same generic "you set a reminder"
-                # text. See conversation_control_service.check_due_reminders
-                # for how auto_send_status/auto_send_skip_reason are derived.
-                auto_send_status = reminder.get("auto_send_status", "not_requested")
-                if auto_send_status == "sent":
-                    title = f"Auto follow-up sent to {display_name}"
-                    body = (
-                        reminder.get("reminder_note")
-                        or "The pre-authored follow-up message was sent automatically."
-                    )
-                elif auto_send_status == "skipped":
-                    reason_text = _AUTO_SEND_SKIP_REASON_TEXT.get(
-                        reminder.get("auto_send_skip_reason"),
-                        "the safety checks did not pass",
-                    )
-                    title = f"Reminder due for {display_name}"
-                    body = f"Auto follow-up skipped — {reason_text}."
-                elif auto_send_status == "failed":
-                    title = f"Reminder due for {display_name}"
-                    body = "Auto follow-up failed to send — you may need to follow up manually."
-                else:
-                    title = f"Follow up with {display_name}"
-                    body = reminder.get("reminder_note") or "You set a reminder to follow up on this conversation."
-
-                notification_service.create(
-                    company_id=reminder["company_id"],
-                    notification_type="conversation_reminder",
-                    title=title,
-                    body=body,
-                    channel=reminder["channel"],
-                    external_user_id=reminder["external_user_id"],
-                    conversation_id=reminder["id"],
-                    severity="info",
-                    data={
-                        "user_id": reminder.get("reminder_set_by_user_id"),
-                        "auto_send_status": auto_send_status,
-                        "auto_send_skip_reason": reminder.get("auto_send_skip_reason"),
-                    },
-                )
+            await asyncio.to_thread(_reminder_cycle)
         except Exception as exc:
             print("REMINDER WORKER ERROR:", exc)
 
@@ -188,7 +199,7 @@ async def reminder_worker() -> None:
 async def scheduled_post_worker() -> None:
     while True:
         try:
-            scheduled_post_service.publish_due_posts()
+            await asyncio.to_thread(scheduled_post_service.publish_due_posts)
         except Exception as exc:
             print("SCHEDULED POST WORKER ERROR:", exc)
 
@@ -418,6 +429,9 @@ app.include_router(
     whatsapp_webhook.router
 )
 app.include_router(
+    whatsapp_qr_webhook.router
+)
+app.include_router(
     meta_webhook.router
 )
 
@@ -450,6 +464,7 @@ def home():
         "documentation": "/docs",
         "webhooks": [
             "/webhook/whatsapp/",
+            "/webhook/whatsapp-qr/",
             "/webhook/meta/",
             "/webhook/messenger/",
             "/webhook/instagram/",

@@ -6,6 +6,7 @@ import {
   CampaignOutlined,
   ChatOutlined,
   DashboardOutlined,
+  DialpadOutlined,
   EventNoteOutlined,
   ForumOutlined,
   GroupOutlined,
@@ -53,6 +54,7 @@ const NAV_GROUPS = [
       ["customers", "/customers", "Customers", GroupOutlined],
       ["broadcast", "/broadcast", "Broadcast", CampaignOutlined, ["channels.view"]],
       ["calls", "/calls", "Calls", CallOutlined],
+      ["dialer", "/dialer", "Dialer", DialpadOutlined, ["dialer.use"]],
     ],
   },
   {
@@ -66,7 +68,7 @@ const NAV_GROUPS = [
     label: "Growth",
     items: [
       ["publish", "/publish", "Publish", SendOutlined, ["channels.view"]],
-      ["comments", "/comments", "Comments", ForumOutlined, ["channels.view", "modules.comments"]],
+      ["comments", "/comments", "Comments", ForumOutlined, ["modules.comments"]],
       ["catalogue", "/catalogue", "Master Catalogue", Inventory2Outlined],
       ["analytics", "/analytics", "Analytics", QueryStatsOutlined, ["analytics.view"]],
     ],

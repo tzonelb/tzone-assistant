@@ -83,6 +83,20 @@ class AppConfig:
         "v21.0",
     )
 
+    # WhatsApp Web bridge (QR pairing — channels/whatsapp_qr/bridge/).
+    # Local-only by default; change WA_BRIDGE_SECRET in production and set
+    # the same value in the bridge process's environment.
+    WA_BRIDGE_URL: str = os.getenv(
+        "WA_BRIDGE_URL",
+        "http://127.0.0.1:3901",
+    )
+
+    # `or` (not getenv default) so an EMPTY value in a copied .env still
+    # coalesces to the local default — matching the Node bridge's
+    # `process.env.WA_BRIDGE_SECRET || "…"`, so the two never disagree when
+    # the var is present-but-blank.
+    WA_BRIDGE_SECRET: str = os.getenv("WA_BRIDGE_SECRET") or "tzone-local-bridge-secret"
+
     META_VERIFY_TOKEN: str = os.getenv(
         "META_VERIFY_TOKEN",
         "tzone_meta_verify_token",

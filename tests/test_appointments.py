@@ -193,7 +193,9 @@ def test_update_status_and_reschedule(client_and_db):
     assert resp.status_code == 200, resp.text
     body = resp.json()
     assert body["status"] == "completed"
-    assert body["scheduled_at"] == "2026-08-02T11:00:00Z"
+    # scheduled_at is normalized to canonical UTC (+00:00 offset) on write so
+    # reminder-scan string comparisons are correct regardless of client tz form.
+    assert body["scheduled_at"] == "2026-08-02T11:00:00+00:00"
 
 
 def test_update_rejects_invalid_status(client_and_db):

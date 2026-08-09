@@ -408,7 +408,31 @@ class ScheduledPostService:
                 ("sent" if any_success else "failed", json.dumps(results), now, now, post_id, company_id),
             )
             conn.commit()
+
+        # Bell notification on the publish outcome (both worker auto-publish
+        # and manual publish-now flow through here). Deduped per post+status
+        # so a single post never notifies the same outcome twice.
+        self._notify_publish_outcome(company_id=company_id, post=post, succeeded=any_success)
+
         return self.get_post(company_id=company_id, post_id=post_id)
+
+    @staticmethod
+    def _notify_publish_outcome(*, company_id: int, post: dict[str, Any], succeeded: bool) -> None:
+        try:
+            from backend.services.notification_service import notification_service
+            excerpt = (post.get("text") or "").strip()
+            excerpt = (excerpt[:80] + "…") if len(excerpt) > 80 else excerpt
+            notification_service.create(
+                company_id=company_id,
+                notification_type="post_published" if succeeded else "post_publish_failed",
+                title="Post published" if succeeded else "Post failed to publish",
+                body=excerpt or None,
+                severity="info" if succeeded else "warning",
+                data={"scheduled_post_id": post.get("id")},
+                dedupe_key=f"post_publish:{post.get('id')}:{'ok' if succeeded else 'fail'}",
+            )
+        except Exception:
+            pass
 
     def publish_due_posts(self) -> None:
         """Called by the background worker — publishes every scheduled

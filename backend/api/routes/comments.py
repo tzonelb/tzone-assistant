@@ -48,6 +48,17 @@ def list_comments(post_external_id: str, current_user: dict[str, Any] = Depends(
     return {"comments": comment_service.list_comments(company_id=company_id, post_external_id=post_external_id)}
 
 
+@router.post("/sync")
+def sync_direct_accounts(current_user: dict[str, Any] = Depends(get_current_user)):
+    """Pull fresh posts + comments from every connected direct session
+    (Instagram login / Facebook cookies). Graph-API accounts don't need
+    this — their comments arrive by webhook."""
+    company_id = _company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "modules.comments")
+    from backend.services.social_session_service import social_session_service
+    return social_session_service.sync_all(company_id=company_id)
+
+
 @router.post("/{comment_id}/reply")
 def reply(comment_id: int, payload: ReplyRequest, current_user: dict[str, Any] = Depends(get_current_user)):
     company_id = _company_id(current_user)

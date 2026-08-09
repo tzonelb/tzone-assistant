@@ -3,21 +3,32 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.api.schemas.scheduled_posts import ScheduledPostCreateRequest, ScheduledPostUpdateRequest
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.channel_account_service import channel_account_service
+from backend.services.platform_admin_service import platform_admin_service
 from backend.services.scheduled_post_service import POST_CHANNELS, POST_TYPES, STATUSES, scheduled_post_service
 
 
 router = APIRouter(prefix="/api/scheduled-posts", tags=["Scheduled Posts"])
 
 
-def current_context(current_user=Depends(get_current_user)):
-    company_id = auth_service.resolve_company_id(
+def _context_no_module_gate(current_user=Depends(get_current_user)):
+    company_id = int(auth_service.resolve_company_id(
         current_user=current_user, requested_company_id=None
-    )
-    return current_user, int(company_id)
+    ))
+    return current_user, company_id
+
+
+def current_context(current_user=Depends(get_current_user)):
+    current_user, company_id = _context_no_module_gate(current_user)
+    if not current_user.get("is_super_admin") and not platform_admin_service.is_module_enabled(company_id=company_id, module="scheduler"):
+        raise HTTPException(status_code=403, detail="The Scheduler module is not enabled for this company.")
+    return current_user, company_id
 
 
 @router.get("/options")
-def scheduled_post_options(context=Depends(current_context)):
+def scheduled_post_options(context=Depends(_context_no_module_gate)):
+    # Not scheduler-gated: the Comments inbox also uses this to list
+    # postable channel accounts for its channel filter, and it exposes no
+    # scheduler data (just channel accounts, already available elsewhere).
     current_user, company_id = context
     auth_service.require_permission(current_user, company_id, "channels.view")
     accounts = channel_account_service.list_for_company(company_id=company_id)

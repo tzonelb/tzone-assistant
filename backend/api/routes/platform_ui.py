@@ -1,3 +1,4 @@
+import hashlib
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -57,7 +58,16 @@ def get_config(response: Response, current_user: dict[str, Any] = Depends(get_cu
     if not current_user.get("is_super_admin"):
         company_id = auth_service.resolve_company_id(current_user)
     resolved = platform_ui_service.resolve_config(company_id=company_id)
-    response.headers["ETag"] = f'"{resolved["version"]}-{company_id or "platform"}"'
+    # Fold module visibility into the ETag: the per-company module-flag
+    # overlay changes visibility WITHOUT bumping the theme version, so a
+    # version-only ETag would let a browser keep a suspended module
+    # visible via a 304 until the next theme publish.
+    visibility = "".join(
+        "1" if (resolved["modules"].get(key) or {}).get("visible", True) else "0"
+        for key in sorted(resolved["modules"])
+    )
+    vis_hash = hashlib.sha1(visibility.encode()).hexdigest()[:8]
+    response.headers["ETag"] = f'"{resolved["version"]}-{company_id or "platform"}-{vis_hash}"'
     return resolved
 
 

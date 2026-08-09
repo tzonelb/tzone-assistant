@@ -238,6 +238,35 @@ class CommentService:
                         (company_id, parent_comment_external_id),
                     )
             conn.commit()
+            newly_inserted = existing is None
+
+        # A brand-new comment from a customer (not our own reply) raises a
+        # bell notification for the team, deduped by the platform comment id
+        # so a re-sync of the same comment never notifies twice.
+        if newly_inserted and not is_from_business:
+            self._notify_new_comment(
+                company_id=company_id, channel=channel, comment_external_id=comment_external_id,
+                post_external_id=post_external_id, author_name=author_name, text=text,
+            )
+
+    @staticmethod
+    def _notify_new_comment(*, company_id, channel, comment_external_id, post_external_id, author_name, text):
+        try:
+            from backend.services.notification_service import notification_service
+            who = author_name or "Someone"
+            notification_service.create(
+                company_id=company_id,
+                notification_type="new_comment",
+                title=f"New comment from {who}",
+                body=text,
+                channel=channel,
+                severity="info",
+                data={"post_external_id": post_external_id, "author_name": author_name},
+                dedupe_key=f"comment:{comment_external_id}",
+            )
+        except Exception:
+            # A notification failure must never lose the ingested comment.
+            pass
 
     # -----------------------------------------------------------------
     # Reading — grouped by post (Buffer "By post" view)
@@ -305,6 +334,31 @@ class CommentService:
         comment = dict(comment)
 
         account_id = comment["channel_account_id"]
+
+        # Direct-session channels don't go through the Graph API at all.
+        if comment["channel"] == "instagram_direct":
+            from backend.services.social_session_service import SocialSessionError, social_session_service
+            try:
+                result = social_session_service.reply_instagram(
+                    account_id=account_id,
+                    post_external_id=comment["post_external_id"],
+                    comment_external_id=comment["comment_external_id"],
+                    text=text,
+                )
+            except SocialSessionError as exc:
+                raise ValueError(str(exc))
+            data = {"id": result["comment_external_id"]}
+            return self._store_reply(
+                comment=comment, account_id=account_id, text=text,
+                reply_external_id=str(data["id"]), actor_user_id=actor_user_id,
+                comment_id=comment_id,
+            )
+        if comment["channel"] == "facebook_direct":
+            raise ValueError(
+                "Facebook direct download is read-only — replying needs the official "
+                "Facebook connection or the Facebook app on your phone."
+            )
+
         access_token = channel_account_service.get_decrypted_token(account_id=account_id)
         base = f"https://graph.facebook.com/{config.META_API_VERSION}"
         # Facebook: POST /{comment-id}/comments ; Instagram: POST /{ig-comment-id}/replies
@@ -322,13 +376,24 @@ class CommentService:
         except requests.RequestException as exc:
             raise ValueError(str(exc))
 
-        # Store our reply as a business comment and mark the parent answered.
+        return self._store_reply(
+            comment=comment, account_id=account_id, text=text,
+            reply_external_id=str(data["id"]), actor_user_id=actor_user_id,
+            comment_id=comment_id,
+        )
+
+    def _store_reply(
+        self, *, comment: dict[str, Any], account_id: int, text: str,
+        reply_external_id: str, actor_user_id: int | None, comment_id: int,
+    ) -> dict[str, Any]:
+        """Store our reply as a business comment and mark the parent
+        answered — shared by the Graph API and direct-session paths."""
         self._upsert_comment(
-            company_id=company_id,
+            company_id=comment["company_id"],
             channel_account_id=account_id,
             channel=comment["channel"],
             post_external_id=comment["post_external_id"],
-            comment_external_id=str(data["id"]),
+            comment_external_id=reply_external_id,
             parent_comment_external_id=comment["comment_external_id"],
             author_name="You",
             author_external_id=None,
@@ -342,7 +407,7 @@ class CommentService:
                 (actor_user_id, comment_id),
             )
             conn.commit()
-        return {"reply_external_id": str(data["id"]), "status": "answered"}
+        return {"reply_external_id": reply_external_id, "status": "answered"}
 
 
 comment_service = CommentService()

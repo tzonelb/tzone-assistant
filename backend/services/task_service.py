@@ -13,6 +13,25 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def normalize_dt(value: Any) -> str | None:
+    """Canonicalize a date/time string to UTC ISO with a +00:00 offset so the
+    string comparisons in scan_due_tasks (due_at <= now) are correct regardless
+    of whether the client sent a naive, Z-suffixed, or offset value. Unparseable
+    input is returned as-is (never blocks a save)."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
+
+
 # Tasks are a company's internal work list — follow-ups, payments, services
 # and internal cases assigned to the team. Status/priority/type are fixed,
 # small enumerations (unlike Departments, which are free-form per company)
@@ -45,6 +64,42 @@ def _fire_task_reply_flow_trigger(*, company_id: int, customer_id: int | None) -
         reply_flow_engine.fire_event_for_customer(company_id=company_id, customer_id=customer_id, trigger_type="task_completed")
     except Exception:
         logger.exception("task_completed reply flow trigger failed for customer #%s", customer_id)
+
+
+def _notify_task_assigned(*, company_id: int, task_id: int, title: str, assigned_user_id: int, due_at: str | None) -> None:
+    """Bell notification to the assignee when a task lands on them. Deduped
+    per task+assignee so re-assigning back and forth never spams. Never raises."""
+    try:
+        from backend.services.notification_service import notification_service
+        body = f"Due {due_at}" if due_at else None
+        notification_service.create(
+            company_id=company_id,
+            notification_type="task_assigned",
+            title=f'Task assigned: "{title}"',
+            body=body,
+            recipient_user_id=assigned_user_id,
+            severity="info",
+            data={"task_id": task_id},
+            dedupe_key=f"task_assigned:{task_id}:{assigned_user_id}",
+        )
+    except Exception:
+        logger.exception("task_assigned notification failed for task #%s", task_id)
+
+
+def _notify_task_completed(*, company_id: int, task_id: int, title: str) -> None:
+    """Team-wide bell notification when a task is completed. Never raises."""
+    try:
+        from backend.services.notification_service import notification_service
+        notification_service.create(
+            company_id=company_id,
+            notification_type="task_completed",
+            title=f'Task completed: "{title}"',
+            severity="info",
+            data={"task_id": task_id},
+            dedupe_key=f"task_completed:{task_id}",
+        )
+    except Exception:
+        logger.exception("task_completed notification failed for task #%s", task_id)
 
 
 class TaskService:
@@ -87,6 +142,14 @@ class TaskService:
                 conn.execute("ALTER TABLE tasks ADD COLUMN task_type TEXT NOT NULL DEFAULT 'other'")
             if "conversation_id" not in existing_columns:
                 conn.execute("ALTER TABLE tasks ADD COLUMN conversation_id INTEGER")
+            # Claim marker for the due-task bell scan: set once a due alert has
+            # fired so scan_due_tasks doesn't re-examine the same overdue task
+            # every 30s forever. Reset to NULL when due_at is changed.
+            if "due_notified_at" not in existing_columns:
+                conn.execute("ALTER TABLE tasks ADD COLUMN due_notified_at TEXT")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_due_scan ON tasks(status, due_at)"
+            )
             conn.commit()
 
     @staticmethod
@@ -147,7 +210,7 @@ class TaskService:
             raise ValueError(f'"{clean_task_type}" is not a valid task type. Choose one of: {", ".join(TASK_TYPES)}.')
 
         description = self._clean(description)
-        due_at = self._clean(due_at)
+        due_at = normalize_dt(self._clean(due_at))
         now = utc_now_iso()
 
         with db.connect() as conn:
@@ -178,6 +241,11 @@ class TaskService:
             company_id=company_id, actor_user_id=actor_user_id, action="task_created",
             entity_id=task_id, description=f'Created task "{clean_title}"',
         )
+        if assigned_user_id is not None:
+            _notify_task_assigned(
+                company_id=company_id, task_id=task_id, title=clean_title,
+                assigned_user_id=assigned_user_id, due_at=due_at,
+            )
         return self.get_task(company_id=company_id, task_id=task_id)
 
     @staticmethod
@@ -265,7 +333,7 @@ class TaskService:
             cleaned["description"] = self._clean(values["description"])
 
         if "due_at" in values:
-            cleaned["due_at"] = self._clean(values["due_at"])
+            cleaned["due_at"] = normalize_dt(self._clean(values["due_at"]))
 
         if "task_type" in values and values["task_type"] is not None:
             task_type = str(values["task_type"]).strip().lower()
@@ -298,7 +366,7 @@ class TaskService:
         now = utc_now_iso()
         with db.connect() as conn:
             existing = conn.execute(
-                "SELECT id, status, customer_id FROM tasks WHERE id = ? AND company_id = ?",
+                "SELECT id, status, customer_id, title, assigned_user_id FROM tasks WHERE id = ? AND company_id = ?",
                 (task_id, company_id),
             ).fetchone()
             if not existing:
@@ -314,26 +382,56 @@ class TaskService:
             if customer_requested:
                 cleaned["customer_id"] = customer_id
 
+            # A due-date change re-arms the due bell (a task pushed to
+            # tomorrow should alert again when tomorrow arrives).
+            if "due_at" in cleaned:
+                cleaned["due_notified_at"] = None
+
             just_completed = False
+            completing = False
             if status_requested:
-                cleaned["status"] = new_status
                 was_done = existing["status"] == "done"
                 if new_status == "done" and not was_done:
-                    cleaned["completed_at"] = now
-                    just_completed = True
-                elif new_status != "done" and was_done:
-                    cleaned["completed_at"] = None
+                    # Claim the completion atomically below instead of via the
+                    # bulk update, so only ONE of two concurrent "mark done"
+                    # calls fires the reply-flow trigger (a customer-facing
+                    # message) and the completion bell.
+                    completing = True
+                else:
+                    cleaned["status"] = new_status
+                    if new_status != "done" and was_done:
+                        cleaned["completed_at"] = None
 
-            assignments = ", ".join(f"{key} = ?" for key in cleaned)
-            conn.execute(
-                f"UPDATE tasks SET {assignments}, updated_at = ? WHERE id = ? AND company_id = ?",
-                [*cleaned.values(), now, task_id, company_id],
-            )
+            if cleaned:
+                assignments = ", ".join(f"{key} = ?" for key in cleaned)
+                conn.execute(
+                    f"UPDATE tasks SET {assignments}, updated_at = ? WHERE id = ? AND company_id = ?",
+                    [*cleaned.values(), now, task_id, company_id],
+                )
+
+            if completing:
+                claim = conn.execute(
+                    "UPDATE tasks SET status = 'done', completed_at = ?, updated_at = ? "
+                    "WHERE id = ? AND company_id = ? AND status != 'done'",
+                    (now, now, task_id, company_id),
+                )
+                just_completed = claim.rowcount == 1
+
             conn.commit()
+
+        resolved_title = cleaned.get("title", existing["title"])
 
         if just_completed:
             resolved_customer_id = cleaned.get("customer_id", existing["customer_id"])
             _fire_task_reply_flow_trigger(company_id=company_id, customer_id=resolved_customer_id)
+            _notify_task_completed(company_id=company_id, task_id=task_id, title=resolved_title)
+
+        # Notify a newly-assigned user (a real change, not a no-op re-save).
+        if assign_requested and assigned_user_id is not None and assigned_user_id != existing["assigned_user_id"]:
+            _notify_task_assigned(
+                company_id=company_id, task_id=task_id, title=resolved_title,
+                assigned_user_id=assigned_user_id, due_at=cleaned.get("due_at"),
+            )
 
         if status_requested:
             _log_activity(
@@ -361,6 +459,53 @@ class TaskService:
             company_id=company_id, actor_user_id=actor_user_id, action="task_deleted",
             entity_id=task_id, description=f'Deleted task "{existing["title"] if existing else task_id}"',
         )
+
+    def scan_due_tasks(self) -> int:
+        """Called on the reminder-worker cadence: raise a one-time bell alert
+        for every open task whose due time has arrived. Uses the claim marker
+        `due_notified_at` (set once fired) so an overdue task is examined ONCE,
+        not re-scanned every 30s forever — the same claim-then-act pattern as
+        appointment reminders. Never raises; returns count fired."""
+        now = utc_now_iso()
+        try:
+            with db.connect() as conn:
+                # Only un-notified, now-due, still-open tasks — the set drains
+                # as they're claimed instead of growing without bound.
+                rows = conn.execute(
+                    """
+                    SELECT id, company_id, title, assigned_user_id FROM tasks
+                    WHERE status NOT IN ('done', 'cancelled')
+                      AND due_at IS NOT NULL AND due_at <= ?
+                      AND due_notified_at IS NULL
+                    """,
+                    (now,),
+                ).fetchall()
+        except Exception:
+            logger.exception("scan_due_tasks query failed")
+            return 0
+
+        fired = 0
+        from backend.services.notification_service import notification_service
+        for row in rows:
+            try:
+                # Claim first so a create() failure doesn't cause an endless
+                # retry; the dedupe_key is a second guard against duplicates.
+                with db.connect() as conn:
+                    conn.execute("UPDATE tasks SET due_notified_at = ? WHERE id = ?", (now, row["id"]))
+                    conn.commit()
+                notification_service.create(
+                    company_id=row["company_id"],
+                    notification_type="task_due",
+                    title=f'Task due: "{row["title"]}"',
+                    recipient_user_id=row["assigned_user_id"],
+                    severity="warning",
+                    data={"task_id": row["id"]},
+                    dedupe_key=f"task_due:{row['id']}",
+                )
+                fired += 1
+            except Exception:
+                logger.exception("task_due notification failed for task #%s", row["id"])
+        return fired
 
 
 task_service = TaskService()
