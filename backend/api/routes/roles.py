@@ -157,6 +157,9 @@ def overview(current_user: dict = Depends(get_current_user)):
 def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
+    _require_grantable_permissions(
+        current_user=current_user, company_id=company_id, permission_codes=payload.permission_codes,
+    )
 
     with db.connect() as conn:
         try:
@@ -225,6 +228,52 @@ def _admin_capable_user_exists(
     return False
 
 
+def _require_grantable_permissions(
+    *, current_user: dict, company_id: int, permission_codes: list[str], existing_codes: list[str] | None = None,
+) -> None:
+    """SECURITY: a holder of `users.manage` (a deliberately limited
+    "delegated admin" permission) must never be able to mint a NEW role
+    carrying permissions they don't themselves hold, then self-assign it —
+    that is a full privilege-escalation bypass of the entire granular-
+    permission model (identical blast radius to the Owner-role escalation
+    already fixed elsewhere in this file, just routed around the
+    `code == 'owner'` special case via a fresh role instead).
+
+    Only the NEWLY-ADDED codes (permission_codes minus whatever the role
+    already had, when editing) are checked against the caller — removing
+    permissions from a role (including one's own) must always be allowed
+    regardless of what the caller currently holds, otherwise an admin could
+    get stuck unable to edit their own role at all once it holds anything
+    they don't personally have (e.g. narrowing their own role down)."""
+    if current_user.get("is_super_admin"):
+        return
+    with db.connect() as conn:
+        caller_is_owner = conn.execute(
+            """
+            SELECT 1 FROM company_users cu
+            JOIN roles r ON r.id = cu.role_id
+            WHERE cu.company_id = ? AND cu.user_id = ? AND r.code = 'owner'
+            LIMIT 1
+            """,
+            (company_id, current_user["id"]),
+        ).fetchone()
+    if caller_is_owner:
+        return
+    newly_added = set(permission_codes) - set(existing_codes or [])
+    not_held = [
+        code for code in newly_added
+        if not auth_service.has_permission(current_user["id"], company_id, code, False)
+    ]
+    if not_held:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "You cannot grant a role permissions you don't hold yourself: "
+                + ", ".join(sorted(not_held))
+            ),
+        )
+
+
 def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> None:
     conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
     codes = sorted(set(permission_codes))
@@ -250,6 +299,18 @@ def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = D
             raise HTTPException(status_code=404, detail="Role not found.")
         if role["code"] == "owner" and payload.permission_codes is not None:
             raise HTTPException(status_code=400, detail="The Owner role always has full access.")
+        if payload.permission_codes is not None:
+            existing_codes = [
+                r["code"] for r in conn.execute(
+                    "SELECT p.code FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id "
+                    "WHERE rp.role_id = ?",
+                    (role_id,),
+                ).fetchall()
+            ]
+            _require_grantable_permissions(
+                current_user=current_user, company_id=company_id,
+                permission_codes=payload.permission_codes, existing_codes=existing_codes,
+            )
         # Last-admin guard: stripping users.manage from this role must not
         # leave the company with no active member able to manage users.
         if (

@@ -8,6 +8,7 @@ import {
   updateCustomerRequest,
 } from "../../api/client";
 import { AppCard, ErrorState, LoadingState } from "../../components/common";
+import { safeHttpUrl } from "../../utils/safeUrl";
 import "./CustomersPage.css";
 import "./CustomerDetailPage.css";
 
@@ -81,6 +82,10 @@ function DocumentsEditor({ documents, disabled, onAdd, onRemove }) {
     const cleanLabel = label.trim();
     const cleanUrl = url.trim();
     if (!cleanLabel || !cleanUrl) return;
+    if (!safeHttpUrl(cleanUrl)) {
+      window.alert("Please enter a valid http:// or https:// URL.");
+      return;
+    }
     onAdd(cleanLabel, cleanUrl);
     setLabel("");
     setUrl("");
@@ -89,15 +94,22 @@ function DocumentsEditor({ documents, disabled, onAdd, onRemove }) {
   return (
     <div className="client-file-kv-editor">
       {(!documents || documents.length === 0) ? <p className="client-file-empty-hint">No documents on file — e.g. ID photo, signed contract, warranty card.</p> : null}
-      {(documents || []).map((doc, index) => (
+      {(documents || []).map((doc, index) => {
+        const href = safeHttpUrl(doc.url);
+        return (
         <div className="client-file-kv-row" key={`${doc.label}-${index}`}>
-          <a className="client-file-kv-key" href={doc.url} target="_blank" rel="noreferrer">{doc.label}</a>
+          {href ? (
+            <a className="client-file-kv-key" href={href} target="_blank" rel="noreferrer">{doc.label}</a>
+          ) : (
+            <span className="client-file-kv-key">{doc.label}</span>
+          )}
           <span className="client-file-doc-url">{doc.url}</span>
           <button type="button" disabled={disabled} aria-label={`Remove document ${doc.label}`} onClick={() => onRemove(index)}>
             <CloseOutlined fontSize="inherit" />
           </button>
         </div>
-      ))}
+        );
+      })}
       <form className="client-file-kv-add-form" onSubmit={submit}>
         <input placeholder="Document label (e.g. ID photo)" value={label} disabled={disabled} onChange={(event) => setLabel(event.target.value)} />
         <input placeholder="URL" value={url} disabled={disabled} onChange={(event) => setUrl(event.target.value)} />

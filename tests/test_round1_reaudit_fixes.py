@@ -263,7 +263,13 @@ def test_stripping_users_manage_from_last_admin_role_is_rejected(fresh_env):
         resp = client.patch(
             f"/api/admin/access/roles/{role_id}",
             headers={"Authorization": f"Bearer {session['access_token']}"},
-            json={"permission_codes": ["dashboard.view"]},
+            # Pure removal (role holds only users.manage) so this isolates the
+            # last-admin-lockout guard from the separate
+            # _require_grantable_permissions guard (added later this
+            # session): swapping to a permission the caller doesn't hold
+            # (e.g. "dashboard.view") is correctly blocked by THAT guard
+            # first (403) — a different, equally-intentional protection.
+            json={"permission_codes": []},
         )
     assert resp.status_code == 400
     assert "no administrator" in resp.json()["detail"].lower()

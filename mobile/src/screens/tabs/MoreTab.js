@@ -23,9 +23,13 @@ export default function MoreTab() {
 
   const saveServer = async () => {
     if (!serverUrl.trim()) return;
-    await setServerUrl(serverUrl);
-    setSavedNote("Saved. It applies to all requests from now on.");
-    setTimeout(() => setSavedNote(""), 3000);
+    try {
+      await setServerUrl(serverUrl);
+      setSavedNote("Saved. It applies to all requests from now on.");
+      setTimeout(() => setSavedNote(""), 3000);
+    } catch (e) {
+      Alert.alert("Invalid server address", e.message || "Could not save this address.");
+    }
   };
 
   const confirmLogout = () => {

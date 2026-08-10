@@ -19,6 +19,14 @@ COPY . .
 # container still works if run standalone without those mounts.
 RUN mkdir -p database uploads
 
+# Run as a non-root user: a container escape or RCE in a dependency
+# (or in the app itself) shouldn't hand the attacker root inside the
+# container. Own the app + volume-mount dirs so gunicorn/sqlite can
+# still write to them under the new user.
+RUN groupadd --system tzone && useradd --system --gid tzone --home /app tzone \
+    && chown -R tzone:tzone /app
+USER tzone
+
 EXPOSE 8000
 
 # 4 workers is a reasonable default for a small/medium VPS; raise

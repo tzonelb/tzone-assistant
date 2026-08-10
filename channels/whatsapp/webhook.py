@@ -1,3 +1,4 @@
+import hmac
 import json
 import logging
 
@@ -85,7 +86,7 @@ def verify_webhook(
     hub_verify_token: str | None = Query(default=None, alias="hub.verify_token"),
     hub_challenge: str | None = Query(default=None, alias="hub.challenge"),
 ):
-    if hub_mode == "subscribe" and hub_verify_token == config.WHATSAPP_VERIFY_TOKEN:
+    if hub_mode == "subscribe" and hmac.compare_digest(str(hub_verify_token or ""), config.WHATSAPP_VERIFY_TOKEN):
         return PlainTextResponse(content=hub_challenge or "")
 
     raise HTTPException(status_code=403, detail="Verification failed")

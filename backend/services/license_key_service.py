@@ -83,10 +83,19 @@ class LicenseKeyService:
             ).fetchone()
             if not row or row["status"] != "unused":
                 raise ValueError("This license key is not valid or already used.")
-            conn.execute(
-                "UPDATE license_keys SET status = 'redeemed', redeemed_by_company_id = ?, redeemed_at = ? WHERE id = ?",
+            # Atomic claim: the WHERE status='unused' guard (not just the
+            # pre-check above) is what actually prevents two concurrent
+            # redemptions of the same key from both succeeding — a bare
+            # SELECT-then-UPDATE has a gap where both callers can pass the
+            # pre-check before either commits, double-granting the plan
+            # entitlement from a single key.
+            cursor = conn.execute(
+                "UPDATE license_keys SET status = 'redeemed', redeemed_by_company_id = ?, redeemed_at = ? "
+                "WHERE id = ? AND status = 'unused'",
                 (company_id, utc_now_iso(), row["id"]),
             )
+            if cursor.rowcount == 0:
+                raise ValueError("This license key is not valid or already used.")
             conn.commit()
 
     def list_all(self) -> list[dict[str, Any]]:

@@ -59,6 +59,7 @@ import {
   LoadingState,
   StatusBadge,
 } from "../../components/common";
+import { safeHttpUrl } from "../../utils/safeUrl";
 
 import "./ConversationControl.css";
 import "./ConversationInbox.css";
@@ -179,7 +180,7 @@ function getCustomerName(metadata, control) {
 
 
 function MessageMedia({ metadata }) {
-  const mediaUrl = metadata?.media_url;
+  const mediaUrl = safeHttpUrl(metadata?.media_url);
   const mediaType = metadata?.media_type;
   if (!mediaUrl) return null;
 

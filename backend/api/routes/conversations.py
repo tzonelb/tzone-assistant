@@ -580,19 +580,25 @@ def _channel_counts(
     return counts
 
 
+def _safe_filename_part(value: str) -> str:
+    # Defense-in-depth for the Content-Disposition header this builds: only
+    # replacing "/" (as before) left `"`, backslash, and control characters
+    # untouched in a value built from raw path params — a crafted external
+    # user_id could break out of the quoted filename attribute. uvicorn's
+    # h11 layer currently rejects CR/LF at the wire level so this isn't a
+    # live header-splitting exploit today, but the app itself provided no
+    # protection of its own; keep only a safe character set.
+    return "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in value)
+
+
 def _export_filename(
     channel: str,
     user_id: str,
     scope: str,
     extension: str,
 ) -> str:
-    safe_channel = (
-        channel.replace("/", "_")
-    )
-
-    safe_user_id = (
-        user_id.replace("/", "_")
-    )
+    safe_channel = _safe_filename_part(channel)
+    safe_user_id = _safe_filename_part(user_id)
 
     timestamp = datetime.now().strftime(
         "%Y%m%d_%H%M%S"
@@ -725,6 +731,13 @@ def list_conversations(
             current_user
         )
     )
+    # SECURITY: this endpoint returns every customer conversation summary
+    # (names, last-message text) for the company and previously had NO
+    # permission check at all — any authenticated user, even one whose role
+    # was granted zero permissions, could read the entire company inbox.
+    # The "department" filter narrows what's *displayed*, it was never an
+    # access-control boundary. Owners/super-admins bypass automatically.
+    auth_service.require_permission(current_user, company_id, "conversations.view")
 
     all_rows = (
         _load_all_conversations(
@@ -1022,6 +1035,7 @@ def read_conversation(
     # channel+external_user_id (e.g. a phone number). See
     # core/conversation_store.py's _company_dir.
     company_id = auth_service.resolve_company_id(current_user)
+    auth_service.require_permission(current_user, company_id, "conversations.view")
 
     messages = get_conversation(
         company_id,
@@ -1512,6 +1526,7 @@ def export_conversation(
             current_user
         )
     )
+    auth_service.require_permission(current_user, company_id, "conversations.view")
 
     messages = get_conversation(
         company_id,

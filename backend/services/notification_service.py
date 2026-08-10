@@ -191,15 +191,23 @@ class NotificationService:
             conditions.append("substr(created_at, 1, 10) = ?")
             params.append(notification_date.isoformat())
 
+        # Grouping (below) can only ever shrink row count, never grow it, so
+        # fetching enough raw rows to cover offset+limit after grouping is
+        # sufficient. A flat LIMIT 500 silently dropped/misplaced results for
+        # any page past the first ~500 raw notifications; scale the raw fetch
+        # to the requested page instead, capped so a huge offset can't force
+        # an unbounded scan.
+        raw_limit = min(5000, max(500, (max(0, offset) + max(1, min(250, limit))) * 5))
+
         with db.connect() as conn:
             rows = conn.execute(
                 f"""
                 SELECT * FROM notifications
                 WHERE {' AND '.join(conditions)}
                 ORDER BY created_at DESC, id DESC
-                LIMIT 500
+                LIMIT ?
                 """,
-                tuple(params),
+                tuple(params) + (raw_limit,),
             ).fetchall()
 
         raw = [self._row_to_dict(row) for row in rows]

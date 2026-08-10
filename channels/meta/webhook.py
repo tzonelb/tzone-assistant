@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, HTTPException
+import hmac
 import json
 import logging
 
@@ -53,7 +54,7 @@ async def verify_meta_webhook(request: Request):
     token = params.get("hub.verify_token")
     challenge = params.get("hub.challenge")
 
-    if mode == "subscribe" and token == config.META_VERIFY_TOKEN:
+    if mode == "subscribe" and hmac.compare_digest(str(token or ""), config.META_VERIFY_TOKEN):
         log_meta_event("verified", {"status": "success"})
         return int(challenge)
 

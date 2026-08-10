@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 
 const TOKEN_KEY = "tzone_access_token";
 const SERVER_KEY = "tzone_server_url";
@@ -22,21 +23,65 @@ export async function getServerUrl() {
   return cachedBaseUrl;
 }
 
+// SECURITY: only http://localhost/127.0.0.1/private-LAN dev servers may use
+// plaintext HTTP (the shipped default is exactly that — a dev machine's LAN
+// IP). Any other host must be HTTPS, otherwise the access token and every
+// request/response cross the network in the clear — trivially interceptable
+// on a shared/public Wi-Fi or by a phishing "point the app at this URL" trick.
+function isAllowedServerUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol === "https:") return true;
+  if (parsed.protocol !== "http:") return false;
+  const host = parsed.hostname;
+  return (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    /^10\.\d+\.\d+\.\d+$/.test(host) ||
+    /^192\.168\.\d+\.\d+$/.test(host) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+$/.test(host)
+  );
+}
+
 export async function setServerUrl(url) {
-  cachedBaseUrl = url.trim().replace(/\/+$/, "");
+  const clean = url.trim().replace(/\/+$/, "");
+  if (!isAllowedServerUrl(clean)) {
+    throw new Error(
+      "For your security, only https:// servers (or a local/LAN address for development) are allowed."
+    );
+  }
+  cachedBaseUrl = clean;
   await AsyncStorage.setItem(SERVER_KEY, cachedBaseUrl);
 }
 
+// SECURITY: the access token used to be stored in AsyncStorage, which is
+// unencrypted plain storage on both iOS and Android — readable by anything
+// with filesystem access (a rooted/jailbroken device, malware with storage
+// permission, or an unencrypted device backup). expo-secure-store uses the
+// OS Keychain (iOS) / EncryptedSharedPreferences+Keystore (Android).
 export async function getToken() {
   if (cachedToken) return cachedToken;
-  cachedToken = await AsyncStorage.getItem(TOKEN_KEY);
+  cachedToken = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (!cachedToken) {
+    // One-time migration from the old unencrypted location, if present.
+    const legacy = await AsyncStorage.getItem(TOKEN_KEY);
+    if (legacy) {
+      cachedToken = legacy;
+      await SecureStore.setItemAsync(TOKEN_KEY, legacy);
+      await AsyncStorage.removeItem(TOKEN_KEY);
+    }
+  }
   return cachedToken;
 }
 
 export async function setToken(token) {
   cachedToken = token;
-  if (token) await AsyncStorage.setItem(TOKEN_KEY, token);
-  else await AsyncStorage.removeItem(TOKEN_KEY);
+  if (token) await SecureStore.setItemAsync(TOKEN_KEY, token);
+  else await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
 function normalizeError(status, data) {

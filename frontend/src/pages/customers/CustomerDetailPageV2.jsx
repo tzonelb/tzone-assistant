@@ -8,6 +8,7 @@ import {
   updateCustomerRequest,
 } from "../../api/client";
 import { ErrorState, LoadingState } from "../../components/common";
+import { safeHttpUrl } from "../../utils/safeUrl";
 import "./CustomerDetailPageV2.css";
 
 // Same real data + actions as CustomerDetailPage.jsx (v1) — this is a
@@ -85,6 +86,10 @@ function DocumentsEditor({ documents, disabled, onAdd, onRemove }) {
     const cleanLabel = label.trim();
     const cleanUrl = url.trim();
     if (!cleanLabel || !cleanUrl) return;
+    if (!safeHttpUrl(cleanUrl)) {
+      window.alert("Please enter a valid http:// or https:// URL.");
+      return;
+    }
     onAdd(cleanLabel, cleanUrl);
     setLabel("");
     setUrl("");
@@ -93,15 +98,22 @@ function DocumentsEditor({ documents, disabled, onAdd, onRemove }) {
   return (
     <div className="tzv2-custdet-kv-editor">
       {(!documents || documents.length === 0) ? <p className="tzv2-custdet-empty-hint">No documents on file — e.g. ID photo, signed contract, warranty card.</p> : null}
-      {(documents || []).map((doc, index) => (
+      {(documents || []).map((doc, index) => {
+        const href = safeHttpUrl(doc.url);
+        return (
         <div className="tzv2-custdet-kv-row" key={`${doc.label}-${index}`}>
-          <a className="tzv2-custdet-kv-key" href={doc.url} target="_blank" rel="noreferrer">{doc.label}</a>
+          {href ? (
+            <a className="tzv2-custdet-kv-key" href={href} target="_blank" rel="noreferrer">{doc.label}</a>
+          ) : (
+            <span className="tzv2-custdet-kv-key">{doc.label}</span>
+          )}
           <span className="tzv2-custdet-doc-url">{doc.url}</span>
           <button type="button" className="btn btn-ghost btn-icon" disabled={disabled} aria-label={`Remove document ${doc.label}`} onClick={() => onRemove(index)}>
             <CloseOutlined fontSize="inherit" />
           </button>
         </div>
-      ))}
+        );
+      })}
       <form className="tzv2-custdet-kv-add-form" onSubmit={submit}>
         <input className="input" placeholder="Document label (e.g. ID photo)" value={label} disabled={disabled} onChange={(event) => setLabel(event.target.value)} />
         <input className="input" placeholder="URL" value={url} disabled={disabled} onChange={(event) => setUrl(event.target.value)} />

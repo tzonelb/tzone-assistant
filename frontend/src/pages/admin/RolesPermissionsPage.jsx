@@ -5,6 +5,7 @@ import {
   createDepartmentRequest,
   deleteDepartmentRequest,
   getAccessOverviewRequest,
+  getCurrentUserRequest,
   getUserPermissionOverridesRequest,
   logoutCompanyUserRequest,
   resetCompanyUserPasswordRequest,
@@ -84,8 +85,9 @@ function RolePermissionEditor({ role, groupedPermissions, saving, onTogglePermis
   );
 }
 
-function AddUserForm({ newUser, setNewUser, roles, branches, departments }) {
+function AddUserForm({ newUser, setNewUser, roles, branches, departments, canGrantOwner }) {
   const departmentOptions = departments.filter((name) => name !== "Unassigned").map((name) => ({ value: name, label: name }));
+  const assignableRoles = canGrantOwner ? roles : roles.filter((role) => role.code !== "owner");
 
   return (
     <>
@@ -97,7 +99,7 @@ function AddUserForm({ newUser, setNewUser, roles, branches, departments }) {
         Role
         <select value={newUser.role_id} onChange={(event) => setNewUser({ ...newUser, role_id: event.target.value })} required>
           <option value="">Select role</option>
-          {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+          {assignableRoles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
         </select>
       </label>
       <label>
@@ -414,8 +416,25 @@ export default function RolesPermissionsPage() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutResult, setLogoutResult] = useState(null);
 
+  // Only an existing Owner (or platform super admin) can grant the Owner
+  // role — enforced server-side (backend/api/routes/roles.py). Filter it
+  // out of the assignable-role dropdown for anyone else so a doomed
+  // selection can't even be made, instead of round-tripping to a 403.
+  const [canGrantOwner, setCanGrantOwner] = useState(false);
+  useEffect(() => {
+    getCurrentUserRequest()
+      .then((response) => {
+        const activeCompanyId = response?.user?.active_company_id;
+        const companies = Array.isArray(response?.companies) ? response.companies : [];
+        const active = companies.find((company) => company.id === activeCompanyId) || companies[0];
+        setCanGrantOwner(Boolean(response?.user?.is_super_admin) || active?.role_code === "owner");
+      })
+      .catch(() => {});
+  }, []);
+
   async function load() {
     setLoading(true);
+    setError("");
     try {
       const result = await getAccessOverviewRequest();
       setData(result);
@@ -433,6 +452,7 @@ export default function RolesPermissionsPage() {
   const groupedPermissions = useMemo(() => groupPermissions(data?.permissions), [data]);
 
   const roles = data?.roles || [];
+  const assignableRoles = canGrantOwner ? roles : roles.filter((role) => role.code !== "owner");
   const branches = data?.branches || [];
   const departments = data?.departments || [];
   const departmentOptions = departments.filter((name) => name !== "Unassigned").map((name) => ({ value: name, label: name }));
@@ -449,6 +469,7 @@ export default function RolesPermissionsPage() {
   async function createRole(event) {
     event.preventDefault();
     setSaving(true);
+    setError("");
     try {
       await createAccessRoleRequest(newRole);
       setNewRole({ name: "", code: "", description: "", permission_codes: [] });
@@ -463,6 +484,7 @@ export default function RolesPermissionsPage() {
   async function createUser(event) {
     event.preventDefault();
     setSaving(true);
+    setError("");
     try {
       await createCompanyUserRequest({
         ...newUser,
@@ -481,6 +503,7 @@ export default function RolesPermissionsPage() {
 
   async function updateUser(user, updates) {
     setSaving(true);
+    setError("");
     try {
       await updateCompanyUserRequest(user.id, {
         role_id: updates.role_id ?? user.role_id,
@@ -500,6 +523,7 @@ export default function RolesPermissionsPage() {
     if (!selectedRole || selectedRole.code === "owner") return;
     const current = selectedRole.permission_codes || [];
     setSaving(true);
+    setError("");
     try {
       await updateAccessRoleRequest(selectedRole.id, {
         permission_codes: current.includes(code) ? current.filter((existing) => existing !== code) : [...current, code],
@@ -525,6 +549,7 @@ export default function RolesPermissionsPage() {
   async function confirmReset() {
     if (!resetTarget) return;
     setResetting(true);
+    setError("");
     try {
       const result = await resetCompanyUserPasswordRequest(resetTarget.id);
       setResetResult({ user: resetTarget, temporary_password: result?.temporary_password });
@@ -540,6 +565,7 @@ export default function RolesPermissionsPage() {
   async function confirmLogout() {
     if (!logoutTarget) return;
     setLoggingOut(true);
+    setError("");
     try {
       const result = await logoutCompanyUserRequest(logoutTarget.id);
       setLogoutResult({ user: logoutTarget, revoked_sessions: result?.revoked_sessions ?? 0 });
@@ -681,7 +707,15 @@ export default function RolesPermissionsPage() {
                           disabled={saving}
                           onChange={(event) => updateUser(user, { role_id: Number(event.target.value) })}
                         >
-                          {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
+                          {/* Owner is hidden from selection unless the viewer is
+                              already an Owner/super-admin (server-enforced;
+                              this just avoids a doomed 403 round-trip) — but a
+                              row whose CURRENT role is Owner must still show
+                              it selected rather than silently mismatching. */}
+                          {(assignableRoles.some((role) => role.id === user.role_id)
+                            ? assignableRoles
+                            : [...assignableRoles, ...roles.filter((role) => role.id === user.role_id)]
+                          ).map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
                         </select>
                       </td>
                       <td>
@@ -849,7 +883,7 @@ export default function RolesPermissionsPage() {
               <h2>Add company user</h2>
               <button type="button" onClick={() => setMode(null)}>×</button>
             </div>
-            <AddUserForm newUser={newUser} setNewUser={setNewUser} roles={roles} branches={branches} departments={departments} />
+            <AddUserForm newUser={newUser} setNewUser={setNewUser} roles={roles} branches={branches} departments={departments} canGrantOwner={canGrantOwner} />
             <button className="primary-action" type="submit" disabled={saving}>
               {saving ? "Saving…" : "Create user"}
             </button>

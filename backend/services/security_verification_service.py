@@ -16,6 +16,12 @@ def _hash(value: str) -> str:
 
 CODE_TTL_MINUTES = 10
 ELEVATED_TTL_MINUTES = 20
+# A 6-digit code has only 1,000,000 combinations; with no attempt limit an
+# authenticated attacker (e.g. one who stole a session but not the victim's
+# inbox) could script through the keyspace well within the 10-minute TTL.
+# Lock the code out after this many wrong guesses, forcing a fresh
+# request_code() (a brand-new code + hash) instead of unlimited retries.
+MAX_VERIFY_ATTEMPTS = 5
 
 
 class SecurityVerificationError(Exception):
@@ -61,6 +67,9 @@ class SecurityVerificationService:
                 )
                 """
             )
+            existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(email_verifications)")}
+            if "attempts" not in existing_columns:
+                conn.execute("ALTER TABLE email_verifications ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0")
             conn.commit()
 
     def request_code(self, *, user_id: int, email: str, purpose: str) -> tuple[bool, str]:
@@ -98,7 +107,7 @@ class SecurityVerificationService:
         with db.connect() as conn:
             row = conn.execute(
                 """
-                SELECT id, code_hash, expires_at FROM email_verifications
+                SELECT id, code_hash, expires_at, attempts FROM email_verifications
                 WHERE user_id = ? AND purpose = ? AND consumed_at IS NULL
                 ORDER BY created_at DESC LIMIT 1
                 """,
@@ -107,10 +116,22 @@ class SecurityVerificationService:
 
             if not row:
                 raise SecurityVerificationError("No verification code was requested. Please request a new one.")
-            if row["code_hash"] != _hash(code.strip()):
-                raise SecurityVerificationError("Incorrect code.")
             if datetime.fromisoformat(row["expires_at"]) < now:
                 raise SecurityVerificationError("This code has expired. Please request a new one.")
+            # A 6-digit code is only 1,000,000 combinations; without an
+            # attempt cap an authenticated attacker (e.g. one who stole a
+            # session but not the victim's inbox) could script through the
+            # keyspace inside the TTL. Count every wrong guess (even after
+            # the cap) so a script that ignores the error can't keep probing
+            # once locked out.
+            if row["attempts"] >= MAX_VERIFY_ATTEMPTS:
+                raise SecurityVerificationError("Too many incorrect attempts. Please request a new code.")
+            if row["code_hash"] != _hash(code.strip()):
+                conn.execute(
+                    "UPDATE email_verifications SET attempts = attempts + 1 WHERE id = ?", (row["id"],),
+                )
+                conn.commit()
+                raise SecurityVerificationError("Incorrect code.")
 
             conn.execute(
                 "UPDATE email_verifications SET consumed_at = ? WHERE id = ?",

@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.services.auth_service import get_current_user
@@ -374,8 +374,8 @@ def issue_license_key(payload: IssueLicenseKeyRequest, current_user: dict[str, A
 def list_audit_logs(
     company_id: int | None = None,
     action: str | None = None,
-    limit: int = 100,
-    offset: int = 0,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
     current_user: dict[str, Any] = Depends(get_current_user),
 ):
     """SUPER-ADMIN ONLY — reads back the audit_logs rows already written by

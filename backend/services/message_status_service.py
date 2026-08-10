@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
@@ -73,9 +74,23 @@ class MessageStatusService:
 
     def update_status(self, *, channel: str, provider_message_id: str, status: str) -> None:
         """Called from webhook delivery/read events. Never downgrades an
-        already-more-advanced status."""
+        already-more-advanced status.
+
+        Two delivery-status webhooks for the same message arriving close
+        together (plausible — e.g. "delivered" then "read" firing back to
+        back) could both miss the SELECT below and both attempt the INSERT,
+        so the loser hit the table's UNIQUE(channel, provider_message_id)
+        constraint with an unhandled IntegrityError, 500-ing the webhook.
+        Retry once: the retry's SELECT finds the winner's committed row and
+        takes the UPDATE/rank-check path instead of raising."""
         if status not in _STATUS_RANK or not provider_message_id:
             return
+        try:
+            self._update_status_once(channel=channel, provider_message_id=provider_message_id, status=status)
+        except sqlite3.IntegrityError:
+            self._update_status_once(channel=channel, provider_message_id=provider_message_id, status=status)
+
+    def _update_status_once(self, *, channel: str, provider_message_id: str, status: str) -> None:
         now = utc_now_iso()
         with db.connect() as conn:
             existing = conn.execute(

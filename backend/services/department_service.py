@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
@@ -52,11 +53,19 @@ class DepartmentService:
             if existing:
                 raise ValueError(f'A department named "{name}" already exists.')
 
-            conn.execute(
-                "INSERT INTO company_departments (company_id, name, created_at) VALUES (?, ?, ?)",
-                (company_id, name, utc_now_iso()),
-            )
-            conn.commit()
+            try:
+                conn.execute(
+                    "INSERT INTO company_departments (company_id, name, created_at) VALUES (?, ?, ?)",
+                    (company_id, name, utc_now_iso()),
+                )
+                conn.commit()
+            except sqlite3.IntegrityError:
+                # Two concurrent creates of the same name (double-click, or
+                # two admins racing) can both pass the pre-check above before
+                # either commits — the table's UNIQUE(company_id, name)
+                # constraint catches the loser. Surface the same clean
+                # validation error instead of a raw 500.
+                raise ValueError(f'A department named "{name}" already exists.')
         return self.list_for_company(company_id=company_id)
 
     def clean_selection(self, *, company_id: int, departments: list[str] | None) -> list[str]:
