@@ -109,7 +109,7 @@ def test_meta_webhook_transcribes_voice_note_and_forwards_text(fresh_env):
     assert result["status"] == "received_ai_queued"
 
     import core.conversation_store as conversation_store
-    saved_file = conversation_store.BASE_DIR / "messenger" / f"{CUSTOMER_ID}.jsonl"
+    saved_file = conversation_store.BASE_DIR / str(COMPANY_ID) / "messenger" / f"{CUSTOMER_ID}.jsonl"
     assert saved_file.exists()
     assert '"source_type": "audio"' in saved_file.read_text(encoding="utf-8")
 
@@ -128,7 +128,7 @@ def test_meta_webhook_describes_image_and_forwards_text(fresh_env):
     assert result["status"] == "received_ai_queued"
 
     import core.conversation_store as conversation_store
-    saved_file = conversation_store.BASE_DIR / "messenger" / f"{CUSTOMER_ID}.jsonl"
+    saved_file = conversation_store.BASE_DIR / str(COMPANY_ID) / "messenger" / f"{CUSTOMER_ID}.jsonl"
     assert '"source_type": "image"' in saved_file.read_text(encoding="utf-8")
 
 

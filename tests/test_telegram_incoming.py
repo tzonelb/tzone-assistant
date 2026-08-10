@@ -113,7 +113,7 @@ def test_incoming_telegram_message_is_saved_to_conversation_store(fresh_env):
         company_id=COMPANY_ID,
     )
 
-    saved_file = conversation_store.BASE_DIR / "telegram" / f"{CUSTOMER_ID}.jsonl"
+    saved_file = conversation_store.BASE_DIR / str(COMPANY_ID) / "telegram" / f"{CUSTOMER_ID}.jsonl"
     assert saved_file.exists()
     content = saved_file.read_text(encoding="utf-8")
     assert "What's my balance?" in content

@@ -195,14 +195,25 @@ class ReplyFlowEngine:
             if not flow or not flow["nodes"]:
                 return
 
-            session_row = self._start_session(
-                company_id=company_id, channel=channel, external_user_id=external_user_id, flow_id=flow["id"],
-            )
-            request = Request(channel=channel, user_id=external_user_id, message="", company_id=company_id)
-            state = conversation_control_service.get_state(
-                company_id=company_id, channel=channel, external_user_id=external_user_id,
-            )
-            response = self._advance(request, flow, session_row, state)
+            # Same lock maybe_handle uses for the message-triggered path — an
+            # event-fired flow (appointment reminder, task completed, etc.)
+            # must never race a concurrent customer message for the same
+            # (company, channel, user): without this, an unlocked
+            # _start_session/_advance here can upsert the very session row a
+            # concurrent maybe_handle just read, so its later save silently
+            # writes a stale current_node_id onto a different (or ended)
+            # flow — corrupting the session and permanently suppressing
+            # further replies for that customer.
+            lock = _session_lock(company_id, channel, external_user_id)
+            with lock:
+                session_row = self._start_session(
+                    company_id=company_id, channel=channel, external_user_id=external_user_id, flow_id=flow["id"],
+                )
+                request = Request(channel=channel, user_id=external_user_id, message="", company_id=company_id)
+                state = conversation_control_service.get_state(
+                    company_id=company_id, channel=channel, external_user_id=external_user_id,
+                )
+                response = self._advance(request, flow, session_row, state)
             if response is not None and (response.text or response.buttons):
                 self._dispatch_event_response(
                     company_id=company_id, channel=channel, external_user_id=external_user_id, response=response,
@@ -257,7 +268,7 @@ class ReplyFlowEngine:
             send_result = send_meta_buttons(recipient_id=external_user_id, text=response.text, buttons=buttons, channel=channel, company_id=company_id)
 
         save_conversation_message(
-            channel=channel, user_id=external_user_id, direction="out", text=response.text,
+            company_id=company_id, channel=channel, user_id=external_user_id, direction="out", text=response.text,
             metadata={"buttons": buttons, "send_result": send_result, "sender_type": "ai", "source": "reply_flow_trigger"},
         )
 

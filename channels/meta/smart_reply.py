@@ -329,6 +329,7 @@ def _finish_pending(company_id: int, channel: str, user_id: str, generation: int
         )
 
         outgoing = save_conversation_message(
+            company_id=company_id,
             channel=channel,
             user_id=user_id,
             direction="out",

@@ -75,7 +75,7 @@ def client_and_db(tmp_path):
     )
     # A message must exist for the GET endpoint to find the conversation.
     import core.conversation_store as store
-    store.save_conversation_message(channel=CHANNEL, user_id=CUSTOMER_ID, direction="in", text="hi", metadata={})
+    store.save_conversation_message(company_id=COMPANY_ID, channel=CHANNEL, user_id=CUSTOMER_ID, direction="in", text="hi", metadata={})
 
     from main import app
     from backend.services.auth_service import get_current_user

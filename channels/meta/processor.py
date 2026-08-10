@@ -127,6 +127,7 @@ def process_meta_payload(payload: dict):
     )
 
     incoming = save_conversation_message(
+        company_id=company_id,
         channel=channel,
         user_id=user_id,
         direction="in",

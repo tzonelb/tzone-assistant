@@ -40,6 +40,7 @@ def process_whatsapp_message(
     )
 
     incoming = save_conversation_message(
+        company_id=resolved_company_id,
         channel="whatsapp",
         user_id=user_id,
         direction="in",

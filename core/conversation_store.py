@@ -11,7 +11,21 @@ def _safe_name(value: str) -> str:
     return str(value).replace("/", "_").replace("\\", "_").replace(":", "_")
 
 
+def _company_dir(company_id: int) -> Path:
+    # SECURITY: company_id is the tenant boundary for this store. It used to
+    # be absent from the storage key entirely (BASE_DIR/{channel}/{user}.jsonl)
+    # — any authenticated user of ANY company could read another company's
+    # full conversation history (customer PII, everything a customer ever
+    # typed) just by knowing/guessing a channel+external_user_id (e.g. a
+    # phone number), and the inbox list leaked it with zero guessing needed
+    # (it globbed every file on disk with no ownership check). Fixed by
+    # scoping the storage key to company_id; every call site below now
+    # requires it.
+    return BASE_DIR / _safe_name(str(company_id))
+
+
 def save_conversation_message(
+    company_id: int,
     channel: str,
     user_id: str,
     direction: str,
@@ -21,7 +35,7 @@ def save_conversation_message(
     channel = _safe_name(channel)
     user_id = _safe_name(user_id)
 
-    folder = BASE_DIR / channel
+    folder = _company_dir(company_id) / channel
     folder.mkdir(parents=True, exist_ok=True)
 
     file_path = folder / f"{user_id}.jsonl"
@@ -41,11 +55,11 @@ def save_conversation_message(
     return record
 
 
-def get_conversation(channel: str, user_id: str, limit: int = 50):
+def get_conversation(company_id: int, channel: str, user_id: str, limit: int = 50):
     channel = _safe_name(channel)
     user_id = _safe_name(user_id)
 
-    file_path = BASE_DIR / channel / f"{user_id}.jsonl"
+    file_path = _company_dir(company_id) / channel / f"{user_id}.jsonl"
 
     if not file_path.exists():
         return []

@@ -46,6 +46,33 @@ def _require_access_admin(current_user: dict, company_id: int) -> None:
     )
 
 
+def _require_owner_to_grant_owner(conn, *, current_user: dict, company_id: int, role) -> None:
+    """Only an existing Owner (or a platform super admin) may grant the Owner
+    role. `_require_access_admin` lets ANY holder of the single `users.manage`
+    permission reach the assignment endpoints — without this, a delegated
+    admin who was only ever granted `users.manage` could self-promote (or
+    promote anyone) to Owner, which is exempt from the last-admin lockout and
+    from ever having its permissions edited (see update_role) — permanent,
+    un-demotable, unrestricted access exceeding what their role was ever meant
+    to have."""
+    if role["code"] != "owner" or current_user.get("is_super_admin"):
+        return
+    caller_is_owner = conn.execute(
+        """
+        SELECT 1 FROM company_users cu
+        JOIN roles r ON r.id = cu.role_id
+        WHERE cu.company_id = ? AND cu.user_id = ? AND r.code = 'owner'
+        LIMIT 1
+        """,
+        (company_id, current_user["id"]),
+    ).fetchone()
+    if not caller_is_owner:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an existing Owner can grant the Owner role.",
+        )
+
+
 @router.get("/overview")
 def overview(current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
@@ -275,9 +302,12 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
             )
 
     with db.connect() as conn:
-        role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
+        role = conn.execute(
+            "SELECT id, code FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)
+        ).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        _require_owner_to_grant_owner(conn, current_user=current_user, company_id=company_id, role=role)
 
     try:
         cleaned_departments = department_service.clean_selection(company_id=company_id, departments=payload.departments)
@@ -316,9 +346,13 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     with db.connect() as conn:
-        role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
+        role = conn.execute(
+            "SELECT id, code FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)
+        ).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        _require_owner_to_grant_owner(conn, current_user=current_user, company_id=company_id, role=role)
+
         # Last-admin guard: demoting/deactivating this user must not leave
         # the company with no active member able to manage users. The
         # check excludes the user being changed, then verifies someone

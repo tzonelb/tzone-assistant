@@ -999,6 +999,7 @@ class ConversationControlService:
                             channel=row["channel"], raw_result=raw_result,
                         )
                         save_conversation_message(
+                            company_id=row["company_id"],
                             channel=row["channel"],
                             user_id=row["external_user_id"],
                             direction="out",

@@ -35,6 +35,7 @@ def process_whatsapp_qr_message(
     """Same sequence as channels/whatsapp/processor.py, with the company
     already resolved (by session key instead of phone_number_id)."""
     incoming = save_conversation_message(
+        company_id=company_id,
         channel="whatsapp",
         user_id=user_id,
         direction="in",

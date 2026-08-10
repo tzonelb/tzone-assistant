@@ -262,6 +262,7 @@ def _finish_reply(
         )
 
     saved_message = save_conversation_message(
+        company_id=company_id,
         channel=normalized_channel,
         user_id=normalized_user_id,
         direction="out",

@@ -505,7 +505,14 @@ def _build_summary(
 def _load_all_conversations(
     company_id: int,
 ) -> list[dict[str, Any]]:
-    if not CONVERSATIONS_DIR.exists():
+    # SECURITY: scope to THIS company's own subtree only
+    # (data/conversations/{company_id}/{channel}/*.jsonl) — this used to
+    # iterate the entire CONVERSATIONS_DIR (every company's files), which let
+    # any authenticated user list every other company's conversations. See
+    # core/conversation_store.py's _company_dir for the storage-key fix this
+    # pairs with.
+    company_conversations_dir = CONVERSATIONS_DIR / str(company_id)
+    if not company_conversations_dir.exists():
         return []
 
     conversations: list[
@@ -513,7 +520,7 @@ def _load_all_conversations(
     ] = []
 
     for channel_dir in (
-        CONVERSATIONS_DIR.iterdir()
+        company_conversations_dir.iterdir()
     ):
         if not channel_dir.is_dir():
             continue
@@ -1007,7 +1014,17 @@ def read_conversation(
         get_current_user
     ),
 ):
+    # SECURITY: resolve company_id BEFORE reading, and pass it into the
+    # storage lookup — this endpoint used to read by channel+user_id alone
+    # with no tenant scoping (data/conversations/{channel}/{user}.jsonl had
+    # no company_id in the key), so any authenticated user of ANY company
+    # could read another company's full conversation content by guessing a
+    # channel+external_user_id (e.g. a phone number). See
+    # core/conversation_store.py's _company_dir.
+    company_id = auth_service.resolve_company_id(current_user)
+
     messages = get_conversation(
+        company_id,
         channel,
         user_id,
         limit,
@@ -1020,8 +1037,6 @@ def read_conversation(
                 "Conversation not found."
             ),
         )
-
-    company_id = auth_service.resolve_company_id(current_user)
     # Background polling of an already-open conversation passes
     # mark_read=false - otherwise an explicit "mark as unread" click gets
     # silently undone by the next 3-second refresh tick, since every read
@@ -1499,6 +1514,7 @@ def export_conversation(
     )
 
     messages = get_conversation(
+        company_id,
         channel,
         user_id,
         500,

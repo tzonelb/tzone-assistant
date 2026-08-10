@@ -36,6 +36,7 @@ def process_telegram_message(
     resolved_company_id = company_id or config.DEFAULT_COMPANY_ID
 
     incoming = save_conversation_message(
+        company_id=resolved_company_id,
         channel="telegram",
         user_id=user_id,
         direction="in",
