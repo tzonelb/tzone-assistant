@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
@@ -210,6 +211,36 @@ class CustomerService:
         return text or None
 
     def upsert_from_channel(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        display_name: str | None = None,
+        profile_picture: str | None = None,
+        username: str | None = None,
+    ) -> dict[str, Any]:
+        # Every real inbound-message processor (WhatsApp/Meta/Telegram/QR)
+        # calls this unguarded on every message — a first-ever message from a
+        # brand-new customer arriving twice near-simultaneously (a duplicate
+        # webhook delivery, or two channels racing for the same identity) can
+        # have both calls miss the SELECT below and both attempt the INSERT,
+        # so the loser hits customer_identities' unique constraint. Retry
+        # once: after the winner's transaction commits, the retry's SELECT
+        # finds its row and takes the UPDATE path instead of raising into the
+        # webhook handler.
+        try:
+            return self._upsert_from_channel_once(
+                company_id=company_id, channel=channel, external_user_id=external_user_id,
+                display_name=display_name, profile_picture=profile_picture, username=username,
+            )
+        except sqlite3.IntegrityError:
+            return self._upsert_from_channel_once(
+                company_id=company_id, channel=channel, external_user_id=external_user_id,
+                display_name=display_name, profile_picture=profile_picture, username=username,
+            )
+
+    def _upsert_from_channel_once(
         self,
         *,
         company_id: int,
