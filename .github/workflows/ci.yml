@@ -112,6 +112,15 @@ jobs:
           export TZONE_MASTER_KEY
           pytest -q
 
+      # Advisory, like the frontend one: a known-vulnerable pin should be
+      # visible in the run without blocking a merge on an advisory that has no
+      # fixed version yet.
+      - name: Dependency audit (advisory)
+        continue-on-error: true
+        run: |
+          pip install --quiet pip-audit
+          pip-audit --requirement requirements.txt
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -133,5 +142,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npx eslint src
+
       - name: Build
         run: npx vite build
+
+      # The bundle is public. Anyone who loads the application can read it, so
+      # a secret reaching it is a secret published — and minification is not a
+      # defence, it is a speed bump. This catches the mistake at the commit
+      # that makes it rather than at the disclosure that follows.
+      - name: No secrets in the built bundle
+        run: |
+          if grep -rqE 'TZONE_MASTER_KEY|SMTP_PASSWORD|OPENAI_API_KEY|META_APP_SECRET|password_hash' dist/assets/; then
+            echo "A secret-shaped string is present in the built bundle."
+            exit 1
+          fi
+          echo "No secret names found in dist/."
+
+      # Source maps hand a reader the original code with comments intact.
+      # Vite omits them by default; this fails if a future config turns them on.
+      - name: No source maps shipped
+        run: |
+          if ls dist/assets/*.map >/dev/null 2>&1; then
+            echo "Source maps are present in the production build."
+            exit 1
+          fi
+          echo "No source maps in dist/."
+
+      # Advisory: a known-vulnerable dependency should be visible in the run
+      # without blocking every merge on an advisory nobody can action today.
+      - name: Dependency audit (advisory)
+        continue-on-error: true
+        run: npm audit --audit-level=high
