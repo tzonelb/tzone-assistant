@@ -19,6 +19,7 @@ from backend.api.routes import (
     analytics,
     auth,
     channels,
+    comments,
     company_settings,
     conversation_tags,
     conversations,
@@ -176,6 +177,7 @@ app.include_router(company_settings.router)
 app.include_router(customers.router)
 app.include_router(knowledge.router)
 app.include_router(channels.router)
+app.include_router(comments.router)
 app.include_router(notifications.router)
 app.include_router(roles.router)
 app.include_router(tickets.router)

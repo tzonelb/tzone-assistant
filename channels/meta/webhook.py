@@ -20,7 +20,11 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from starlette.concurrency import run_in_threadpool
 
 from channels.meta.logger import log_meta_event
-from channels.meta.parser import detect_meta_channel, parse_meta_events
+from channels.meta.parser import (
+    detect_meta_channel,
+    parse_meta_comment_events,
+    parse_meta_events,
+)
 from channels.inbound import process_inbound_event
 from channels.webhook_security import (
     WebhookVerificationError,
@@ -90,14 +94,80 @@ async def receive_meta_webhook(request: Request):
         return {"status": "ignored", "reason": "invalid_json"}
 
     events = parse_meta_events(payload)
+    comment_events = parse_meta_comment_events(payload)
 
-    if not events:
+    if not events and not comment_events:
         log_meta_event("webhook_no_events", {"channel": detect_meta_channel(payload)})
         return {"status": "ignored", "reason": "no_events"}
 
     results = await run_in_threadpool(_process_events, events)
+    comment_results = await run_in_threadpool(_process_comments, comment_events)
 
-    return {"status": "ok", "processed": len(results), "results": results}
+    return {
+        "status": "ok",
+        "processed": len(results) + len(comment_results),
+        "results": results,
+        "comments": comment_results,
+    }
+
+
+def _process_comments(events: list[dict]) -> list[dict]:
+    """Store post comments, routed to the company that owns the page."""
+    if not events:
+        return []
+
+    from backend.services.comment_service import comment_service
+
+    results: list[dict] = []
+
+    for event in events:
+        company_id = database_manager.resolve_company_for_channel(
+            channel=event.get("channel", "messenger"),
+            page_id=event.get("page_id"),
+            instagram_business_id=(
+                event.get("page_id") if event.get("channel") == "instagram" else None
+            ),
+        )
+
+        if company_id is None:
+            log_meta_event(
+                "comment_unrouted",
+                {"channel": event.get("channel"), "page_id": event.get("page_id")},
+            )
+            results.append({"status": "ignored", "reason": "unknown_account"})
+            continue
+
+        try:
+            stored = comment_service.record_incoming(
+                company_id=company_id,
+                channel=event["channel"],
+                provider_comment_id=event["comment_id"],
+                message=event["message"],
+                post_id=event.get("post_id"),
+                parent_comment_id=event.get("parent_comment_id"),
+                author_external_id=event.get("author_external_id"),
+                author_name=event.get("author_name"),
+                permalink=event.get("permalink"),
+                post_caption=event.get("post_caption"),
+            )
+
+            results.append(
+                {
+                    "status": "duplicate" if stored["duplicate"] else "stored",
+                    "comment_id": stored["id"],
+                    "company_id": company_id,
+                }
+            )
+
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to store a post comment")
+            log_meta_event(
+                "comment_failed",
+                {"company_id": company_id, "error": type(exc).__name__},
+            )
+            results.append({"status": "error", "reason": "processing_failed"})
+
+    return results
 
 
 def _process_events(events: list[dict]) -> list[dict]:

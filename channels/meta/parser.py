@@ -174,6 +174,83 @@ def parse_meta_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return events
 
 
+# Meta delivers post comments on a different webhook field from messages:
+# `feed` for a Page, `comments` for Instagram. They share nothing with the
+# messaging payload shape, so they are parsed separately rather than bent into
+# the message parser.
+COMMENT_FIELDS = ("feed", "comments")
+
+
+def parse_meta_comment_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return every post comment in the payload.
+
+    Only additions are returned. An edit or a delete arrives on the same field
+    with a different ``verb``; treating those as new comments would re-open a
+    comment the team already answered.
+    """
+    if not isinstance(payload, dict):
+        return []
+
+    channel = detect_meta_channel(payload)
+    events: list[dict[str, Any]] = []
+
+    for entry in payload.get("entry") or []:
+        if not isinstance(entry, dict):
+            continue
+
+        page_id = entry.get("id")
+
+        for change in entry.get("changes") or []:
+            if not isinstance(change, dict):
+                continue
+
+            if change.get("field") not in COMMENT_FIELDS:
+                continue
+
+            value = change.get("value") or {}
+
+            # Page `feed` carries every kind of activity — likes, shares, new
+            # posts — so it has to be narrowed to comment additions.
+            if change.get("field") == "feed":
+                if value.get("item") != "comment":
+                    continue
+                if value.get("verb") not in (None, "add"):
+                    continue
+
+            comment_id = value.get("comment_id") or value.get("id")
+            text = _clean_text(value.get("message") or value.get("text"))
+
+            if not comment_id or not text:
+                continue
+
+            author = value.get("from") or {}
+
+            # A reply we published ourselves comes back on the same field.
+            # Recording it as a customer comment would create an endless queue
+            # of the team answering itself.
+            if page_id and str(author.get("id") or "") == str(page_id):
+                continue
+
+            events.append(
+                {
+                    "channel": channel,
+                    "page_id": page_id,
+                    "comment_id": str(comment_id),
+                    "parent_comment_id": value.get("parent_id"),
+                    "post_id": value.get("post_id")
+                    or (value.get("media") or {}).get("id"),
+                    "post_caption": (value.get("media") or {}).get("media_product_type"),
+                    "author_external_id": author.get("id"),
+                    "author_name": author.get("name") or author.get("username"),
+                    "message": text,
+                    "permalink": value.get("permalink_url"),
+                    "raw_event": change,
+                }
+            )
+
+    return events
+
+
 def parse_meta_text_message(payload: dict[str, Any]) -> dict[str, Any] | None:
     """Return the first event in a payload.
 
