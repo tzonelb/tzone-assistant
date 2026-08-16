@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from channels.webhook_limits import event_limit, log_dropped_events
+
 
 def detect_meta_channel(payload: dict[str, Any]) -> str:
     """Map the payload's object type to our channel name."""
@@ -132,16 +134,24 @@ def _event_from_change(
 
 
 def parse_meta_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return every event in the payload, including ignored ones.
+    """Return every event in the payload, including ignored ones, up to the cap.
 
     Ignored events are kept rather than filtered so the caller can log why a
     delivery produced no conversation instead of guessing.
+
+    A delivery may carry at most ``WEBHOOK_MAX_EVENTS`` events. One signed body
+    was otherwise free to expand into hundreds of thousands of them, each
+    costing several database writes and possibly an outbound Graph call. Past
+    the cap the remaining items are counted but not parsed — counted because a
+    silent truncation looks identical to having handled the whole delivery.
     """
     if not isinstance(payload, dict):
         return []
 
     channel = detect_meta_channel(payload)
+    cap = event_limit()
     events: list[dict[str, Any]] = []
+    dropped = 0
 
     for entry in payload.get("entry") or []:
         if not isinstance(entry, dict):
@@ -155,6 +165,10 @@ def parse_meta_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
             if not isinstance(messaging_event, dict):
                 continue
 
+            if len(events) >= cap:
+                dropped += 1
+                continue
+
             parsed = _event_from_messaging(messaging_event, channel)
 
             if parsed is not None:
@@ -165,11 +179,17 @@ def parse_meta_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
             if not isinstance(change, dict):
                 continue
 
+            if len(events) >= cap:
+                dropped += 1
+                continue
+
             parsed = _event_from_change(change, channel)
 
             if parsed is not None:
                 parsed.setdefault("page_id", page_id)
                 events.append(parsed)
+
+    log_dropped_events(source="meta", kept=len(events), dropped=dropped)
 
     return events
 
@@ -192,7 +212,9 @@ def parse_meta_comment_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     channel = detect_meta_channel(payload)
+    cap = event_limit()
     events: list[dict[str, Any]] = []
+    dropped = 0
 
     for entry in payload.get("entry") or []:
         if not isinstance(entry, dict):
@@ -205,6 +227,12 @@ def parse_meta_comment_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 continue
 
             if change.get("field") not in COMMENT_FIELDS:
+                continue
+
+            # Comments are capped on the same terms as messages: one delivery
+            # may not turn into unbounded work.
+            if len(events) >= cap:
+                dropped += 1
                 continue
 
             value = change.get("value") or {}
@@ -247,6 +275,8 @@ def parse_meta_comment_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "raw_event": change,
                 }
             )
+
+    log_dropped_events(source="meta_comments", kept=len(events), dropped=dropped)
 
     return events
 

@@ -415,5 +415,109 @@ class ChannelAccountService:
 
         return credentials
 
+    # ------------------------------------------------------------------
+    # Credentials for the inbound path
+    # ------------------------------------------------------------------
+
+    def app_secret_for_routing_id(
+        self,
+        *,
+        channel: str,
+        page_id: str | None = None,
+        instagram_business_id: str | None = None,
+        phone_number_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Return the receiving account's own app secret, unsealed.
+
+        Most companies are served by the platform's single Meta app and store
+        nothing here. A customer large enough to bring their own Meta app signs
+        with their own secret, and this is the only way to check it.
+
+        Returns ``None`` when no active account matches, when that account has
+        no app secret of its own, or when the stored value cannot be unsealed —
+        all of which the caller must treat as "not verified by this secret",
+        never as "verified".
+        """
+        normalized = str(channel or "").strip().lower()
+
+        # One source of truth for how a routing id maps to a company; a second
+        # implementation here would eventually disagree with the one that
+        # decides whose inbox a message lands in.
+        company_id = database_manager.resolve_company_for_channel(
+            channel=normalized,
+            page_id=page_id,
+            phone_number_id=phone_number_id,
+            instagram_business_id=instagram_business_id,
+        )
+
+        if company_id is None:
+            return None
+
+        values = [
+            str(value)
+            for value in (page_id, instagram_business_id, phone_number_id)
+            if value
+        ]
+
+        if not values:
+            return None
+
+        placeholders = ", ".join("?" for _ in values)
+        # The routing id may be recorded on any of these columns, exactly as
+        # resolve_company_for_channel accepts it on any of them.
+        clause = " OR ".join(
+            f"{column} IN ({placeholders})"
+            for column in (
+                "page_id",
+                "instagram_business_id",
+                "phone_number_id",
+                "external_account_id",
+            )
+        )
+
+        with database_manager.control() as conn:
+            row = conn.execute(
+                f"""
+                SELECT id, app_secret_sealed
+                FROM channel_accounts
+                WHERE company_id = ?
+                  AND status = 'active'
+                  AND ({clause})
+                ORDER BY id ASC
+                LIMIT 1
+                """,
+                [company_id, *values, *values, *values, *values],
+            ).fetchone()
+
+        if not row or not row["app_secret_sealed"]:
+            return None
+
+        try:
+            app_secret = keyring.unseal_secret(
+                row["app_secret_sealed"],
+                database_manager.company_key(company_id),
+                company_id,
+                # The same context this field was sealed under — see
+                # SECRET_FIELDS. A different one will not open the value.
+                "app_secret",
+            )
+        except CorruptedKeyMaterial:
+            logger.error(
+                "App secret for company %s account %s could not be unsealed; "
+                "refusing to verify against it rather than accepting the request",
+                company_id,
+                row["id"],
+            )
+            return None
+
+        if not app_secret:
+            return None
+
+        return {
+            "app_secret": app_secret,
+            "company_id": int(company_id),
+            "account_id": int(row["id"]),
+        }
+
 
 channel_account_service = ChannelAccountService()

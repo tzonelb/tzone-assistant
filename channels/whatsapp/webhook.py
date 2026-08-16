@@ -19,15 +19,21 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
-from starlette.concurrency import run_in_threadpool
 
 from channels.inbound import process_inbound_event
 from channels.meta.logger import log_meta_event
+from channels.webhook_limits import (
+    dispatch,
+    event_limit,
+    log_dropped_events,
+    read_capped_body,
+)
 from channels.webhook_security import (
     SIGNATURE_HEADER,
+    SOURCE_CURRENT,
     WebhookVerificationError,
-    verify_signature,
     verify_token_challenge,
+    verify_webhook_signature,
 )
 from config.settings import config
 from database.manager import database_manager
@@ -58,12 +64,18 @@ def verify_webhook(
 
 
 def parse_whatsapp_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return every text message in the delivery.
+    """Return every text message in the delivery, up to the event cap.
 
     WhatsApp batches messages under ``entry[].changes[].value.messages[]``, so
     reading only the first entry silently discards the rest.
+
+    At most ``WEBHOOK_MAX_EVENTS`` messages are parsed from one delivery, and
+    anything past that is counted and logged rather than dropped quietly: one
+    signed body must not be able to turn into unbounded work.
     """
     events: list[dict[str, Any]] = []
+    cap = event_limit()
+    dropped = 0
 
     for entry in payload.get("entry") or []:
         if not isinstance(entry, dict):
@@ -79,6 +91,10 @@ def parse_whatsapp_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
             for message in value.get("messages") or []:
                 if not isinstance(message, dict):
+                    continue
+
+                if len(events) >= cap:
+                    dropped += 1
                     continue
 
                 if message.get("type") != "text":
@@ -114,18 +130,21 @@ def parse_whatsapp_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     }
                 )
 
+    log_dropped_events(source="whatsapp", kept=len(events), dropped=dropped)
+
     return events
 
 
 @router.post("/")
 async def receive_message(request: Request):
-    raw_body = await request.body()
+    raw_body = await read_capped_body(request, source="whatsapp")
 
     try:
-        verify_signature(
+        match = verify_webhook_signature(
             raw_body=raw_body,
             signature_header=request.headers.get(SIGNATURE_HEADER),
             app_secret=config.WHATSAPP_APP_SECRET,
+            previous_app_secret=config.WHATSAPP_APP_SECRET_PREVIOUS,
             allow_unsigned=config.ALLOW_UNSIGNED_WEBHOOKS,
         )
     except WebhookVerificationError as exc:
@@ -135,6 +154,18 @@ async def receive_message(request: Request):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid webhook signature.",
         ) from exc
+
+    if match.source != SOURCE_CURRENT:
+        # So an operator can watch a rotation drain. Which secret matched, not
+        # the secret.
+        log_meta_event(
+            "whatsapp_webhook_signature_source",
+            {
+                "source": match.source,
+                "company_id": match.company_id,
+                "account_id": match.account_id,
+            },
+        )
 
     if not raw_body:
         return {"status": "ignored", "reason": "empty_body"}
@@ -150,9 +181,12 @@ async def receive_message(request: Request):
     if not events:
         return {"status": "ignored", "reason": "no_messages"}
 
-    results = await run_in_threadpool(_process_events, events)
+    # Acknowledged now, processed after the response has gone. Holding the
+    # response open for every event kept a shared worker thread — the same pool
+    # that serves the dashboard — busy for the whole batch.
+    dispatch(_process_events, events, source="whatsapp")
 
-    return {"status": "ok", "processed": len(results), "results": results}
+    return {"status": "accepted", "accepted": len(events)}
 
 
 def _process_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:

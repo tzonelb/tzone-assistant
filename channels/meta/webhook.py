@@ -7,8 +7,11 @@ Three properties this endpoint has to hold:
 * A message is delivered to the company that owns the receiving account, looked
   up from the page id. There is no default company, because guessing routes one
   company's customers into another company's inbox.
-* Slow work never blocks the event loop. Processing runs in a worker thread so a
-  model call cannot stall the rest of the API.
+* Slow work never blocks the event loop, and never holds the response open. A
+  verified delivery is acknowledged immediately and processed on a background
+  task, so a model call — or a flood of them — cannot stall the rest of the API.
+  The size of a body and the number of events in it are capped before any of
+  that work is accepted; see ``channels/webhook_limits.py``.
 """
 
 from __future__ import annotations
@@ -17,7 +20,6 @@ import json
 import logging
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
-from starlette.concurrency import run_in_threadpool
 
 from channels.meta.logger import log_meta_event
 from channels.meta.parser import (
@@ -27,11 +29,13 @@ from channels.meta.parser import (
 )
 from channels.inbound import process_inbound_event
 from backend.services.comment_service import comment_service
+from channels.webhook_limits import dispatch, read_capped_body
 from channels.webhook_security import (
     WebhookVerificationError,
     SIGNATURE_HEADER,
-    verify_signature,
+    SOURCE_CURRENT,
     verify_token_challenge,
+    verify_webhook_signature,
 )
 from config.settings import config
 from database.manager import database_manager
@@ -67,13 +71,14 @@ async def verify_meta_webhook(request: Request):
 
 @router.post("/meta")
 async def receive_meta_webhook(request: Request):
-    raw_body = await request.body()
+    raw_body = await read_capped_body(request, source="meta")
 
     try:
-        verify_signature(
+        match = verify_webhook_signature(
             raw_body=raw_body,
             signature_header=request.headers.get(SIGNATURE_HEADER),
             app_secret=config.META_APP_SECRET,
+            previous_app_secret=config.META_APP_SECRET_PREVIOUS,
             allow_unsigned=config.ALLOW_UNSIGNED_WEBHOOKS,
         )
     except WebhookVerificationError as exc:
@@ -84,6 +89,19 @@ async def receive_meta_webhook(request: Request):
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid webhook signature.",
         ) from exc
+
+    if match.source != SOURCE_CURRENT:
+        # Left in the channel log so an operator can watch a rotation drain and
+        # see when the previous secret stops being used. The secret itself is
+        # never recorded, only which one matched.
+        log_meta_event(
+            "webhook_signature_source",
+            {
+                "source": match.source,
+                "company_id": match.company_id,
+                "account_id": match.account_id,
+            },
+        )
 
     if not raw_body:
         return {"status": "ignored", "reason": "empty_body"}
@@ -101,14 +119,16 @@ async def receive_meta_webhook(request: Request):
         log_meta_event("webhook_no_events", {"channel": detect_meta_channel(payload)})
         return {"status": "ignored", "reason": "no_events"}
 
-    results = await run_in_threadpool(_process_events, events)
-    comment_results = await run_in_threadpool(_process_comments, comment_events)
+    # Acknowledged now, processed after the response has gone. Waiting for every
+    # event held one of Starlette's shared worker threads for the whole batch —
+    # the same pool that serves every `def` route, which is why a flood here
+    # froze the dashboard as well.
+    dispatch(_process_events, events, source="meta")
+    dispatch(_process_comments, comment_events, source="meta_comments")
 
     return {
-        "status": "ok",
-        "processed": len(results) + len(comment_results),
-        "results": results,
-        "comments": comment_results,
+        "status": "accepted",
+        "accepted": len(events) + len(comment_events),
     }
 
 
