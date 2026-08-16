@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import json
 import threading
 from contextlib import contextmanager
@@ -39,6 +40,7 @@ from database.schema_control import (
 )
 from database.schema_tenant import (
     DEFAULT_SETTINGS,
+    TENANT_COLUMNS,
     TENANT_INDEXES,
     TENANT_SCHEMA_VERSION,
     TENANT_TABLES,
@@ -49,6 +51,8 @@ CONTROL_FILENAME = "control.db"
 TENANT_DIRNAME = "tenants"
 
 BUSY_TIMEOUT_MS = 15_000
+
+logger = logging.getLogger(__name__)
 
 
 class DatabaseError(RuntimeError):
@@ -265,11 +269,102 @@ class DatabaseManager:
         finally:
             connection.close()
 
-    def _build_tenant_schema(self, connection) -> None:
+    @staticmethod
+    def _create_tenant_tables(connection) -> None:
         for statement in TENANT_TABLES:
             connection.execute(statement)
+
+    @staticmethod
+    def _create_tenant_indexes(connection) -> None:
         for statement in TENANT_INDEXES:
             connection.execute(statement)
+
+    @staticmethod
+    def _add_missing_tenant_columns(connection) -> list[str]:
+        applied: list[str] = []
+
+        for table_name, columns in TENANT_COLUMNS.items():
+            existing = {
+                str(row["name"])
+                for row in connection.execute(
+                    f"PRAGMA table_info({table_name})"
+                ).fetchall()
+            }
+
+            if not existing:
+                continue
+
+            for column_name, definition in columns.items():
+                if column_name in existing:
+                    continue
+
+                connection.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+                )
+                applied.append(f"{table_name}.{column_name}")
+
+        return applied
+
+    def _build_tenant_schema(self, connection) -> None:
+        # Order matters: a column added by an upgrade must exist before an index
+        # over it is created, or a fresh index build fails on an older database.
+        self._create_tenant_tables(connection)
+        self._add_missing_tenant_columns(connection)
+        self._create_tenant_indexes(connection)
+
+    def upgrade_tenant(self, company_id: int) -> list[str]:
+        """Bring one company's database up to the current schema.
+
+        ``CREATE TABLE IF NOT EXISTS`` adds new tables but never new columns to
+        an existing one, so a company provisioned before a release would be
+        missing them and fail at query time. This adds what is missing and
+        reports it, rather than leaving each service to patch its own tables at
+        runtime — which is what previously left the platform unbootable.
+        """
+        company_id = int(company_id)
+        applied: list[str] = []
+
+        with self.tenant(company_id) as conn:
+            self._create_tenant_tables(conn)
+            applied = self._add_missing_tenant_columns(conn)
+            self._create_tenant_indexes(conn)
+
+            conn.execute(
+                "PRAGMA user_version = %d" % TENANT_SCHEMA_VERSION
+            )
+            conn.commit()
+
+        if applied:
+            logger.info(
+                "Upgraded company %s database: added %s",
+                company_id,
+                ", ".join(applied),
+            )
+
+        with self.control() as conn:
+            conn.execute(
+                """
+                UPDATE company_databases
+                SET schema_version = ?, updated_at = ?
+                WHERE company_id = ?
+                """,
+                (TENANT_SCHEMA_VERSION, utc_now_iso(), company_id),
+            )
+            conn.commit()
+
+        return applied
+
+    def upgrade_all_tenants(self) -> dict[int, list[str]]:
+        """Upgrade every provisioned company. Used at boot and by the CLI."""
+        results: dict[int, list[str]] = {}
+
+        for company_id in self.list_company_ids():
+            try:
+                results[company_id] = self.upgrade_tenant(company_id)
+            except Exception:
+                logger.exception("Schema upgrade failed for company %s", company_id)
+
+        return results
 
     # ------------------------------------------------------------------
     # Provisioning
