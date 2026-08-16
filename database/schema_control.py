@@ -85,6 +85,10 @@ CONTROL_TABLES: tuple[str, ...] = (
         status TEXT NOT NULL DEFAULT 'active',
         is_super_admin INTEGER NOT NULL DEFAULT 0,
         last_login_at TEXT,
+        password_changed_at TEXT,
+        must_change_password INTEGER NOT NULL DEFAULT 0,
+        locked_until TEXT,
+        locked_reason TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )
@@ -164,6 +168,28 @@ CONTROL_TABLES: tuple[str, ...] = (
         succeeded INTEGER NOT NULL DEFAULT 0,
         failure_reason TEXT,
         created_at TEXT NOT NULL
+    )
+    """,
+    # One-time links that let a locked-out or reset employee set a new password.
+    #
+    # The link itself is never stored — only its SHA-256, exactly as
+    # `auth_sessions.token_hash` stores a session. Somebody with read access to
+    # this table can see that a reset was issued and to whom; they cannot use it.
+    #
+    # `created_by_user_id` is the administrator who pressed the button. It is
+    # the whole point of the audit trail on this table: a reset link is a way
+    # into somebody else's account, so who asked for one matters.
+    """
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_by_user_id INTEGER,
+        ip_address TEXT,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     """,
     # Routing table for inbound webhooks. This must be control-plane: when a
@@ -267,6 +293,23 @@ CONTROL_COLUMNS: dict[str, dict[str, str]] = {
     "auth_sessions": {
         "scope": "TEXT NOT NULL DEFAULT 'company'",
     },
+    "users": {
+        # When the password was last set. Shown on the user's own record so an
+        # administrator can see an account still on the password it was created
+        # with, which is the one most likely to be shared or reused.
+        "password_changed_at": "TEXT",
+        # Set when an administrator forces a reset. While it is on, the session
+        # is minted but every route except changing the password refuses — the
+        # enforcement is server-side, not a message the interface could skip.
+        "must_change_password": "INTEGER NOT NULL DEFAULT 0",
+        # When the account stops accepting sign-ins. An explicit column rather
+        # than a count derived from `login_attempts`, because unlocking then
+        # means clearing a field instead of deleting rows — and the old
+        # `clear_login_attempts` deleted by email only, so it could not clear
+        # an address-side block at all.
+        "locked_until": "TEXT",
+        "locked_reason": "TEXT",
+    },
 }
 
 
@@ -280,6 +323,8 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_scope ON auth_sessions(scope, user_id)",
     "CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_reset_tokens(token_hash)",
+    "CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_reset_tokens(user_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_company ON channel_accounts(company_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_page ON channel_accounts(page_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_phone ON channel_accounts(phone_number_id)",

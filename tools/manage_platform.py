@@ -1399,6 +1399,115 @@ def cmd_check(args: argparse.Namespace) -> int:
 # ----------------------------------------------------------------------
 
 
+
+def _find_user(database_manager, email: str) -> dict:
+    """Look a user up by address, or fail with advice."""
+    normalized = email.strip().lower()
+
+    with database_manager.control() as conn:
+        row = conn.execute(
+            """
+            SELECT id, email, full_name, status, is_super_admin, locked_until
+            FROM users
+            WHERE LOWER(email) = ?
+            LIMIT 1
+            """,
+            (normalized,),
+        ).fetchone()
+
+    if not row:
+        raise OperatorError(
+            f"No account with the address {normalized}. "
+            "Check the spelling, or run `list-companies` to see who exists."
+        )
+
+    return dict(row)
+
+
+def cmd_unlock_user(args: argparse.Namespace) -> int:
+    """Clear a lockout from the server.
+
+    The way back in when nobody inside the product can help: a platform
+    administrator has nobody above them, and a company whose only owner is
+    locked out has nobody with `users.manage` left to act.
+    """
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+    auth_service = load_auth_service()
+
+    user = _find_user(database_manager, args.email)
+
+    if not user["locked_until"]:
+        out()
+        out(f"  {user['email']} is not locked. Nothing to do.")
+        out()
+        return 0
+
+    auth_service.unlock_account(user_id=int(user["id"]))
+
+    banner("ACCOUNT UNLOCKED")
+    out()
+    out(f"  Account : {user['email']} (id {user['id']})")
+    out()
+    out("  The lock and the failed attempts behind it were both cleared.")
+    out("  The password was not changed.")
+    out()
+
+    return 0
+
+
+def cmd_reset_password(args: argparse.Namespace) -> int:
+    """Set a password from the server, without granting anything.
+
+    Deliberately separate from `create-super-admin`, which was the only
+    per-user lever there was and which sets `is_super_admin = 1` as a side
+    effect. Using that to help a locked-out employee handed them the platform.
+    """
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+    auth_service = load_auth_service()
+
+    user = _find_user(database_manager, args.email)
+
+    try:
+        auth_service.set_password(
+            user_id=int(user["id"]),
+            new_password=args.password,
+            must_change=not args.no_forced_change,
+        )
+    except ValueError as exc:
+        raise OperatorError(f"Password rejected: {exc}") from exc
+
+    banner("PASSWORD RESET")
+    out()
+    out(f"  Account : {user['email']} (id {user['id']})")
+    out(f"  Platform administrator : {'yes' if user['is_super_admin'] else 'no'}")
+    out()
+    out(RULE)
+    out("  What this did")
+    out()
+    out("      - set the password to the one you supplied")
+    out("      - cleared any lockout and the failed attempts behind it")
+    out("      - ended every existing session for this account")
+
+    if not args.no_forced_change:
+        out("      - required a change at next sign-in")
+
+    out()
+    out("  It did NOT change what this account is allowed to do.")
+    out()
+    out(RULE)
+    out()
+
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m tools.manage_platform",
@@ -1548,6 +1657,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to write the timestamped backup folder into.",
     )
     backup.set_defaults(handler=cmd_backup)
+
+    unlock_user = subparsers.add_parser(
+        "unlock-user",
+        help="Clear a lockout on one account. Does not change the password.",
+    )
+    unlock_user.add_argument("--email", required=True, help="Account address.")
+    unlock_user.set_defaults(handler=cmd_unlock_user)
+
+    reset_password = subparsers.add_parser(
+        "reset-password",
+        help="Set a password on one account, granting nothing.",
+    )
+    reset_password.add_argument("--email", required=True, help="Account address.")
+    reset_password.add_argument("--password", required=True, help="The new password.")
+    reset_password.add_argument(
+        "--no-forced-change",
+        action="store_true",
+        help="Do not require the account to change it at next sign-in.",
+    )
+    reset_password.set_defaults(handler=cmd_reset_password)
 
     check = subparsers.add_parser(
         "check",

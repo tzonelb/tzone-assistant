@@ -57,6 +57,14 @@ TOO_MANY_ATTEMPTS = (
     "Too many failed attempts. Wait a few minutes before trying again."
 )
 
+# There is nobody above a platform administrator to unlock them, so this
+# message names the only way back in rather than leaving them to guess.
+LOCKED_ADMIN = (
+    "This account is locked after too many failed attempts. A platform "
+    "administrator account can only be recovered from the server: "
+    "python -m tools.manage_platform unlock-user --email <address>"
+)
+
 
 def _actor(current_user: dict[str, Any]) -> int:
     return int(current_user["id"])
@@ -90,11 +98,18 @@ def platform_login(payload: PlatformLoginRequest, request: Request):
     ip_address = client_ip(request)
     email = str(payload.email)
 
-    if auth_service.is_login_blocked(email=email, ip_address=ip_address):
-        logger.warning("Platform login blocked by rate limit for %s", ip_address)
+    gate = auth_service.login_gate(email=email, ip_address=ip_address)
+
+    if gate:
+        logger.warning(
+            "Platform login refused (%s) for %s", gate["kind"], ip_address
+        )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=TOO_MANY_ATTEMPTS,
+            detail=(
+                LOCKED_ADMIN if gate["kind"] == "account_locked" else TOO_MANY_ATTEMPTS
+            ),
+            headers={"Retry-After": str(int(gate["retry_after_seconds"]))},
         )
 
     user = auth_service.authenticate_platform(email=email, password=payload.password)
@@ -106,6 +121,7 @@ def platform_login(payload: PlatformLoginRequest, request: Request):
             succeeded=False,
             failure_reason="platform_invalid_credentials",
         )
+        auth_service.register_failure(email=email, ip_address=ip_address)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=INVALID_CREDENTIALS,

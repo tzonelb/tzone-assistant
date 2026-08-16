@@ -101,7 +101,52 @@ class AppConfig:
         os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "720")
     )
     LOGIN_MAX_ATTEMPTS: int = int(os.getenv("LOGIN_MAX_ATTEMPTS", "5"))
-    LOGIN_LOCKOUT_MINUTES: int = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15"))
+    LOGIN_LOCKOUT_MINUTES: int = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "30"))
+
+    # Failures from one address before that address is throttled — deliberately
+    # far above LOGIN_MAX_ATTEMPTS, and this gap is load-bearing.
+    #
+    # An address is not an account. A whole office reaches this platform from
+    # one address, so throttling it at five failures would mean one colleague
+    # fumbling their password locks out everyone sitting near them. That is the
+    # collateral damage the account lock was redesigned to avoid, and setting
+    # the two thresholds equal reintroduces it through the other door.
+    #
+    # Twenty is above what a floor of people mistyping produces in half an hour
+    # and far below what someone working through a password list produces.
+    LOGIN_ADDRESS_MAX_ATTEMPTS: int = int(
+        os.getenv("LOGIN_ADDRESS_MAX_ATTEMPTS", "20")
+    )
+
+    # How long a password-reset link stays usable. Short on purpose: the link is
+    # a bearer credential for one account, and it arrives in a mailbox this
+    # platform does not control.
+    PASSWORD_RESET_TTL_MINUTES: int = int(
+        os.getenv("PASSWORD_RESET_TTL_MINUTES", "30")
+    )
+
+    # ------------------------------------------------------------------
+    # Outbound email
+    # ------------------------------------------------------------------
+    # Used for password-reset links and security notices. There is no fallback
+    # channel: if this is not configured, the endpoints that depend on it refuse
+    # rather than report success for a message nobody will receive.
+    #
+    # `console` prints the message to the log instead of sending, which is what
+    # development and the test suite use.
+    EMAIL_BACKEND: str = os.getenv("EMAIL_BACKEND", "console").strip().lower()
+
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM: str = os.getenv("SMTP_FROM", "")
+    SMTP_STARTTLS: bool = _env_bool("SMTP_STARTTLS", True)
+    SMTP_TIMEOUT_SECONDS: int = int(os.getenv("SMTP_TIMEOUT_SECONDS", "20"))
+
+    # The origin the browser reaches this platform on. Password-reset links are
+    # built from it, so a wrong value produces links that go nowhere.
+    APP_PUBLIC_URL: str = os.getenv("APP_PUBLIC_URL", "http://localhost:5173")
 
     # ------------------------------------------------------------------
     # Channels

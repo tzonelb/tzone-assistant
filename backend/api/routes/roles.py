@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from backend.api.schemas.roles import (
     RoleCreateRequest,
@@ -6,7 +6,14 @@ from backend.api.schemas.roles import (
     UserAssignmentRequest,
     UserCreateRequest,
 )
-from backend.services.auth_service import auth_service, get_current_user, require_permission
+from backend.services import mailer
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    get_current_user,
+    require_permission,
+)
+from config.settings import config
 from database.manager import database_manager
 
 
@@ -205,3 +212,122 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
             raise HTTPException(status_code=404, detail="Company user not found.")
         conn.commit()
     return {"success": True}
+
+
+# ----------------------------------------------------------------------
+# Account recovery
+# ----------------------------------------------------------------------
+
+
+def _assert_member(conn, company_id: int, user_id: int) -> dict:
+    """Confirm the target belongs to this company before acting on them.
+
+    Without it, `users.manage` in one company would be a lever on any account
+    on the platform — the user id comes from the URL, and `users` is a shared
+    control-plane table.
+    """
+    row = conn.execute(
+        """
+        SELECT users.id, users.email, users.full_name
+        FROM company_users
+        JOIN users ON users.id = company_users.user_id
+        WHERE company_users.company_id = ? AND company_users.user_id = ?
+        LIMIT 1
+        """,
+        (company_id, user_id),
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Company user not found.")
+
+    return dict(row)
+
+
+@router.post("/users/{user_id}/force-password-reset")
+def force_password_reset(
+    user_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Send this employee a single-use link to set a new password.
+
+    This is the unlock path. A locked account does not have to wait out its
+    timer — setting a new password clears the lock — which is what makes a full
+    account lock safe to have: without it, five requests against a known address
+    would be a free "disable this employee" button.
+
+    The administrator never learns the password. They cause a link to be sent;
+    the employee chooses what to set. Every existing session of that employee is
+    ended immediately, before the link is even used, because the reason for a
+    forced reset is usually that somebody else may be holding the account.
+    """
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+
+    # Refuse before doing anything if the mail cannot go out. Reporting success
+    # for a message nobody will receive leaves two people believing the account
+    # is recoverable when it is not.
+    try:
+        mailer.assert_configured()
+    except mailer.MailerNotConfigured as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+
+    with database_manager.control() as conn:
+        target = _assert_member(conn, company_id, user_id)
+
+    token = auth_service.create_password_reset(
+        user_id=user_id,
+        created_by_user_id=int(current_user["id"]),
+        ip_address=client_ip(request),
+    )
+
+    auth_service.revoke_all_user_sessions(user_id)
+    auth_service.unlock_account(user_id=user_id)
+
+    link = f"{config.APP_PUBLIC_URL.rstrip('/')}/reset-password/{token}"
+    minutes = config.PASSWORD_RESET_TTL_MINUTES
+
+    result = mailer.send(
+        to=target["email"],
+        subject="Set a new password for your T-ZONE account",
+        body=(
+            f"Hello {target['full_name'] or ''},\n\n"
+            "An administrator at your company asked us to help you set a new "
+            "password. Open this link to choose one:\n\n"
+            f"  {link}\n\n"
+            f"The link works once and expires in {minutes} minutes.\n\n"
+            "If you did not expect this, tell your administrator — somebody "
+            "asked for it on your behalf.\n"
+        ),
+    )
+
+    if not result.delivered:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"The reset link could not be sent. {result.reason}",
+        )
+
+    return {
+        "success": True,
+        "message": f"A reset link was sent to {target['email']}.",
+    }
+
+
+@router.post("/users/{user_id}/unlock")
+def unlock_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    """Clear a lockout without touching the password.
+
+    For the ordinary case: an employee mistyped their password five times and
+    remembers it perfectly well. Forcing a reset on them would be theatre.
+    """
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+
+    with database_manager.control() as conn:
+        _assert_member(conn, company_id, user_id)
+
+    auth_service.unlock_account(user_id=user_id)
+
+    return {"success": True, "message": "Account unlocked."}

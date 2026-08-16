@@ -7,7 +7,10 @@ class LoginRequest(BaseModel):
     workspace_code: str = Field(min_length=4, max_length=64)
     company: str = Field(min_length=2, max_length=120)
     email: EmailStr
-    password: str = Field(min_length=8, max_length=200)
+    # 10, matching AuthService.MIN_PASSWORD_LENGTH. It used to be 8 here, so
+    # this schema accepted a length no account could ever have been created
+    # with — the mismatch could only ever produce a confusing rejection later.
+    password: str = Field(min_length=10, max_length=200)
 
 
 class LoginResponse(BaseModel):
@@ -25,5 +28,23 @@ class CurrentUserResponse(BaseModel):
 
 
 class LogoutResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=10, max_length=200)
+
+
+class PasswordResetRequest(BaseModel):
+    """Spending a reset link. The token is the credential; there is no email
+    field, because accepting one would let a caller aim a valid token at a
+    different account."""
+
+    new_password: str = Field(min_length=10, max_length=200)
+
+
+class PasswordChangeResponse(BaseModel):
     success: bool
     message: str

@@ -114,6 +114,11 @@ class AuthService:
     # Login throttling
     # ------------------------------------------------------------------
 
+    # An address block doubles each failure past the threshold; this is where it
+    # stops. An hour is long enough to make online guessing pointless and short
+    # enough that a shared office address recovers within a working morning.
+    ADDRESS_BLOCK_CAP_SECONDS = 3600
+
     def record_login_attempt(
         self,
         *,
@@ -140,36 +145,240 @@ class AuthService:
             )
             conn.commit()
 
-    def is_login_blocked(self, *, email: str | None, ip_address: str | None) -> bool:
-        """Return whether this email or address has burned its attempts.
+    def _failure_count(
+        self, conn: Any, *, window_start: str, email: str | None, ip_address: str | None
+    ) -> int:
+        """Failures in the window for one key, or for the pair when both are given.
 
-        Counting happens in the database rather than in memory so the limit
-        survives a restart and still applies across multiple workers.
+        Separate counters, never combined with OR. The previous version summed
+        `email = ? OR ip_address = ?` into a single count, which meant five
+        failed attempts naming a known employee — from anywhere on earth —
+        locked that employee out. An attacker needed nothing but the address.
         """
+        clauses = ["succeeded = 0", "created_at >= ?"]
+        params: list[Any] = [window_start]
+
+        if email is not None:
+            clauses.append("email = ?")
+            params.append(self.normalize_email(email))
+
+        if ip_address is not None:
+            clauses.append("ip_address = ?")
+            params.append(ip_address)
+
+        row = conn.execute(
+            f"SELECT COUNT(*) AS failures FROM login_attempts WHERE {' AND '.join(clauses)}",
+            params,
+        ).fetchone()
+
+        return int(row["failures"] if row else 0)
+
+    def address_block_seconds(self, ip_address: str | None) -> int:
+        """How long this address is refused for, in seconds. Zero means allowed.
+
+        Doubles with each additional failure past the threshold and stops at an
+        hour.
+
+        The threshold is `LOGIN_ADDRESS_MAX_ATTEMPTS`, not `LOGIN_MAX_ATTEMPTS`,
+        and the gap between them matters: a whole office shares one address, so
+        throttling it as tightly as an account would mean one colleague's typos
+        lock out everyone around them — the exact collateral damage the account
+        lock was redesigned to avoid. A test holds this apart, because setting
+        the two equal is an easy and invisible way to bring the old bug back.
+        """
+        if not ip_address:
+            return 0
+
         window_start = (
             utc_now() - timedelta(minutes=config.LOGIN_LOCKOUT_MINUTES)
         ).isoformat()
 
         with database_manager.control() as conn:
+            failures = self._failure_count(
+                conn, window_start=window_start, email=None, ip_address=ip_address
+            )
+
+        over = failures - config.LOGIN_ADDRESS_MAX_ATTEMPTS
+
+        if over < 0:
+            return 0
+
+        return min(self.ADDRESS_BLOCK_CAP_SECONDS, 60 * (2**over))
+
+    def account_lock(self, email: str | None) -> dict[str, Any] | None:
+        """The lock on this account, or nothing.
+
+        Reads an explicit column rather than deriving the state from a count.
+        Deriving it was what made unlocking impossible to express: "unlock"
+        became "delete rows", and `clear_login_attempts` deleted by email only,
+        so an address-side block could not be cleared at all.
+        """
+        if not email:
+            return None
+
+        with database_manager.control() as conn:
             row = conn.execute(
                 """
-                SELECT COUNT(*) AS failures
-                FROM login_attempts
-                WHERE succeeded = 0
-                  AND created_at >= ?
-                  AND (
-                        (email = ? AND email IS NOT NULL)
-                     OR (ip_address = ? AND ip_address IS NOT NULL)
-                  )
+                SELECT id, locked_until, locked_reason
+                FROM users
+                WHERE email = ?
+                LIMIT 1
                 """,
-                (
-                    window_start,
-                    self.normalize_email(email) if email else None,
-                    ip_address,
-                ),
+                (self.normalize_email(email),),
             ).fetchone()
 
-        return int(row["failures"] if row else 0) >= config.LOGIN_MAX_ATTEMPTS
+        if not row or not row["locked_until"]:
+            return None
+
+        try:
+            locked_until = datetime.fromisoformat(row["locked_until"])
+        except (TypeError, ValueError):
+            return None
+
+        if locked_until.tzinfo is None:
+            locked_until = locked_until.replace(tzinfo=timezone.utc)
+
+        if locked_until <= utc_now():
+            return None
+
+        return {
+            "user_id": int(row["id"]),
+            "locked_until": locked_until,
+            "reason": row["locked_reason"] or "",
+        }
+
+    def lock_account(
+        self, *, email: str, reason: str, minutes: int | None = None
+    ) -> dict[str, Any] | None:
+        """Lock an account and say who it was, so the caller can raise an alarm."""
+        minutes = config.LOGIN_LOCKOUT_MINUTES if minutes is None else int(minutes)
+        locked_until = (utc_now() + timedelta(minutes=minutes)).isoformat()
+
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT id, full_name FROM users WHERE email = ? LIMIT 1",
+                (self.normalize_email(email),),
+            ).fetchone()
+
+            if not row:
+                # No account by that name. Nothing to lock, and saying so is not
+                # a leak because the caller answers identically either way.
+                return None
+
+            conn.execute(
+                """
+                UPDATE users
+                SET locked_until = ?, locked_reason = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (locked_until, reason, utc_now_iso(), int(row["id"])),
+            )
+            conn.commit()
+
+        logger.warning(
+            "Account locked user id=%s until %s (%s)", row["id"], locked_until, reason
+        )
+
+        return {
+            "user_id": int(row["id"]),
+            "full_name": row["full_name"],
+            "locked_until": locked_until,
+        }
+
+    def unlock_account(self, *, user_id: int) -> bool:
+        """Clear the lock and the failures behind it.
+
+        Both halves matter: leaving the attempt rows would let the account lock
+        itself again on the next mistyped password, which would read to the
+        employee as the unlock never having worked.
+        """
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT email FROM users WHERE id = ? LIMIT 1", (int(user_id),)
+            ).fetchone()
+
+            if not row:
+                return False
+
+            conn.execute(
+                """
+                UPDATE users
+                SET locked_until = NULL, locked_reason = NULL, updated_at = ?
+                WHERE id = ?
+                """,
+                (utc_now_iso(), int(user_id)),
+            )
+            conn.execute(
+                "DELETE FROM login_attempts WHERE email = ? AND succeeded = 0",
+                (row["email"],),
+            )
+            conn.commit()
+
+        logger.info("Account unlocked user id=%s", user_id)
+        return True
+
+    def register_failure(
+        self, *, email: str | None, ip_address: str | None
+    ) -> dict[str, Any] | None:
+        """Decide whether this failure locks the account, and lock it if so.
+
+        Called after a failed attempt has been recorded. Returns the lock it
+        created, so the caller can raise a security event and tell the company
+        owner — a lock nobody is told about is a support ticket waiting to
+        happen.
+        """
+        if not email:
+            return None
+
+        window_start = (
+            utc_now() - timedelta(minutes=config.LOGIN_LOCKOUT_MINUTES)
+        ).isoformat()
+
+        with database_manager.control() as conn:
+            failures = self._failure_count(
+                conn, window_start=window_start, email=email, ip_address=None
+            )
+
+        if failures < config.LOGIN_MAX_ATTEMPTS:
+            return None
+
+        return self.lock_account(
+            email=email,
+            reason=f"{failures} failed sign-in attempts",
+        )
+
+    def login_gate(
+        self, *, email: str | None, ip_address: str | None
+    ) -> dict[str, Any] | None:
+        """What, if anything, stops this sign-in before a password is checked.
+
+        Returns `None` to proceed, or a dict with a `kind` the route turns into
+        a response. The two kinds are deliberately different things:
+
+        `address_blocked` is about where the request came from and clears itself
+        with time. `account_locked` is about the account and does not have to be
+        waited out — an administrator holding `users.manage` can send a
+        password-reset link, which unlocks it immediately. That escape is what
+        makes a full account lock safe to have at all; without it, five requests
+        would be a free "disable this employee" button for anyone who knows an
+        address.
+        """
+        blocked_for = self.address_block_seconds(ip_address)
+
+        if blocked_for:
+            return {"kind": "address_blocked", "retry_after_seconds": blocked_for}
+
+        lock = self.account_lock(email)
+
+        if lock:
+            return {
+                "kind": "account_locked",
+                "retry_after_seconds": max(
+                    1, int((lock["locked_until"] - utc_now()).total_seconds())
+                ),
+            }
+
+        return None
 
     def clear_login_attempts(self, email: str) -> None:
         with database_manager.control() as conn:
@@ -266,6 +475,19 @@ class AuthService:
 
         # The decisive check. A wrong code fails to unseal the company key, so
         # possession of the code is proven rather than claimed.
+        #
+        # On timing: the branches above are equalised — an unknown email and an
+        # inactive account each burn one PBKDF2 round through
+        # `_dummy_password_check`, so the endpoint cannot be used as a user
+        # directory, which is the property that matters. The branches *below* a
+        # successful password check are measurably slower, and this one most of
+        # all: unsealing runs 600k KDF iterations against the password's 310k.
+        # That difference tells an attacker who already holds a correct password
+        # that the company or the code was what stopped them. Equalising it
+        # would mean running the 600k unseal on every rejected attempt, turning
+        # the login endpoint into a CPU-exhaustion lever. The leak is bounded to
+        # someone who already has valid credentials; the amplification would be
+        # available to everyone. Left as it is, on purpose.
         if not database_manager.verify_workspace_code(company_id, workspace_code):
             logger.warning(
                 "Login rejected: bad workspace code for company id=%s", company_id
@@ -476,6 +698,207 @@ class AuthService:
             conn.commit()
             return cursor.rowcount
 
+    # ------------------------------------------------------------------
+    # Passwords
+    # ------------------------------------------------------------------
+
+    def set_password(
+        self, *, user_id: int, new_password: str, must_change: bool = False
+    ) -> None:
+        """Replace a password and end every session that used the old one.
+
+        Revoking is not optional politeness. A password is changed because it
+        may be known to somebody else; leaving that person's existing session
+        alive would mean the change accomplished nothing for up to twelve hours.
+
+        `revoke_all_user_sessions` has existed since the session table was
+        written and was called from nowhere. This is its first caller.
+        """
+        password_hash = self.hash_password(new_password)
+        now = utc_now_iso()
+
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE users
+                SET password_hash = ?,
+                    password_changed_at = ?,
+                    must_change_password = ?,
+                    locked_until = NULL,
+                    locked_reason = NULL,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (password_hash, now, 1 if must_change else 0, now, int(user_id)),
+            )
+
+            if not cursor.rowcount:
+                raise ValueError(f"No user with id {user_id}.")
+
+            # Same reasoning as `unlock_account`: leaving the failures behind
+            # would let the account re-lock on the next typo, which reads to the
+            # employee as the reset never having worked.
+            conn.execute(
+                """
+                DELETE FROM login_attempts
+                WHERE succeeded = 0
+                  AND email = (SELECT email FROM users WHERE id = ?)
+                """,
+                (int(user_id),),
+            )
+            conn.commit()
+
+        self.revoke_all_user_sessions(int(user_id))
+        logger.info("Password changed for user id=%s", user_id)
+
+    def change_own_password(
+        self, *, user_id: int, current_password: str, new_password: str
+    ) -> bool:
+        """Change a password on presentation of the current one."""
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT password_hash FROM users WHERE id = ? LIMIT 1",
+                (int(user_id),),
+            ).fetchone()
+
+        if not row or not self.verify_password(
+            current_password, row["password_hash"]
+        ):
+            return False
+
+        self.set_password(user_id=user_id, new_password=new_password)
+        return True
+
+    # ------------------------------------------------------------------
+    # Password reset links
+    # ------------------------------------------------------------------
+
+    def create_password_reset(
+        self,
+        *,
+        user_id: int,
+        created_by_user_id: int | None = None,
+        ip_address: str | None = None,
+    ) -> str:
+        """Mint a single-use reset link token and return it once.
+
+        Only the hash is stored, exactly as a session token is. Somebody reading
+        this table learns that a reset was issued and to whom, which is what an
+        audit needs; they cannot use it, which is what safety needs.
+
+        Any earlier unused token for the same user is spent first — two live
+        links for one account means the older one is a second key nobody is
+        tracking.
+        """
+        token = secrets.token_urlsafe(48)
+        now = utc_now()
+        expires_at = now + timedelta(minutes=config.PASSWORD_RESET_TTL_MINUTES)
+
+        with database_manager.control() as conn:
+            conn.execute(
+                """
+                UPDATE password_reset_tokens
+                SET used_at = ?
+                WHERE user_id = ? AND used_at IS NULL
+                """,
+                (now.isoformat(), int(user_id)),
+            )
+            conn.execute(
+                """
+                INSERT INTO password_reset_tokens (
+                    user_id, token_hash, created_by_user_id, ip_address,
+                    expires_at, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(user_id),
+                    self.hash_token(token),
+                    int(created_by_user_id) if created_by_user_id else None,
+                    ip_address,
+                    expires_at.isoformat(),
+                    now.isoformat(),
+                ),
+            )
+            conn.commit()
+
+        return token
+
+    def consume_password_reset(self, *, token: str, new_password: str) -> bool:
+        """Spend a reset token and set the new password. One attempt, one use."""
+        token_hash = self.hash_token(token)
+        now = utc_now()
+
+        with database_manager.control() as conn:
+            row = conn.execute(
+                """
+                SELECT id, user_id, expires_at, used_at
+                FROM password_reset_tokens
+                WHERE token_hash = ?
+                LIMIT 1
+                """,
+                (token_hash,),
+            ).fetchone()
+
+            if not row or row["used_at"]:
+                return False
+
+            try:
+                expires_at = datetime.fromisoformat(row["expires_at"])
+            except (TypeError, ValueError):
+                return False
+
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+            if expires_at <= now:
+                return False
+
+            # Marked spent before the password is written. If setting the
+            # password then fails, the link is dead and the administrator sends
+            # another — the opposite order would leave a usable link after a
+            # partial failure.
+            conn.execute(
+                "UPDATE password_reset_tokens SET used_at = ? WHERE id = ?",
+                (now.isoformat(), int(row["id"])),
+            )
+            conn.commit()
+
+            user_id = int(row["user_id"])
+
+        self.set_password(user_id=user_id, new_password=new_password)
+        return True
+
+    def prune_expired_sessions(self, retention_hours: int = 72) -> int:
+        """Delete sessions that expired or were revoked a while ago.
+
+        Kept for a few days rather than removed the moment they expire, because
+        the row is the only record that a session existed and the security log
+        may want to say where somebody signed in from.
+        """
+        cutoff = (utc_now() - timedelta(hours=retention_hours)).isoformat()
+
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM auth_sessions
+                WHERE (expires_at < ? AND revoked_at IS NULL)
+                   OR (revoked_at IS NOT NULL AND revoked_at < ?)
+                """,
+                (cutoff, cutoff),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def prune_password_resets(self, retention_hours: int = 72) -> int:
+        with database_manager.control() as conn:
+            cutoff = (utc_now() - timedelta(hours=retention_hours)).isoformat()
+            cursor = conn.execute(
+                "DELETE FROM password_reset_tokens WHERE created_at < ?", (cutoff,)
+            )
+            conn.commit()
+            return cursor.rowcount
+
     # Everything about the signed-in caller that may reach a browser. An
     # allow-list, not a deny-list, and that is the whole point: the previous
     # version removed five known-secret keys and passed the rest of the `users`
@@ -493,6 +916,11 @@ class AuthService:
         "status",
         "is_super_admin",
         "last_login_at",
+        # When the password was last set, and whether the user is being made to
+        # change it. Both are shown to the person they describe: the interface
+        # cannot route them to the change-password screen without knowing.
+        "password_changed_at",
+        "must_change_password",
         "created_at",
         "updated_at",
         # Not columns on `users` — these come from the session row that
@@ -909,6 +1337,51 @@ async def get_current_user(
                 "This is a platform administration session. Sign in to a "
                 "company to use the workspace."
             ),
+        )
+
+    user["_raw_token"] = credentials.credentials
+
+    # A forced password change is enforced here rather than in the interface,
+    # because an interface check is a suggestion: the token is already minted
+    # and every endpoint would answer to it. Refusing at the one dependency
+    # every customer route depends on is what makes "must change" mean it.
+    if user.get("must_change_password"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "password_change_required",
+                "message": (
+                    "Your password must be changed before you can continue."
+                ),
+            },
+        )
+
+    return user
+
+
+async def get_user_changing_password(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict[str, Any]:
+    """`get_current_user` without the forced-change refusal.
+
+    Exactly one route may use this — the one that changes the password. It is a
+    separate dependency rather than a flag on the first so that exempting a
+    route is a visible, deliberate act in the route's own signature.
+    """
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = auth_service.get_user_from_token(credentials.credentials)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or token is invalid.",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     user["_raw_token"] = credentials.credentials

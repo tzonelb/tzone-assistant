@@ -125,6 +125,22 @@ async def maintenance_worker() -> None:
         except Exception:
             logger.exception("Login attempt pruning failed")
 
+        # Sessions expire but their rows never went anywhere, so the table grew
+        # for the lifetime of the installation.
+        try:
+            removed = await asyncio.to_thread(auth_service.prune_expired_sessions)
+            if removed:
+                logger.info("Pruned %s expired sessions", removed)
+        except Exception:
+            logger.exception("Session pruning failed")
+
+        try:
+            removed = await asyncio.to_thread(auth_service.prune_password_resets)
+            if removed:
+                logger.info("Pruned %s spent password reset tokens", removed)
+        except Exception:
+            logger.exception("Password reset pruning failed")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
