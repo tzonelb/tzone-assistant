@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from backend.services.scheduler_service import scheduler_service
 from config.settings import config
 
 
@@ -90,8 +91,6 @@ def publish_post(
 
 def publish_due_posts(company_id: int) -> int:
     """Publish every approved post whose time has come. Returns how many went out."""
-    from backend.services.scheduler_service import scheduler_service
-
     published = 0
 
     for post in scheduler_service.claim_due(company_id):

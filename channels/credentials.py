@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from backend.services.channel_account_service import channel_account_service
 from config.settings import config
 from database.manager import database_manager
 
@@ -43,11 +44,6 @@ def resolve(company_id: int, channel: str) -> dict[str, Any]:
     Raises :class:`MissingChannelCredentials` rather than returning a partially
     filled result, so a caller can never send with someone else's token.
     """
-    # Imported here: the service imports the database manager, and importing it
-    # at module scope would pull the database into the channel layer's import
-    # graph before configuration is ready.
-    from backend.services.channel_account_service import channel_account_service
-
     company_id = int(company_id)
     normalized = str(channel or "").strip().lower()
 

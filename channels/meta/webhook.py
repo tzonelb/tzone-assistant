@@ -26,6 +26,7 @@ from channels.meta.parser import (
     parse_meta_events,
 )
 from channels.inbound import process_inbound_event
+from backend.services.comment_service import comment_service
 from channels.webhook_security import (
     WebhookVerificationError,
     SIGNATURE_HEADER,
@@ -115,8 +116,6 @@ def _process_comments(events: list[dict]) -> list[dict]:
     """Store post comments, routed to the company that owns the page."""
     if not events:
         return []
-
-    from backend.services.comment_service import comment_service
 
     results: list[dict] = []
 

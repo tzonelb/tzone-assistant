@@ -30,6 +30,7 @@ from typing import Any
 from uuid import uuid4
 
 from database.manager import database_manager
+from backend.services.channel_account_service import channel_account_service
 
 
 logger = logging.getLogger(__name__)
@@ -703,7 +704,6 @@ class BotProfileService:
         company's connected page id, and later screens would read the two as
         related.
         """
-        from backend.services.channel_account_service import channel_account_service
 
         try:
             account_id = int(account_id)

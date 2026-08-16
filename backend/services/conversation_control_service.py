@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from database.manager import database_manager
+from backend.services.company_settings_service import company_settings_service
 
 
 VALID_STATUSES = {
@@ -40,14 +41,14 @@ class ConversationOwnershipConflict(RuntimeError):
 def _takeover_timeout_minutes(company_id: int) -> int:
     """Return the company-configured human takeover timeout safely.
 
-    The import stays local to avoid coupling schema initialization order.
+    Falls back to the default rather than raising: a missing or malformed
+    setting must not stop a conversation being handed back to the assistant,
+    which would leave the customer waiting on nobody.
     """
     try:
-        from backend.services.company_settings_service import company_settings_service
-
         values = company_settings_service.get_section(company_id, "ai_behavior")["values"]
         value = int(values.get("return_to_ai_timeout_minutes", DEFAULT_TAKEOVER_MINUTES))
-    except (ImportError, KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError):
         value = DEFAULT_TAKEOVER_MINUTES
 
     return max(1, min(1440, value))
