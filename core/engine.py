@@ -10,11 +10,11 @@ from core.intent_transition import intent_transition_manager
 from core.ai_router import ai_router
 from core.automation_policy import automation_policy
 from core.conversation_memory import conversation_memory
-from core.knowledge_manager import knowledge_manager
 from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
 from core.business_modules import business_modules
+from backend.services.knowledge_service import knowledge_service
 from backend.services.ticket_service import ticket_service
 
 
@@ -445,6 +445,52 @@ class Engine:
 
         return Response(text, buttons)
 
+    def load_company_knowledge(
+        self,
+        request,
+        department=None,
+    ):
+        """Load the knowledge of the company this message belongs to.
+
+        The assistant used to read two shared JSON files, so every company on
+        the platform answered its customers out of one company's knowledge.
+        Items now come from ``knowledge_items`` inside the owning company's own
+        encrypted database.
+
+        Two failure modes are handled here rather than left to explode. A
+        request with no company cannot be answered from anyone's knowledge, and
+        guessing a company is exactly the leak this replaces. And a knowledge
+        database that will not open must not take the reply path down with it:
+        with no knowledge the router's guardrails already escalate to a human.
+        """
+        company_id = getattr(
+            request,
+            "company_id",
+            None,
+        )
+
+        if not company_id:
+            logger.warning(
+                "Message on channel %s has no company; "
+                "the assistant runs with no knowledge.",
+                getattr(request, "channel", "unknown"),
+            )
+
+            return []
+
+        try:
+            return knowledge_service.for_assistant(
+                company_id,
+                department,
+            )
+        except Exception:
+            logger.exception(
+                "Could not load knowledge for company %s",
+                company_id,
+            )
+
+            return []
+
     def handle_ai(
         self,
         request,
@@ -522,8 +568,8 @@ class Engine:
             )
         )
 
-        knowledge_items = knowledge_manager.list_for_ai(
-            None
+        knowledge_items = self.load_company_knowledge(
+            request
         )
 
         try:
@@ -564,6 +610,7 @@ class Engine:
                 if match_result.get("department") != "unknown"
                 else current_department
             ),
+            company_id=request.company_id,
         )
 
         ai_result = ai_router.route(
@@ -577,6 +624,8 @@ class Engine:
             connector_results=connector_results,
             response_policy=channel_policy,
             match_result=match_result,
+            company_id=request.company_id,
+            channel_account_id=getattr(request, "channel_account_id", None),
         )
 
         if not ai_result:
@@ -606,7 +655,15 @@ class Engine:
         message,
         language,
         department,
+        company_id=None,
     ):
+        """Gather verified facts the assistant is allowed to state.
+
+        The company must be threaded through: a product lookup answers with real
+        prices, and without knowing whose catalogue to read the connector
+        refuses rather than guessing — a guess here would quote one company's
+        price to another company's customer.
+        """
         results = []
         lowered = message.lower()
 
@@ -682,7 +739,8 @@ class Engine:
         if asks_product:
             result = (
                 business_connectors.get_product_info(
-                    message
+                    message,
+                    company_id=company_id,
                 )
             )
 

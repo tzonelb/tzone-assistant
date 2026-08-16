@@ -584,6 +584,65 @@ export async function updateCustomerRequest(customerId, values) {
   );
 }
 
+export async function getKnowledgeItemsRequest({
+  search = "",
+  department = "",
+  status = "",
+  limit = 20,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({
+    search,
+    department,
+    status,
+    limit,
+    offset,
+  });
+
+  return apiRequest(`/api/knowledge${query}`);
+}
+
+export async function getKnowledgeItemRequest(itemId) {
+  return apiRequest(
+    `/api/knowledge/${encodeURIComponent(itemId)}`,
+  );
+}
+
+export async function createKnowledgeItemRequest(values) {
+  return apiRequest("/api/knowledge", {
+    method: "POST",
+    body: values,
+  });
+}
+
+export async function updateKnowledgeItemRequest(itemId, values) {
+  return apiRequest(
+    `/api/knowledge/${encodeURIComponent(itemId)}`,
+    {
+      method: "PUT",
+      body: values,
+    },
+  );
+}
+
+export async function deleteKnowledgeItemRequest(itemId) {
+  return apiRequest(
+    `/api/knowledge/${encodeURIComponent(itemId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function getKnowledgeOptionsRequest() {
+  return apiRequest("/api/knowledge/options");
+}
+
+export async function createKnowledgeCategoryRequest(values) {
+  return apiRequest("/api/knowledge/categories", {
+    method: "POST",
+    body: values,
+  });
+}
+
 export async function getCompanySettingSectionRequest(section) {
   return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`);
 }

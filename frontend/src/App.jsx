@@ -6,6 +6,7 @@ import ConversationDetailPage from "./pages/conversations/ConversationDetailPage
 import ConversationsPage from "./pages/conversations/ConversationsPage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import DashboardPage from "./pages/dashboard/DashboardPage";
+import KnowledgePage from "./pages/knowledge/KnowledgePage";
 import UISettingsPage from "./pages/dashboard/UISettingsPage";
 import CompanySettingsPage from "./pages/company/CompanySettingsPage";
 import NotificationsPage from "./pages/notifications/NotificationsPage";
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/conversations" element={<ConversationsPage />} />
         <Route path="/conversations/:channel/:userId" element={<ConversationsPage />} />
         <Route path="/customers" element={<CustomersPage />} />
+        <Route path="/knowledge" element={<KnowledgePage />} />
         <Route path="/settings" element={<UISettingsPage />} />
         <Route path="/company-settings/*" element={<CompanySettingsPage />} />
         <Route path="/roles" element={<RolesPermissionsPage />} />

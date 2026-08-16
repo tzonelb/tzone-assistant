@@ -16,8 +16,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
+    ai_teaching,
     analytics,
+    appointments,
     auth,
+    catalogue,
     channels,
     comments,
     company_settings,
@@ -31,6 +34,8 @@ from backend.api.routes import (
     manual_messages,
     notifications,
     roles,
+    scheduler,
+    team_chat,
     tickets,
 )
 from backend.security.keyring import KeyringError
@@ -38,6 +43,7 @@ from backend.services.auth_service import auth_service
 from backend.services.conversation_control_service import conversation_control_service
 from channels.meta import webhook as meta_webhook
 from channels.meta.smart_reply import process_due_replies
+from channels.post_publisher import publish_due_posts
 from channels.whatsapp import webhook as whatsapp_webhook
 from config.settings import config
 from database.manager import database_manager
@@ -53,6 +59,7 @@ logger = logging.getLogger("tzone")
 
 TAKEOVER_SWEEP_SECONDS = 10
 PENDING_REPLY_SWEEP_SECONDS = 2
+SCHEDULED_POST_SWEEP_SECONDS = 30
 ATTEMPT_PRUNE_SECONDS = 3600
 
 
@@ -90,6 +97,17 @@ async def pending_reply_worker() -> None:
     while True:
         await _run_for_every_company("assistant reply sweep", process_due_replies)
         await asyncio.sleep(PENDING_REPLY_SWEEP_SECONDS)
+
+
+async def scheduled_post_worker() -> None:
+    """Publish approved posts whose scheduled time has arrived.
+
+    Swept less often than replies: a post is scheduled to the minute, not the
+    second, and each sweep opens every company's database.
+    """
+    while True:
+        await _run_for_every_company("scheduled post sweep", publish_due_posts)
+        await asyncio.sleep(SCHEDULED_POST_SWEEP_SECONDS)
 
 
 async def maintenance_worker() -> None:
@@ -133,6 +151,7 @@ async def lifespan(app: FastAPI):
     tasks = [
         asyncio.create_task(takeover_timeout_worker()),
         asyncio.create_task(pending_reply_worker()),
+        asyncio.create_task(scheduled_post_worker()),
         asyncio.create_task(maintenance_worker()),
     ]
 
@@ -170,6 +189,7 @@ app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(analytics.router)
+app.include_router(ai_teaching.router)
 app.include_router(conversations.router)
 app.include_router(manual_messages.router)
 app.include_router(conversation_tags.router)
@@ -177,10 +197,15 @@ app.include_router(company_settings.router)
 app.include_router(customers.router)
 app.include_router(knowledge.router)
 app.include_router(channels.router)
+app.include_router(catalogue.router)
 app.include_router(comments.router)
+app.include_router(scheduler.router)
+app.include_router(appointments.router)
+app.include_router(team_chat.router)
 app.include_router(notifications.router)
 app.include_router(roles.router)
 app.include_router(tickets.router)
+app.include_router(tickets.tasks_router)
 app.include_router(developer_center.router)
 
 app.include_router(whatsapp_webhook.router)

@@ -33,6 +33,7 @@ const pageTitles = {
   "/notifications": "Notification Center",
   "/conversations": "Conversations",
   "/customers": "Customers",
+  "/knowledge": "Knowledge Base",
   "/settings": "Settings",
   "/company-settings": "Company Settings",
   "/roles": "Roles & Permissions",

@@ -712,6 +712,240 @@ def cmd_create_super_admin(args: argparse.Namespace) -> int:
 
 
 # ----------------------------------------------------------------------
+# import-knowledge
+# ----------------------------------------------------------------------
+
+
+LEGACY_KNOWLEDGE_FILES = (
+    Path("config") / "knowledge_base.json",
+    Path("config") / "training_knowledge.json",
+)
+
+IMPORT_CATEGORY_NAME = "Imported knowledge"
+
+# Kept in step with backend/api/schemas/knowledge.py, so an imported row can be
+# edited through the API afterwards instead of failing its validators.
+MAX_TITLE = 200
+MAX_KEYWORDS = 1000
+MAX_CONTENT = 8000
+
+
+def load_knowledge_service():
+    try:
+        from backend.services.knowledge_service import knowledge_service
+    except Exception as exc:  # noqa: BLE001 - any import-time failure is fatal here
+        raise OperatorError(
+            "Could not import backend.services.knowledge_service "
+            f"({type(exc).__name__}: {exc}). The import writes through that "
+            "service so the rules the API enforces also apply here."
+        ) from exc
+
+    return knowledge_service
+
+
+def _clean_text(value, limit: int) -> str | None:
+    text = str(value or "").strip()
+
+    if not text:
+        return None
+
+    return text[:limit]
+
+
+def _read_legacy_file(path: Path) -> list[dict]:
+    """Read one legacy knowledge file, refusing anything not shaped like one."""
+    import json
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise OperatorError(f"Cannot read {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise OperatorError(f"{path} is not valid JSON: {exc}") from exc
+
+    items = raw.get("items") if isinstance(raw, dict) else raw
+
+    if not isinstance(items, list):
+        raise OperatorError(
+            f"{path} does not contain an 'items' list. A legacy knowledge file "
+            'looks like {"items": [ ... ]}.'
+        )
+
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _legacy_to_item(raw: dict) -> tuple[str, dict] | None:
+    """Map one legacy entry onto the knowledge_items columns.
+
+    The legacy entry carries a question and an answer per language plus a line
+    of usage instructions; the table has one title, one body per language and
+    one free-text hint field. The question becomes the title, the answers become
+    the content, and the Arabic phrasing and the instructions are kept together
+    as the item's hints, so nothing in the file is dropped on the way in.
+    """
+    external_id = _clean_text(raw.get("id"), 120)
+
+    question_en = _clean_text(raw.get("question_en"), MAX_TITLE)
+    question_ar = _clean_text(raw.get("question_ar"), MAX_TITLE)
+    title = question_en or question_ar or external_id
+
+    content_ar = _clean_text(raw.get("answer_ar"), MAX_CONTENT)
+    content_en = _clean_text(raw.get("answer_en"), MAX_CONTENT)
+
+    if not external_id or not title or not (content_ar or content_en):
+        return None
+
+    hints = [
+        hint
+        for hint in (
+            question_ar if question_ar and question_ar != title else None,
+            _clean_text(raw.get("instructions"), MAX_KEYWORDS),
+        )
+        if hint
+    ]
+
+    return external_id, {
+        "title": title,
+        "content_ar": content_ar,
+        "content_en": content_en,
+        "department": _clean_text(raw.get("department"), 60),
+        "keywords": _clean_text(" | ".join(hints), MAX_KEYWORDS),
+        "status": "active",
+    }
+
+
+def cmd_import_knowledge(args: argparse.Namespace) -> int:
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+
+    knowledge_service = load_knowledge_service()
+
+    company_id = int(args.company_id)
+
+    with database_manager.control() as conn:
+        row = conn.execute(
+            "SELECT name FROM companies WHERE id = ? LIMIT 1",
+            (company_id,),
+        ).fetchone()
+
+    if not row:
+        raise OperatorError(
+            f"No company with id {company_id}. Run `list-companies` to see them."
+        )
+
+    if not database_manager.tenant_path(company_id).exists():
+        raise OperatorError(
+            f"Company {company_id} has no database file at "
+            f"{database_manager.tenant_path(company_id)}. Restore it from a "
+            "backup before importing anything into it."
+        )
+
+    paths = [Path(name) for name in (args.file or [])] or list(LEGACY_KNOWLEDGE_FILES)
+
+    missing = [path for path in paths if not path.exists()]
+    present = [path for path in paths if path.exists()]
+
+    if not present:
+        raise OperatorError(
+            "None of these files exist: "
+            f"{', '.join(str(path) for path in paths)}. Run this from the "
+            "project root, or name the files with --file."
+        )
+
+    # Later files win, which matches how the assistant used to read them: the
+    # training file was loaded after the base file and refined the same ids.
+    collected: dict[str, dict] = {}
+    unusable = 0
+    read_counts: list[tuple[Path, int]] = []
+
+    for path in present:
+        entries = _read_legacy_file(path)
+        read_counts.append((path, len(entries)))
+
+        for entry in entries:
+            mapped = _legacy_to_item(entry)
+
+            if mapped is None:
+                unusable += 1
+                continue
+
+            external_id, values = mapped
+            collected[external_id] = values
+
+    if not collected:
+        raise OperatorError(
+            "No usable entries were found. Every entry needs an 'id', a "
+            "question and at least one answer."
+        )
+
+    try:
+        category = knowledge_service.ensure_category(
+            company_id=company_id,
+            name=IMPORT_CATEGORY_NAME,
+        )
+    except manager.UnknownCompany as exc:
+        raise OperatorError(str(exc)) from exc
+    except ValueError as exc:
+        raise OperatorError(f"Could not prepare the import category: {exc}") from exc
+
+    created = 0
+    updated = 0
+    failed: list[str] = []
+
+    for external_id, values in collected.items():
+        try:
+            _, was_created = knowledge_service.upsert_by_external_id(
+                company_id=company_id,
+                external_id=external_id,
+                data={**values, "category_id": int(category["id"])},
+            )
+        except ValueError as exc:
+            failed.append(f"{external_id}: {exc}")
+            continue
+
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+
+    banner("KNOWLEDGE IMPORTED")
+    out()
+    out(f"  Company   : {row['name']} (id {company_id})")
+    out(f"  Category  : {category['name']} (id {int(category['id'])})")
+    out()
+
+    for path, count in read_counts:
+        out(f"  Read      : {path} ({count} entries)")
+
+    for path in missing:
+        out(f"  Skipped   : {path} (not found)")
+
+    out()
+    out(f"  Created   : {created}")
+    out(f"  Updated   : {updated}")
+
+    if unusable:
+        out(f"  Unusable  : {unusable} (no id, no question, or no answer)")
+
+    if failed:
+        out(f"  Rejected  : {len(failed)}")
+        for line in failed:
+            out(f"      {line}")
+
+    out()
+    out("  These items belong to this company alone and are stored inside its")
+    out("  encrypted database. The assistant reads them on the next message;")
+    out("  no restart is needed. Review them at /knowledge before relying on")
+    out("  them — the legacy files were written for one specific business.")
+    out()
+
+    return 1 if failed else 0
+
+
+# ----------------------------------------------------------------------
 # backup
 # ----------------------------------------------------------------------
 
@@ -1067,6 +1301,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Password, at least 8 characters.",
     )
     super_admin.set_defaults(handler=cmd_create_super_admin)
+
+    import_knowledge = subparsers.add_parser(
+        "import-knowledge",
+        help="Import the legacy config/*.json knowledge into one company.",
+        description=(
+            "Load config/knowledge_base.json and config/training_knowledge.json "
+            "into one company's own encrypted database. Safe to re-run: entries "
+            "are matched on their legacy id and refreshed rather than "
+            "duplicated."
+        ),
+    )
+    import_knowledge.add_argument(
+        "--company-id",
+        required=True,
+        type=int,
+        help="The company that receives this knowledge.",
+    )
+    import_knowledge.add_argument(
+        "--file",
+        action="append",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Import this file instead of the two default ones. "
+            "Repeat for several files; later files win on a shared id."
+        ),
+    )
+    import_knowledge.set_defaults(handler=cmd_import_knowledge)
 
     backup = subparsers.add_parser(
         "backup",
