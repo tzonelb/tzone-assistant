@@ -26,11 +26,22 @@ def utc_now_iso() -> str:
 
 
 DEFAULT_SETTINGS: dict[str, Any] = {
+    # The real values come from this company's control-plane row, resolved in
+    # `_defaults_for`. The keys are listed here so the section exists and so
+    # `get_all` still enumerates it.
+    #
+    # There is deliberately no `workspace_code` key. There used to be, holding
+    # the string "tzone", and it was a label that did nothing. The workspace
+    # code is now the credential that unseals this company's database: it lives
+    # in the control plane, it is never returned to a browser, and it is
+    # rotated from the Super Admin console. A settings field of the same name
+    # that silently ignores what you type is worse than no field at all.
     "company_profile": {
-        "company_name": "T-ZONE",
-        "workspace_code": "tzone",
+        "company_name": "",
         "timezone": "Asia/Beirut",
         "default_language": "ar",
+        "country": "",
+        "currency": "USD",
     },
     "ai_behavior": {
         "enabled": True,
@@ -61,13 +72,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "escalation",
         ]
     },
-    "modules": {
-        "appointments": False,
-        "scheduler": True,
-        "catalogue": True,
-        "team_chat": True,
-        "comments": True,
-    },
+    # Read-only here. This section used to carry its own five switches that
+    # nothing ever read, so a company could turn Appointments "off" and keep
+    # using it. Module visibility is now one decision, made by the platform
+    # administrator and enforced by `backend/services/module_access`; this
+    # section reports it and refuses writes.
+    "modules": {},
 }
 
 
@@ -80,10 +90,50 @@ class CompanySettingsService:
         except (json.JSONDecodeError, TypeError):
             return fallback
 
+    def _company_profile_defaults(self, company_id: int) -> dict[str, Any]:
+        """This company's identity, taken from the control plane.
+
+        A static default here meant every company's settings screen opened
+        showing the platform owner's own company name.
+        """
+        with database_manager.control() as conn:
+            row = conn.execute(
+                """
+                SELECT name, timezone, default_language, country, currency
+                FROM companies
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (int(company_id),),
+            ).fetchone()
+
+        if not row:
+            return dict(DEFAULT_SETTINGS["company_profile"])
+
+        return {
+            "company_name": row["name"],
+            "timezone": row["timezone"] or "Asia/Beirut",
+            "default_language": row["default_language"] or "ar",
+            "country": row["country"] or "",
+            "currency": row["currency"] or "USD",
+        }
+
+    def _defaults_for(self, company_id: int, section: str) -> dict[str, Any]:
+        if section == "company_profile":
+            return self._company_profile_defaults(company_id)
+
+        if section == "modules":
+            # The platform administrator's decision, reported as it stands.
+            from backend.services.platform_service import platform_service
+
+            return dict(platform_service.get_platform_config(company_id)["modules"])
+
+        return dict(DEFAULT_SETTINGS.get(section, {}))
+
     def get_section(self, company_id: int, section: str) -> dict[str, Any]:
         company_id = int(company_id)
         normalized = section.strip().lower()
-        defaults = DEFAULT_SETTINGS.get(normalized, {})
+        defaults = self._defaults_for(company_id, normalized)
 
         with database_manager.tenant(company_id) as conn:
             row = conn.execute(
@@ -106,8 +156,15 @@ class CompanySettingsService:
             ).fetchall()
 
         stored = self._loads(row["settings_json"], {}) if row else {}
-        values = {**defaults, **stored}
-        locked: list[str] = []
+
+        if normalized == "modules":
+            # Reported, never overridden. Any stored value here predates the
+            # platform switches and would contradict what the API enforces.
+            values = defaults
+            locked = list(defaults)
+        else:
+            values = {**defaults, **stored}
+            locked = []
 
         for override in override_rows:
             key = str(override["setting_key"])

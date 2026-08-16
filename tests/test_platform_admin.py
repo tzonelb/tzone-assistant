@@ -1012,3 +1012,65 @@ def test_every_mutating_operation_writes_an_audit_row(
     # The audit table is shared across companies, so it must carry no content
     # from inside one.
     assert "content" not in audit["items"][0]
+
+
+# ----------------------------------------------------------------------
+# Finding the person you are about to make an administrator
+# ----------------------------------------------------------------------
+
+
+def test_user_search_finds_an_account_by_email_or_name(client, platform, alpha):
+    """Granting used to require typing a numeric id from memory. The lookup
+    exists so the console names the person it is about to promote."""
+    _make_admin()
+    token = _platform_token(client)
+
+    _make_user(
+        "hana@alpha.example.com",
+        EMPLOYEE_PASSWORD,
+        full_name="Hana Mansour",
+    )
+
+    by_email = client.get(
+        "/api/platform/users", params={"search": "hana@"}, headers=_bearer(token)
+    ).json()["items"]
+
+    by_name = client.get(
+        "/api/platform/users", params={"search": "mansour"}, headers=_bearer(token)
+    ).json()["items"]
+
+    assert [item["email"] for item in by_email] == ["hana@alpha.example.com"]
+    assert [item["email"] for item in by_name] == ["hana@alpha.example.com"]
+
+
+def test_user_search_returns_no_credential_material(client, platform):
+    """The control plane holds password hashes and sealed key material next to
+    these rows. A lookup that widened to `SELECT *` would hand both to the
+    console, and nobody would notice until it mattered."""
+    _make_admin()
+    token = _platform_token(client)
+
+    items = client.get("/api/platform/users", headers=_bearer(token)).json()["items"]
+
+    assert items
+    for item in items:
+        assert set(item) == {
+            "id",
+            "email",
+            "full_name",
+            "status",
+            "is_super_admin",
+            "created_at",
+        }
+
+
+def test_user_search_needs_a_platform_token(client, platform, alpha):
+    """A company employee must not be able to enumerate platform accounts."""
+    user_id = _make_user("staff@alpha.example.com", EMPLOYEE_PASSWORD)
+    _employ(platform, alpha, user_id)
+
+    token = _company_token(client, alpha, "staff@alpha.example.com")
+
+    response = client.get("/api/platform/users", headers=_bearer(token))
+
+    assert response.status_code in (401, 403), response.text

@@ -27,7 +27,9 @@ def service(platform, monkeypatch):
     # Imported before the sweep: a module imported afterwards would bind this
     # test's temporary manager permanently and corrupt later test files.
     import backend.api.routes.auth  # noqa: F401
+    import backend.api.routes.company_settings  # noqa: F401
     import backend.api.routes.customers  # noqa: F401
+    import backend.services.company_settings_service  # noqa: F401
     import backend.api.routes.platform  # noqa: F401
     import backend.api.routes.platform_ui  # noqa: F401
     import backend.services.auth_service  # noqa: F401
@@ -61,6 +63,7 @@ def client(service):
 
     from backend.api.routes import (
         auth,
+        company_settings,
         customers,
         platform as platform_routes,
         platform_ui,
@@ -71,6 +74,10 @@ def client(service):
     app.include_router(platform_routes.router)
     app.include_router(platform_ui.router)
     app.include_router(auth.router)
+    app.include_router(
+        company_settings.router,
+        dependencies=[Depends(require_module("company_settings"))],
+    )
     # Mounted the same way main.py mounts it, because the gate lives in the
     # registration rather than in the handler — testing the handler alone would
     # test something the application does not do.
@@ -280,3 +287,64 @@ def test_an_unknown_module_key_is_refused_when_the_gate_is_built(service):
 
     with pytest.raises(UnknownModule):
         require_module("conversatoins")
+
+
+# ----------------------------------------------------------------------
+# One decision, reported in one place
+# ----------------------------------------------------------------------
+
+
+def test_company_settings_reports_the_platform_modules_and_refuses_to_change_them(
+    client, platform, alpha
+):
+    """The company settings API used to carry its own five module switches that
+    nothing ever read, so a company could turn Appointments "off" and keep
+    using it. The section now mirrors the platform decision and locks it."""
+    admin_token = _platform_token(client)
+    token = _employee_token(client, platform, alpha, "seven@alpha.example.com")
+
+    _switch_off(client, admin_token, alpha, "catalogue")
+
+    section = client.get(
+        "/api/company-settings/modules", headers=_bearer(token)
+    ).json()
+
+    assert section["values"]["catalogue"] is False
+    assert section["values"]["conversations"] is True
+    assert "catalogue" in section["locked_keys"]
+
+    refused = client.put(
+        "/api/company-settings/modules",
+        headers=_bearer(token),
+        json={"values": {"catalogue": True}},
+    )
+
+    assert refused.status_code == 409, refused.text
+    assert "locked" in refused.text.lower()
+
+    # And the refusal was real: the API still says no.
+    assert client.get("/api/customers", headers=_bearer(token)).status_code == 200
+
+
+def test_company_profile_settings_name_the_company_not_the_platform_owner(
+    client, platform, alpha, beta
+):
+    """The default used to be the string "T-ZONE", so every company's settings
+    screen opened showing the platform owner's own company."""
+    alpha_token = _employee_token(client, platform, alpha, "eight@alpha.example.com")
+    beta_token = _employee_token(client, platform, beta, "eight@beta.example.com")
+
+    alpha_values = client.get(
+        "/api/company-settings/company_profile", headers=_bearer(alpha_token)
+    ).json()["values"]
+
+    beta_values = client.get(
+        "/api/company-settings/company_profile", headers=_bearer(beta_token)
+    ).json()["values"]
+
+    assert alpha_values["company_name"] == alpha["name"]
+    assert beta_values["company_name"] == beta["name"]
+
+    # The workspace code is the credential that unseals the database. It is not
+    # a settings field, and it must never travel to a browser.
+    assert "workspace_code" not in alpha_values

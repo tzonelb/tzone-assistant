@@ -30,6 +30,10 @@ const TasksPage = lazy(() => import("./pages/tasks/TasksPage"));
 const TeamChatPage = lazy(() => import("./pages/team-chat/TeamChatPage"));
 const UISettingsPage = lazy(() => import("./pages/dashboard/UISettingsPage"));
 
+// The operator's console. A separate credential, a separate shell and a
+// separate visual identity — it shares this router and nothing else.
+const SuperAdminApp = lazy(() => import("./superadmin/SuperAdminApp"));
+
 function RouteFallback() {
   return (
     <main className="full-screen-state">
@@ -43,6 +47,7 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/superadmin/*" element={<SuperAdminApp />} />
         <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailPage standalone /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute>} />

@@ -329,6 +329,16 @@ def list_plans(current_user: dict[str, Any] = Depends(get_platform_admin)):
 # ----------------------------------------------------------------------
 
 
+@router.get("/users")
+def search_users(
+    search: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=20, ge=1, le=50),
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Look up an account so granting administrator rights needs no guessed id."""
+    return {"items": platform_service.search_users(search=search, limit=limit)}
+
+
 @router.get("/admins")
 def list_platform_admins(current_user: dict[str, Any] = Depends(get_platform_admin)):
     return {"items": platform_service.list_platform_admins()}

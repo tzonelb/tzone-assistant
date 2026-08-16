@@ -1379,6 +1379,51 @@ class PlatformService:
 
         return [dict(row) for row in rows]
 
+    def search_users(
+        self, *, search: str | None = None, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Find an account by email or name, so a grant needs no guessed id.
+
+        Control-plane only: `users` holds sign-in identities, not anything a
+        company's customers wrote. No password hash, no session token and no
+        workspace code is selected.
+
+        A blank search returns the most recent accounts rather than all of
+        them, because this exists to find one person, not to export a directory.
+        """
+        term = self._clean(search)
+        limit = max(1, min(int(limit), 50))
+
+        with database_manager.control() as conn:
+            if term:
+                pattern = f"%{term}%"
+                rows = conn.execute(
+                    """
+                    SELECT id, email, full_name, status, is_super_admin, created_at
+                    FROM users
+                    WHERE email LIKE ? COLLATE NOCASE
+                       OR full_name LIKE ? COLLATE NOCASE
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (pattern, pattern, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, email, full_name, status, is_super_admin, created_at
+                    FROM users
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                ).fetchall()
+
+        return [
+            {**dict(row), "is_super_admin": bool(row["is_super_admin"])}
+            for row in rows
+        ]
+
     def _active_admin_ids(self, conn: Any) -> set[int]:
         rows = conn.execute(
             "SELECT id FROM users WHERE is_super_admin = 1 AND status = 'active'"
