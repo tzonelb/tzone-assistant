@@ -68,6 +68,53 @@ export async function reorderBusinessDepartmentsRequest(departmentIds) {
 }
 
 /**
+ * How this company answers: whether a welcome is sent and how often, whether
+ * the assistant may reply with no knowledge match, how confident a match must
+ * be, how many knowledge items reach the model, whether buttons are shown.
+ *
+ * One company default plus an optional override per channel. The platform's
+ * shipped values are the floor underneath both, and a setting that is not
+ * overridden inherits rather than holding a copy — which is why clearing is its
+ * own call rather than "save the inherited value again".
+ */
+export async function getReplyPolicyRequest() {
+  return apiRequest(`${BASE}/reply-policy`);
+}
+
+export async function updateReplyPolicyDefaultRequest({
+  values = {},
+  clear = [],
+} = {}) {
+  return apiRequest(`${BASE}/reply-policy`, {
+    method: "PUT",
+    body: { values, clear },
+  });
+}
+
+export async function updateReplyPolicyChannelRequest(
+  channel,
+  { values = {}, clear = [] } = {},
+) {
+  return apiRequest(
+    `${BASE}/reply-policy/channels/${encodeURIComponent(channel)}`,
+    {
+      method: "PUT",
+      body: { values, clear },
+    },
+  );
+}
+
+/** Drops the channel's whole override, so it inherits the company default again. */
+export async function clearReplyPolicyChannelRequest(channel) {
+  return apiRequest(
+    `${BASE}/reply-policy/channels/${encodeURIComponent(channel)}`,
+    {
+      method: "DELETE",
+    },
+  );
+}
+
+/**
  * Runs the real assistant against a typed message and returns what it would
  * say. Nothing is delivered, stored or queued by this call.
  */

@@ -1,8 +1,9 @@
 """AI TEACHING — what this company's assistant is told, and a way to try it.
 
-Two things are edited here: the assistant's profile (tone, instructions,
-welcome, taught examples) and the company's business departments — the sections
-its customers are offered as a menu and as quick-reply buttons.
+Three things are edited here: the assistant's profile (tone, instructions,
+welcome, taught examples), the company's business departments — the sections its
+customers are offered as a menu and as quick-reply buttons — and the company's
+reply policy, which is how it answers on each channel.
 
 Reads require ``settings.view``; every write requires ``settings.manage``. The
 dry run is also behind ``settings.manage``: it is not a write, but it runs the
@@ -29,6 +30,7 @@ from backend.api.schemas.ai_teaching import (
     BusinessDepartmentReorder,
     BusinessDepartmentUpdate,
     DryRunRequest,
+    ReplyPolicyUpdate,
 )
 from backend.services.auth_service import auth_service, require_permission
 from backend.services.bot_profile_service import (
@@ -41,6 +43,11 @@ from backend.services.business_department_service import (
     BusinessDepartmentError,
     business_department_service,
 )
+from backend.services.reply_policy_service import (
+    ReplyPolicyError,
+    reply_policy_service,
+)
+from core.response_policy import response_policy
 
 
 router = APIRouter(prefix="/api/ai-teaching", tags=["AI Teaching"])
@@ -56,6 +63,21 @@ def view_context(current_user=Depends(require_permission("settings.view"))) -> i
 
 def manage_context(current_user=Depends(require_permission("settings.manage"))) -> int:
     return _company_id(current_user)
+
+
+def manage_actor(
+    current_user=Depends(require_permission("settings.manage")),
+) -> dict[str, Any]:
+    """The same gate as ``manage_context``, plus who is doing it.
+
+    The reply policy is stored through ``company_settings_service``, which keeps
+    a change audit; an audit row with no actor answers "what changed" and not
+    "who changed it".
+    """
+    return {
+        "company_id": _company_id(current_user),
+        "actor_user_id": int(current_user["id"]),
+    }
 
 
 def _payload(model: BotProfileUpdate) -> dict[str, Any]:
@@ -289,6 +311,99 @@ def delete_department(
         raise HTTPException(status_code=404, detail="Department not found.")
 
     return {"success": True}
+
+
+# ----------------------------------------------------------------------
+# The reply policy — how this company answers, per channel
+#
+# Same gate as the rest of this screen: ``settings.view`` to read,
+# ``settings.manage`` to change. The company comes from the caller's token and
+# never from the request, so one company can neither read nor write another's
+# mechanism.
+#
+# Three routes rather than one, because clearing has to be as real as setting:
+# ``PUT`` sets and clears named keys on a scope, and ``DELETE`` drops a
+# channel's whole override so it inherits the company default again.
+# ----------------------------------------------------------------------
+
+
+def _policy_view(company_id: int) -> dict[str, Any]:
+    return reply_policy_service.describe(company_id, response_policy.shipped_map())
+
+
+@router.get("/reply-policy")
+def get_reply_policy(company_id: int = Depends(view_context)):
+    """What applies, what this company chose, and what it is inheriting."""
+    return _policy_view(company_id)
+
+
+@router.put("/reply-policy")
+def update_reply_policy_default(
+    payload: ReplyPolicyUpdate,
+    actor: dict[str, Any] = Depends(manage_actor),
+):
+    """The company's own default, applied to every channel it has not overridden."""
+    try:
+        reply_policy_service.update_company_default(
+            company_id=actor["company_id"],
+            values=payload.values,
+            clear=payload.clear,
+            actor_user_id=actor["actor_user_id"],
+        )
+    except ReplyPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        # A Super Admin lock on this section. 409 rather than 400: nothing the
+        # operator typed is wrong, they are simply not the one who decides it.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return _policy_view(actor["company_id"])
+
+
+@router.put("/reply-policy/channels/{channel}")
+def update_reply_policy_channel(
+    channel: str,
+    payload: ReplyPolicyUpdate,
+    actor: dict[str, Any] = Depends(manage_actor),
+):
+    try:
+        reply_policy_service.update_channel(
+            company_id=actor["company_id"],
+            channel=channel,
+            values=payload.values,
+            clear=payload.clear,
+            actor_user_id=actor["actor_user_id"],
+        )
+    except ReplyPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        # A Super Admin lock on this section. 409 rather than 400: nothing the
+        # operator typed is wrong, they are simply not the one who decides it.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return _policy_view(actor["company_id"])
+
+
+@router.delete("/reply-policy/channels/{channel}")
+def clear_reply_policy_channel(
+    channel: str,
+    actor: dict[str, Any] = Depends(manage_actor),
+):
+    """Back to inheriting the company default, with nothing frozen in place."""
+    try:
+        reply_policy_service.clear_channel(
+            company_id=actor["company_id"],
+            channel=channel,
+            actor_user_id=actor["actor_user_id"],
+        )
+    except ReplyPolicyError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        # A Super Admin lock on this section. 409 rather than 400: nothing the
+        # operator typed is wrong, they are simply not the one who decides it.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    return _policy_view(actor["company_id"])
 
 
 # ----------------------------------------------------------------------

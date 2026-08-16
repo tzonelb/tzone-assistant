@@ -1,8 +1,24 @@
 """When and how a reply is wrapped before it leaves for the customer.
 
 The behavioural half of this — whether a welcome is sent at all, how often, and
-whether buttons are shown — is per channel and still comes from
-``config/response_policy.json``.
+whether buttons are shown — is per channel *and per company*.
+
+``config/response_policy.json`` is now only the platform's shipped starting
+point. It used to be the whole decision: one file, read by every company, so a
+business could not loosen ``allow_ai_free_reply`` or tighten
+``minimum_match_confidence`` without doing it to every other business on the
+platform. What a company chooses for itself lives in its own encrypted
+database and is resolved on top of the shipped values by
+``backend/services/reply_policy_service.py``:
+
+1. the shipped default, then the shipped entry for this channel;
+2. the company's own default;
+3. the company's override for this channel.
+
+The company is passed explicitly, the way ``core/engine.py`` already passes it
+to ``ai_router.route`` and ``collect_connector_results``. With no company —
+a message that could not be attributed to one, or a preview — the shipped
+values apply on their own and nothing raises.
 
 The *words* of the welcome do not. They used to: this module shipped a
 ``DEFAULT_POLICY`` containing one company's greeting ("Welcome to T-ZONE 💙"),
@@ -29,6 +45,10 @@ from pathlib import Path
 from typing import Any
 
 from backend.services.bot_profile_service import bot_profile_service
+from backend.services.reply_policy_service import (
+    POLICY_CHANNELS,
+    reply_policy_service,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -70,13 +90,59 @@ class ResponsePolicy:
         with open(self.POLICY_FILE, "r", encoding="utf-8") as file:
             return json.load(file)
 
-    def get_channel_policy(self, channel: str) -> dict:
-        policy = self.load_policy()
-        default_policy = policy.get("default", self.DEFAULT_POLICY)
-        channel_policy = policy.get("channels", {}).get(channel, {})
+    def shipped_default(self) -> dict:
+        """The platform's starting values, before any channel or company."""
+        merged = dict(self.load_policy().get("default", self.DEFAULT_POLICY))
 
-        merged = default_policy.copy()
-        merged.update(channel_policy)
+        for key in self.IDENTITY_KEYS:
+            merged.pop(key, None)
+
+        return merged
+
+    def shipped_channel_policy(self, channel: str) -> dict:
+        """The platform's starting values for this channel. Shared, no company."""
+        policy = self.load_policy()
+        merged = self.shipped_default()
+        merged.update(policy.get("channels", {}).get(channel, {}))
+
+        for key in self.IDENTITY_KEYS:
+            merged.pop(key, None)
+
+        return merged
+
+    def shipped_map(self) -> dict:
+        """Every shipped policy at once, for the screen that edits the company's.
+
+        Handed to ``reply_policy_service.describe`` so a company can see what it
+        is inheriting before it overrides anything.
+        """
+        return {
+            "default": self.shipped_default(),
+            "channels": {
+                channel: self.shipped_channel_policy(channel)
+                for channel in POLICY_CHANNELS
+            },
+        }
+
+    def get_channel_policy(
+        self,
+        channel: str,
+        company_id: int | None = None,
+    ) -> dict:
+        """How *this* company answers on this channel.
+
+        Never raises. A company that has chosen nothing, a message with no
+        company, or a database that will not open all fall back to the shipped
+        values — the customer loses a preference, not the reply.
+        """
+        merged = self.shipped_channel_policy(channel)
+
+        if company_id:
+            merged = reply_policy_service.apply(
+                merged,
+                company_id=company_id,
+                channel=channel,
+            )
 
         for key in self.IDENTITY_KEYS:
             merged.pop(key, None)
@@ -131,8 +197,9 @@ class ResponsePolicy:
         channel: str,
         user_session: dict,
         language: str,
+        company_id: int | None = None,
     ) -> bool:
-        policy = self.get_channel_policy(channel)
+        policy = self.get_channel_policy(channel, company_id=company_id)
 
         if not policy.get("welcome_enabled", True):
             return False
@@ -163,7 +230,12 @@ class ResponsePolicy:
         reply = ai_result.get("reply") or ""
         buttons = ai_result.get("buttons") or []
 
-        if self.should_send_welcome(channel, user_session, language):
+        if self.should_send_welcome(
+            channel,
+            user_session,
+            language,
+            company_id=company_id,
+        ):
             welcome = self.get_welcome_message(
                 channel,
                 language,
@@ -177,7 +249,7 @@ class ResponsePolicy:
                 reply = f"{welcome}\n\n{reply}".strip()
                 user_session["welcome_sent"] = True
 
-        policy = self.get_channel_policy(channel)
+        policy = self.get_channel_policy(channel, company_id=company_id)
 
         if not policy.get("show_buttons", True):
             buttons = []

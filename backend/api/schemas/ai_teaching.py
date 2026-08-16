@@ -11,7 +11,7 @@ attention.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -135,3 +135,27 @@ class BusinessDepartmentReorder(BaseModel):
     """The ids in the order the menu should be shown in."""
 
     department_ids: list[int] = Field(default_factory=list, max_length=200)
+
+
+# ----------------------------------------------------------------------
+# The reply policy — how this company answers, per channel
+# ----------------------------------------------------------------------
+
+
+class ReplyPolicyUpdate(BaseModel):
+    """Set some settings on one scope, clear others back to inheriting.
+
+    The values are typed ``Any`` on purpose: what a key may hold is decided by
+    ``reply_policy_service`` — which is also the gate on
+    ``/api/company-settings/reply_policy`` — so the rules live in one place
+    rather than being restated here and drifting. A key it does not recognise,
+    a mode that is not a real mode and a confidence outside 0..1 are refused
+    with a message that says which, rather than stored.
+
+    ``clear`` is what makes an override removable. Without it a channel row
+    could show a value with no way back to inheriting, which is a control that
+    looks like a decision and is really a copy.
+    """
+
+    values: dict[str, Any] = Field(default_factory=dict)
+    clear: list[str] = Field(default_factory=list, max_length=32)

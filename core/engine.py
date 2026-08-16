@@ -645,9 +645,14 @@ class Engine:
             user_session
         )
 
+        # This company's own reply mechanism, resolved for this channel: the
+        # platform's shipped defaults, then whatever this company chose. The
+        # company is passed explicitly, like it is to ``ai_router.route`` and
+        # ``collect_connector_results`` below.
         channel_policy = (
             response_policy.get_channel_policy(
-                request.channel
+                request.channel,
+                company_id=request.company_id,
             )
         )
 

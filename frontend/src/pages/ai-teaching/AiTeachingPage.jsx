@@ -9,15 +9,19 @@ import {
 } from "@mui/icons-material";
 
 import {
+  clearReplyPolicyChannelRequest,
   createBusinessDepartmentRequest,
   deleteBusinessDepartmentRequest,
   getAiTeachingProfileRequest,
   getAiTeachingPromptRequest,
+  getReplyPolicyRequest,
   listBusinessDepartmentsRequest,
   reorderBusinessDepartmentsRequest,
   runAiTeachingDryRunRequest,
   updateAiTeachingProfileRequest,
   updateBusinessDepartmentRequest,
+  updateReplyPolicyChannelRequest,
+  updateReplyPolicyDefaultRequest,
 } from "../../api/aiTeaching";
 import {
   AppButton,
@@ -83,6 +87,226 @@ function departmentPayload(row) {
     button_en: (row.button_en || "").trim() || null,
     enabled: Boolean(row.enabled),
   };
+}
+
+// ----------------------------------------------------------------------
+// The reply policy — how this company answers, per channel
+//
+// Two levels: the company's own default, and an optional override per channel.
+// Underneath both sit the platform's shipped values. A setting that is not
+// overridden *inherits* — it does not hold a copy — so every control here can
+// be put back to inheriting, and the screen has to show which of the two it is
+// looking at. Showing only the effective value is exactly how a control starts
+// looking like a decision somebody made when nobody made it.
+// ----------------------------------------------------------------------
+
+const POLICY_DEFAULT_SCOPE = "default";
+
+const CHANNEL_LABELS = {
+  messenger: "Messenger",
+  instagram: "Instagram",
+  whatsapp: "WhatsApp",
+  telegram: "Telegram",
+  website_chat: "Website chat",
+};
+
+const POLICY_CHOICE_LABELS = {
+  always: "Every message",
+  once_per_conversation: "Once per conversation",
+  never: "Never",
+  grounded_ai: "Grounded AI",
+  knowledge_then_ai: "Knowledge, then AI",
+  flow_only: "Flow only",
+};
+
+function channelLabel(channel) {
+  return CHANNEL_LABELS[channel] || channel;
+}
+
+function choiceLabel(value) {
+  return POLICY_CHOICE_LABELS[value] || String(value);
+}
+
+function formatPolicyValue(field, value) {
+  if (value === undefined || value === null || value === "") {
+    return "not set";
+  }
+
+  if (field.type === "boolean") {
+    return value ? "on" : "off";
+  }
+
+  if (field.type === "choice") {
+    return choiceLabel(value);
+  }
+
+  return String(value);
+}
+
+/** The overrides each scope has actually stored, as the drafts the form edits. */
+function policyDraftsFrom(policy) {
+  const drafts = {
+    [POLICY_DEFAULT_SCOPE]: { ...(policy?.default?.overrides || {}) },
+  };
+
+  (policy?.channels || []).forEach((row) => {
+    drafts[row.channel] = { ...(row.overrides || {}) };
+  });
+
+  return drafts;
+}
+
+function policyScopes(policy) {
+  if (!policy) {
+    return [];
+  }
+
+  return [
+    {
+      key: POLICY_DEFAULT_SCOPE,
+      channel: null,
+      title: "Your default",
+      subtitle: "Applies on every channel you have not overridden below.",
+      inheritLabel: "the platform default",
+      inherited: policy.default?.inherited || {},
+      overrides: policy.default?.overrides || {},
+      values: policy.default?.values || {},
+    },
+    ...(policy.channels || []).map((row) => ({
+      key: row.channel,
+      channel: row.channel,
+      title: channelLabel(row.channel),
+      subtitle: null,
+      inheritLabel: "your default",
+      inherited: row.inherited || {},
+      overrides: row.overrides || {},
+      values: row.values || {},
+    })),
+  ];
+}
+
+function policyScopeDirty(scope, draft) {
+  const stored = scope.overrides || {};
+  const draftKeys = Object.keys(draft || {});
+  const storedKeys = Object.keys(stored);
+
+  if (draftKeys.length !== storedKeys.length) {
+    return true;
+  }
+
+  return draftKeys.some((key) => String(draft[key]) !== String(stored[key]));
+}
+
+/** Numbers arrive from the inputs as strings; the API refuses those, rightly. */
+function policyValuesFromDraft(draft, fields) {
+  const values = {};
+
+  fields.forEach((field) => {
+    if (!(field.key in draft)) {
+      return;
+    }
+
+    const raw = draft[field.key];
+
+    if (field.type === "boolean") {
+      values[field.key] = Boolean(raw);
+      return;
+    }
+
+    if (field.type === "fraction" || field.type === "integer") {
+      const number =
+        field.type === "integer"
+          ? Number.parseInt(raw, 10)
+          : Number.parseFloat(raw);
+
+      if (Number.isNaN(number)) {
+        throw new Error(`${field.label} needs a number.`);
+      }
+
+      values[field.key] = number;
+      return;
+    }
+
+    values[field.key] = String(raw);
+  });
+
+  return values;
+}
+
+function PolicyField({ field, scope, draft, onOverride, onChange, disabled }) {
+  const overridden = field.key in draft;
+  const inherited = scope.inherited?.[field.key];
+  const value = overridden ? draft[field.key] : inherited;
+  const controlId = `ai-teaching-policy-${scope.key}-${field.key}`;
+
+  return (
+    <li className={overridden ? "" : "is-inherited"}>
+      <div className="ai-teaching-policy-field-head">
+        <span className="ai-teaching-policy-label">{field.label}</span>
+
+        <label htmlFor={`${controlId}-override`}>
+          <input
+            id={`${controlId}-override`}
+            type="checkbox"
+            checked={overridden}
+            disabled={disabled}
+            onChange={(event) =>
+              onOverride(field, event.target.checked, inherited)
+            }
+          />
+
+          <span>{overridden ? "Set here" : "Inheriting"}</span>
+        </label>
+      </div>
+
+      {field.type === "boolean" ? (
+        <label className="ai-teaching-policy-switch" htmlFor={controlId}>
+          <input
+            id={controlId}
+            type="checkbox"
+            checked={Boolean(value)}
+            disabled={disabled || !overridden}
+            onChange={(event) => onChange(field, event.target.checked)}
+          />
+
+          <span>{value ? "On" : "Off"}</span>
+        </label>
+      ) : field.type === "choice" ? (
+        <select
+          id={controlId}
+          value={value ?? ""}
+          disabled={disabled || !overridden}
+          onChange={(event) => onChange(field, event.target.value)}
+        >
+          {(field.choices || []).map((choice) => (
+            <option key={choice} value={choice}>
+              {choiceLabel(choice)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={controlId}
+          type="number"
+          value={value ?? ""}
+          min={field.minimum}
+          max={field.maximum}
+          step={field.step}
+          disabled={disabled || !overridden}
+          onChange={(event) => onChange(field, event.target.value)}
+        />
+      )}
+
+      <small className="ai-teaching-note">
+        {overridden
+          ? field.help
+          : `Inherits ${scope.inheritLabel}: ${formatPolicyValue(
+              field,
+              inherited,
+            )}.`}
+      </small>
+    </li>
+  );
 }
 
 function emptyForm() {
@@ -173,6 +397,13 @@ export default function AiTeachingPage() {
   const [pendingDepartmentDelete, setPendingDepartmentDelete] = useState(null);
   const [deletingDepartment, setDeletingDepartment] = useState(false);
 
+  const [policy, setPolicy] = useState(null);
+  const [policyDrafts, setPolicyDrafts] = useState({});
+  const [policyLoading, setPolicyLoading] = useState(true);
+  const [policyError, setPolicyError] = useState("");
+  const [policyStatus, setPolicyStatus] = useState("");
+  const [policyBusyScope, setPolicyBusyScope] = useState(null);
+
   const loadProfile = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -217,10 +448,134 @@ export default function AiTeachingPage() {
     }
   }, []);
 
+  const applyPolicy = useCallback((result) => {
+    setPolicy(result);
+    setPolicyDrafts(policyDraftsFrom(result));
+  }, []);
+
+  const loadPolicy = useCallback(async () => {
+    setPolicyLoading(true);
+    setPolicyError("");
+
+    try {
+      applyPolicy(await getReplyPolicyRequest());
+    } catch (requestError) {
+      setPolicyError(
+        requestError.message || "The reply policy could not be loaded.",
+      );
+    } finally {
+      setPolicyLoading(false);
+    }
+  }, [applyPolicy]);
+
   useEffect(() => {
     loadProfile();
     loadDepartments();
-  }, [loadProfile, loadDepartments]);
+    loadPolicy();
+  }, [loadProfile, loadDepartments, loadPolicy]);
+
+  const overridePolicyField = useCallback(
+    (scopeKey, field, overridden, inherited) => {
+      setPolicyStatus("");
+      setPolicyError("");
+      setPolicyDrafts((current) => {
+        const draft = { ...(current[scopeKey] || {}) };
+
+        if (overridden) {
+          // Starts from what it was inheriting, so switching a setting to
+          // "set here" changes nothing until the value itself is changed.
+          draft[field.key] = inherited;
+        } else {
+          delete draft[field.key];
+        }
+
+        return { ...current, [scopeKey]: draft };
+      });
+    },
+    [],
+  );
+
+  const changePolicyField = useCallback((scopeKey, field, value) => {
+    setPolicyStatus("");
+    setPolicyError("");
+    setPolicyDrafts((current) => ({
+      ...current,
+      [scopeKey]: { ...(current[scopeKey] || {}), [field.key]: value },
+    }));
+  }, []);
+
+  const savePolicyScope = useCallback(
+    async (scope) => {
+      const draft = policyDrafts[scope.key] || {};
+      const fields = policy?.fields || [];
+
+      let values;
+
+      try {
+        values = policyValuesFromDraft(draft, fields);
+      } catch (localError) {
+        setPolicyError(localError.message);
+        return;
+      }
+
+      // Anything this scope had stored and the form no longer sets goes back
+      // to inheriting. Without this a cleared row would keep its old value.
+      const clear = Object.keys(scope.overrides || {}).filter(
+        (key) => !(key in draft),
+      );
+
+      setPolicyBusyScope(scope.key);
+      setPolicyError("");
+      setPolicyStatus("");
+
+      try {
+        const result = scope.channel
+          ? await updateReplyPolicyChannelRequest(scope.channel, {
+              values,
+              clear,
+            })
+          : await updateReplyPolicyDefaultRequest({ values, clear });
+
+        applyPolicy(result);
+        setPolicyStatus(
+          `Saved. ${scope.title} applies from the next customer message.`,
+        );
+      } catch (requestError) {
+        setPolicyError(
+          requestError.message || "The reply policy could not be saved.",
+        );
+      } finally {
+        setPolicyBusyScope(null);
+      }
+    },
+    [applyPolicy, policy, policyDrafts],
+  );
+
+  const clearPolicyChannel = useCallback(
+    async (scope) => {
+      if (!scope.channel) {
+        return;
+      }
+
+      setPolicyBusyScope(scope.key);
+      setPolicyError("");
+      setPolicyStatus("");
+
+      try {
+        applyPolicy(await clearReplyPolicyChannelRequest(scope.channel));
+        setPolicyStatus(
+          `${scope.title} inherits your default again — nothing is kept behind.`,
+        );
+      } catch (requestError) {
+        setPolicyError(
+          requestError.message || "The override could not be cleared.",
+        );
+      } finally {
+        setPolicyBusyScope(null);
+      }
+    },
+    [applyPolicy],
+  );
 
   const markDepartmentDirty = useCallback((departmentId) => {
     setDepartmentsStatus("");
@@ -1154,6 +1509,148 @@ export default function AiTeachingPage() {
               label is still listed by name but is not offered as a button. Up
               to {MAX_DEPARTMENTS} sections.
             </p>
+          </AppCard>
+
+          <AppCard padding="medium">
+            <header className="ai-teaching-section-head">
+              <div>
+                <span>REPLY POLICY</span>
+                <h3>How your assistant answers</h3>
+              </div>
+
+              <AppButton
+                variant="ghost"
+                size="small"
+                icon={<RefreshOutlined />}
+                onClick={loadPolicy}
+                disabled={Boolean(policyBusyScope)}
+              >
+                Reload
+              </AppButton>
+            </header>
+
+            <p className="ai-teaching-note">
+              Yours alone. Set your own default and, where a channel needs to
+              behave differently, override just that channel. Anything you do
+              not set inherits — your default from the platform&apos;s, a
+              channel from your default — and can be put back to inheriting at
+              any time.
+            </p>
+
+            {policyError ? (
+              <p className="ai-teaching-alert is-error">{policyError}</p>
+            ) : null}
+
+            {policyStatus ? (
+              <p className="ai-teaching-alert is-ok">{policyStatus}</p>
+            ) : null}
+
+            {policyLoading ? (
+              <p className="ai-teaching-note">Loading your reply policy...</p>
+            ) : (
+              policyScopes(policy).map((scope) => {
+                const draft = policyDrafts[scope.key] || {};
+                const locked = (policy?.locked_keys || []).includes(
+                  scope.channel ? "channels" : "default",
+                );
+                const overrideCount = Object.keys(scope.overrides || {}).length;
+                const busy = policyBusyScope === scope.key;
+
+                const fields = (
+                  <>
+                    <ul className="ai-teaching-policy-fields">
+                      {(policy?.fields || []).map((field) => (
+                        <PolicyField
+                          key={`${scope.key}-${field.key}`}
+                          field={field}
+                          scope={scope}
+                          draft={draft}
+                          disabled={locked || busy}
+                          onOverride={(policyField, overridden, inherited) =>
+                            overridePolicyField(
+                              scope.key,
+                              policyField,
+                              overridden,
+                              inherited,
+                            )
+                          }
+                          onChange={(policyField, value) =>
+                            changePolicyField(scope.key, policyField, value)
+                          }
+                        />
+                      ))}
+                    </ul>
+
+                    {locked ? (
+                      <p className="ai-teaching-note">
+                        Locked by the platform administrator, so it is shown
+                        here but cannot be changed from this screen.
+                      </p>
+                    ) : (
+                      <div className="ai-teaching-policy-actions">
+                        {scope.channel ? (
+                          <AppButton
+                            variant="ghost"
+                            size="small"
+                            onClick={() => clearPolicyChannel(scope)}
+                            disabled={!overrideCount}
+                            loading={busy}
+                          >
+                            Inherit everything
+                          </AppButton>
+                        ) : null}
+
+                        <AppButton
+                          variant="primary"
+                          size="small"
+                          onClick={() => savePolicyScope(scope)}
+                          disabled={!policyScopeDirty(scope, draft)}
+                          loading={busy}
+                        >
+                          Save
+                        </AppButton>
+                      </div>
+                    )}
+                  </>
+                );
+
+                if (!scope.channel) {
+                  return (
+                    <section
+                      key={scope.key}
+                      className="ai-teaching-policy-scope"
+                    >
+                      <h4>{scope.title}</h4>
+
+                      <p className="ai-teaching-note">{scope.subtitle}</p>
+
+                      {fields}
+                    </section>
+                  );
+                }
+
+                return (
+                  <details
+                    key={scope.key}
+                    className="ai-teaching-policy-scope is-channel"
+                  >
+                    <summary>
+                      <span>{scope.title}</span>
+
+                      <small>
+                        {overrideCount
+                          ? `${overrideCount} setting${
+                              overrideCount === 1 ? "" : "s"
+                            } set here`
+                          : "Inherits your default"}
+                      </small>
+                    </summary>
+
+                    {fields}
+                  </details>
+                );
+              })
+            )}
           </AppCard>
         </div>
 

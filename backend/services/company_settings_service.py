@@ -10,6 +10,7 @@ Table creation belongs to `database/schema_tenant.py` alone.
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from datetime import datetime, timezone
@@ -72,6 +73,26 @@ DEFAULT_SETTINGS: dict[str, Any] = {
             "escalation",
         ]
     },
+    # How this company answers, per channel: whether a welcome is sent and how
+    # often, whether the assistant may reply freely, how confident a knowledge
+    # match must be, how many knowledge items reach the model, whether buttons
+    # are shown. It used to be one shared file for the whole platform, so no
+    # company could change any of it without changing it for everybody.
+    #
+    # Sparse on purpose, and empty by default: a key that is absent inherits
+    # the platform's shipped value in `config/response_policy.json`, and a
+    # channel that is absent inherits this company's default. Seeding the
+    # shipped values in here would freeze a copy of them and make "clear this
+    # override" impossible to tell apart from "set it to the same thing".
+    #
+    # `backend/services/reply_policy_service.py` owns the shape, the validation
+    # and the resolution; writes to this section are validated there, including
+    # writes that arrive straight at `/api/company-settings/reply_policy`.
+    # Unlike `modules` below, this section is the company's to edit.
+    "reply_policy": {
+        "default": {},
+        "channels": {},
+    },
     # Read-only here. This section used to carry its own five switches that
     # nothing ever read, so a company could turn Appointments "off" and keep
     # using it. Module visibility is now one decision, made by the platform
@@ -128,7 +149,9 @@ class CompanySettingsService:
 
             return dict(platform_service.get_platform_config(company_id)["modules"])
 
-        return dict(DEFAULT_SETTINGS.get(section, {}))
+        # Deep: `reply_policy` and `reply_flow` hold nested values, and a
+        # shallow copy would hand every company the same inner dict to mutate.
+        return copy.deepcopy(DEFAULT_SETTINGS.get(section, {}))
 
     def get_section(self, company_id: int, section: str) -> dict[str, Any]:
         company_id = int(company_id)
@@ -211,6 +234,22 @@ class CompanySettingsService:
             )
 
         merged = {**current["values"], **values}
+
+        if normalized == "reply_policy":
+            # Validated wherever the write came from, not only from the screen
+            # that usually sends it. An unknown key or an out-of-range value
+            # reads back exactly like a decision that was applied and changes
+            # nothing, so it is refused rather than stored. Merged rather than
+            # replaced, because a write names only the part it changes.
+            # Imported here because the reply policy service reads this one.
+            from backend.services.reply_policy_service import reply_policy_service
+
+            merged = reply_policy_service.merge_section(
+                current["values"],
+                values,
+                company_id=company_id,
+            )
+
         now = utc_now_iso()
 
         with database_manager.tenant(company_id) as conn:

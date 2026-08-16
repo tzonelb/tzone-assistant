@@ -292,3 +292,141 @@
   gap: 8px;
   justify-content: flex-end;
 }
+
+/* ------------------------------------------------------------------
+   Reply policy — the company default and its per-channel overrides.
+
+   An inherited row is dimmed and its control is disabled, so at a glance the
+   settings this company decided are separable from the ones it is only
+   passing through. A row that looked identical either way would make an
+   inherited value read as a decision nobody made.
+   ------------------------------------------------------------------ */
+
+.ai-teaching-policy-scope {
+  margin-bottom: var(--tz-space-4);
+  padding: var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface-muted, transparent);
+}
+
+.ai-teaching-policy-scope h4 {
+  margin: 0 0 4px;
+  color: var(--tz-text-primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ai-teaching-policy-scope.is-channel > summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--tz-space-3);
+  cursor: pointer;
+  color: var(--tz-text-primary);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ai-teaching-policy-scope.is-channel > summary small {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ai-teaching-policy-scope.is-channel[open] > summary {
+  margin-bottom: var(--tz-space-3);
+}
+
+.ai-teaching-policy-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--tz-space-3);
+  margin: 0 0 var(--tz-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.ai-teaching-policy-fields li {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface);
+}
+
+.ai-teaching-policy-fields li.is-inherited {
+  border-style: dashed;
+  opacity: 0.75;
+}
+
+.ai-teaching-policy-fields li .ai-teaching-note {
+  margin: 0;
+}
+
+.ai-teaching-policy-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-teaching-policy-label {
+  color: var(--tz-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Beats `.ai-teaching-page label { display: grid }` on specificity rather
+   than on source order, so these stay rows if the file is ever reordered. */
+.ai-teaching-policy-fields .ai-teaching-policy-field-head label,
+.ai-teaching-policy-fields .ai-teaching-policy-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-teaching-policy-fields .ai-teaching-policy-field-head label > span,
+.ai-teaching-policy-fields .ai-teaching-policy-switch > span {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.ai-teaching-policy-fields .ai-teaching-policy-switch > span {
+  color: var(--tz-text-primary);
+  font-size: 13px;
+}
+
+.ai-teaching-policy-fields input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.ai-teaching-policy-fields input[type="number"] {
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font: inherit;
+  outline: 0;
+}
+
+.ai-teaching-policy-fields input:disabled,
+.ai-teaching-policy-fields select:disabled {
+  opacity: 0.55;
+}
+
+.ai-teaching-policy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
