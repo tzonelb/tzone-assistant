@@ -248,3 +248,47 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+.ai-teaching-profile-form {
+  display: grid;
+  gap: var(--tz-space-5);
+  min-width: 0;
+}
+
+.ai-teaching-departments {
+  display: grid;
+  gap: var(--tz-space-4);
+  margin: 0 0 var(--tz-space-4);
+  padding: 0;
+  list-style: none;
+}
+
+.ai-teaching-departments li {
+  display: grid;
+  gap: var(--tz-space-3);
+  padding: var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface-muted, transparent);
+}
+
+.ai-teaching-departments li.is-off {
+  opacity: 0.6;
+}
+
+.ai-teaching-departments li.is-new {
+  border-style: dashed;
+}
+
+.ai-teaching-department-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--tz-space-3);
+}
+
+.ai-teaching-department-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}

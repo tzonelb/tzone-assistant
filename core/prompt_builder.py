@@ -15,8 +15,8 @@ That needs a company id, and the caller on the live path
   through a call stack that cannot pass it as an argument. The dry-run preview
   uses this.
 
-If neither is set, the prompt falls back to the shared file and says nothing
-company-specific, because guessing a company here is exactly the leak this
+If neither is set, the prompt says nothing company-specific at all — no name, no
+tone, no departments — because guessing a company here is exactly the leak this
 replaces.
 """
 
@@ -29,8 +29,8 @@ from contextvars import ContextVar
 from typing import Any
 
 from backend.services.bot_profile_service import bot_profile_service
+from backend.services.business_department_service import business_department_service
 from core.automation_policy import automation_policy
-from core.profile_loader import profile_loader
 
 
 logger = logging.getLogger(__name__)
@@ -140,8 +140,16 @@ class PromptBuilder:
             },
             "welcome": self._welcome(profile),
             "channel": channel,
-            "channel_role": profile_loader.get_channel_role(channel),
-            "business_modules": profile_loader.get_modules(),
+            # This company's own sections, from its own database. It used to be
+            # ``profile_loader.get_modules()`` — one shared JSON file listing
+            # one company's departments, told to every company's model, so the
+            # assistant offered a clinic's customers an IPTV menu.
+            #
+            # ``channel_role`` came from the same file and is gone rather than
+            # replaced: the per-channel bot profile resolved above already
+            # carries the role, since a company binds a profile to a channel
+            # account and writes that profile's own instructions and tone.
+            "business_departments": self._departments(company_id),
             "automation_policy": automation_policy.get_channel_policy(channel),
         }
 
@@ -192,10 +200,12 @@ class PromptBuilder:
         examples: answering as some other company is worse than answering
         generically.
         """
+        # Carries no departments and no channel role: both used to be read from
+        # the shared ``config/bot_profile.json``, so this prompt told the model
+        # it had no company identity and then handed it one company's
+        # departments anyway.
         context = {
             "channel": channel,
-            "channel_role": profile_loader.get_channel_role(channel),
-            "business_modules": profile_loader.get_modules(),
             "automation_policy": automation_policy.get_channel_policy(channel),
         }
 
@@ -285,6 +295,23 @@ Required JSON:
             "ar": profile.get("welcome_message_ar") or "",
             "en": profile.get("welcome_message_en") or "",
         }
+
+    @staticmethod
+    def _departments(company_id: int) -> list[dict[str, Any]]:
+        """The sections this company offers, as the model should describe them.
+
+        Only the enabled ones, and only this company's. ``for_assistant`` never
+        raises, so a department table that will not open costs the model its
+        menu rather than costing the customer a reply.
+        """
+        return [
+            {
+                "code": row.get("code"),
+                "name_ar": row.get("name_ar"),
+                "name_en": row.get("name_en"),
+            }
+            for row in business_department_service.for_assistant(company_id)
+        ]
 
     @staticmethod
     def _company_name(company_id: int) -> str | None:

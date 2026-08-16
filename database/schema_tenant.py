@@ -363,6 +363,29 @@ TENANT_TABLES: tuple[str, ...] = (
         updated_at TEXT NOT NULL
     )
     """,
+    # The sections this company offers its customers: the menu the assistant
+    # shows, the quick-reply buttons it renders, and the department list handed
+    # to the model. These used to come from `config/business_modules.json` — one
+    # file naming one company's departments, served to every company's
+    # customers, so a clinic's visitor was offered an IPTV menu. There is no
+    # default set: a company that has defined none gets no menu rather than
+    # somebody else's.
+    """
+    CREATE TABLE IF NOT EXISTS business_departments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        code TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        name_ar TEXT,
+        name_en TEXT,
+        button_ar TEXT,
+        button_en TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(company_id, code)
+    )
+    """,
     # --- Post comments --------------------------------------------------
     """
     CREATE TABLE IF NOT EXISTS post_comments (
@@ -563,6 +586,7 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_products_name ON products(name)",
     "CREATE INDEX IF NOT EXISTS idx_products_stock ON products(in_stock, status)",
     "CREATE INDEX IF NOT EXISTS idx_bot_profiles_default ON bot_profiles(is_default, status)",
+    "CREATE INDEX IF NOT EXISTS idx_departments_order ON business_departments(enabled, sort_order, id)",
     "CREATE INDEX IF NOT EXISTS idx_comments_status ON post_comments(status, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_comments_post ON post_comments(post_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_comment_replies ON comment_replies(comment_id, created_at)",

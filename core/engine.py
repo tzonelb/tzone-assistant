@@ -109,7 +109,10 @@ class Engine:
                 language = self.detect_language(request.message)
                 session.set_language(request.user_id, language)
 
-                return self.build_main_menu_response(language)
+                return self.build_main_menu_response(
+                    language,
+                    company_id=request.company_id,
+                )
 
             explicit_language = self.get_explicit_language(request.message)
 
@@ -122,6 +125,7 @@ class Engine:
                 return self.build_language_changed_response(
                     user_id=request.user_id,
                     language=explicit_language,
+                    company_id=request.company_id,
                 )
 
             message_language = self.detect_language(request.message)
@@ -139,7 +143,10 @@ class Engine:
                     request.channel,
                 )
 
-                return self.build_main_menu_response(language)
+                return self.build_main_menu_response(
+                    language,
+                    company_id=request.company_id,
+                )
 
             if request.message == "start":
                 return self.handle_start(
@@ -202,7 +209,10 @@ class Engine:
                         request.channel,
                     )
 
-                return self.build_main_menu_response(language)
+                return self.build_main_menu_response(
+                    language,
+                    company_id=request.company_id,
+                )
 
             if request.message in self.BACK_BUTTONS:
                 previous_state = session.go_back(
@@ -331,7 +341,10 @@ class Engine:
         if automation_policy.should_auto_reply_with_ai(
             request.channel
         ):
-            return self.build_main_menu_response(language)
+            return self.build_main_menu_response(
+                language,
+                company_id=request.company_id,
+            )
 
         if request.channel == "telegram":
             session.update(
@@ -359,12 +372,16 @@ class Engine:
             "main_menu",
         )
 
-        return self.build_main_menu_response(language)
+        return self.build_main_menu_response(
+            language,
+            company_id=request.company_id,
+        )
 
     def build_language_changed_response(
         self,
         user_id,
         language,
+        company_id=None,
     ):
         user_session = session.get(user_id) or {}
 
@@ -384,12 +401,18 @@ class Engine:
                     "en",
                 )
             else:
-                text = (
-                    "Language changed to English ✅\n\n"
-                    + business_modules.overview_text("en")
+                text = self.join_lines(
+                    "Language changed to English ✅",
+                    business_modules.overview_text(
+                        company_id,
+                        "en",
+                    ),
                 )
 
-                buttons = business_modules.buttons("en")
+                buttons = business_modules.buttons(
+                    company_id,
+                    "en",
+                )
 
             if "🏠 Main Menu" not in buttons:
                 buttons.append("🏠 Main Menu")
@@ -407,43 +430,101 @@ class Engine:
                 "ar",
             )
         else:
-            text = (
-                "تم تغيير اللغة إلى العربية ✅\n\n"
-                + business_modules.overview_text("ar")
+            text = self.join_lines(
+                "تم تغيير اللغة إلى العربية ✅",
+                business_modules.overview_text(
+                    company_id,
+                    "ar",
+                ),
             )
 
-            buttons = business_modules.buttons("ar")
+            buttons = business_modules.buttons(
+                company_id,
+                "ar",
+            )
 
         if "🏠 القائمة الرئيسية" not in buttons:
             buttons.append("🏠 القائمة الرئيسية")
 
         return Response(text, buttons)
 
-    def build_main_menu_response(self, language):
-        if language == "en":
-            text = (
-                "Welcome to T-ZONE 💙\n\n"
-                + business_modules.overview_text("en")
-            )
+    # The menu is assembled entirely from what the asking company has actually
+    # written down. It used to open with "Welcome to T-ZONE 💙" and list
+    # T-ZONE's departments, hardcoded here, so every business on the platform
+    # greeted its customers as another business and offered them another
+    # business's sections.
+    #
+    # Both halves are now optional and independently omitted:
+    #
+    # * The greeting is the company's own welcome message from its assistant
+    #   profile. A company that wrote none is not given one.
+    # * The sections sentence and its buttons appear only if the company has
+    #   defined departments. With none, the menu carries neither rather than a
+    #   fabricated list.
+    #
+    # If a company has written neither, the reply still has to say *something* —
+    # an empty message cannot be delivered — so it falls back to a question that
+    # makes no claim about the business and names nobody.
+    NEUTRAL_MENU_PROMPT = {
+        "en": "How can we help you today?",
+        "ar": "كيف فينا نساعدك اليوم؟",
+    }
 
-            buttons = business_modules.buttons("en")
+    SUPPORT_BUTTON = {
+        "en": "Contact support",
+        "ar": "التواصل مع الدعم",
+    }
 
-            if "Contact support" not in buttons:
-                buttons.append("Contact support")
+    def build_main_menu_response(
+        self,
+        language,
+        company_id=None,
+        channel="messenger",
+        channel_account_id=None,
+    ):
+        language = "en" if language == "en" else "ar"
 
-            return Response(text, buttons)
-
-        text = (
-            "أهلاً وسهلاً بك في T-ZONE 💙\n\n"
-            + business_modules.overview_text("ar")
+        greeting = response_policy.get_welcome_message(
+            channel,
+            language,
+            company_id=company_id,
+            channel_account_id=channel_account_id,
         )
 
-        buttons = business_modules.buttons("ar")
+        overview = business_modules.overview_text(
+            company_id,
+            language,
+        )
 
-        if "التواصل مع الدعم" not in buttons:
-            buttons.append("التواصل مع الدعم")
+        buttons = business_modules.buttons(
+            company_id,
+            language,
+        )
+
+        text = self.join_lines(greeting, overview)
+
+        if not text:
+            text = self.NEUTRAL_MENU_PROMPT[language]
+
+        support_label = self.SUPPORT_BUTTON[language]
+
+        if support_label not in buttons:
+            buttons.append(support_label)
 
         return Response(text, buttons)
+
+    @staticmethod
+    def join_lines(*parts):
+        """Join the parts that exist, with a blank line between them.
+
+        Concatenating unconditionally left a trailing blank paragraph whenever a
+        company had no sections to list.
+        """
+        return "\n\n".join(
+            part.strip()
+            for part in parts
+            if part and part.strip()
+        )
 
     def load_company_knowledge(
         self,
@@ -508,6 +589,7 @@ class Engine:
         ) or {}
 
         module = business_modules.get_module_by_button(
+            request.company_id,
             request.message,
             language,
         )
@@ -534,7 +616,8 @@ class Engine:
 
         if self.is_greeting_only(request.message):
             greeting_result = self.build_greeting_result(
-                language
+                language,
+                company_id=request.company_id,
             )
 
             return self.finalize_ai_response(
@@ -767,9 +850,17 @@ class Engine:
         module_id = module.get("id")
 
         if language == "en":
+            # A company may name a section in one language only; printing the
+            # literal "None" back at the customer is worse than the other name.
+            name = (
+                module.get("name_en")
+                or module.get("name_ar")
+                or module_id
+            )
+
             text = (
                 f"You selected "
-                f"{module.get('name_en')}.\n"
+                f"{name}.\n"
                 "Tell us what you need exactly."
             )
 
@@ -783,9 +874,15 @@ class Engine:
 
             return Response(text, buttons)
 
+        arabic_name = (
+            module.get("name_ar")
+            or module.get("name_en")
+            or module_id
+        )
+
         text = (
             f"اخترت قسم "
-            f"{module.get('name_ar')}.\n"
+            f"{arabic_name}.\n"
             "خبرنا شو بدك تحديداً لنساعدك."
         )
 
@@ -799,7 +896,16 @@ class Engine:
 
         return Response(text, buttons)
 
-    def build_greeting_result(self, language):
+    def build_greeting_result(self, language, company_id=None):
+        # "hello" is answered with what this company actually offers. A company
+        # that has defined no sections has nothing to list, so the reply falls
+        # back to asking what the customer needs rather than reciting another
+        # company's departments.
+        overview = business_modules.overview_text(
+            company_id,
+            "en" if language == "en" else "ar",
+        )
+
         if language == "en":
             return {
                 "department": "information",
@@ -808,10 +914,14 @@ class Engine:
                 "language": "en",
                 "confidence": 1.0,
                 "reply": (
-                    business_modules.overview_text("en")
+                    overview
+                    or self.NEUTRAL_MENU_PROMPT["en"]
                 ),
                 "buttons": (
-                    business_modules.buttons("en")
+                    business_modules.buttons(
+                        company_id,
+                        "en",
+                    )
                 ),
                 "needs_human": False,
                 "missing_information": [],
@@ -829,10 +939,14 @@ class Engine:
             "language": "ar",
             "confidence": 1.0,
             "reply": (
-                business_modules.overview_text("ar")
+                overview
+                or self.NEUTRAL_MENU_PROMPT["ar"]
             ),
             "buttons": (
-                business_modules.buttons("ar")
+                business_modules.buttons(
+                    company_id,
+                    "ar",
+                )
             ),
             "needs_human": False,
             "missing_information": [],
@@ -1083,6 +1197,12 @@ class Engine:
             channel=request.channel,
             user_session=user_session,
             ai_result=ai_result,
+            company_id=request.company_id,
+            channel_account_id=getattr(
+                request,
+                "channel_account_id",
+                None,
+            ),
         )
 
         conversation_memory.append(

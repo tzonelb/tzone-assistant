@@ -42,6 +42,7 @@ from backend.services.conversation_control_service import (
     conversation_control_service,
 )
 from backend.services.message_service import message_service
+from database.manager import DatabaseError, database_manager
 
 
 logger = logging.getLogger(__name__)
@@ -636,6 +637,19 @@ def add_note(
 # ----------------------------------------------------------------------
 
 
+def _company_name(company_id: int) -> str:
+    """This company's own name, for anything a customer might read."""
+    try:
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT name FROM companies WHERE id = ? LIMIT 1", (int(company_id),)
+            ).fetchone()
+    except DatabaseError:
+        return "Conversation"
+
+    return str(row["name"]) if row and row["name"] else "Conversation"
+
+
 @router.get("/{channel}/{user_id}/export")
 def export_conversation(
     channel: str,
@@ -687,9 +701,14 @@ def export_conversation(
         "notes": notes,
     }
 
+    # The export belongs to the company that made it. It used to be headed
+    # "T-ZONE Conversation Report" whoever produced it, so a company handing a
+    # transcript to its own customer handed over the platform owner's name.
+    report_title = f"{_company_name(company_id)} Conversation Report"
+
     def build_text_report() -> str:
         lines = [
-            "T-ZONE Conversation Report",
+            report_title,
             f"Channel: {channel}",
             f"Customer ID: {user_id}",
             f"Exported at: {report['exported_at']}",
@@ -755,7 +774,7 @@ def export_conversation(
                 except Exception:  # noqa: BLE001
                     pass
 
-        pdf.setTitle("T-ZONE Conversation Report")
+        pdf.setTitle(report_title)
         pdf.setFont(font_name, 13)
         y = page_height - 42
 

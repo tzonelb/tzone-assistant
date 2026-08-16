@@ -24,6 +24,11 @@ from backend.services.bot_profile_service import (
     MAX_TONE,
     MAX_WELCOME,
 )
+from backend.services.business_department_service import (
+    MAX_BUTTON,
+    MAX_CODE,
+    MAX_NAME as MAX_DEPARTMENT_NAME,
+)
 
 
 Language = Literal["ar", "en"]
@@ -90,3 +95,43 @@ class DryRunRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_TEST_MESSAGE)
     channel: PreviewChannel = "messenger"
     language: Language | None = None
+
+
+# ----------------------------------------------------------------------
+# Business departments — the sections a company offers its customers
+# ----------------------------------------------------------------------
+
+
+class BusinessDepartmentCreate(BaseModel):
+    """One section of this company's business.
+
+    ``code`` is normalised by the service to lowercase ascii: it is what the
+    assistant routes on and what the session stores, so it is not free text
+    even though the names above it are.
+    """
+
+    code: str = Field(min_length=1, max_length=MAX_CODE)
+    name_ar: str | None = Field(default=None, max_length=MAX_DEPARTMENT_NAME)
+    name_en: str | None = Field(default=None, max_length=MAX_DEPARTMENT_NAME)
+    button_ar: str | None = Field(default=None, max_length=MAX_BUTTON)
+    button_en: str | None = Field(default=None, max_length=MAX_BUTTON)
+    enabled: bool = True
+    sort_order: int | None = Field(default=None, ge=0, le=9999)
+
+
+class BusinessDepartmentUpdate(BaseModel):
+    """Every field optional: the screen sends only what the row changed."""
+
+    code: str | None = Field(default=None, min_length=1, max_length=MAX_CODE)
+    name_ar: str | None = Field(default=None, max_length=MAX_DEPARTMENT_NAME)
+    name_en: str | None = Field(default=None, max_length=MAX_DEPARTMENT_NAME)
+    button_ar: str | None = Field(default=None, max_length=MAX_BUTTON)
+    button_en: str | None = Field(default=None, max_length=MAX_BUTTON)
+    enabled: bool | None = None
+    sort_order: int | None = Field(default=None, ge=0, le=9999)
+
+
+class BusinessDepartmentReorder(BaseModel):
+    """The ids in the order the menu should be shown in."""
+
+    department_ids: list[int] = Field(default_factory=list, max_length=200)

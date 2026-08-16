@@ -1,5 +1,9 @@
 """AI TEACHING — what this company's assistant is told, and a way to try it.
 
+Two things are edited here: the assistant's profile (tone, instructions,
+welcome, taught examples) and the company's business departments — the sections
+its customers are offered as a menu and as quick-reply buttons.
+
 Reads require ``settings.view``; every write requires ``settings.manage``. The
 dry run is also behind ``settings.manage``: it is not a write, but it runs the
 whole assistant and can spend money on a model call, so it belongs with the
@@ -21,6 +25,9 @@ from backend.api.schemas.ai_teaching import (
     BotProfileBindingUpdate,
     BotProfileCreate,
     BotProfileUpdate,
+    BusinessDepartmentCreate,
+    BusinessDepartmentReorder,
+    BusinessDepartmentUpdate,
     DryRunRequest,
 )
 from backend.services.auth_service import auth_service, require_permission
@@ -29,6 +36,10 @@ from backend.services.bot_profile_service import (
     SUGGESTED_TONES,
     BotProfileError,
     bot_profile_service,
+)
+from backend.services.business_department_service import (
+    BusinessDepartmentError,
+    business_department_service,
 )
 
 
@@ -179,6 +190,103 @@ def delete_one_profile(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Assistant profile not found.")
+
+    return {"success": True}
+
+
+# ----------------------------------------------------------------------
+# Business departments — the sections this company offers its customers
+#
+# They live here rather than behind their own permission because they are edited
+# on the AI TEACHING screen and they are part of what the assistant is taught:
+# the menu it shows, the buttons it offers and the department list in its
+# prompt. ``settings.view`` / ``settings.manage`` is the same gate the rest of
+# this screen uses, so a user who may teach the assistant may define its
+# sections, rather than meeting a half-working screen.
+#
+# ``/departments/reorder`` is declared before ``/departments/{department_id}``
+# so the literal segment is never parsed as an id.
+# ----------------------------------------------------------------------
+
+
+@router.get("/departments")
+def list_departments(company_id: int = Depends(view_context)):
+    return {
+        "items": business_department_service.list_departments(company_id=company_id)
+    }
+
+
+@router.post("/departments", status_code=status.HTTP_201_CREATED)
+def create_department(
+    payload: BusinessDepartmentCreate,
+    company_id: int = Depends(manage_context),
+):
+    try:
+        return {
+            "department": business_department_service.create_department(
+                company_id=company_id,
+                data=payload.model_dump(exclude_unset=True),
+            )
+        }
+    except BusinessDepartmentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/departments/reorder")
+def reorder_departments(
+    payload: BusinessDepartmentReorder,
+    company_id: int = Depends(manage_context),
+):
+    return {
+        "items": business_department_service.reorder(
+            company_id=company_id,
+            department_ids=payload.department_ids,
+        )
+    }
+
+
+@router.get("/departments/{department_id}")
+def get_department(department_id: int, company_id: int = Depends(view_context)):
+    department = business_department_service.get_department(
+        company_id=company_id, department_id=department_id
+    )
+
+    if not department:
+        raise HTTPException(status_code=404, detail="Department not found.")
+
+    return {"department": department}
+
+
+@router.put("/departments/{department_id}")
+def update_department(
+    department_id: int,
+    payload: BusinessDepartmentUpdate,
+    company_id: int = Depends(manage_context),
+):
+    try:
+        department = business_department_service.update_department(
+            company_id=company_id,
+            department_id=department_id,
+            values=payload.model_dump(exclude_unset=True),
+        )
+    except BusinessDepartmentError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not department:
+        raise HTTPException(status_code=404, detail="Department not found.")
+
+    return {"department": department}
+
+
+@router.delete("/departments/{department_id}")
+def delete_department(
+    department_id: int,
+    company_id: int = Depends(manage_context),
+):
+    if not business_department_service.delete_department(
+        company_id=company_id, department_id=department_id
+    ):
+        raise HTTPException(status_code=404, detail="Department not found.")
 
     return {"success": True}
 

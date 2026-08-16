@@ -946,6 +946,188 @@ def cmd_import_knowledge(args: argparse.Namespace) -> int:
 
 
 # ----------------------------------------------------------------------
+# import-departments
+# ----------------------------------------------------------------------
+
+
+LEGACY_DEPARTMENTS_FILE = Path("config") / "business_modules.json"
+
+MAX_DEPARTMENT_CODE = 60
+MAX_DEPARTMENT_NAME = 120
+MAX_DEPARTMENT_BUTTON = 60
+
+
+def load_department_service():
+    try:
+        from backend.services.business_department_service import (
+            business_department_service,
+        )
+    except Exception as exc:  # noqa: BLE001 - any import-time failure is fatal here
+        raise OperatorError(
+            "Could not import backend.services.business_department_service "
+            f"({type(exc).__name__}: {exc}). The import writes through that "
+            "service so the rules the API enforces also apply here."
+        ) from exc
+
+    return business_department_service
+
+
+def _read_departments_file(path: Path) -> list[dict]:
+    import json
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise OperatorError(f"Cannot read {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise OperatorError(f"{path} is not valid JSON: {exc}") from exc
+
+    modules = raw.get("modules") if isinstance(raw, dict) else raw
+
+    if not isinstance(modules, list):
+        raise OperatorError(
+            f"{path} does not contain a 'modules' list. A business modules "
+            'file looks like {"modules": [ ... ]}.'
+        )
+
+    return [module for module in modules if isinstance(module, dict)]
+
+
+def _legacy_to_department(raw: dict, position: int) -> tuple[str, dict] | None:
+    """Map one legacy module onto the business_departments columns."""
+    code = _clean_text(raw.get("id") or raw.get("code"), MAX_DEPARTMENT_CODE)
+
+    name_ar = _clean_text(raw.get("name_ar"), MAX_DEPARTMENT_NAME)
+    name_en = _clean_text(raw.get("name_en"), MAX_DEPARTMENT_NAME)
+
+    if not code or not (name_ar or name_en):
+        return None
+
+    return code, {
+        "name_ar": name_ar,
+        "name_en": name_en,
+        "button_ar": _clean_text(raw.get("button_ar"), MAX_DEPARTMENT_BUTTON),
+        "button_en": _clean_text(raw.get("button_en"), MAX_DEPARTMENT_BUTTON),
+        "enabled": bool(raw.get("enabled", True)),
+        "sort_order": position,
+    }
+
+
+def cmd_import_departments(args: argparse.Namespace) -> int:
+    """Load the legacy shared menu into one named company.
+
+    Deliberately one company at a time, and never at provisioning: seeding this
+    file into every company is precisely the defect being repaired — it is one
+    business's menu, and every other business on the platform was serving it to
+    its own customers.
+    """
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+
+    department_service = load_department_service()
+
+    company_id = int(args.company_id)
+
+    with database_manager.control() as conn:
+        row = conn.execute(
+            "SELECT name FROM companies WHERE id = ? LIMIT 1",
+            (company_id,),
+        ).fetchone()
+
+    if not row:
+        raise OperatorError(
+            f"No company with id {company_id}. Run `list-companies` to see them."
+        )
+
+    if not database_manager.tenant_path(company_id).exists():
+        raise OperatorError(
+            f"Company {company_id} has no database file at "
+            f"{database_manager.tenant_path(company_id)}. Restore it from a "
+            "backup before importing anything into it."
+        )
+
+    path = Path(args.file) if args.file else LEGACY_DEPARTMENTS_FILE
+
+    if not path.exists():
+        raise OperatorError(
+            f"{path} does not exist. Run this from the project root, or name "
+            "the file with --file."
+        )
+
+    entries = _read_departments_file(path)
+
+    collected: dict[str, dict] = {}
+    unusable = 0
+
+    for position, entry in enumerate(entries):
+        mapped = _legacy_to_department(entry, position)
+
+        if mapped is None:
+            unusable += 1
+            continue
+
+        code, values = mapped
+        collected[code] = values
+
+    if not collected:
+        raise OperatorError(
+            "No usable departments were found. Every entry needs an 'id' and "
+            "an Arabic or English name."
+        )
+
+    created = 0
+    updated = 0
+    failed: list[str] = []
+
+    for code, values in collected.items():
+        try:
+            _, was_created = department_service.upsert_by_code(
+                company_id=company_id,
+                code=code,
+                data=values,
+            )
+        except manager.UnknownCompany as exc:
+            raise OperatorError(str(exc)) from exc
+        except ValueError as exc:
+            failed.append(f"{code}: {exc}")
+            continue
+
+        if was_created:
+            created += 1
+        else:
+            updated += 1
+
+    banner("DEPARTMENTS IMPORTED")
+    out()
+    out(f"  Company   : {row['name']} (id {company_id})")
+    out(f"  Read      : {path} ({len(entries)} entries)")
+    out()
+    out(f"  Created   : {created}")
+    out(f"  Updated   : {updated}")
+
+    if unusable:
+        out(f"  Unusable  : {unusable} (no id, or no name in either language)")
+
+    if failed:
+        out(f"  Rejected  : {len(failed)}")
+        for line in failed:
+            out(f"      {line}")
+
+    out()
+    out("  These sections belong to this company alone and are stored inside")
+    out("  its encrypted database. Every other company keeps the menu it")
+    out("  defines for itself, and a company that defines none is shown no")
+    out("  menu at all rather than this one. Safe to re-run: entries are")
+    out("  matched on their code and refreshed rather than duplicated.")
+    out()
+
+    return 1 if failed else 0
+
+
+# ----------------------------------------------------------------------
 # backup
 # ----------------------------------------------------------------------
 
@@ -1329,6 +1511,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     import_knowledge.set_defaults(handler=cmd_import_knowledge)
+
+    import_departments = subparsers.add_parser(
+        "import-departments",
+        help="Import config/business_modules.json into one company.",
+        description=(
+            "Load config/business_modules.json — the founding company's real "
+            "sections — into that one company's own encrypted database. It is "
+            "never seeded into every company: it names one business's "
+            "departments, and serving it to everybody is the leak this "
+            "replaces. Safe to re-run: entries are matched on their code and "
+            "refreshed rather than duplicated."
+        ),
+    )
+    import_departments.add_argument(
+        "--company-id",
+        required=True,
+        type=int,
+        help="The company that receives these departments.",
+    )
+    import_departments.add_argument(
+        "--file",
+        default=None,
+        metavar="PATH",
+        help="Import this file instead of config/business_modules.json.",
+    )
+    import_departments.set_defaults(handler=cmd_import_departments)
 
     backup = subparsers.add_parser(
         "backup",
