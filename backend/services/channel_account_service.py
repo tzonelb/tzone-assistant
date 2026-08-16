@@ -69,6 +69,34 @@ class ChannelAccountService:
 
         return [self._public(row) for row in rows]
 
+    def connected_channels(self, company_id: int) -> list[str]:
+        """The channel types this company actually has switched on.
+
+        The inbox used to build its channel filters from
+        `SELECT DISTINCT channel FROM conversations` — that is, from message
+        history rather than from what the company connected. Two wrong answers
+        came out of it: a company that has just connected Instagram sees no
+        Instagram filter until the first message arrives, and a company that
+        once received a single test message on Messenger keeps a Messenger
+        filter it never asked for and cannot get rid of.
+
+        A company should see the channels it runs. Conversations belonging to a
+        channel that was later disconnected are still reachable under "all" —
+        disconnecting an account must not hide a customer's history.
+        """
+        with database_manager.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT DISTINCT channel
+                FROM channel_accounts
+                WHERE company_id = ? AND status = 'active'
+                ORDER BY channel
+                """,
+                (int(company_id),),
+            ).fetchall()
+
+        return [str(row["channel"]) for row in rows if row["channel"]]
+
     def get_account(self, company_id: int, account_id: int) -> dict[str, Any] | None:
         row = self._row(company_id, account_id)
         return self._public(row) if row else None

@@ -15,10 +15,14 @@ database, so they are resolved once per page rather than once per conversation.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from database.manager import database_manager
+from database.manager import DatabaseError, database_manager
+
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -377,7 +381,7 @@ class MessageService:
                 (company_id,),
             ).fetchall()
 
-            channel_rows = conn.execute(
+            historic_rows = conn.execute(
                 "SELECT DISTINCT channel FROM conversations WHERE company_id = ?",
                 (company_id,),
             ).fetchall()
@@ -392,8 +396,16 @@ class MessageService:
         return {
             "items": items,
             "channel_counts": counts,
-            "available_channels": sorted(
-                str(row["channel"]) for row in channel_rows if row["channel"]
+            # The channels this company runs, not the channels it has ever
+            # received a message on. Built from the connected accounts in the
+            # control plane, so a company that has just connected Instagram
+            # sees it immediately, and one that received a single test message
+            # on Messenger years ago is not stuck with a filter for it.
+            #
+            # Conversations on a disconnected channel are still listed under
+            # "all" — the filter chip disappears, the customer history does not.
+            "available_channels": self._available_channels(
+                company_id, historic_rows
             ),
             "pagination": {
                 "page": page,
@@ -402,6 +414,33 @@ class MessageService:
                 "total_pages": max(1, (total + page_size - 1) // page_size),
             },
         }
+
+    def _available_channels(self, company_id: int, historic_rows: Any) -> list[str]:
+        """Connected channels, falling back to history if that cannot be read.
+
+        The connected list lives in the control plane and this method runs on
+        the tenant path, so it is a second database. Falling back rather than
+        failing is deliberate: an inbox that cannot draw its filters is worse
+        than one drawing them from history for a moment.
+        """
+        from backend.services.channel_account_service import channel_account_service
+
+        try:
+            return channel_account_service.connected_channels(company_id)
+        except DatabaseError:
+            logger.exception(
+                "Could not read connected channels for company %s; "
+                "falling back to conversation history.",
+                company_id,
+            )
+
+        # Only reached when the read itself failed. An empty connected list is
+        # returned above, because "this company has connected nothing" is a
+        # correct answer and not a failure — conflating the two put a filter
+        # back for every channel the company had ever disconnected.
+        return sorted(
+            str(row["channel"]) for row in historic_rows if row["channel"]
+        )
 
     def _public_conversation(self, row: Any) -> dict[str, Any]:
         handled_by_ai = bool(row["handled_by_ai"])
