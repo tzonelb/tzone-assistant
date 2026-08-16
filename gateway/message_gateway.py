@@ -3,12 +3,15 @@ from core.request import Request
 
 
 class MessageGateway:
-    def handle_text(self, channel, user_id, message, language=None):
+    """Entry point from a channel into the assistant engine."""
+
+    def handle_text(self, channel, user_id, company_id, message, language=None):
         request = Request(
             channel=channel,
             user_id=str(user_id),
+            company_id=int(company_id),
             language=language,
-            message=message
+            message=message,
         )
 
         return engine.handle(request)

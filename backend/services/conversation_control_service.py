@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
 
 
 VALID_STATUSES = {
@@ -92,381 +92,6 @@ def parse_datetime(
 
 
 class ConversationControlService:
-    def __init__(self) -> None:
-        self.ensure_schema()
-
-    @staticmethod
-    def _table_columns(
-        conn,
-        table_name: str,
-    ) -> set[str]:
-        rows = conn.execute(
-            f"""
-            PRAGMA table_info({table_name})
-            """
-        ).fetchall()
-
-        return {
-            str(row["name"])
-            for row in rows
-        }
-
-    @staticmethod
-    def _table_exists(
-        conn,
-        table_name: str,
-    ) -> bool:
-        row = conn.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table'
-              AND name = ?
-            LIMIT 1
-            """,
-            (table_name,),
-        ).fetchone()
-
-        return row is not None
-
-    @staticmethod
-    def _add_missing_columns(
-        conn,
-        table_name: str,
-        definitions: dict[str, str],
-    ) -> None:
-        existing_columns = (
-            ConversationControlService
-            ._table_columns(
-                conn,
-                table_name,
-            )
-        )
-
-        for (
-            column_name,
-            definition,
-        ) in definitions.items():
-            if column_name in existing_columns:
-                continue
-
-            conn.execute(
-                f"""
-                ALTER TABLE {table_name}
-                ADD COLUMN {column_name}
-                {definition}
-                """
-            )
-
-            existing_columns.add(
-                column_name
-            )
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            if not self._table_exists(
-                conn,
-                "conversations",
-            ):
-                conn.execute(
-                    """
-                    CREATE TABLE conversations (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id INTEGER NOT NULL,
-                        channel TEXT NOT NULL,
-                        external_user_id TEXT NOT NULL,
-                        status TEXT NOT NULL
-                            DEFAULT 'ai_handling',
-                        workflow_state TEXT NOT NULL
-                            DEFAULT 'ai_active',
-                        ai_enabled INTEGER NOT NULL
-                            DEFAULT 1,
-                        handled_by_ai INTEGER NOT NULL
-                            DEFAULT 1,
-                        priority TEXT NOT NULL
-                            DEFAULT 'normal',
-                        department TEXT
-                            DEFAULT 'Unassigned',
-                        assigned_user_id INTEGER,
-                        needs_human INTEGER NOT NULL
-                            DEFAULT 0,
-                        unread_count INTEGER NOT NULL
-                            DEFAULT 0,
-                        takeover_expires_at TEXT,
-                        human_last_reply_at TEXT,
-                        last_message_at TEXT,
-                        branch_id INTEGER,
-                        channel_account_id INTEGER,
-                        customer_alias TEXT,
-                        official_customer_name TEXT,
-                        customer_profile_picture TEXT,
-                        folder TEXT NOT NULL DEFAULT 'inbox',
-                        is_starred INTEGER NOT NULL DEFAULT 0,
-                        is_pinned INTEGER NOT NULL DEFAULT 0,
-                        tags_json TEXT NOT NULL DEFAULT '[]',
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
-                    )
-                    """
-                )
-
-            self._add_missing_columns(
-                conn,
-                "conversations",
-                {
-                    "handled_by_ai":
-                        "INTEGER NOT NULL DEFAULT 1",
-                    "workflow_state":
-                        "TEXT NOT NULL DEFAULT 'ai_active'",
-                    "priority":
-                        "TEXT NOT NULL DEFAULT 'normal'",
-                    "department":
-                        "TEXT DEFAULT 'Unassigned'",
-                    "assigned_user_id":
-                        "INTEGER",
-                    "needs_human":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "unread_count":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "takeover_expires_at":
-                        "TEXT",
-                    "human_last_reply_at":
-                        "TEXT",
-                    "last_message_at":
-                        "TEXT",
-                    "branch_id":
-                        "INTEGER",
-                    "channel_account_id":
-                        "INTEGER",
-                    "customer_alias":
-                        "TEXT",
-                    "official_customer_name":
-                        "TEXT",
-                    "customer_profile_picture":
-                        "TEXT",
-                    "folder":
-                        "TEXT NOT NULL DEFAULT 'inbox'",
-                    "is_starred":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "is_pinned":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "tags_json":
-                        "TEXT NOT NULL DEFAULT '[]'",
-                },
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS
-                conversation_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    company_id INTEGER NOT NULL,
-                    actor_user_id INTEGER,
-                    event_type TEXT NOT NULL,
-                    event_data_json TEXT,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(conversation_id)
-                        REFERENCES conversations(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(actor_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS
-                conversation_notes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    company_id INTEGER NOT NULL,
-                    author_user_id INTEGER,
-                    note TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(conversation_id)
-                        REFERENCES conversations(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(author_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS branches (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    status TEXT NOT NULL
-                        DEFAULT 'active',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id)
-                        REFERENCES companies(id)
-                        ON DELETE CASCADE
-                )
-                """
-            )
-
-            if not self._table_exists(
-                conn,
-                "channel_accounts",
-            ):
-                conn.execute(
-                    """
-                    CREATE TABLE channel_accounts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id INTEGER NOT NULL,
-                        branch_id INTEGER,
-                        channel_type TEXT NOT NULL,
-                        display_name TEXT NOT NULL,
-                        external_account_id TEXT,
-                        phone_number TEXT,
-                        status TEXT NOT NULL
-                            DEFAULT 'active',
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        FOREIGN KEY(company_id)
-                            REFERENCES companies(id)
-                            ON DELETE CASCADE,
-                        FOREIGN KEY(branch_id)
-                            REFERENCES branches(id)
-                            ON DELETE SET NULL
-                    )
-                    """
-                )
-            else:
-                self._add_missing_columns(
-                    conn,
-                    "channel_accounts",
-                    {
-                        "company_id":
-                            "INTEGER",
-                        "branch_id":
-                            "INTEGER",
-                        "channel_type":
-                            "TEXT",
-                        "display_name":
-                            "TEXT",
-                        "external_account_id":
-                            "TEXT",
-                        "phone_number":
-                            "TEXT",
-                        "status":
-                            "TEXT DEFAULT 'active'",
-                        "created_at":
-                            "TEXT",
-                        "updated_at":
-                            "TEXT",
-                    },
-                )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS conversation_tags (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    normalized_name TEXT NOT NULL,
-                    color TEXT,
-                    status TEXT NOT NULL DEFAULT 'active',
-                    created_by_user_id INTEGER,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(company_id, normalized_name),
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
-                    FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS
-                idx_conversations_control_lookup
-                ON conversations (
-                    company_id,
-                    channel,
-                    external_user_id
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS
-                idx_conversation_events_lookup
-                ON conversation_events (
-                    conversation_id,
-                    id DESC
-                )
-                """
-            )
-
-            channel_account_columns = (
-                self._table_columns(
-                    conn,
-                    "channel_accounts",
-                )
-            )
-
-            if {
-                "company_id",
-                "status",
-                "channel_type",
-            }.issubset(
-                channel_account_columns
-            ):
-                conn.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS
-                    idx_channel_accounts_company
-                    ON channel_accounts (
-                        company_id,
-                        status,
-                        channel_type
-                    )
-                    """
-                )
-
-            conn.commit()
-
-    def resolve_default_company_id(
-        self,
-    ) -> int:
-        with db.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT id
-                FROM companies
-                WHERE status = 'active'
-                ORDER BY id
-                LIMIT 1
-                """
-            ).fetchone()
-
-            if row:
-                return int(row["id"])
-
-            row = conn.execute(
-                """
-                SELECT id
-                FROM companies
-                ORDER BY id
-                LIMIT 1
-                """
-            ).fetchone()
-
-            if row:
-                return int(row["id"])
-
-        return 1
-
     @staticmethod
     def row_to_dict(
         row,
@@ -536,7 +161,7 @@ class ConversationControlService:
             external_user_id.strip()
         )
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 """
                 SELECT *
@@ -680,84 +305,94 @@ class ConversationControlService:
 
     def expire_overdue_takeovers(
         self,
+        company_id: int,
     ) -> int:
+        """Hand conversations back to the assistant once a takeover lapses.
+
+        The UPDATE re-checks the exact expiry it read. Without that guard, an
+        employee who takes the conversation over in the moment between the read
+        and the write has it silently taken away from them again — a race that
+        was reachable because this ran on nearly every read.
+        """
         current_time = utc_now()
         expired_count = 0
 
-        with db.connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM conversations
-                WHERE handled_by_ai = 0
-                  AND takeover_expires_at IS NOT NULL
-                """
-            ).fetchall()
+        with database_manager.tenant(company_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
 
-            for row in rows:
-                state = self.row_to_dict(
-                    row
-                )
-
-                expiry = parse_datetime(
-                    state.get(
-                        "takeover_expires_at"
-                    )
-                )
-
-                if (
-                    expiry is None
-                    or current_time < expiry
-                ):
-                    continue
-
-                conn.execute(
+            try:
+                rows = conn.execute(
                     """
-                    UPDATE conversations
-                    SET
-                        handled_by_ai = 1,
-                        ai_enabled = 1,
-                        status = 'ai_handling',
-                        workflow_state =
-                            CASE
-                                WHEN unread_count > 0 THEN 'waiting_ai'
-                                ELSE 'ai_active'
-                            END,
-                        needs_human = 0,
-                        takeover_expires_at = NULL,
-                        assigned_user_id = NULL,
-                        updated_at = ?
-                    WHERE id = ?
+                    SELECT *
+                    FROM conversations
+                    WHERE company_id = ?
+                      AND handled_by_ai = 0
+                      AND takeover_expires_at IS NOT NULL
                     """,
-                    (
-                        utc_now_iso(),
-                        state["id"],
-                    ),
-                )
+                    (company_id,),
+                ).fetchall()
 
-                self.insert_event(
-                    conn=conn,
-                    conversation_id=(
-                        state["id"]
-                    ),
-                    company_id=(
-                        state["company_id"]
-                    ),
-                    actor_user_id=None,
-                    event_type=(
-                        "automatically_returned_to_ai"
-                    ),
-                    data={
-                        "reason":
-                            "employee_response_timeout",
-                        "timeout_minutes":
-                            _takeover_timeout_minutes(int(state["company_id"])),
-                    },
-                )
+                for row in rows:
+                    state = self.row_to_dict(row)
+                    stored_expiry = state.get("takeover_expires_at")
+                    expiry = parse_datetime(stored_expiry)
 
-                expired_count += 1
+                    if expiry is None or current_time < expiry:
+                        continue
 
-            conn.commit()
+                    cursor = conn.execute(
+                        """
+                        UPDATE conversations
+                        SET
+                            handled_by_ai = 1,
+                            ai_enabled = 1,
+                            status = 'ai_handling',
+                            workflow_state =
+                                CASE
+                                    WHEN unread_count > 0 THEN 'waiting_ai'
+                                    ELSE 'ai_active'
+                                END,
+                            needs_human = 0,
+                            takeover_expires_at = NULL,
+                            assigned_user_id = NULL,
+                            updated_at = ?
+                        WHERE id = ?
+                          AND company_id = ?
+                          AND handled_by_ai = 0
+                          AND takeover_expires_at = ?
+                        """,
+                        (
+                            utc_now_iso(),
+                            state["id"],
+                            company_id,
+                            stored_expiry,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        # Someone changed this conversation first. Their change
+                        # wins; expiring it now would undo a live takeover.
+                        continue
+
+                    self.insert_event(
+                        conn=conn,
+                        conversation_id=state["id"],
+                        company_id=company_id,
+                        actor_user_id=None,
+                        event_type="automatically_returned_to_ai",
+                        data={
+                            "reason": "employee_response_timeout",
+                            "timeout_minutes": _takeover_timeout_minutes(company_id),
+                        },
+                    )
+
+                    expired_count += 1
+
+                conn.commit()
+
+            except Exception:
+                conn.rollback()
+                raise
 
         return expired_count
 
@@ -767,8 +402,9 @@ class ConversationControlService:
         channel: str,
         external_user_id: str,
     ) -> dict[str, Any]:
-        self.expire_overdue_takeovers()
-
+        # Expiry is handled by the background worker. Running a full sweep on
+        # every read made a single inbox page issue one table scan per
+        # conversation shown.
         return self.get_or_create(
             company_id=company_id,
             channel=channel,
@@ -824,7 +460,7 @@ class ConversationControlService:
                 + timedelta(minutes=_takeover_timeout_minutes(company_id))
             ).isoformat()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             current = conn.execute(
                 """
@@ -953,7 +589,7 @@ class ConversationControlService:
         if state.get("assigned_user_id") != actor_user_id:
             return state
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
                 """
@@ -1036,7 +672,7 @@ class ConversationControlService:
             external_user_id=external_user_id,
         )
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
 
             fresh = conn.execute(
@@ -1124,7 +760,7 @@ class ConversationControlService:
         release_expiry = (
             utc_now() + timedelta(minutes=_takeover_timeout_minutes(company_id))
         ).isoformat()
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             if force:
                 cursor = conn.execute(
@@ -1202,7 +838,7 @@ class ConversationControlService:
             utc_now() + timedelta(minutes=_takeover_timeout_minutes(company_id))
         ).isoformat()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
                 """
@@ -1276,7 +912,7 @@ class ConversationControlService:
             channel=channel,
             external_user_id=external_user_id,
         )
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1309,7 +945,7 @@ class ConversationControlService:
             channel=channel,
             external_user_id=external_user_id,
         )
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1352,7 +988,7 @@ class ConversationControlService:
             channel=channel,
             external_user_id=external_user_id,
         )
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1461,7 +1097,7 @@ class ConversationControlService:
                 "assignment_changed",
         }
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             # SECURITY FIX (Patch 9.1): all writes to this conversation row
             # now happen inside a single BEGIN IMMEDIATE transaction, same
             # locking discipline as set_ai_mode()/take_over(), so a second
@@ -1704,7 +1340,7 @@ class ConversationControlService:
         if not updates:
             return state
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             for field_name, old_value, new_value, event_type in updates:
                 stored_value = new_value
                 if field_name in {"is_starred", "is_pinned"}:
@@ -1771,7 +1407,7 @@ class ConversationControlService:
         old_unread = int(state.get("unread_count", 0) or 0)
         now = utc_now_iso()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1835,7 +1471,7 @@ class ConversationControlService:
             ),
         )
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO conversation_notes (
@@ -1898,7 +1534,7 @@ class ConversationControlService:
         return dict(row)
 
     def list_tags(self, company_id: int) -> list[dict[str, Any]]:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             rows = conn.execute(
                 """
                 SELECT id, name, color, status, created_at, updated_at
@@ -1922,7 +1558,7 @@ class ConversationControlService:
             raise ValueError("Tag name is required.")
         normalized = clean.casefold()
         now = utc_now_iso()
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 INSERT INTO conversation_tags (
@@ -1949,7 +1585,7 @@ class ConversationControlService:
         clean = str(name or "").strip()[:50]
         if not clean:
             raise ValueError("Tag name is required.")
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """UPDATE conversation_tags
                    SET name = ?, normalized_name = ?, color = ?, updated_at = ?
@@ -2008,7 +1644,7 @@ class ConversationControlService:
             ),
         )
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             event_rows = conn.execute(
                 """
                 SELECT

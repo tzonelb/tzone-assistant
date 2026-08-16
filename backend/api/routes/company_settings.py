@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.api.schemas.company_settings import CompanySettingsUpdate
-from backend.services.auth_service import auth_service, get_current_user
+from backend.services.auth_service import auth_service, require_permission
 from backend.services.company_settings_service import company_settings_service
 
 
@@ -16,7 +16,7 @@ def _company_id(current_user: dict[str, Any]) -> int:
 
 @router.get("")
 def get_all_company_settings(
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(require_permission("settings.view")),
 ):
     return {
         "company_id": _company_id(current_user),
@@ -27,7 +27,7 @@ def get_all_company_settings(
 @router.get("/{section}")
 def get_company_setting_section(
     section: str,
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(require_permission("settings.view")),
 ):
     return company_settings_service.get_section(_company_id(current_user), section)
 
@@ -36,7 +36,7 @@ def get_company_setting_section(
 def update_company_setting_section(
     section: str,
     payload: CompanySettingsUpdate,
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(require_permission("settings.manage")),
 ):
     try:
         return company_settings_service.update_section(

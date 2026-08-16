@@ -15,7 +15,7 @@ from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
 from core.business_modules import business_modules
-from database.database import db
+from backend.services.ticket_service import ticket_service
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +101,6 @@ class Engine:
 
     def handle(self, request):
         try:
-            db.create_tables()
             user_session = session.create(request.user_id)
 
             if self.is_reset_message(request.message):
@@ -1230,7 +1229,9 @@ class Engine:
             or {}
         )
 
-        ticket_id = db.create_ticket({
+        ticket_id = ticket_service.create(
+            company_id=request.company_id,
+            data={
             "platform": request.channel,
             "user_id": request.user_id,
             "language": user_session.get(
@@ -1247,7 +1248,8 @@ class Engine:
             "problem": user_session.get(
                 "problem"
             ),
-        })
+            },
+        )
 
         session.update(
             request.user_id,
@@ -1458,12 +1460,12 @@ class Engine:
         logger.info(
             (
                 "channel=%s user=%s "
-                "state=%s message=%s"
+                "state=%s message_length=%s"
             ),
             request.channel,
             request.user_id,
             current_state,
-            request.message,
+            len(request.message or ""),
         )
 
 

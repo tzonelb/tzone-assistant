@@ -6,8 +6,8 @@ from backend.api.schemas.roles import (
     UserAssignmentRequest,
     UserCreateRequest,
 )
-from backend.services.auth_service import auth_service, get_current_user
-from database.database import db
+from backend.services.auth_service import auth_service, get_current_user, require_permission
+from database.manager import database_manager
 
 
 router = APIRouter(prefix="/api/admin/access", tags=["Roles and Permissions"])
@@ -35,7 +35,7 @@ def overview(current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
 
-    with db.connect() as conn:
+    with database_manager.control() as conn:
         permissions = [dict(row) for row in conn.execute("""
             SELECT id, code, name, description
             FROM permissions
@@ -108,7 +108,7 @@ def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_cur
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
 
-    with db.connect() as conn:
+    with database_manager.control() as conn:
         try:
             cursor = conn.execute("""
                 INSERT INTO roles (company_id, name, code, description, is_system)
@@ -142,7 +142,7 @@ def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> No
 def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
-    with db.connect() as conn:
+    with database_manager.control() as conn:
         role = conn.execute("SELECT * FROM roles WHERE id = ? AND company_id = ?", (role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=404, detail="Role not found.")
@@ -163,7 +163,7 @@ def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = D
 def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
-    with db.connect() as conn:
+    with database_manager.control() as conn:
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
@@ -177,7 +177,7 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    with db.connect() as conn:
+    with database_manager.control() as conn:
         conn.execute("""
             INSERT INTO company_users (company_id, user_id, role_id, branch_id, status)
             VALUES (?, ?, ?, ?, 'active')
@@ -192,7 +192,7 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
     _require_access_admin(current_user, company_id)
     if user_id == current_user["id"] and payload.status != "active":
         raise HTTPException(status_code=400, detail="You cannot disable your own membership.")
-    with db.connect() as conn:
+    with database_manager.control() as conn:
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")

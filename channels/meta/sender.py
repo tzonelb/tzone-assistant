@@ -1,4 +1,4 @@
-import requests
+import httpx
 
 from config.settings import config
 from channels.meta.logger import log_meta_event
@@ -54,10 +54,10 @@ def send_meta_text(
     }
 
     try:
-        response = requests.post(url, params=params, json=payload, timeout=15)
+        response = httpx.post(url, params=params, json=payload, timeout=15)
 
         result = {
-            "ok": response.ok,
+            "ok": response.is_success,
             "status_code": response.status_code,
             "channel": channel,
             "recipient_id": recipient_id,
@@ -127,10 +127,10 @@ def send_meta_buttons(
     }
 
     try:
-        response = requests.post(url, params=params, json=payload, timeout=15)
+        response = httpx.post(url, params=params, json=payload, timeout=15)
 
         result = {
-            "ok": response.ok,
+            "ok": response.is_success,
             "status_code": response.status_code,
             "channel": channel,
             "recipient_id": recipient_id,

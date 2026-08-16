@@ -19,6 +19,28 @@ export function clearAccessToken() {
   localStorage.removeItem(TOKEN_KEY);
 }
 
+const LOGIN_PATH = "/login";
+
+let redirectingToLogin = false;
+
+export function handleUnauthorized() {
+  clearAccessToken();
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (
+    redirectingToLogin ||
+    window.location.pathname === LOGIN_PATH
+  ) {
+    return;
+  }
+
+  redirectingToLogin = true;
+  window.location.replace(LOGIN_PATH);
+}
+
 async function parseResponse(response) {
   const contentType =
     response.headers.get("content-type") || "";
@@ -96,12 +118,17 @@ export async function apiRequest(
 
     throw new Error(
       "Cannot connect to the T-ZONE server. Make sure FastAPI is running on port 8000.",
+      { cause: error },
     );
   }
 
   const data = await parseResponse(response);
 
   if (!response.ok) {
+    if (authenticated && response.status === 401) {
+      handleUnauthorized();
+    }
+
     const message = resolveApiErrorMessage(data, response.status);
 
     const error = new Error(message);
@@ -140,11 +167,21 @@ function conversationPath(channel, userId) {
   );
 }
 
-export async function loginRequest(company, email, password) {
+export async function loginRequest(
+  company,
+  email,
+  password,
+  workspaceCode,
+) {
   return apiRequest("/api/auth/login", {
     method: "POST",
     authenticated: false,
-    body: { company, email, password },
+    body: {
+      company,
+      email,
+      password,
+      workspace_code: workspaceCode,
+    },
   });
 }
 
@@ -345,6 +382,10 @@ export async function downloadConversationExport(
   );
 
   if (!response.ok) {
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
+
     const data = await parseResponse(response);
     throw new Error(
       data?.detail ||
@@ -398,6 +439,10 @@ export async function subscribeConversationEvents({
     );
 
     if (!response.ok || !response.body) {
+      if (response.status === 401) {
+        handleUnauthorized();
+      }
+
       throw new Error(
         `Live connection failed with status ${response.status}.`,
       );
@@ -507,6 +552,36 @@ export async function clearVisibleNotificationsRequest(notificationIds) {
     method: "DELETE",
     body: { notification_ids: notificationIds },
   });
+}
+
+export async function getCustomersRequest({
+  search = "",
+  limit = 20,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({
+    search,
+    limit,
+    offset,
+  });
+
+  return apiRequest(`/api/customers${query}`);
+}
+
+export async function getCustomerRequest(customerId) {
+  return apiRequest(
+    `/api/customers/${encodeURIComponent(customerId)}`,
+  );
+}
+
+export async function updateCustomerRequest(customerId, values) {
+  return apiRequest(
+    `/api/customers/${encodeURIComponent(customerId)}`,
+    {
+      method: "PUT",
+      body: values,
+    },
+  );
 }
 
 export async function getCompanySettingSectionRequest(section) {

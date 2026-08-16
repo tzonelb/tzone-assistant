@@ -10,6 +10,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [workspaceCode, setWorkspaceCode] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +33,7 @@ export default function LoginPage() {
         company.trim(),
         email.trim(),
         password,
+        workspaceCode.trim().toUpperCase(),
       );
 
       const destination =
@@ -85,8 +87,25 @@ export default function LoginPage() {
           className="login-form"
           onSubmit={handleSubmit}
         >
+          <label htmlFor="login-workspace-code">
+            Workspace code
+          </label>
+
+          <input
+            id="login-workspace-code"
+            type="text"
+            value={workspaceCode}
+            placeholder="TZ-A1B2-C3D4-E5F6"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) =>
+              setWorkspaceCode(event.target.value)
+            }
+            required
+          />
+
           <label htmlFor="login-company">
-            Company name or workspace code
+            Company name
           </label>
 
           <input

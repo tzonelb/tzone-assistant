@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Any
 
-import requests
+import httpx
 
 from channels.meta.logger import log_meta_event
 from config.settings import config
@@ -75,7 +75,7 @@ def resolve_meta_profile(
     )
 
     try:
-        response = requests.get(
+        response = httpx.get(
             url,
             params={
                 "fields": "first_name,last_name,profile_pic",
@@ -84,7 +84,7 @@ def resolve_meta_profile(
             timeout=8,
         )
 
-        if not response.ok:
+        if not response.is_success:
             log_meta_event(
                 "profile_resolve_failed",
                 {
@@ -127,7 +127,7 @@ def resolve_meta_profile(
 
         return profile
 
-    except requests.RequestException as exc:
+    except httpx.HTTPError as exc:
         log_meta_event(
             "profile_resolve_error",
             {

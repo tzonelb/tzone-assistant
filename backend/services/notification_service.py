@@ -1,10 +1,24 @@
+"""In-app notifications for one company's employees.
+
+Notifications live in the company's own encrypted database. `recipient_user_id`
+and `actor_user_id` reference users in the control-plane database and are stored
+as plain integers; a name, when one is needed, is resolved with
+`auth_service.user_display_names` rather than a join that cannot cross two files.
+
+Table creation belongs to `database/schema_tenant.py` alone.
+"""
+
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
+
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -12,51 +26,6 @@ def utc_now_iso() -> str:
 
 
 class NotificationService:
-    def __init__(self) -> None:
-        self.ensure_schema()
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    recipient_user_id INTEGER,
-                    notification_type TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    body TEXT,
-                    channel TEXT,
-                    external_user_id TEXT,
-                    conversation_id INTEGER,
-                    actor_user_id INTEGER,
-                    severity TEXT NOT NULL DEFAULT 'info',
-                    data_json TEXT NOT NULL DEFAULT '{}',
-                    dedupe_key TEXT,
-                    is_read INTEGER NOT NULL DEFAULT 0,
-                    read_at TEXT,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
-                    FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
-                ON notifications(company_id, dedupe_key)
-                WHERE dedupe_key IS NOT NULL
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_notifications_inbox
-                ON notifications(company_id, recipient_user_id, is_read, created_at DESC)
-                """
-            )
-            conn.commit()
-
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         result = dict(row)
@@ -84,10 +53,11 @@ class NotificationService:
         data: dict[str, Any] | None = None,
         dedupe_key: str | None = None,
     ) -> dict[str, Any]:
+        company_id = int(company_id)
         created_at = utc_now_iso()
         payload = json.dumps(data or {}, ensure_ascii=False)
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             if dedupe_key:
                 existing = conn.execute(
                     "SELECT * FROM notifications WHERE company_id = ? AND dedupe_key = ? LIMIT 1",
@@ -113,7 +83,16 @@ class NotificationService:
             )
             conn.commit()
             row = conn.execute("SELECT * FROM notifications WHERE id = ?", (cursor.lastrowid,)).fetchone()
-            return self._row_to_dict(row)
+
+        # Identifiers only: the title and body carry customer text.
+        logger.info(
+            "Notification created id=%s company id=%s type=%s recipient id=%s",
+            cursor.lastrowid,
+            company_id,
+            notification_type.strip(),
+            recipient_user_id,
+        )
+        return self._row_to_dict(row)
 
     def list_for_user(
         self,
@@ -147,7 +126,7 @@ class NotificationService:
             conditions.append("substr(created_at, 1, 10) = ?")
             params.append(notification_date.isoformat())
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             rows = conn.execute(
                 f"""
                 SELECT * FROM notifications
@@ -201,7 +180,7 @@ class NotificationService:
         return grouped[start:end]
 
     def summary(self, *, company_id: int, user_id: int) -> dict[str, int]:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 """
                 SELECT COUNT(*) AS total,
@@ -232,7 +211,7 @@ class NotificationService:
         return [int(row["id"]) for row in rows]
 
     def set_read_state(self, *, notification_ids: list[int], company_id: int, user_id: int, is_read: bool) -> int:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             ids = self._visible_ids(conn, notification_ids, company_id, user_id)
             if not ids:
                 return 0
@@ -253,7 +232,7 @@ class NotificationService:
         return self.set_read_state(notification_ids=ids, company_id=company_id, user_id=user_id, is_read=False) > 0
 
     def mark_all_read(self, *, company_id: int, user_id: int) -> int:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
                 """
                 UPDATE notifications SET is_read = 1, read_at = ?
@@ -274,7 +253,7 @@ class NotificationService:
         company_id: int,
         user_id: int,
     ) -> int:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             ids = self._visible_ids(conn, notification_ids, company_id, user_id)
             if not ids:
                 return 0

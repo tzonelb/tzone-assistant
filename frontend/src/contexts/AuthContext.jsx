@@ -56,8 +56,8 @@ export function AuthProvider({ children }) {
     loadCurrentUser();
   }, [loadCurrentUser]);
 
-  const login = useCallback(async (company, email, password) => {
-    const result = await loginRequest(company, email, password);
+  const login = useCallback(async (company, email, password, workspaceCode) => {
+    const result = await loginRequest(company, email, password, workspaceCode);
 
     if (!result?.access_token) {
       throw new Error("The server did not return an access token.");

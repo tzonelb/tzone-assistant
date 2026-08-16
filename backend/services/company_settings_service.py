@@ -1,8 +1,24 @@
+"""Per-company settings, Super Admin overrides and the change audit.
+
+All three tables live in the company's own encrypted database. `actor_user_id`
+and `updated_by_user_id` point at control-plane users and are stored as plain
+integers; names are resolved through `auth_service.user_display_names` when they
+are needed, because SQLite cannot join across two files.
+
+Table creation belongs to `database/schema_tenant.py` alone.
+"""
+
+from __future__ import annotations
+
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
+
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -56,74 +72,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 
 
 class CompanySettingsService:
-    def __init__(self) -> None:
-        self.ensure_schema()
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS company_settings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    section TEXT NOT NULL,
-                    settings_json TEXT NOT NULL DEFAULT '{}',
-                    updated_by_user_id INTEGER,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(company_id, section),
-                    FOREIGN KEY(company_id)
-                        REFERENCES companies(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(updated_by_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS company_setting_audit (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    section TEXT NOT NULL,
-                    actor_user_id INTEGER,
-                    old_value_json TEXT,
-                    new_value_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id)
-                        REFERENCES companies(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(actor_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS super_admin_setting_overrides (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    section TEXT NOT NULL,
-                    setting_key TEXT NOT NULL,
-                    value_json TEXT,
-                    is_locked INTEGER NOT NULL DEFAULT 0,
-                    updated_by_user_id INTEGER,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(company_id, section, setting_key),
-                    FOREIGN KEY(company_id)
-                        REFERENCES companies(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(updated_by_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-            conn.commit()
-
     @staticmethod
     def _loads(value: str | None, fallback: Any) -> Any:
         try:
@@ -133,10 +81,11 @@ class CompanySettingsService:
             return fallback
 
     def get_section(self, company_id: int, section: str) -> dict[str, Any]:
+        company_id = int(company_id)
         normalized = section.strip().lower()
         defaults = DEFAULT_SETTINGS.get(normalized, {})
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 """
                 SELECT settings_json
@@ -174,8 +123,9 @@ class CompanySettingsService:
         }
 
     def get_all(self, company_id: int) -> dict[str, Any]:
+        company_id = int(company_id)
         sections = set(DEFAULT_SETTINGS)
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             rows = conn.execute(
                 "SELECT section FROM company_settings WHERE company_id = ?",
                 (company_id,),
@@ -193,6 +143,7 @@ class CompanySettingsService:
         values: dict[str, Any],
         actor_user_id: int | None,
     ) -> dict[str, Any]:
+        company_id = int(company_id)
         normalized = section.strip().lower()
         current = self.get_section(company_id, normalized)
         locked = set(current["locked_keys"])
@@ -205,7 +156,7 @@ class CompanySettingsService:
         merged = {**current["values"], **values}
         now = utc_now_iso()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 INSERT INTO company_settings (
@@ -245,6 +196,14 @@ class CompanySettingsService:
             )
             conn.commit()
 
+        # Setting keys only. Values can hold workspace codes and other secrets.
+        logger.info(
+            "Settings updated company id=%s section=%s keys=%s actor id=%s",
+            company_id,
+            normalized,
+            sorted(values),
+            actor_user_id,
+        )
         return self.get_section(company_id, normalized)
 
 

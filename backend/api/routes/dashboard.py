@@ -1,75 +1,92 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    Query,
-    status,
-)
+"""Dashboard summary.
 
-from backend.services.auth_service import (
-    auth_service,
-    get_current_user,
-)
-from database.database import db
+The counters read from both databases: company, users and subscription from the
+control plane, and everything the company actually owns from its own encrypted
+file. Several tiles previously counted tables nothing ever wrote to, so they
+always read zero — those now count the real records.
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+
+from backend.services.auth_service import auth_service, require_permission
+from database.manager import DatabaseError, database_manager
 
 
-router = APIRouter(
-    prefix="/api/dashboard",
-    tags=["Dashboard"],
-)
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 
-def require_dashboard_access(
-    current_user: dict,
-    company_id: int,
-):
-    allowed = auth_service.has_permission(
-        user_id=current_user["id"],
-        company_id=company_id,
-        permission_code="dashboard.view",
-        is_super_admin=bool(
-            current_user.get("is_super_admin")
-        ),
-    )
+def _active_subscription(conn, company_id: int) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT
+            subscriptions.*,
+            plans.name AS plan_name,
+            plans.code AS plan_code,
+            plans.price_monthly,
+            plans.max_users,
+            plans.max_channel_accounts,
+            plans.max_ai_messages,
+            plans.max_knowledge_items
+        FROM subscriptions
+        JOIN plans ON plans.id = subscriptions.plan_id
+        WHERE subscriptions.company_id = ?
+        ORDER BY subscriptions.id DESC
+        LIMIT 1
+        """,
+        (company_id,),
+    ).fetchone()
 
-    if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have dashboard access.",
-        )
+    return dict(row) if row else None
+
+
+def _subscription_is_active(subscription: dict[str, Any] | None) -> bool:
+    if not subscription:
+        return False
+
+    if subscription.get("status") not in ("active", "trial", "grace_period"):
+        return False
+
+    expires_at = subscription.get("expires_at")
+
+    if not expires_at:
+        return False
+
+    try:
+        expiry = datetime.fromisoformat(str(expires_at))
+    except (TypeError, ValueError):
+        return False
+
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=timezone.utc)
+
+    return expiry >= datetime.now(timezone.utc)
 
 
 @router.get("/summary")
 def dashboard_summary(
-    company_id: int | None = Query(
-        default=None,
-        ge=1,
-    ),
-    current_user: dict = Depends(
-        get_current_user
-    ),
+    company_id: int | None = Query(default=None, ge=1),
+    current_user: dict = Depends(require_permission("dashboard.view")),
 ):
-    resolved_company_id = (
-        auth_service.resolve_company_id(
-            current_user=current_user,
-            requested_company_id=company_id,
-        )
+    resolved_company_id = auth_service.resolve_company_id(
+        current_user=current_user,
+        requested_company_id=company_id,
     )
 
-    require_dashboard_access(
-        current_user,
-        resolved_company_id,
-    )
+    counts: dict[str, int] = {}
 
-    with db.connect() as conn:
-        company = conn.execute("""
-            SELECT *
-            FROM companies
-            WHERE id = ?
-            LIMIT 1
-        """, (
-            resolved_company_id,
-        )).fetchone()
+    with database_manager.control() as conn:
+        company = conn.execute(
+            "SELECT * FROM companies WHERE id = ? LIMIT 1",
+            (resolved_company_id,),
+        ).fetchone()
 
         if not company:
             raise HTTPException(
@@ -77,173 +94,124 @@ def dashboard_summary(
                 detail="Company not found.",
             )
 
-        subscription = db.get_active_subscription(
-            resolved_company_id
+        subscription = _active_subscription(conn, resolved_company_id)
+
+        counts["users"] = int(
+            conn.execute(
+                """
+                SELECT COUNT(*) AS total FROM company_users
+                WHERE company_id = ? AND status = 'active'
+                """,
+                (resolved_company_id,),
+            ).fetchone()["total"]
         )
 
-        counts = {}
-
-        count_queries = {
-            "users": """
-                SELECT COUNT(*) AS total
-                FROM company_users
-                WHERE company_id = ?
-                  AND status = 'active'
-            """,
-            "channel_accounts": """
-                SELECT COUNT(*) AS total
-                FROM channel_accounts
-                WHERE company_id = ?
-                  AND status = 'active'
-            """,
-            "knowledge_items": """
-                SELECT COUNT(*) AS total
-                FROM knowledge_items
-                WHERE company_id = ?
-                  AND status = 'active'
-            """,
-            "conversations": """
-                SELECT COUNT(*) AS total
-                FROM conversations
-                WHERE company_id = ?
-            """,
-            "open_conversations": """
-                SELECT COUNT(*) AS total
-                FROM conversations
-                WHERE company_id = ?
-                  AND status = 'open'
-            """,
-            "messages": """
-                SELECT COUNT(*) AS total
-                FROM messages
-                WHERE company_id = ?
-            """,
-            "tickets": """
-                SELECT COUNT(*) AS total
-                FROM tickets
-                WHERE company_id = ?
-            """,
-            "open_tickets": """
-                SELECT COUNT(*) AS total
-                FROM tickets
-                WHERE company_id = ?
-                  AND status = 'open'
-            """,
-            "products": """
-                SELECT COUNT(*) AS total
-                FROM products
-                WHERE company_id = ?
-                  AND status = 'active'
-            """,
-            "connectors": """
-                SELECT COUNT(*) AS total
-                FROM business_connectors
-                WHERE company_id = ?
-                  AND status = 'active'
-            """,
-        }
-
-        for key, query in count_queries.items():
-            row = conn.execute(
-                query,
+        counts["channel_accounts"] = int(
+            conn.execute(
+                """
+                SELECT COUNT(*) AS total FROM channel_accounts
+                WHERE company_id = ? AND status = 'active'
+                """,
                 (resolved_company_id,),
-            ).fetchone()
+            ).fetchone()["total"]
+        )
 
-            counts[key] = (
-                row["total"]
-                if row
-                else 0
-            )
-
-        recent_conversations = conn.execute("""
+        channel_rows = conn.execute(
+            """
             SELECT
-                id,
-                channel,
-                external_user_id,
-                language,
-                department,
-                topic,
-                status,
-                needs_human,
-                last_message_at,
-                created_at
-            FROM conversations
-            WHERE company_id = ?
-            ORDER BY
-                COALESCE(
-                    last_message_at,
-                    created_at
-                ) DESC
-            LIMIT 10
-        """, (
-            resolved_company_id,
-        )).fetchall()
-
-        active_channels = conn.execute("""
-            SELECT
-                id,
-                channel,
-                name,
-                external_account_id,
-                phone_number_id,
-                page_id,
-                status,
-                ai_enabled,
-                flow_enabled,
-                voice_ai_enabled,
-                image_ai_enabled
+                channel_accounts.id,
+                channel_accounts.channel,
+                channel_accounts.name,
+                channel_accounts.external_account_id,
+                channel_accounts.phone_number_id,
+                channel_accounts.page_id,
+                channel_accounts.status,
+                channel_accounts.ai_enabled,
+                channel_accounts.flow_enabled,
+                channel_accounts.voice_ai_enabled,
+                channel_accounts.image_ai_enabled,
+                branches.name AS branch_name
             FROM channel_accounts
-            WHERE company_id = ?
-            ORDER BY id ASC
-        """, (
-            resolved_company_id,
-        )).fetchall()
+            LEFT JOIN branches ON branches.id = channel_accounts.branch_id
+            WHERE channel_accounts.company_id = ?
+            ORDER BY channel_accounts.id ASC
+            """,
+            (resolved_company_id,),
+        ).fetchall()
 
-    subscription_active = db.is_subscription_active(
-        resolved_company_id
-    )
+    try:
+        with database_manager.tenant(resolved_company_id) as conn:
+            for key, query in {
+                "conversations": "SELECT COUNT(*) AS total FROM conversations",
+                "open_conversations": (
+                    "SELECT COUNT(*) AS total FROM conversations WHERE status != 'closed'"
+                ),
+                "unread_conversations": (
+                    "SELECT COUNT(*) AS total FROM conversations WHERE unread_count > 0"
+                ),
+                "human_handled": (
+                    "SELECT COUNT(*) AS total FROM conversations WHERE handled_by_ai = 0"
+                ),
+                "messages": "SELECT COUNT(*) AS total FROM messages",
+                "customers": "SELECT COUNT(*) AS total FROM customers",
+                "knowledge_items": (
+                    "SELECT COUNT(*) AS total FROM knowledge_items WHERE status = 'active'"
+                ),
+                "tickets": "SELECT COUNT(*) AS total FROM tickets",
+                "open_tickets": (
+                    "SELECT COUNT(*) AS total FROM tickets WHERE status = 'open'"
+                ),
+                "pending_replies": "SELECT COUNT(*) AS total FROM pending_replies",
+            }.items():
+                counts[key] = int(conn.execute(query).fetchone()["total"])
+
+            recent_conversations = [
+                dict(row)
+                for row in conn.execute(
+                    """
+                    SELECT
+                        id, channel, external_user_id, language, department,
+                        topic, status, needs_human, last_message_at, created_at
+                    FROM conversations
+                    ORDER BY COALESCE(last_message_at, created_at) DESC
+                    LIMIT 10
+                    """
+                ).fetchall()
+            ]
+    except DatabaseError:
+        logger.exception(
+            "Could not open the database for company %s", resolved_company_id
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="This company's data is temporarily unavailable.",
+        ) from None
 
     return {
         "company": dict(company),
         "subscription": subscription,
-        "subscription_active": subscription_active,
+        "subscription_active": _subscription_is_active(subscription),
         "counts": counts,
-        "channels": [
-            dict(row)
-            for row in active_channels
-        ],
-        "recent_conversations": [
-            dict(row)
-            for row in recent_conversations
-        ],
+        "channels": [dict(row) for row in channel_rows],
+        "recent_conversations": recent_conversations,
     }
 
 
 @router.get("/company")
 def get_company(
-    company_id: int | None = Query(
-        default=None,
-        ge=1,
-    ),
-    current_user: dict = Depends(
-        get_current_user
-    ),
+    company_id: int | None = Query(default=None, ge=1),
+    current_user: dict = Depends(require_permission("dashboard.view")),
 ):
-    resolved_company_id = (
-        auth_service.resolve_company_id(
-            current_user=current_user,
-            requested_company_id=company_id,
-        )
+    resolved_company_id = auth_service.resolve_company_id(
+        current_user=current_user,
+        requested_company_id=company_id,
     )
 
-    require_dashboard_access(
-        current_user,
-        resolved_company_id,
-    )
-
-    company = db.get_company(
-        resolved_company_id
-    )
+    with database_manager.control() as conn:
+        company = conn.execute(
+            "SELECT * FROM companies WHERE id = ? LIMIT 1",
+            (resolved_company_id,),
+        ).fetchone()
 
     if not company:
         raise HTTPException(
@@ -251,79 +219,67 @@ def get_company(
             detail="Company not found.",
         )
 
-    return company
+    return dict(company)
 
 
 @router.get("/subscription")
 def get_subscription(
-    company_id: int | None = Query(
-        default=None,
-        ge=1,
-    ),
-    current_user: dict = Depends(
-        get_current_user
-    ),
+    company_id: int | None = Query(default=None, ge=1),
+    current_user: dict = Depends(require_permission("subscriptions.view")),
 ):
-    resolved_company_id = (
-        auth_service.resolve_company_id(
-            current_user=current_user,
-            requested_company_id=company_id,
-        )
+    resolved_company_id = auth_service.resolve_company_id(
+        current_user=current_user,
+        requested_company_id=company_id,
     )
 
-    subscription = db.get_active_subscription(
-        resolved_company_id
-    )
+    with database_manager.control() as conn:
+        subscription = _active_subscription(conn, resolved_company_id)
 
     return {
         "subscription": subscription,
-        "active": db.is_subscription_active(
-            resolved_company_id
-        ),
+        "active": _subscription_is_active(subscription),
     }
 
 
 @router.get("/channels")
 def get_channels(
-    company_id: int | None = Query(
-        default=None,
-        ge=1,
-    ),
-    current_user: dict = Depends(
-        get_current_user
-    ),
+    company_id: int | None = Query(default=None, ge=1),
+    current_user: dict = Depends(require_permission("channels.view")),
 ):
-    resolved_company_id = (
-        auth_service.resolve_company_id(
-            current_user=current_user,
-            requested_company_id=company_id,
-        )
+    resolved_company_id = auth_service.resolve_company_id(
+        current_user=current_user,
+        requested_company_id=company_id,
     )
 
-    require_dashboard_access(
-        current_user,
-        resolved_company_id,
-    )
-
-    with db.connect() as conn:
-        rows = conn.execute("""
+    with database_manager.control() as conn:
+        rows = conn.execute(
+            """
             SELECT
-                channel_accounts.*,
+                channel_accounts.id,
+                channel_accounts.company_id,
+                channel_accounts.branch_id,
+                channel_accounts.channel,
+                channel_accounts.name,
+                channel_accounts.external_account_id,
+                channel_accounts.phone_number_id,
+                channel_accounts.page_id,
+                channel_accounts.instagram_business_id,
+                channel_accounts.status,
+                channel_accounts.ai_enabled,
+                channel_accounts.flow_enabled,
+                channel_accounts.voice_ai_enabled,
+                channel_accounts.image_ai_enabled,
+                channel_accounts.created_at,
+                channel_accounts.updated_at,
                 branches.name AS branch_name
             FROM channel_accounts
-            LEFT JOIN branches
-                ON branches.id =
-                   channel_accounts.branch_id
+            LEFT JOIN branches ON branches.id = channel_accounts.branch_id
             WHERE channel_accounts.company_id = ?
             ORDER BY channel_accounts.id ASC
-        """, (
-            resolved_company_id,
-        )).fetchall()
+            """,
+            (resolved_company_id,),
+        ).fetchall()
 
-    return {
-        "items": [
-            dict(row)
-            for row in rows
-        ],
-        "total": len(rows),
-    }
+    # Sealed credentials are deliberately not selected: nothing outside the
+    # sending code needs them, and they must never reach a browser.
+    return {"items": [dict(row) for row in rows], "total": len(rows)}

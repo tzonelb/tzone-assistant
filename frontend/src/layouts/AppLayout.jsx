@@ -32,15 +32,7 @@ const pageTitles = {
   "/dashboard": "Dashboard",
   "/notifications": "Notification Center",
   "/conversations": "Conversations",
-  "/comments": "Comments",
   "/customers": "Customers",
-  "/catalogue": "Master Catalogue",
-  "/ai-teaching": "AI Teaching",
-  "/tasks": "Tasks",
-  "/scheduler": "Scheduler",
-  "/appointments": "Appointments",
-  "/analytics": "Analytics",
-  "/team-chat": "Team Chat",
   "/settings": "Settings",
   "/company-settings": "Company Settings",
   "/roles": "Roles & Permissions",
@@ -600,9 +592,6 @@ export default function AppLayout() {
         onClose={() =>
           setSidebarOpen(false)
         }
-        onToggleCollapsed={
-          toggleSidebarCollapsed
-        }
       /> : null}
 
       <div className="app-main">
@@ -795,7 +784,7 @@ export default function AppLayout() {
           </div>
         ) : null}
 
-        <main className={`app-content ${location.pathname.startsWith("/conversations") || location.pathname.startsWith("/comments") ? "app-content-workspace" : "app-content-scroll"}`}>
+        <main className={`app-content ${location.pathname.startsWith("/conversations") ? "app-content-workspace" : "app-content-scroll"}`}>
           <Outlet />
         </main>
       </div>

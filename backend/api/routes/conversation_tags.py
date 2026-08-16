@@ -3,7 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from backend.services.auth_service import auth_service, get_current_user
+from backend.services.auth_service import auth_service, require_permission
 from backend.services.conversation_control_service import conversation_control_service
 
 
@@ -22,7 +22,7 @@ class ConversationTagUpdate(BaseModel):
 
 @router.get("")
 def list_conversation_tags(
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     return {"items": conversation_control_service.list_tags(company_id)}
@@ -31,7 +31,7 @@ def list_conversation_tags(
 @router.post("")
 def create_conversation_tag(
     payload: ConversationTagCreate,
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(require_permission("conversations.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     try:
@@ -50,7 +50,7 @@ def create_conversation_tag(
 def update_conversation_tag(
     tag_id: int,
     payload: ConversationTagUpdate,
-    current_user: dict[str, Any] = Depends(get_current_user),
+    current_user: dict[str, Any] = Depends(require_permission("conversations.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     try:

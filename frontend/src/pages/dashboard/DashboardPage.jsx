@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  AddOutlined,
   ChatOutlined,
   GroupOutlined,
   HubOutlined,
@@ -120,22 +119,13 @@ export default function DashboardPage() {
         title={summary?.company?.name || "Company Dashboard"}
         description="Monitor conversations, customers, AI knowledge, connected channels and business activity."
         actions={
-          <>
-            <AppButton
-              variant="secondary"
-              icon={<RefreshOutlined fontSize="small" />}
-              onClick={loadSummary}
-            >
-              Refresh
-            </AppButton>
-
-            <AppButton
-              variant="primary"
-              icon={<AddOutlined fontSize="small" />}
-            >
-              Quick action
-            </AppButton>
-          </>
+          <AppButton
+            variant="secondary"
+            icon={<RefreshOutlined fontSize="small" />}
+            onClick={loadSummary}
+          >
+            Refresh
+          </AppButton>
         }
       />
 
@@ -221,13 +211,6 @@ export default function DashboardPage() {
               <span>RECENT ACTIVITY</span>
               <h3>Recent conversations</h3>
             </div>
-
-            <AppButton
-              variant="ghost"
-              size="small"
-            >
-              View all
-            </AppButton>
           </div>
 
           {conversations.length ? (
@@ -346,14 +329,6 @@ export default function DashboardPage() {
             <span>CHANNEL ACCOUNTS</span>
             <h3>Connected channels</h3>
           </div>
-
-          <AppButton
-            variant="secondary"
-            size="small"
-            icon={<AddOutlined fontSize="small" />}
-          >
-            Add channel
-          </AppButton>
         </div>
 
         {channels.length ? (

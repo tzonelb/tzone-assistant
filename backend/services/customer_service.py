@@ -1,9 +1,26 @@
+"""Customer records and the channel identities that map onto them.
+
+Customers, their identities and their audit trail all live in the company's own
+encrypted database. `actor_user_id` on an audit row points at a user in the
+control-plane database; it is stored as a plain integer and resolved through
+`auth_service.user_display_names` when a name is actually needed, because SQLite
+cannot join across two files.
+
+Table creation belongs to `database/schema_tenant.py` alone. This service only
+reads and writes.
+"""
+
 from __future__ import annotations
 
+import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
+
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -11,82 +28,6 @@ def utc_now_iso() -> str:
 
 
 class CustomerService:
-    def __init__(self) -> None:
-        self.ensure_schema()
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS customers (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    display_name TEXT,
-                    internal_name TEXT,
-                    profile_picture TEXT,
-                    phone TEXT,
-                    email TEXT,
-                    language TEXT,
-                    country TEXT,
-                    timezone TEXT,
-                    notes TEXT,
-                    first_seen_at TEXT NOT NULL,
-                    last_seen_at TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS customer_identities (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    customer_id INTEGER NOT NULL,
-                    channel TEXT NOT NULL,
-                    external_user_id TEXT NOT NULL,
-                    username TEXT,
-                    display_name TEXT,
-                    profile_picture TEXT,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(company_id, channel, external_user_id),
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
-                    FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_customer_identity_lookup
-                ON customer_identities(company_id, channel, external_user_id)
-                """
-            )
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS customer_audit (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    customer_id INTEGER NOT NULL,
-                    actor_user_id INTEGER,
-                    action TEXT NOT NULL,
-                    data_json TEXT,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
-                    FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE,
-                    FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-                """
-            )
-            columns = {
-                str(row["name"])
-                for row in conn.execute("PRAGMA table_info(conversations)").fetchall()
-            }
-            if "customer_id" not in columns:
-                conn.execute("ALTER TABLE conversations ADD COLUMN customer_id INTEGER")
-            conn.commit()
-
     @staticmethod
     def _clean(value: Any) -> str | None:
         if value is None:
@@ -104,6 +45,7 @@ class CustomerService:
         profile_picture: str | None = None,
         username: str | None = None,
     ) -> dict[str, Any]:
+        company_id = int(company_id)
         normalized_channel = channel.strip().lower()
         normalized_external_id = external_user_id.strip()
         display_name = self._clean(display_name)
@@ -111,7 +53,7 @@ class CustomerService:
         username = self._clean(username)
         now = utc_now_iso()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             identity = conn.execute(
                 """
                 SELECT ci.*, c.internal_name, c.phone, c.email, c.language,
@@ -178,6 +120,12 @@ class CustomerService:
                         profile_picture, now, now,
                     ),
                 )
+                logger.info(
+                    "Created customer id=%s company id=%s channel=%s",
+                    customer_id,
+                    company_id,
+                    normalized_channel,
+                )
 
             conn.execute(
                 """
@@ -198,7 +146,9 @@ class CustomerService:
         return self.get_customer(company_id=company_id, customer_id=customer_id)
 
     def get_customer(self, *, company_id: int, customer_id: int) -> dict[str, Any]:
-        with db.connect() as conn:
+        company_id = int(company_id)
+
+        with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 "SELECT * FROM customers WHERE id = ? AND company_id = ? LIMIT 1",
                 (customer_id, company_id),
@@ -232,6 +182,7 @@ class CustomerService:
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
+        company_id = int(company_id)
         where = ["c.company_id = ?"]
         params: list[Any] = [company_id]
         if search and search.strip():
@@ -243,7 +194,7 @@ class CustomerService:
             )
             params.extend([pattern] * 7)
         clause = " AND ".join(where)
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             total = conn.execute(
                 f"SELECT COUNT(*) AS total FROM customers c WHERE {clause}", params
             ).fetchone()["total"]
@@ -269,6 +220,7 @@ class CustomerService:
         values: dict[str, Any],
         actor_user_id: int | None,
     ) -> dict[str, Any]:
+        company_id = int(company_id)
         allowed = {
             "display_name", "internal_name", "phone", "email",
             "language", "country", "timezone", "notes",
@@ -278,7 +230,7 @@ class CustomerService:
             return self.get_customer(company_id=company_id, customer_id=customer_id)
         now = utc_now_iso()
         assignments = ", ".join(f"{key} = ?" for key in cleaned)
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             existing = conn.execute(
                 "SELECT id FROM customers WHERE id = ? AND company_id = ?",
                 (customer_id, company_id),
@@ -289,7 +241,6 @@ class CustomerService:
                 f"UPDATE customers SET {assignments}, updated_at = ? WHERE id = ? AND company_id = ?",
                 [*cleaned.values(), now, customer_id, company_id],
             )
-            import json
             conn.execute(
                 """
                 INSERT INTO customer_audit (
@@ -299,6 +250,16 @@ class CustomerService:
                 (company_id, customer_id, actor_user_id, json.dumps(cleaned, ensure_ascii=False), now),
             )
             conn.commit()
+
+        # Field names only. The values are customer contact details and never
+        # belong in a log line.
+        logger.info(
+            "Updated customer id=%s company id=%s fields=%s actor id=%s",
+            customer_id,
+            company_id,
+            sorted(cleaned),
+            actor_user_id,
+        )
         return self.get_customer(company_id=company_id, customer_id=customer_id)
 
 

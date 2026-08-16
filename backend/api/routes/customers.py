@@ -1,18 +1,26 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.api.schemas.customers import CustomerUpdateRequest
-from backend.services.auth_service import auth_service, get_current_user
+from backend.services.auth_service import auth_service, require_permission
 from backend.services.customer_service import customer_service
 
 
 router = APIRouter(prefix="/api/customers", tags=["Customers"])
 
 
-def current_context(current_user=Depends(get_current_user)):
+def _context(current_user):
     company_id = auth_service.resolve_company_id(
         current_user=current_user, requested_company_id=None
     )
     return current_user, int(company_id)
+
+
+def view_context(current_user=Depends(require_permission("customers.view"))):
+    return _context(current_user)
+
+
+def manage_context(current_user=Depends(require_permission("customers.manage"))):
+    return _context(current_user)
 
 
 @router.get("")
@@ -20,7 +28,7 @@ def list_customers(
     search: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-    context=Depends(current_context),
+    context=Depends(view_context),
 ):
     _, company_id = context
     return customer_service.list_customers(
@@ -29,7 +37,7 @@ def list_customers(
 
 
 @router.get("/{customer_id}")
-def get_customer(customer_id: int, context=Depends(current_context)):
+def get_customer(customer_id: int, context=Depends(view_context)):
     _, company_id = context
     try:
         return customer_service.get_customer(company_id=company_id, customer_id=customer_id)
@@ -41,7 +49,7 @@ def get_customer(customer_id: int, context=Depends(current_context)):
 def update_customer(
     customer_id: int,
     payload: CustomerUpdateRequest,
-    context=Depends(current_context),
+    context=Depends(manage_context),
 ):
     current_user, company_id = context
     try:

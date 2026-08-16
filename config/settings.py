@@ -11,137 +11,140 @@ ENV_FILE = BASE_DIR / ".env"
 load_dotenv(dotenv_path=ENV_FILE, override=True)
 
 
+def _env_path(name: str, default: Path) -> Path:
+    """Resolve a configurable path, always against the project root.
+
+    Paths are resolved from ``BASE_DIR`` rather than the working directory so
+    the platform behaves identically whether it is started from the project
+    root, from systemd, or from a container with a different workdir.
+    """
+    raw = os.getenv(name, "").strip()
+
+    if not raw:
+        return default
+
+    candidate = Path(raw).expanduser()
+
+    return candidate if candidate.is_absolute() else (BASE_DIR / candidate)
+
+
+def _env_list(name: str, default: list[str]) -> list[str]:
+    raw = os.getenv(name, "").strip()
+
+    if not raw:
+        return list(default)
+
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+
+    if not raw:
+        return default
+
+    return raw in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class AppConfig:
     APP_NAME: str = "T-ZONE Platform API"
-    VERSION: str = "3.0.0"
+    VERSION: str = "4.0.0"
 
     APP_ENV: str = os.getenv("APP_ENV", "development")
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    DEBUG: bool = _env_bool("DEBUG", False)
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO").upper()
 
     DEFAULT_LANGUAGE: str = os.getenv("DEFAULT_LANGUAGE", "ar")
     COMPANY_NAME: str = os.getenv("COMPANY_NAME", "T-ZONE")
 
-    DATABASE_PATH: str = os.getenv(
-        "DATABASE_PATH",
-        str(BASE_DIR / "database" / "tzone.db"),
+    # ------------------------------------------------------------------
+    # Paths — all absolute, all derived from the project root
+    # ------------------------------------------------------------------
+    BASE_DIR: Path = BASE_DIR
+    DATA_DIR: Path = field(
+        default_factory=lambda: _env_path("DATA_DIR", BASE_DIR / "data")
+    )
+    LOG_DIR: Path = field(
+        default_factory=lambda: _env_path("LOG_DIR", BASE_DIR / "logs")
+    )
+    FEATURES_DIR: Path = field(
+        default_factory=lambda: _env_path("FEATURES_DIR", BASE_DIR / "features")
+    )
+    CONFIG_DIR: Path = field(
+        default_factory=lambda: _env_path("CONFIG_DIR", BASE_DIR / "config")
+    )
+    UPLOAD_DIR: Path = field(
+        default_factory=lambda: _env_path("UPLOAD_DIR", BASE_DIR / "data" / "uploads")
+    )
+    MEDIA_DIR: Path = field(
+        default_factory=lambda: _env_path("MEDIA_DIR", BASE_DIR / "data" / "media")
     )
 
-    DATABASE_URL: str = os.getenv(
-        "DATABASE_URL",
-        f"sqlite:///{BASE_DIR / 'database' / 'tzone.db'}",
+    # ------------------------------------------------------------------
+    # HTTP surface
+    # ------------------------------------------------------------------
+    CORS_ORIGINS: list[str] = field(
+        default_factory=lambda: _env_list(
+            "CORS_ORIGINS",
+            ["http://localhost:5173", "http://127.0.0.1:5173"],
+        )
     )
-
-    JWT_SECRET: str = os.getenv(
-        "JWT_SECRET",
-        "change-this-before-production",
-    )
-
-    JWT_ALGORITHM: str = os.getenv(
-        "JWT_ALGORITHM",
-        "HS256",
+    # Interactive API docs map the entire attack surface, so they stay off
+    # unless explicitly enabled.
+    ENABLE_DOCS: bool = _env_bool(
+        "ENABLE_DOCS",
+        os.getenv("APP_ENV", "development") != "production",
     )
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = int(
-        os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440")
+        os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "720")
     )
+    LOGIN_MAX_ATTEMPTS: int = int(os.getenv("LOGIN_MAX_ATTEMPTS", "5"))
+    LOGIN_LOCKOUT_MINUTES: int = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "15"))
 
-    DEFAULT_WORKSPACE_ID: int = int(
-        os.getenv("DEFAULT_WORKSPACE_ID", "1")
+    # ------------------------------------------------------------------
+    # Channels
+    # ------------------------------------------------------------------
+    # App secrets sign inbound webhooks. Without them any host on the internet
+    # can inject customer messages, so an unset secret is treated as a hard
+    # rejection rather than a skipped check.
+    META_APP_SECRET: str = os.getenv("META_APP_SECRET", "")
+    WHATSAPP_APP_SECRET: str = os.getenv(
+        "WHATSAPP_APP_SECRET",
+        os.getenv("META_APP_SECRET", ""),
     )
+    ALLOW_UNSIGNED_WEBHOOKS: bool = _env_bool("ALLOW_UNSIGNED_WEBHOOKS", False)
 
-    DEFAULT_COMPANY_ID: int = int(
-        os.getenv("DEFAULT_COMPANY_ID", "1")
-    )
+    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
-    DEFAULT_BRANCH_ID: int = int(
-        os.getenv("DEFAULT_BRANCH_ID", "1")
-    )
+    WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
+    WHATSAPP_ACCESS_TOKEN: str = os.getenv("WHATSAPP_ACCESS_TOKEN", "")
+    WHATSAPP_PHONE_NUMBER_ID: str = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
+    WHATSAPP_API_VERSION: str = os.getenv("WHATSAPP_API_VERSION", "v21.0")
 
-    TELEGRAM_BOT_TOKEN: str = os.getenv(
-        "TELEGRAM_BOT_TOKEN",
-        "",
-    )
+    META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "")
+    META_PAGE_ACCESS_TOKEN: str = os.getenv("META_PAGE_ACCESS_TOKEN", "")
+    META_INSTAGRAM_ACCESS_TOKEN: str = os.getenv("META_INSTAGRAM_ACCESS_TOKEN", "")
+    META_API_VERSION: str = os.getenv("META_API_VERSION", "v21.0")
 
-    WHATSAPP_VERIFY_TOKEN: str = os.getenv(
-        "WHATSAPP_VERIFY_TOKEN",
-        "tzone_verify_token",
-    )
+    FACEBOOK_PAGE_ID: str = os.getenv("FACEBOOK_PAGE_ID", "")
+    INSTAGRAM_BUSINESS_ID: str = os.getenv("INSTAGRAM_BUSINESS_ID", "")
 
-    WHATSAPP_ACCESS_TOKEN: str = os.getenv(
-        "WHATSAPP_ACCESS_TOKEN",
-        "",
-    )
-
-    WHATSAPP_PHONE_NUMBER_ID: str = os.getenv(
-        "WHATSAPP_PHONE_NUMBER_ID",
-        "",
-    )
-
-    WHATSAPP_API_VERSION: str = os.getenv(
-        "WHATSAPP_API_VERSION",
-        "v21.0",
-    )
-
-    META_VERIFY_TOKEN: str = os.getenv(
-        "META_VERIFY_TOKEN",
-        "tzone_meta_verify_token",
-    )
-
-    META_PAGE_ACCESS_TOKEN: str = os.getenv(
-        "META_PAGE_ACCESS_TOKEN",
-        "",
-    )
-
-    META_API_VERSION: str = os.getenv(
-        "META_API_VERSION",
-        "v21.0",
-    )
-
-    FACEBOOK_PAGE_ID: str = os.getenv(
-        "FACEBOOK_PAGE_ID",
-        "",
-    )
-
-    INSTAGRAM_BUSINESS_ID: str = os.getenv(
-        "INSTAGRAM_BUSINESS_ID",
-        "",
-    )
-
-    AI_ENABLED: bool = (
-        os.getenv("AI_ENABLED", "true").lower() == "true"
-    )
-
-    OPENAI_API_KEY: str = os.getenv(
-        "OPENAI_API_KEY",
-        "",
-    )
-
-    OPENAI_MODEL: str = os.getenv(
-        "OPENAI_MODEL",
-        "gpt-4.1-mini",
-    )
-
+    # ------------------------------------------------------------------
+    # Assistant
+    # ------------------------------------------------------------------
+    AI_ENABLED: bool = _env_bool("AI_ENABLED", True)
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     OPENAI_API_URL: str = os.getenv(
         "OPENAI_API_URL",
         "https://api.openai.com/v1/responses",
     )
-
-    UPLOAD_PATH: str = os.getenv(
-        "UPLOAD_PATH",
-        str(BASE_DIR / "data" / "uploads"),
-    )
-
-    MEDIA_PATH: str = os.getenv(
-        "MEDIA_PATH",
-        str(BASE_DIR / "data" / "media"),
-    )
+    OPENAI_TIMEOUT_SECONDS: int = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "40"))
 
     SUPPORTED_LANGUAGES: list[str] = field(
-        default_factory=lambda: [
-            "en",
-            "ar",
-        ]
+        default_factory=lambda: ["en", "ar"]
     )
 
     SUPPORTED_CHANNELS: list[str] = field(
@@ -167,6 +170,10 @@ class AppConfig:
             "unknown",
         ]
     )
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.strip().lower() == "production"
 
 
 config = AppConfig()
