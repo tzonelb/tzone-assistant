@@ -157,12 +157,21 @@ class PendingReplyService:
                             _deferral_ceiling_seconds(),
                         )
 
+                    # `locked_until` is left alone. It used to be set to NULL
+                    # here, which released a batch a worker was holding at that
+                    # moment: a message arriving mid-generation freed the lease,
+                    # the next sweep claimed the same batch, and the customer
+                    # got two replies for one conversation — billed twice.
+                    #
+                    # The lease belongs to whoever took it. It expires on its
+                    # own after LEASE_SECONDS if that worker dies, which is the
+                    # case clearing it was reaching for, and `complete` and
+                    # `fail` release it deliberately when the work is done.
                     conn.execute(
                         """
                         UPDATE pending_replies
                         SET messages_json = ?,
                             deliver_after = ?,
-                            locked_until = NULL,
                             updated_at = ?
                         WHERE id = ?
                         """,
