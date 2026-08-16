@@ -476,17 +476,37 @@ class AuthService:
             conn.commit()
             return cursor.rowcount
 
-    def sanitize_user(self, user: dict[str, Any]) -> dict[str, Any]:
-        safe_user = dict(user)
+    # Everything about the signed-in caller that may reach a browser. An
+    # allow-list, not a deny-list, and that is the whole point: the previous
+    # version removed five known-secret keys and passed the rest of the `users`
+    # row through, so any column added to that table afterwards was published
+    # by default until somebody remembered to add it to the list. The columns
+    # about to be added there hold a TOTP secret and recovery codes.
+    #
+    # Adding a key here is a decision to show it. Not adding one is the safe
+    # accident.
+    PUBLIC_USER_FIELDS: tuple[str, ...] = (
+        "id",
+        "email",
+        "full_name",
+        "phone",
+        "status",
+        "is_super_admin",
+        "last_login_at",
+        "created_at",
+        "updated_at",
+        # Not columns on `users` — these come from the session row that
+        # `get_user_from_token` joins, and every request that resolves a
+        # company reads `active_company_id` back off this dict.
+        "active_company_id",
+        "session_scope",
+    )
 
-        for secret_field in (
-            "password_hash",
-            "token_hash",
-            "session_id",
-            "revoked_at",
-            "expires_at",
-        ):
-            safe_user.pop(secret_field, None)
+    def sanitize_user(self, user: dict[str, Any]) -> dict[str, Any]:
+        """The caller's own record, reduced to what may be published."""
+        safe_user = {
+            field: user[field] for field in self.PUBLIC_USER_FIELDS if field in user
+        }
 
         safe_user["is_super_admin"] = bool(safe_user.get("is_super_admin"))
         return safe_user
@@ -790,38 +810,66 @@ class AuthService:
             for row in rows
         }
 
-    def company_employees(self, company_id: int) -> list[dict[str, Any]]:
+    def company_employees(
+        self, company_id: int, *, include_contact_details: bool = False
+    ) -> list[dict[str, Any]]:
+        """The company's active employees, for assigning and attributing work.
+
+        By default this returns a name and an id and nothing else, because that
+        is all the screens that call it display: an assignment dropdown and the
+        name beside a timeline entry.
+
+        It used to return every colleague's email, phone, role and branch to
+        anyone holding ``conversations.view`` — the lowest permission on the
+        platform. None of it was rendered, so nobody noticed; it was visible to
+        any employee who opened the browser's network tab.
+
+        ``include_contact_details`` is the deliberate opt-in, and the caller is
+        expected to have checked ``users.view`` first. Who holds that permission
+        is the company owner's decision, made on the roles screen — which is the
+        right place for it, because whether colleagues may see each other's
+        contact details is a question about how that business runs, not one this
+        code should answer for everybody.
+        """
+        columns = [
+            "users.id",
+            "users.full_name",
+        ]
+
+        if include_contact_details:
+            columns += [
+                "users.email",
+                "users.phone",
+                "roles.name AS role_name",
+                "roles.code AS role_code",
+                "company_users.branch_id",
+            ]
+
         with database_manager.control() as conn:
             rows = conn.execute(
-                """
-                SELECT
-                    users.id,
-                    users.full_name,
-                    users.email,
-                    users.phone,
-                    roles.name AS role_name,
-                    roles.code AS role_code,
-                    company_users.branch_id
+                f"""
+                SELECT {", ".join(columns)}
                 FROM company_users
                 JOIN users ON users.id = company_users.user_id
                 LEFT JOIN roles ON roles.id = company_users.role_id
                 WHERE company_users.company_id = ?
                   AND company_users.status = 'active'
                   AND users.status = 'active'
-                ORDER BY users.full_name ASC, users.email ASC
+                ORDER BY users.full_name ASC, users.id ASC
                 """,
                 (company_id,),
             ).fetchall()
 
-        return [
-            {
-                **dict(row),
-                "display_name": (
-                    row["full_name"] or row["email"] or f"User {row['id']}"
-                ),
-            }
-            for row in rows
-        ]
+        employees = []
+
+        for row in rows:
+            record = dict(row)
+            # The fallback used to be the email address, which would have put
+            # one back into the default response through the display name.
+            record["display_name"] = record.get("full_name") or f"User {row['id']}"
+            employees.append(record)
+
+        return employees
 
 
 auth_service = AuthService()

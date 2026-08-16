@@ -108,6 +108,26 @@ def _is_conversation_admin(current_user: dict[str, Any], company_id: int) -> boo
     )
 
 
+def _employees(current_user: dict[str, Any], company_id: int) -> list[dict[str, Any]]:
+    """The assignment list, carrying contact details only when allowed.
+
+    The inbox needs a name and an id to fill a dropdown. It used to receive
+    every colleague's email, phone, role and branch as well — to anyone holding
+    `conversations.view`, the lowest permission there is — and rendered none of
+    it. Whether employees may see each other's contact details is the company
+    owner's call, expressed by who they give `users.view` to.
+    """
+    return auth_service.company_employees(
+        company_id,
+        include_contact_details=auth_service.has_permission(
+            user_id=int(current_user["id"]),
+            company_id=company_id,
+            permission_code="users.view",
+            is_super_admin=bool(current_user.get("is_super_admin")),
+        ),
+    )
+
+
 def _owner_detail(
     company_id: int,
     owner_user_id: int | None,
@@ -254,7 +274,7 @@ def list_conversations(
         "current_user_id": int(current_user["id"]),
         "current_user_is_admin": is_admin,
         "departments": DEPARTMENTS,
-        "employees": auth_service.company_employees(company_id),
+        "employees": _employees(current_user, company_id),
         "pagination": result["pagination"],
     }
 
@@ -268,7 +288,7 @@ def conversation_options(
     return {
         "status": "ok",
         "departments": DEPARTMENTS,
-        "employees": auth_service.company_employees(company_id),
+        "employees": _employees(current_user, company_id),
     }
 
 
@@ -423,7 +443,7 @@ def read_control(
         is_super_admin=bool(current_user.get("is_super_admin")),
     )
 
-    result["employees"] = auth_service.company_employees(company_id)
+    result["employees"] = _employees(current_user, company_id)
     result["departments"] = DEPARTMENTS
     result["current_user_id"] = current_user_id
     result["current_user_is_admin"] = is_admin
@@ -548,8 +568,11 @@ def update_control(
         raise HTTPException(status_code=422, detail="Invalid department.")
 
     if payload.assigned_user_id is not None:
+        # Server-side validation, not a response: ids are all this needs, so it
+        # skips the contact-detail permission check rather than paying for it.
         employee_ids = {
-            employee["id"] for employee in auth_service.company_employees(company_id)
+            employee["id"]
+            for employee in auth_service.company_employees(company_id)
         }
 
         if payload.assigned_user_id not in employee_ids:

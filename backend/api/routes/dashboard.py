@@ -24,13 +24,29 @@ router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 
 def _active_subscription(conn, company_id: int) -> dict[str, Any] | None:
+    """The plan and its allowances — deliberately without the price.
+
+    `plans.price_monthly` used to be selected here and reached anyone holding
+    `dashboard.view`, which is the permission almost every employee has. What
+    the company pays is commercial information about the business, not
+    operational information about the inbox; it belongs on the subscription
+    screen, behind `subscriptions.view`.
+
+    The allowances stay, because an employee who is about to be refused for
+    exceeding one needs to be able to see it coming.
+    """
     row = conn.execute(
         """
         SELECT
-            subscriptions.*,
+            subscriptions.id,
+            subscriptions.company_id,
+            subscriptions.plan_id,
+            subscriptions.status,
+            subscriptions.starts_at,
+            subscriptions.expires_at,
+            subscriptions.grace_period_until,
             plans.name AS plan_name,
             plans.code AS plan_code,
-            plans.price_monthly,
             plans.max_users,
             plans.max_channel_accounts,
             plans.max_ai_messages,
@@ -83,8 +99,16 @@ def dashboard_summary(
     counts: dict[str, int] = {}
 
     with database_manager.control() as conn:
+        # Named columns rather than SELECT *: a column added to `companies`
+        # later should not reach the browser because this query was lazy.
         company = conn.execute(
-            "SELECT * FROM companies WHERE id = ? LIMIT 1",
+            """
+            SELECT id, name, slug, country, currency, timezone,
+                   default_language, status, created_at
+            FROM companies
+            WHERE id = ?
+            LIMIT 1
+            """,
             (resolved_company_id,),
         ).fetchone()
 
@@ -116,15 +140,18 @@ def dashboard_summary(
             ).fetchone()["total"]
         )
 
+        # No `page_id`, `phone_number_id` or `external_account_id` here. Those
+        # are the provider identifiers the webhook layer routes on, and this
+        # endpoint is guarded by `dashboard.view` — the permission nearly every
+        # employee holds. They are served by GET /api/dashboard/channels
+        # instead, which requires `channels.view`; the tile below only needs to
+        # say which channels are connected and whether they are healthy.
         channel_rows = conn.execute(
             """
             SELECT
                 channel_accounts.id,
                 channel_accounts.channel,
                 channel_accounts.name,
-                channel_accounts.external_account_id,
-                channel_accounts.phone_number_id,
-                channel_accounts.page_id,
                 channel_accounts.status,
                 channel_accounts.ai_enabled,
                 channel_accounts.flow_enabled,
@@ -208,8 +235,16 @@ def get_company(
     )
 
     with database_manager.control() as conn:
+        # Named columns rather than SELECT *: a column added to `companies`
+        # later should not reach the browser because this query was lazy.
         company = conn.execute(
-            "SELECT * FROM companies WHERE id = ? LIMIT 1",
+            """
+            SELECT id, name, slug, country, currency, timezone,
+                   default_language, status, created_at
+            FROM companies
+            WHERE id = ?
+            LIMIT 1
+            """,
             (resolved_company_id,),
         ).fetchone()
 
