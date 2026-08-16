@@ -558,7 +558,23 @@ class DatabaseManager:
         Returns ``None`` when nothing matches, which the webhook treats as a
         message for an account this platform does not serve. Guessing a company
         here is what previously funnelled every company's traffic into company 1.
+
+        Every lookup is filtered by ``channel``. It used to be accepted and then
+        ignored, which mattered because of the last candidate: ``page_id`` was
+        also matched against ``external_account_id``, a free-form column, while
+        ``_assert_routing_id_is_free`` only enforces uniqueness per channel. Two
+        companies may therefore legitimately hold the same string on different
+        channels — and a Messenger event would then find whichever row the
+        database returned first and deliver a customer's message into the wrong
+        company's inbox. Filtering by channel makes that impossible, and it
+        cannot narrow a legitimate match, because an account only ever receives
+        traffic on its own channel.
         """
+        normalized_channel = str(channel or "").strip().lower()
+
+        if not normalized_channel:
+            return None
+
         candidates = [
             ("page_id", page_id),
             ("phone_number_id", phone_number_id),
@@ -576,10 +592,11 @@ class DatabaseManager:
                     SELECT company_id
                     FROM channel_accounts
                     WHERE {column} = ?
+                      AND channel = ?
                       AND status = 'active'
                     LIMIT 1
                     """,
-                    (str(value),),
+                    (str(value), normalized_channel),
                 ).fetchone()
 
                 if row:

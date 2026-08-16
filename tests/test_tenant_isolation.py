@@ -267,3 +267,88 @@ def test_provisioning_twice_is_refused(platform, alpha):
         platform["manager"].provision_company(
             company_id=alpha["id"], workspace_code="TZ-AAAA-BBBB-CCCC"
         )
+
+
+# ----------------------------------------------------------------------
+# Inbound routing picks the right company
+# ----------------------------------------------------------------------
+
+
+def test_an_inbound_event_never_routes_to_another_company_by_accident(platform, alpha, beta):
+    """`resolve_company_for_channel` took a `channel` and did not use it.
+
+    That mattered because of the last candidate it tries: a Messenger `page_id`
+    is also matched against `external_account_id`, a free-form column, and
+    `_assert_routing_id_is_free` only enforces uniqueness *per channel*. So two
+    companies could legitimately hold the same string on different channels —
+    and a customer's Messenger message would land in whichever row came back
+    first.
+
+    This is the isolation failure the whole encrypted-per-company design exists
+    to prevent, arriving through the routing table rather than through a query.
+    """
+    from database.manager import utc_now_iso
+
+    manager = platform["manager"]
+    shared_identifier = "1234567890"
+    now = utc_now_iso()
+
+    with manager.control() as conn:
+        # Alpha owns the Messenger page.
+        conn.execute(
+            """
+            INSERT INTO channel_accounts (
+                company_id, channel, name, page_id, external_account_id,
+                status, created_at, updated_at
+            )
+            VALUES (?, 'messenger', 'Alpha Page', ?, ?, 'active', ?, ?)
+            """,
+            (alpha["id"], shared_identifier, shared_identifier, now, now),
+        )
+        # Beta owns a WhatsApp number that happens to carry the same string in
+        # the free-form column. Permitted today: uniqueness is per channel.
+        conn.execute(
+            """
+            INSERT INTO channel_accounts (
+                company_id, channel, name, phone_number_id, external_account_id,
+                status, created_at, updated_at
+            )
+            VALUES (?, 'whatsapp', 'Beta Number', '999', ?, 'active', ?, ?)
+            """,
+            (beta["id"], shared_identifier, now, now),
+        )
+        conn.commit()
+
+    routed = manager.resolve_company_for_channel(
+        channel="messenger", page_id=shared_identifier
+    )
+
+    assert routed == alpha["id"], "a Messenger event reached the wrong company"
+
+
+def test_an_event_for_a_channel_nobody_connected_is_refused(platform, alpha):
+    """Returning a company for an unconnected channel would deliver traffic to
+    somebody who never asked for it."""
+    from database.manager import utc_now_iso
+
+    manager = platform["manager"]
+    now = utc_now_iso()
+
+    with manager.control() as conn:
+        conn.execute(
+            """
+            INSERT INTO channel_accounts (
+                company_id, channel, name, page_id, external_account_id,
+                status, created_at, updated_at
+            )
+            VALUES (?, 'messenger', 'Alpha Page', '555', '555', 'active', ?, ?)
+            """,
+            (alpha["id"], now, now),
+        )
+        conn.commit()
+
+    assert (
+        manager.resolve_company_for_channel(channel="whatsapp", phone_number_id="555")
+        is None
+    )
+    assert manager.resolve_company_for_channel(channel="", page_id="555") is None
