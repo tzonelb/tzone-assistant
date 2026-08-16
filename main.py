@@ -40,6 +40,7 @@ from backend.api.routes import (
     team_chat,
     tickets,
 )
+from backend.api.middleware import SecurityHeadersMiddleware
 from backend.security.keyring import KeyringError
 from backend.services.auth_service import auth_service
 from backend.services.module_access import require_module
@@ -178,6 +179,11 @@ app = FastAPI(
     openapi_url="/openapi.json" if config.ENABLE_DOCS else None,
 )
 
+
+# Added before CORS so it ends up outermost: every response leaving the
+# application carries the headers, including CORS preflights and error
+# responses raised inside the stack.
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

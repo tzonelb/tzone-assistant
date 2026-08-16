@@ -256,6 +256,7 @@ curl -sS http://127.0.0.1:8000/health/
 
 ```bash
 sudo cp /opt/tzone/deploy/tzone-proxy.conf /etc/nginx/snippets/tzone-proxy.conf
+sudo cp /opt/tzone/deploy/tzone-security-headers.conf /etc/nginx/snippets/tzone-security-headers.conf
 sudo cp /opt/tzone/deploy/nginx.conf /etc/nginx/sites-available/tzone
 sudo sed -i 's/app.example.com/YOUR.DOMAIN/g' /etc/nginx/sites-available/tzone
 sudo ln -sf /etc/nginx/sites-available/tzone /etc/nginx/sites-enabled/tzone

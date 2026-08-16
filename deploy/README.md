@@ -7,6 +7,7 @@ Files in this directory, and where each one goes:
 | `tzone-api.service` | `/etc/systemd/system/tzone-api.service` |
 | `nginx.conf` | `/etc/nginx/sites-available/tzone` |
 | `tzone-proxy.conf` | `/etc/nginx/snippets/tzone-proxy.conf` |
+| `tzone-security-headers.conf` | `/etc/nginx/snippets/tzone-security-headers.conf` |
 | `backup.cron` | `/etc/cron.d/tzone-backup` |
 
 Full explanations are in [`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md).
@@ -81,6 +82,7 @@ sudo systemctl status tzone-api
 
 ```bash
 sudo cp /opt/tzone/deploy/tzone-proxy.conf /etc/nginx/snippets/tzone-proxy.conf
+sudo cp /opt/tzone/deploy/tzone-security-headers.conf /etc/nginx/snippets/tzone-security-headers.conf
 sudo cp /opt/tzone/deploy/nginx.conf /etc/nginx/sites-available/tzone
 sudo sed -i 's/app.example.com/YOUR.DOMAIN/g' /etc/nginx/sites-available/tzone
 sudo ln -sf /etc/nginx/sites-available/tzone /etc/nginx/sites-enabled/tzone
