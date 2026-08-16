@@ -134,6 +134,12 @@ export async function apiRequest(
     const error = new Error(message);
     error.status = response.status;
     error.data = data;
+    // Null far more often than not: Retry-After is not a CORS-safelisted
+    // response header, so unless the API is same-origin or names it in
+    // Access-Control-Expose-Headers the browser hides it. A screen that wants
+    // a countdown has to work without one.
+    const retryAfter = Number(response.headers.get("Retry-After"));
+    error.retryAfter = retryAfter > 0 ? retryAfter : null;
     throw error;
   }
 
@@ -185,6 +191,27 @@ export async function loginRequest(
   });
 }
 
+export async function changeOwnPasswordRequest(currentPassword, newPassword) {
+  return apiRequest("/api/auth/password", {
+    method: "POST",
+    body: {
+      current_password: currentPassword,
+      new_password: newPassword,
+    },
+  });
+}
+
+export async function resetPasswordRequest(token, newPassword) {
+  return apiRequest(
+    `/api/auth/password/reset/${encodeURIComponent(token)}`,
+    {
+      method: "POST",
+      authenticated: false,
+      body: { new_password: newPassword },
+    },
+  );
+}
+
 export async function getAccessOverviewRequest() {
   return apiRequest("/api/admin/access/overview");
 }
@@ -203,6 +230,19 @@ export async function createCompanyUserRequest(payload) {
 
 export async function updateCompanyUserRequest(userId, payload) {
   return apiRequest(`/api/admin/access/users/${userId}`, { method: "PATCH", body: payload });
+}
+
+export async function forceUserPasswordResetRequest(userId) {
+  return apiRequest(
+    `/api/admin/access/users/${userId}/force-password-reset`,
+    { method: "POST" },
+  );
+}
+
+export async function unlockCompanyUserRequest(userId) {
+  return apiRequest(`/api/admin/access/users/${userId}/unlock`, {
+    method: "POST",
+  });
 }
 
 export async function logoutRequest() {

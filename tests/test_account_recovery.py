@@ -412,6 +412,28 @@ def test_a_forced_change_blocks_every_other_route(client, service, alpha):
     assert blocked.json()["detail"]["code"] == "password_change_required"
 
 
+def test_a_forced_change_leaves_the_identity_route_reachable(client, service, alpha):
+    """`/api/auth/me` is the second exemption, and it has to be one: the
+    interface cannot route somebody to the change screen without being able to
+    ask who they are. While this was blocked, `must_change_password` was the one
+    fact the client could not read, so it had to be inferred from the shape of a
+    403 — a workaround that would have quietly broken the day the status code
+    changed."""
+    user_id = _employee(service, alpha, "identity@alpha.example.com")
+    service.set_password(
+        user_id=user_id, new_password=NEW_PASSWORD, must_change=True
+    )
+
+    token = _login(
+        client, alpha, "identity@alpha.example.com", password=NEW_PASSWORD
+    ).json()["access_token"]
+
+    me = client.get("/api/auth/me", headers=_bearer(token))
+
+    assert me.status_code == 200, me.text
+    assert me.json()["user"]["must_change_password"] == 1
+
+
 def test_a_forced_change_leaves_the_change_route_reachable(client, service, alpha):
     """Otherwise the requirement would be a locked door with no handle."""
     user_id = _employee(service, alpha, "forced2@alpha.example.com")

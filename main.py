@@ -48,6 +48,7 @@ from backend.services.conversation_control_service import conversation_control_s
 from channels.meta import webhook as meta_webhook
 from channels.meta.smart_reply import process_due_replies
 from channels.post_publisher import publish_due_posts
+from channels.webhook_limits import drain as drain_webhook_work
 from channels.whatsapp import webhook as whatsapp_webhook
 from config.settings import config
 from database.manager import database_manager
@@ -178,6 +179,14 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        # Webhook deliveries are acknowledged before they are processed, so
+        # anything still running is work no provider will send again. Finish it
+        # before the sweeps are torn down rather than cancelling it mid-message.
+        try:
+            await drain_webhook_work()
+        except Exception:
+            logger.exception("Draining accepted webhook work failed")
+
         for task in tasks:
             task.cancel()
 
@@ -207,6 +216,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
+    # `Retry-After` is not a CORS-safelisted response header, so without this
+    # the browser hides it from the application even though the server sent it.
+    # The login screen uses it to say how long a lockout has left; withholding
+    # it turns a precise answer into "try again later".
+    expose_headers=["Retry-After"],
 )
 
 

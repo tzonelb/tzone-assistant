@@ -123,7 +123,18 @@ def login(payload: LoginRequest, request: Request):
 
 
 @router.get("/me", response_model=CurrentUserResponse)
-def get_me(current_user: dict = Depends(get_current_user)):
+def get_me(current_user: dict = Depends(get_user_changing_password)):
+    """Who am I — reachable even while a password change is being forced.
+
+    The second route to use the permissive dependency, and for the same
+    reason as the first: an employee who must change their password needs the
+    change screen, and the interface cannot route them to it without being able
+    to ask who they are. Blocking this made `must_change_password` the one fact
+    the client could not read, so it had to be inferred from the shape of a 403.
+
+    It publishes nothing extra — `sanitize_user` decides that, and it is the
+    caller's own record either way.
+    """
     companies = auth_service.get_user_companies(current_user["id"])
 
     safe_user = dict(current_user)

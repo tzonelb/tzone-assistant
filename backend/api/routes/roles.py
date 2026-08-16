@@ -76,6 +76,12 @@ def overview(current_user: dict = Depends(get_current_user)):
                 users.phone,
                 users.status AS user_status,
                 users.last_login_at,
+                users.password_changed_at,
+                users.must_change_password,
+                -- The screen cannot offer "unlock" on the accounts that need
+                -- it without knowing which those are. `user_status` is the
+                -- account's platform status and says nothing about a lockout.
+                users.locked_until,
                 company_users.status AS membership_status,
                 company_users.branch_id,
                 roles.id AS role_id,

@@ -207,6 +207,46 @@ a {
   font-size: 14px;
 }
 
+/* A refused sign-in is not the same event as a wrong password, and the panel
+   says so before a word is read: amber rather than red, and roomy enough for
+   the sentence about what to do instead of waiting. */
+.login-blocked {
+  display: grid;
+  gap: 7px;
+  padding: 16px 18px;
+  border: 1px solid #f3d18a;
+  border-radius: 14px;
+  color: #7a4c05;
+  background: #fff8e8;
+  font-size: 14px;
+}
+
+.login-blocked strong {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.login-blocked p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.login-blocked span {
+  color: #9a7226;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-notice {
+  padding: 12px 14px;
+  margin-bottom: 4px;
+  border: 1px solid #b6e6d4;
+  border-radius: 12px;
+  color: #17624a;
+  background: #eefaf5;
+  font-size: 14px;
+}
+
 .primary-action {
   min-height: 53px;
   margin-top: 15px;
@@ -1222,7 +1262,7 @@ body[data-ui-density="compact"] .app-content {
 
 /* MASTER UI lock corrections */
 .company-settings-content{height:100dvh;overflow:auto}
-.admin-access-page{padding:20px;display:grid;gap:16px}.access-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border:1px solid var(--tz-border);border-radius:16px;background:var(--tz-surface);box-shadow:var(--tz-shadow-sm)}.access-toolbar>div:first-child{display:grid;gap:4px}.access-toolbar>div:last-child{display:flex;gap:10px}.access-toolbar span{color:var(--tz-text-muted)}.admin-access-card{padding:18px;border:1px solid var(--tz-border);border-radius:16px;background:var(--tz-surface);box-shadow:var(--tz-shadow-sm)}.admin-access-grid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px}.role-list{display:grid;gap:8px}.role-list-item{display:grid;gap:4px;padding:12px;border:1px solid var(--tz-border);border-radius:12px;background:#fff;text-align:left}.role-list-item.active{border-color:var(--tz-primary);background:var(--tz-primary-soft)}.role-list-item span,.permission-row span,.users-card-header p{color:var(--tz-text-muted);font-size:12px}.permission-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.permission-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--tz-border);border-radius:12px}.permission-row>div{display:grid}.owner-access-note{padding:16px;border-radius:12px;background:var(--tz-success-soft);color:var(--tz-success);font-weight:800}.users-card-header{display:flex;justify-content:space-between;align-items:center}.users-table-wrap{overflow:auto}.users-table{width:100%;border-collapse:collapse}.users-table th,.users-table td{padding:12px;border-bottom:1px solid var(--tz-border);text-align:left}.users-table td:first-child{display:grid}.users-table select{min-height:36px;border:1px solid var(--tz-border);border-radius:9px;background:#fff}.admin-modal-backdrop{position:fixed;z-index:2000;inset:0;display:grid;place-items:center;padding:20px;background:rgb(15 23 42 / 45%)}.admin-modal{width:min(560px,100%);max-height:85dvh;overflow:auto;display:grid;gap:12px;padding:20px;border-radius:18px;background:#fff}.admin-modal-header{display:flex;justify-content:space-between;align-items:center}.admin-modal label{display:grid;gap:6px;font-weight:700}.admin-modal input,.admin-modal select,.admin-modal textarea{min-height:42px;padding:9px 11px;border:1px solid var(--tz-border);border-radius:10px}.permission-mini-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.permission-mini-list label{display:flex;align-items:center;gap:7px}.admin-access-error{padding:12px;border-radius:10px;color:var(--tz-danger);background:var(--tz-danger-soft)}
+.admin-access-page{padding:20px;display:grid;gap:16px}.access-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 18px;border:1px solid var(--tz-border);border-radius:16px;background:var(--tz-surface);box-shadow:var(--tz-shadow-sm)}.access-toolbar>div:first-child{display:grid;gap:4px}.access-toolbar>div:last-child{display:flex;gap:10px}.access-toolbar span{color:var(--tz-text-muted)}.admin-access-card{padding:18px;border:1px solid var(--tz-border);border-radius:16px;background:var(--tz-surface);box-shadow:var(--tz-shadow-sm)}.admin-access-grid{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px}.role-list{display:grid;gap:8px}.role-list-item{display:grid;gap:4px;padding:12px;border:1px solid var(--tz-border);border-radius:12px;background:#fff;text-align:left}.role-list-item.active{border-color:var(--tz-primary);background:var(--tz-primary-soft)}.role-list-item span,.permission-row span,.users-card-header p{color:var(--tz-text-muted);font-size:12px}.permission-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.permission-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--tz-border);border-radius:12px}.permission-row>div{display:grid}.owner-access-note{padding:16px;border-radius:12px;background:var(--tz-success-soft);color:var(--tz-success);font-weight:800}.users-card-header{display:flex;justify-content:space-between;align-items:center}.users-table-wrap{overflow:auto}.users-table{width:100%;border-collapse:collapse}.users-table th,.users-table td{padding:12px;border-bottom:1px solid var(--tz-border);text-align:left}.users-table td:first-child{display:grid}.users-table select{min-height:36px;border:1px solid var(--tz-border);border-radius:9px;background:#fff}.admin-modal-backdrop{position:fixed;z-index:2000;inset:0;display:grid;place-items:center;padding:20px;background:rgb(15 23 42 / 45%)}.admin-modal{width:min(560px,100%);max-height:85dvh;overflow:auto;display:grid;gap:12px;padding:20px;border-radius:18px;background:#fff}.admin-modal-header{display:flex;justify-content:space-between;align-items:center}.admin-modal label{display:grid;gap:6px;font-weight:700}.admin-modal input,.admin-modal select,.admin-modal textarea{min-height:42px;padding:9px 11px;border:1px solid var(--tz-border);border-radius:10px}.permission-mini-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.permission-mini-list label{display:flex;align-items:center;gap:7px}.admin-access-error{padding:12px;border-radius:10px;color:var(--tz-danger);background:var(--tz-danger-soft)}.admin-access-notice{padding:12px;border-radius:10px;color:var(--tz-success);background:var(--tz-success-soft);font-weight:700}.admin-modal-actions{display:flex;justify-content:flex-end;gap:10px}.admin-modal-actions .primary-action{margin-top:0}.user-actions{display:flex;flex-wrap:wrap;gap:8px}.user-account-status{display:block;margin-top:4px;color:var(--tz-text-muted);font-size:12px}
 @media(max-width:900px){.admin-access-grid{grid-template-columns:1fr}.permission-grid{grid-template-columns:1fr}}
 
 /* PATCH 7 — Notification Center */

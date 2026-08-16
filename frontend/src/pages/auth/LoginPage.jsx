@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
+
+
+function formatCountdown(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return minutes
+    ? `${minutes}m ${seconds}s`
+    : `${seconds}s`;
+}
 
 
 export default function LoginPage() {
@@ -17,15 +27,34 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [errorStatus, setErrorStatus] = useState(null);
+  const [retrySeconds, setRetrySeconds] = useState(null);
+
+  useEffect(() => {
+    if (!retrySeconds) {
+      return undefined;
+    }
+
+    const timer = setTimeout(
+      () => setRetrySeconds(retrySeconds - 1),
+      1000,
+    );
+
+    return () => clearTimeout(timer);
+  }, [retrySeconds]);
 
   if (!loading && authenticated) {
     return <Navigate to="/dashboard" replace />;
   }
 
+  const notice = location.state?.notice || "";
+
   async function handleSubmit(event) {
     event.preventDefault();
 
     setError("");
+    setErrorStatus(null);
+    setRetrySeconds(null);
     setSubmitting(true);
 
     try {
@@ -46,6 +75,12 @@ export default function LoginPage() {
       setError(
         loginError.message ||
         "Login failed. Please check your information.",
+      );
+      setErrorStatus(loginError.status ?? null);
+      setRetrySeconds(
+        loginError.status === 429
+          ? loginError.retryAfter
+          : null,
       );
     } finally {
       setSubmitting(false);
@@ -82,6 +117,12 @@ export default function LoginPage() {
             Sign in with your company account to continue.
           </p>
         </div>
+
+        {notice ? (
+          <div className="login-notice">
+            {notice}
+          </div>
+        ) : null}
 
         <form
           className="login-form"
@@ -161,7 +202,25 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {error ? (
+          {error && errorStatus === 429 ? (
+            // Two different refusals arrive as 429 — the account is locked, or
+            // the connection is throttled — and the server writes the right
+            // explanation for each. The heading has to hold for both, and the
+            // text below it is the server's, verbatim.
+            <div className="login-blocked" role="alert">
+              <strong>Too many failed attempts</strong>
+              <p>{error}</p>
+
+              {retrySeconds ? (
+                <span>
+                  The block lifts on its own in{" "}
+                  {formatCountdown(retrySeconds)}.
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {error && errorStatus !== 429 ? (
             <div className="login-error">
               {error}
             </div>

@@ -20,6 +20,18 @@ import {
 const AuthContext = createContext(null);
 
 
+// A user whose administrator forced a reset is refused by every route except
+// the one that changes the password — `/api/auth/me` included. The refusal is
+// therefore the only way to learn the state, and treating it as a dead session
+// would bounce them back to the login screen they just came from.
+function passwordChangeRequired(error) {
+  return (
+    error?.status === 403 &&
+    error?.data?.detail?.code === "password_change_required"
+  );
+}
+
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -44,6 +56,15 @@ export function AuthProvider({ children }) {
       setCompanies(result?.companies || []);
       setPermissions(result?.permissions || []);
     } catch (error) {
+      if (passwordChangeRequired(error)) {
+        // Nothing else about them is readable until they change it, so the
+        // flag is all the interface gets — and all it needs to route them.
+        setUser({ must_change_password: true });
+        setCompanies([]);
+        setPermissions([]);
+        return;
+      }
+
       if (error.status === 401) {
         clearAccessToken();
       }
@@ -69,13 +90,37 @@ export function AuthProvider({ children }) {
 
     saveAccessToken(result.access_token);
 
-    const currentUser = await getCurrentUserRequest();
+    let currentUser;
+
+    try {
+      currentUser = await getCurrentUserRequest();
+    } catch (error) {
+      if (!passwordChangeRequired(error)) {
+        throw error;
+      }
+
+      // The credentials were right and the token is real; the account is just
+      // held at the change-password screen. Sign them in with what the login
+      // response already said about them, and grant nothing.
+      setUser(result?.user || null);
+      setCompanies([]);
+      setPermissions([]);
+
+      return result;
+    }
 
     setUser(currentUser?.user || result?.user || null);
     setCompanies(currentUser?.companies || []);
     setPermissions(currentUser?.permissions || result?.permissions || []);
 
     return result;
+  }, []);
+
+  const endLocalSession = useCallback(() => {
+    clearAccessToken();
+    setUser(null);
+    setCompanies([]);
+    setPermissions([]);
   }, []);
 
   const logout = useCallback(async () => {
@@ -86,12 +131,9 @@ export function AuthProvider({ children }) {
     } catch {
       // The local session is still cleared when the server is unreachable.
     } finally {
-      clearAccessToken();
-      setUser(null);
-      setCompanies([]);
-      setPermissions([]);
+      endLocalSession();
     }
-  }, []);
+  }, [endLocalSession]);
 
   const value = useMemo(
     () => ({
@@ -106,6 +148,10 @@ export function AuthProvider({ children }) {
         Boolean(user?.is_super_admin) || permissions.includes(code),
       login,
       logout,
+      // For the case where the server has already ended the session: changing
+      // a password revokes every token, so calling /api/auth/logout afterwards
+      // answers 401 and hard-redirects the browser mid-navigation.
+      endLocalSession,
       refreshUser: loadCurrentUser,
     }),
     [
@@ -115,6 +161,7 @@ export function AuthProvider({ children }) {
       loading,
       login,
       logout,
+      endLocalSession,
       loadCurrentUser,
     ],
   );

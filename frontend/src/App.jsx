@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import ModuleRoute from "./routes/ModuleRoute";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -47,6 +48,9 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* Public by necessity: the person following this link cannot sign in,
+            which is the whole reason the link exists. */}
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/superadmin/*" element={<SuperAdminApp />} />
         <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailPage standalone /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
