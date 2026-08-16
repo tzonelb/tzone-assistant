@@ -8,6 +8,7 @@ import App from "./App";
 import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { ConversationLiveProvider } from "./contexts/ConversationLiveContext";
+import { WorkspaceConfigProvider } from "./contexts/WorkspaceConfigContext";
 
 import "./index.css";
 import "./styles/theme.css";
@@ -20,22 +21,24 @@ createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <NotificationProvider>
-          <ConversationLiveProvider>
-            <App />
+        <WorkspaceConfigProvider>
+          <NotificationProvider>
+            <ConversationLiveProvider>
+              <App />
 
-            <Toaster
-              position="top-right"
-              toastOptions={{
-                duration: 3500,
-                style: {
-                  borderRadius: "14px",
-                  fontWeight: 700,
-                },
-              }}
-            />
-          </ConversationLiveProvider>
-        </NotificationProvider>
+              <Toaster
+                position="top-right"
+                toastOptions={{
+                  duration: 3500,
+                  style: {
+                    borderRadius: "14px",
+                    fontWeight: 700,
+                  },
+                }}
+              />
+            </ConversationLiveProvider>
+          </NotificationProvider>
+        </WorkspaceConfigProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>

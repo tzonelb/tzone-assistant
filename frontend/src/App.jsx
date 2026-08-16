@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
+import ModuleRoute from "./routes/ModuleRoute";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
 // Loaded eagerly: the login screen is the first thing an unauthenticated
@@ -42,26 +43,26 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ConversationDetailPage standalone /></ProtectedRoute>} />
+        <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailPage standalone /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/notifications" element={<NotificationsPage />} />
-          <Route path="/conversations" element={<ConversationsPage />} />
-          <Route path="/conversations/:channel/:userId" element={<ConversationsPage />} />
-          <Route path="/comments" element={<CommentsPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/appointments" element={<AppointmentsPage />} />
-          <Route path="/catalogue" element={<CataloguePage />} />
-          <Route path="/knowledge" element={<KnowledgePage />} />
-          <Route path="/ai-teaching" element={<AiTeachingPage />} />
-          <Route path="/scheduler" element={<SchedulerPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/team-chat" element={<TeamChatPage />} />
-          <Route path="/channels" element={<ChannelsPage />} />
-          <Route path="/settings" element={<UISettingsPage />} />
-          <Route path="/company-settings/*" element={<CompanySettingsPage />} />
-          <Route path="/roles" element={<RolesPermissionsPage />} />
+          <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute>} />
+          <Route path="/notifications" element={<ModuleRoute module="notifications"><NotificationsPage /></ModuleRoute>} />
+          <Route path="/conversations" element={<ModuleRoute module="conversations"><ConversationsPage /></ModuleRoute>} />
+          <Route path="/conversations/:channel/:userId" element={<ModuleRoute module="conversations"><ConversationsPage /></ModuleRoute>} />
+          <Route path="/comments" element={<ModuleRoute module="comments"><CommentsPage /></ModuleRoute>} />
+          <Route path="/customers" element={<ModuleRoute module="customers"><CustomersPage /></ModuleRoute>} />
+          <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksPage /></ModuleRoute>} />
+          <Route path="/appointments" element={<ModuleRoute module="appointments"><AppointmentsPage /></ModuleRoute>} />
+          <Route path="/catalogue" element={<ModuleRoute module="catalogue"><CataloguePage /></ModuleRoute>} />
+          <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
+          <Route path="/ai-teaching" element={<ModuleRoute module="ai_teaching"><AiTeachingPage /></ModuleRoute>} />
+          <Route path="/scheduler" element={<ModuleRoute module="scheduler"><SchedulerPage /></ModuleRoute>} />
+          <Route path="/analytics" element={<ModuleRoute module="analytics"><AnalyticsPage /></ModuleRoute>} />
+          <Route path="/team-chat" element={<ModuleRoute module="team_chat"><TeamChatPage /></ModuleRoute>} />
+          <Route path="/channels" element={<ModuleRoute module="channels"><ChannelsPage /></ModuleRoute>} />
+          <Route path="/settings" element={<ModuleRoute module="preferences"><UISettingsPage /></ModuleRoute>} />
+          <Route path="/company-settings/*" element={<ModuleRoute module="company_settings"><CompanySettingsPage /></ModuleRoute>} />
+          <Route path="/roles" element={<ModuleRoute module="roles"><RolesPermissionsPage /></ModuleRoute>} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

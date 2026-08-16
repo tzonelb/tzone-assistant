@@ -215,6 +215,10 @@ export async function getCurrentUserRequest() {
   return apiRequest("/api/auth/me");
 }
 
+export async function getWorkspaceConfigRequest() {
+  return apiRequest("/api/platform-ui/config");
+}
+
 export async function getDashboardSummaryRequest() {
   return apiRequest("/api/dashboard/summary");
 }

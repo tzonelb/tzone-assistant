@@ -12,7 +12,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
@@ -33,6 +33,8 @@ from backend.api.routes import (
     knowledge,
     manual_messages,
     notifications,
+    platform,
+    platform_ui,
     roles,
     scheduler,
     team_chat,
@@ -40,6 +42,7 @@ from backend.api.routes import (
 )
 from backend.security.keyring import KeyringError
 from backend.services.auth_service import auth_service
+from backend.services.module_access import require_module
 from backend.services.conversation_control_service import conversation_control_service
 from channels.meta import webhook as meta_webhook
 from channels.meta.smart_reply import process_due_replies
@@ -185,27 +188,45 @@ app.add_middleware(
 )
 
 
+# Reachable without a company: the service banner, signing in, the control
+# plane, and the customer app asking which modules it may draw.
 app.include_router(health.router)
 app.include_router(auth.router)
-app.include_router(dashboard.router)
-app.include_router(analytics.router)
-app.include_router(ai_teaching.router)
-app.include_router(conversations.router)
-app.include_router(manual_messages.router)
-app.include_router(conversation_tags.router)
-app.include_router(company_settings.router)
-app.include_router(customers.router)
-app.include_router(knowledge.router)
-app.include_router(channels.router)
-app.include_router(catalogue.router)
-app.include_router(comments.router)
-app.include_router(scheduler.router)
-app.include_router(appointments.router)
-app.include_router(team_chat.router)
-app.include_router(notifications.router)
-app.include_router(roles.router)
-app.include_router(tickets.router)
-app.include_router(tickets.tasks_router)
+app.include_router(platform.router)
+app.include_router(platform_ui.router)
+
+# Everything below is a module the Super Admin can switch off for a company.
+# The switch is enforced here rather than in each handler, so a module added to
+# the navigation without a gate is visible as a missing line in this block
+# rather than as a setting that silently does nothing.
+#
+# `require_module` runs before the router's own permission checks: being denied
+# a module the company does not have should not depend on which permission the
+# employee happens to hold.
+def _module(key: str) -> list:
+    return [Depends(require_module(key))]
+
+
+app.include_router(dashboard.router, dependencies=_module("dashboard"))
+app.include_router(analytics.router, dependencies=_module("analytics"))
+app.include_router(ai_teaching.router, dependencies=_module("ai_teaching"))
+app.include_router(conversations.router, dependencies=_module("conversations"))
+app.include_router(manual_messages.router, dependencies=_module("conversations"))
+app.include_router(conversation_tags.router, dependencies=_module("conversations"))
+app.include_router(company_settings.router, dependencies=_module("company_settings"))
+app.include_router(customers.router, dependencies=_module("customers"))
+app.include_router(knowledge.router, dependencies=_module("knowledge"))
+app.include_router(channels.router, dependencies=_module("channels"))
+app.include_router(catalogue.router, dependencies=_module("catalogue"))
+app.include_router(comments.router, dependencies=_module("comments"))
+app.include_router(scheduler.router, dependencies=_module("scheduler"))
+app.include_router(appointments.router, dependencies=_module("appointments"))
+app.include_router(team_chat.router, dependencies=_module("team_chat"))
+app.include_router(notifications.router, dependencies=_module("notifications"))
+app.include_router(roles.router, dependencies=_module("roles"))
+app.include_router(tickets.router, dependencies=_module("tasks"))
+app.include_router(tickets.tasks_router, dependencies=_module("tasks"))
+
 app.include_router(developer_center.router)
 
 app.include_router(whatsapp_webhook.router)
