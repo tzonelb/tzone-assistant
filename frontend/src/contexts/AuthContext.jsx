@@ -23,6 +23,7 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [companies, setCompanies] = useState([]);
+  const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const loadCurrentUser = useCallback(async () => {
@@ -31,6 +32,7 @@ export function AuthProvider({ children }) {
     if (!token) {
       setUser(null);
       setCompanies([]);
+      setPermissions([]);
       setLoading(false);
       return;
     }
@@ -40,6 +42,7 @@ export function AuthProvider({ children }) {
 
       setUser(result?.user || null);
       setCompanies(result?.companies || []);
+      setPermissions(result?.permissions || []);
     } catch (error) {
       if (error.status === 401) {
         clearAccessToken();
@@ -47,6 +50,7 @@ export function AuthProvider({ children }) {
 
       setUser(null);
       setCompanies([]);
+      setPermissions([]);
     } finally {
       setLoading(false);
     }
@@ -69,6 +73,7 @@ export function AuthProvider({ children }) {
 
     setUser(currentUser?.user || result?.user || null);
     setCompanies(currentUser?.companies || []);
+    setPermissions(currentUser?.permissions || result?.permissions || []);
 
     return result;
   }, []);
@@ -84,6 +89,7 @@ export function AuthProvider({ children }) {
       clearAccessToken();
       setUser(null);
       setCompanies([]);
+      setPermissions([]);
     }
   }, []);
 
@@ -91,8 +97,13 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       companies,
+      permissions,
       loading,
       authenticated: Boolean(user),
+      // A super admin holds every permission implicitly, exactly as the API
+      // decides it; the screen must not disagree with the server about that.
+      can: (code) =>
+        Boolean(user?.is_super_admin) || permissions.includes(code),
       login,
       logout,
       refreshUser: loadCurrentUser,
@@ -100,6 +111,7 @@ export function AuthProvider({ children }) {
     [
       user,
       companies,
+      permissions,
       loading,
       login,
       logout,
