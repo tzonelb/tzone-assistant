@@ -260,6 +260,53 @@ def rewrap_with_new_code(
     return sealed, salt
 
 
+def seal_secret(
+    plaintext: str,
+    company_key: bytes,
+    company_id: int,
+    context: str,
+) -> str:
+    """Seal a short secret — an access token, an app secret — for one company.
+
+    Channel accounts live in the shared control database so an inbound webhook
+    can be routed before the company is known, but the credentials on them
+    belong to one company. Sealing them under that company's database key means
+    a dump of the control database yields no usable tokens.
+
+    ``context`` distinguishes secrets on the same record (for example the access
+    token from the verify token), so a sealed value cannot be moved from one
+    field to another.
+    """
+    return _seal(
+        company_key,
+        str(plaintext).encode("utf-8"),
+        f"{_company_aad(company_id).decode()}:{context}".encode("utf-8"),
+    )
+
+
+def unseal_secret(
+    sealed: str,
+    company_key: bytes,
+    company_id: int,
+    context: str,
+) -> str:
+    """Recover a secret sealed by :func:`seal_secret`."""
+    try:
+        raw = _unseal(
+            company_key,
+            sealed,
+            f"{_company_aad(company_id).decode()}:{context}".encode("utf-8"),
+        )
+    except (InvalidTag, ValueError, TypeError) as exc:
+        raise CorruptedKeyMaterial(
+            f"A stored {context} for company {company_id} could not be "
+            "authenticated. It was written with a different key, or the row "
+            "was tampered with."
+        ) from exc
+
+    return raw.decode("utf-8")
+
+
 def sqlcipher_key_literal(company_key: bytes) -> str:
     """Format a raw key for ``PRAGMA key``.
 

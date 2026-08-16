@@ -6,6 +6,7 @@ from typing import Any
 
 import httpx
 
+from channels.credentials import MissingChannelCredentials, resolve
 from channels.meta.logger import log_meta_event
 from config.settings import config
 
@@ -43,6 +44,7 @@ def _store_profile(user_id: str, profile: dict[str, Any]) -> None:
 
 def resolve_meta_profile(
     user_id: str,
+    company_id: int,
     channel: str = "messenger",
 ) -> dict[str, Any]:
     """Resolve a customer's official profile name without breaking webhook flow.
@@ -57,15 +59,20 @@ def resolve_meta_profile(
     if not normalized_user_id:
         return {}
 
-    cached = _cached_profile(normalized_user_id)
+    cache_key = f"{int(company_id)}:{normalized_user_id}"
+    cached = _cached_profile(cache_key)
 
     if cached is not None:
         return cached
 
-    if (
-        normalized_channel != "messenger"
-        or not config.META_PAGE_ACCESS_TOKEN
-    ):
+    if normalized_channel != "messenger":
+        return {}
+
+    try:
+        access_token = resolve(company_id, normalized_channel)["access_token"]
+    except MissingChannelCredentials:
+        # A missing token is not an error here; the conversation simply shows
+        # the channel default name until an account is connected.
         return {}
 
     url = (
@@ -79,7 +86,7 @@ def resolve_meta_profile(
             url,
             params={
                 "fields": "first_name,last_name,profile_pic",
-                "access_token": config.META_PAGE_ACCESS_TOKEN,
+                "access_token": access_token,
             },
             timeout=8,
         )
@@ -122,8 +129,7 @@ def resolve_meta_profile(
             if value
         }
 
-        if profile:
-            _store_profile(normalized_user_id, profile)
+        _store_profile(cache_key, profile)
 
         return profile
 

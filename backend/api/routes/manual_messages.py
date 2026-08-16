@@ -118,6 +118,7 @@ def send_manual_conversation_reply(
         send_result = send_text(
             channel=normalized_channel,
             recipient_id=normalized_user_id,
+            company_id=company_id,
             text=message_text,
         )
     except UnsupportedChannel as exc:

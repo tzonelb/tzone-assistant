@@ -35,6 +35,7 @@ def send_text(
     *,
     channel: str,
     recipient_id: str,
+    company_id: int,
     text: str,
     buttons: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -50,6 +51,7 @@ def send_text(
             return send_meta_buttons(
                 recipient_id=recipient_id,
                 text=text,
+                company_id=company_id,
                 buttons=buttons,
                 channel=normalized,
             )
@@ -57,11 +59,17 @@ def send_text(
         return send_meta_text(
             recipient_id=recipient_id,
             text=text,
+            company_id=company_id,
             channel=normalized,
         )
 
     if normalized in WHATSAPP_CHANNELS:
-        result = send_whatsapp_text(to=recipient_id, text=text, buttons=buttons)
+        result = send_whatsapp_text(
+            to=recipient_id,
+            text=text,
+            company_id=company_id,
+            buttons=buttons,
+        )
         # WhatsApp's helper reports `sent`; normalise it so callers can rely on
         # one field across channels.
         return {

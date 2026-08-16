@@ -44,7 +44,11 @@ def process_inbound_event(*, event: dict[str, Any], company_id: int) -> dict[str
             "channel": channel,
         }
 
-    official_profile = resolve_meta_profile(user_id=user_id, channel=channel)
+    official_profile = resolve_meta_profile(
+        user_id=user_id,
+        company_id=company_id,
+        channel=channel,
+    )
 
     customer = customer_service.upsert_from_channel(
         company_id=company_id,

@@ -203,6 +203,7 @@ def _process_batch(batch: dict[str, Any]) -> bool:
     send_result = send_text(
         channel=channel,
         recipient_id=user_id,
+        company_id=company_id,
         text=response.text,
         buttons=buttons,
     )

@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
     auth,
+    channels,
     company_settings,
     conversation_tags,
     conversations,
@@ -170,6 +171,7 @@ app.include_router(manual_messages.router)
 app.include_router(conversation_tags.router)
 app.include_router(company_settings.router)
 app.include_router(customers.router)
+app.include_router(channels.router)
 app.include_router(notifications.router)
 app.include_router(roles.router)
 app.include_router(tickets.router)
