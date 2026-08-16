@@ -1,0 +1,51 @@
+{
+  "$comment": "Canonical default chart of accounts. Read by backend/app/seed.py and imported by frontend/src/db/seed.ts, so both sides create identical rows. Ids are deterministic (acc-<code>) — that is what lets an offline client and a fresh server converge instead of duplicating the tree.",
+  "version": 1,
+  "accounts": [
+    { "code": "1000", "name_en": "Assets", "name_ar": "الأصول", "type": "asset", "parent": null, "is_group": true },
+    { "code": "1100", "name_en": "Current assets", "name_ar": "الأصول المتداولة", "type": "asset", "parent": "1000", "is_group": true },
+    { "code": "1110", "name_en": "Cash on hand", "name_ar": "الصندوق", "type": "asset", "parent": "1100", "is_cash": true },
+    { "code": "1120", "name_en": "Bank account", "name_ar": "البنك", "type": "asset", "parent": "1100", "is_cash": true },
+    { "code": "1130", "name_en": "Accounts receivable", "name_ar": "الذمم المدينة (العملاء)", "type": "asset", "parent": "1100", "role": "receivable" },
+    { "code": "1140", "name_en": "Inventory", "name_ar": "المخزون", "type": "asset", "parent": "1100" },
+    { "code": "1150", "name_en": "Tax receivable", "name_ar": "ضريبة مشتريات (مستحقة لنا)", "type": "asset", "parent": "1100", "role": "tax_receivable" },
+    { "code": "1160", "name_en": "Prepaid expenses", "name_ar": "مصروفات مدفوعة مقدمًا", "type": "asset", "parent": "1100" },
+
+    { "code": "1200", "name_en": "Fixed assets", "name_ar": "الأصول الثابتة", "type": "asset", "parent": "1000", "is_group": true },
+    { "code": "1210", "name_en": "Equipment", "name_ar": "المعدات", "type": "asset", "parent": "1200" },
+    { "code": "1220", "name_en": "Furniture and fixtures", "name_ar": "الأثاث والتجهيزات", "type": "asset", "parent": "1200" },
+    { "code": "1230", "name_en": "Vehicles", "name_ar": "السيارات", "type": "asset", "parent": "1200" },
+    { "code": "1290", "name_en": "Accumulated depreciation", "name_ar": "مجمع الإهلاك", "type": "asset", "parent": "1200" },
+
+    { "code": "2000", "name_en": "Liabilities", "name_ar": "الالتزامات", "type": "liability", "parent": null, "is_group": true },
+    { "code": "2100", "name_en": "Current liabilities", "name_ar": "الالتزامات المتداولة", "type": "liability", "parent": "2000", "is_group": true },
+    { "code": "2110", "name_en": "Accounts payable", "name_ar": "الذمم الدائنة (الموردون)", "type": "liability", "parent": "2100", "role": "payable" },
+    { "code": "2120", "name_en": "Tax payable", "name_ar": "ضريبة مبيعات (مستحقة علينا)", "type": "liability", "parent": "2100", "role": "tax_payable" },
+    { "code": "2130", "name_en": "Salaries payable", "name_ar": "رواتب مستحقة", "type": "liability", "parent": "2100" },
+    { "code": "2140", "name_en": "Customer deposits", "name_ar": "دفعات مقدمة من العملاء", "type": "liability", "parent": "2100" },
+    { "code": "2200", "name_en": "Long-term liabilities", "name_ar": "الالتزامات طويلة الأجل", "type": "liability", "parent": "2000", "is_group": true },
+    { "code": "2210", "name_en": "Loans payable", "name_ar": "قروض", "type": "liability", "parent": "2200" },
+
+    { "code": "3000", "name_en": "Equity", "name_ar": "حقوق الملكية", "type": "equity", "parent": null, "is_group": true },
+    { "code": "3100", "name_en": "Capital", "name_ar": "رأس المال", "type": "equity", "parent": "3000" },
+    { "code": "3200", "name_en": "Owner drawings", "name_ar": "مسحوبات المالك", "type": "equity", "parent": "3000" },
+    { "code": "3300", "name_en": "Retained earnings", "name_ar": "الأرباح المحتجزة", "type": "equity", "parent": "3000" },
+    { "code": "3900", "name_en": "Opening balance equity", "name_ar": "حقوق ملكية الأرصدة الافتتاحية", "type": "equity", "parent": "3000", "role": "opening_equity" },
+
+    { "code": "4000", "name_en": "Income", "name_ar": "الإيرادات", "type": "income", "parent": null, "is_group": true },
+    { "code": "4100", "name_en": "Sales revenue", "name_ar": "إيرادات المبيعات", "type": "income", "parent": "4000", "role": "sales" },
+    { "code": "4200", "name_en": "Service revenue", "name_ar": "إيرادات الخدمات", "type": "income", "parent": "4000" },
+    { "code": "4300", "name_en": "Other income", "name_ar": "إيرادات أخرى", "type": "income", "parent": "4000" },
+
+    { "code": "5000", "name_en": "Expenses", "name_ar": "المصروفات", "type": "expense", "parent": null, "is_group": true },
+    { "code": "5100", "name_en": "Cost of goods sold", "name_ar": "تكلفة البضاعة المباعة", "type": "expense", "parent": "5000", "role": "cogs" },
+    { "code": "5200", "name_en": "Salaries and wages", "name_ar": "الرواتب والأجور", "type": "expense", "parent": "5000" },
+    { "code": "5300", "name_en": "Rent", "name_ar": "الإيجار", "type": "expense", "parent": "5000" },
+    { "code": "5400", "name_en": "Utilities", "name_ar": "الكهرباء والماء والاتصالات", "type": "expense", "parent": "5000" },
+    { "code": "5500", "name_en": "Marketing and advertising", "name_ar": "التسويق والإعلان", "type": "expense", "parent": "5000" },
+    { "code": "5600", "name_en": "Transportation and shipping", "name_ar": "النقل والشحن", "type": "expense", "parent": "5000" },
+    { "code": "5700", "name_en": "Bank charges", "name_ar": "عمولات ومصاريف بنكية", "type": "expense", "parent": "5000" },
+    { "code": "5800", "name_en": "Depreciation", "name_ar": "الإهلاك", "type": "expense", "parent": "5000" },
+    { "code": "5900", "name_en": "Other expenses", "name_ar": "مصروفات أخرى", "type": "expense", "parent": "5000" }
+  ]
+}

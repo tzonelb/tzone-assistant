@@ -1,0 +1,14 @@
+{
+  "name": "T-ZONE Accounting",
+  "short_name": "Accounting",
+  "description": "Offline-first double-entry accounting.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
