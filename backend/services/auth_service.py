@@ -29,6 +29,10 @@ logger = logging.getLogger(__name__)
 
 security = HTTPBearer(auto_error=False)
 
+# A token is minted for exactly one of these and is refused everywhere else.
+COMPANY_SCOPE = "company"
+PLATFORM_SCOPE = "platform"
+
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -285,6 +289,62 @@ class AuthService:
         )
         return safe_user
 
+    def authenticate_platform(
+        self,
+        *,
+        email: str,
+        password: str,
+    ) -> dict[str, Any] | None:
+        """Verify a platform administrator, with no company involved.
+
+        Deliberately asks for no workspace code: a platform session never opens
+        a company database, so there is nothing for a code to unlock. That is
+        the whole point of the split — the operator can run the platform without
+        being able to read what customers wrote.
+        """
+        normalized_email = self.normalize_email(email)
+
+        with database_manager.control() as conn:
+            user_row = conn.execute(
+                "SELECT * FROM users WHERE LOWER(email) = ? LIMIT 1",
+                (normalized_email,),
+            ).fetchone()
+
+            if not user_row:
+                self._dummy_password_check()
+                logger.info("Platform login rejected: unknown email")
+                return None
+
+            user_data = dict(user_row)
+
+            if user_data.get("status") != "active":
+                self._dummy_password_check()
+                return None
+
+            if not self.verify_password(password, user_data.get("password_hash")):
+                logger.info(
+                    "Platform login rejected: bad password user id=%s",
+                    user_data["id"],
+                )
+                return None
+
+            if not user_data.get("is_super_admin"):
+                logger.warning(
+                    "Platform login rejected: user id=%s is not a platform "
+                    "administrator",
+                    user_data["id"],
+                )
+                return None
+
+            conn.execute(
+                "UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?",
+                (utc_now_iso(), utc_now_iso(), user_data["id"]),
+            )
+            conn.commit()
+
+        logger.info("Platform login succeeded user id=%s", user_data["id"])
+        return self.sanitize_user(user_data)
+
     # ------------------------------------------------------------------
     # Sessions
     # ------------------------------------------------------------------
@@ -295,7 +355,16 @@ class AuthService:
         ip_address: str | None = None,
         user_agent: str | None = None,
         company_id: int | None = None,
+        scope: str = COMPANY_SCOPE,
     ) -> dict[str, Any]:
+        """Mint a session token bound to one scope.
+
+        A company session reaches that company's data and nothing else. A
+        platform session administers the platform and can never open a company
+        database. Keeping them as separate tokens means a stolen platform token
+        cannot read customer conversations, and a company token cannot suspend a
+        company.
+        """
         raw_token = secrets.token_urlsafe(48)
         expires_at = utc_now() + timedelta(
             minutes=config.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -305,14 +374,15 @@ class AuthService:
             conn.execute(
                 """
                 INSERT INTO auth_sessions (
-                    user_id, company_id, token_hash, expires_at,
+                    user_id, company_id, scope, token_hash, expires_at,
                     ip_address, user_agent, created_at, last_used_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user_id,
                     company_id,
+                    scope,
                     self.hash_token(raw_token),
                     expires_at.isoformat(),
                     ip_address,
@@ -326,6 +396,7 @@ class AuthService:
         return {
             "access_token": raw_token,
             "token_type": "bearer",
+            "scope": scope,
             "expires_at": expires_at.isoformat(),
             "expires_in": config.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         }
@@ -342,6 +413,7 @@ class AuthService:
                     auth_sessions.expires_at,
                     auth_sessions.revoked_at,
                     auth_sessions.company_id AS active_company_id,
+                    auth_sessions.scope AS session_scope,
                     users.*
                 FROM auth_sessions
                 JOIN users ON users.id = auth_sessions.user_id
@@ -374,7 +446,9 @@ class AuthService:
             )
             conn.commit()
 
-            return self.sanitize_user(data)
+            safe_user = self.sanitize_user(data)
+            safe_user["session_scope"] = data.get("session_scope") or COMPANY_SCOPE
+            return safe_user
 
     def revoke_token(self, raw_token: str) -> bool:
         with database_manager.control() as conn:
@@ -465,16 +539,42 @@ class AuthService:
         """
         active_company_id = current_user.get("active_company_id")
 
-        if current_user.get("is_super_admin"):
-            resolved = requested_company_id or active_company_id
+        # A platform session has no company by construction, and must never
+        # acquire one: that is what stops the operator reading customer data.
+        if current_user.get("session_scope") == PLATFORM_SCOPE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "A platform session cannot read company data. Sign in to "
+                    "the company with its workspace code."
+                ),
+            )
 
-            if resolved is None:
+        # A super admin gets no blanket reach across companies. Holding the
+        # master key lets the server open any database unattended, but a person
+        # still has to prove the company's workspace code at login — otherwise
+        # the encryption protects customers from a stolen disk and from nobody
+        # else.
+        if current_user.get("is_super_admin"):
+            if requested_company_id is not None and (
+                active_company_id is None
+                or int(requested_company_id) != int(active_company_id)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        "Sign in to that company with its workspace code to "
+                        "open its data."
+                    ),
+                )
+
+            if active_company_id is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Select a company for this request.",
                 )
 
-            return int(resolved)
+            return int(active_company_id)
 
         companies = self.get_user_companies(current_user["id"])
 
@@ -749,6 +849,60 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired or token is invalid.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # A platform token administers the platform; it must not be usable as a
+    # company token, or the split would be a naming convention rather than a
+    # boundary.
+    if user.get("session_scope") == PLATFORM_SCOPE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This is a platform administration session. Sign in to a "
+                "company to use the workspace."
+            ),
+        )
+
+    user["_raw_token"] = credentials.credentials
+    return user
+
+
+async def get_platform_admin(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict[str, Any]:
+    """Authenticate a platform administrator for the control plane.
+
+    Three conditions, all required: a valid token, minted in the platform
+    scope, belonging to a user who is still a super admin. Checking the flag
+    again here means revoking someone's platform rights takes effect on their
+    next request rather than when their token happens to expire.
+    """
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = auth_service.get_user_from_token(credentials.credentials)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or token is invalid.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user.get("session_scope") != PLATFORM_SCOPE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sign in to the platform console to perform this action.",
+        )
+
+    if not bool(user.get("is_super_admin")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrator access required.",
         )
 
     user["_raw_token"] = credentials.credentials

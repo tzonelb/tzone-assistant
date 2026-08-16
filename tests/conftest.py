@@ -69,7 +69,61 @@ def platform(tmp_path, master_key, monkeypatch):
         company["workspace_code"] = code
         company["path"] = manager.tenant_path(company["id"])
 
+    _seed_roles(manager, [company["id"] for company in companies.values()])
+
     return {"manager": manager, "companies": companies}
+
+
+def _seed_roles(manager, company_ids: list[int]) -> None:
+    """Give each test company the roles a provisioned company really has.
+
+    Mirrors what `tools/manage_platform.py create-company` does. Without it a
+    test company has no roles, so assigning anyone to it fails — and a fixture
+    that cannot model a real company tests the wrong thing.
+    """
+    from database.manager import utc_now_iso
+    from database.schema_control import DEFAULT_ROLES
+
+    now = utc_now_iso()
+
+    with manager.control() as conn:
+        permission_ids = {
+            row["code"]: row["id"]
+            for row in conn.execute("SELECT id, code FROM permissions").fetchall()
+        }
+
+        for company_id in company_ids:
+            for name, code, description, permission_codes in DEFAULT_ROLES:
+                cursor = conn.execute(
+                    """
+                    INSERT OR IGNORE INTO roles (
+                        company_id, name, code, description, is_system, created_at
+                    )
+                    VALUES (?, ?, ?, ?, 1, ?)
+                    """,
+                    (company_id, name, code, description, now),
+                )
+
+                role_id = cursor.lastrowid
+
+                if not role_id:
+                    continue
+
+                conn.executemany(
+                    """
+                    INSERT OR IGNORE INTO role_permissions (
+                        role_id, permission_id, created_at
+                    )
+                    VALUES (?, ?, ?)
+                    """,
+                    [
+                        (role_id, permission_ids[permission_code], now)
+                        for permission_code in permission_codes
+                        if permission_code in permission_ids
+                    ],
+                )
+
+        conn.commit()
 
 
 @pytest.fixture()

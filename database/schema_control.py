@@ -142,6 +142,7 @@ CONTROL_TABLES: tuple[str, ...] = (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         company_id INTEGER,
+        scope TEXT NOT NULL DEFAULT 'company',
         token_hash TEXT NOT NULL UNIQUE,
         expires_at TEXT NOT NULL,
         revoked_at TEXT,
@@ -191,6 +192,22 @@ CONTROL_TABLES: tuple[str, ...] = (
         updated_at TEXT NOT NULL,
         FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
         FOREIGN KEY(branch_id) REFERENCES branches(id) ON DELETE SET NULL
+    )
+    """,
+    # What the Super Admin decides a company may see and use. Control-plane
+    # because the customer app reads it at sign-in, before any tenant database
+    # is opened, and because a company must not be able to grant itself a
+    # module its plan does not include.
+    """
+    CREATE TABLE IF NOT EXISTS company_platform_config (
+        company_id INTEGER PRIMARY KEY,
+        modules_json TEXT NOT NULL DEFAULT '{}',
+        branding_json TEXT NOT NULL DEFAULT '{}',
+        layout_json TEXT NOT NULL DEFAULT '{}',
+        updated_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
     )
     """,
     """
@@ -243,6 +260,16 @@ CONTROL_TABLES: tuple[str, ...] = (
 )
 
 
+# Columns added to a control table after its first release. CREATE TABLE IF NOT
+# EXISTS never adds a column to a table that already exists, so an installation
+# from an earlier release would be missing them and fail at query time.
+CONTROL_COLUMNS: dict[str, dict[str, str]] = {
+    "auth_sessions": {
+        "scope": "TEXT NOT NULL DEFAULT 'company'",
+    },
+}
+
+
 CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_companies_workspace ON companies(workspace_id)",
     "CREATE INDEX IF NOT EXISTS idx_branches_company ON branches(company_id)",
@@ -250,6 +277,7 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_company_users_company ON company_users(company_id)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_token ON auth_sessions(token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_auth_sessions_scope ON auth_sessions(scope, user_id)",
     "CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_company ON channel_accounts(company_id)",

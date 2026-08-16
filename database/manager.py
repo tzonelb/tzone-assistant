@@ -32,6 +32,7 @@ from sqlcipher3 import dbapi2 as sqlcipher
 from backend.security import keyring
 from config.settings import config
 from database.schema_control import (
+    CONTROL_COLUMNS,
     CONTROL_INDEXES,
     CONTROL_TABLES,
     DEFAULT_PERMISSIONS,
@@ -236,6 +237,33 @@ class DatabaseManager:
         try:
             for statement in CONTROL_TABLES:
                 connection.execute(statement)
+
+            # Columns before indexes: an index over a column an upgrade adds
+            # cannot be built until the column exists.
+            for table_name, columns in CONTROL_COLUMNS.items():
+                existing = {
+                    str(row["name"])
+                    for row in connection.execute(
+                        f"PRAGMA table_info({table_name})"
+                    ).fetchall()
+                }
+
+                if not existing:
+                    continue
+
+                for column_name, definition in columns.items():
+                    if column_name in existing:
+                        continue
+
+                    connection.execute(
+                        f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}"
+                    )
+                    logger.info(
+                        "Upgraded control database: added %s.%s",
+                        table_name,
+                        column_name,
+                    )
+
             for statement in CONTROL_INDEXES:
                 connection.execute(statement)
 
