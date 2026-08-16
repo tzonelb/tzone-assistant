@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
+    analytics,
     auth,
     channels,
     company_settings,
@@ -25,6 +26,7 @@ from backend.api.routes import (
     dashboard,
     developer_center,
     health,
+    knowledge,
     manual_messages,
     notifications,
     roles,
@@ -166,11 +168,13 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(dashboard.router)
+app.include_router(analytics.router)
 app.include_router(conversations.router)
 app.include_router(manual_messages.router)
 app.include_router(conversation_tags.router)
 app.include_router(company_settings.router)
 app.include_router(customers.router)
+app.include_router(knowledge.router)
 app.include_router(channels.router)
 app.include_router(notifications.router)
 app.include_router(roles.router)

@@ -271,6 +271,7 @@ CONTROL_INDEXES: tuple[str, ...] = (
 # promised access control the backend never applied.
 DEFAULT_PERMISSIONS: tuple[tuple[str, str, str], ...] = (
     ("dashboard.view", "View Dashboard", "Open the dashboard and see company totals."),
+    ("analytics.view", "View Analytics", "See channel, assistant and team performance reports."),
     ("conversations.view", "View Conversations", "Open the shared inbox and read conversations."),
     ("conversations.reply", "Reply to Conversations", "Take over a conversation and send replies."),
     ("conversations.manage", "Manage Conversations", "Reassign, tag, archive and close any conversation."),
@@ -299,6 +300,7 @@ DEFAULT_ROLES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
         "Runs day-to-day operations and the team.",
         (
             "dashboard.view",
+            "analytics.view",
             "conversations.view",
             "conversations.reply",
             "conversations.manage",
@@ -330,6 +332,7 @@ DEFAULT_ROLES: tuple[tuple[str, str, str, tuple[str, ...]], ...] = (
         "Read-only access for reporting.",
         (
             "dashboard.view",
+            "analytics.view",
             "conversations.view",
             "customers.view",
             "knowledge.view",
