@@ -421,6 +421,69 @@ directory.
 
 ## Routine operations
 
+### Rotating the Meta / WhatsApp app secret
+
+The app secret verifies the signature on every inbound webhook. Rotating it
+naively drops customer messages: Meta signs each delivery with whichever secret
+was current when it queued the delivery, and it retries for hours after an
+outage. So the platform accepts two secrets at once during a rotation.
+
+1. Generate the new secret in the Meta app dashboard (Settings > Basic).
+2. On the server, move the current value down and put the new one in place:
+
+   ```
+   META_APP_SECRET_PREVIOUS=<the old value>
+   META_APP_SECRET=<the new value>
+   ```
+
+3. `sudo systemctl restart tzone-api`.
+4. Watch the log. Each verified webhook records which secret matched. When
+   nothing has matched `previous` for longer than Meta's retry window — a few
+   hours is comfortable — the overlap has drained.
+5. Clear `META_APP_SECRET_PREVIOUS` and restart again.
+
+Set `WHATSAPP_APP_SECRET_PREVIOUS` the same way only if WhatsApp is registered
+under a different Meta app; otherwise it follows the Meta values.
+
+A company large enough to bring its own Meta app can store its own secret
+against its channel account, which is tried after both platform secrets. Most
+never will.
+
+### Unlocking an account
+
+Five failed sign-ins lock an account for thirty minutes. It does not have to be
+waited out — anyone at that company holding `users.manage` can send a
+password-reset link from the roles screen, which unlocks it immediately.
+
+Two cases need the server instead:
+
+* **Email is not configured**, so no link can be sent. The endpoint refuses and
+  says so rather than reporting a success nobody will receive.
+* **A platform administrator locked themselves out.** Nobody is above them, so
+  no console can help.
+
+```
+python -m tools.manage_platform unlock-user --email someone@example.com
+python -m tools.manage_platform reset-password --email someone@example.com --password '<new password>'
+```
+
+`reset-password` clears the lock, ends every session for that account and
+requires a change at next sign-in. It grants nothing — use it in preference to
+`create-super-admin`, which sets platform administrator rights as a side effect.
+
+### Rate limits
+
+nginx refuses excess traffic before it reaches the application: sign-in at
+10/minute per address, webhooks at 300/minute, everything else at 600/minute,
+with 20 concurrent connections per address. The zones are declared at the top of
+`deploy/nginx.conf` with the reasoning for each number.
+
+Raise a limit by editing the `rate=` on its zone. Do not remove the login zone —
+it is the cheapest defence there is against credential guessing, and the
+application-side account lock is deliberately narrower in scope.
+
+### Day-to-day
+
 | Task | Command |
 | --- | --- |
 | Restart the API | `sudo systemctl restart tzone-api` |

@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from sqlcipher3 import dbapi2 as sqlcipher
+
 from backend.api.schemas.roles import (
     RoleCreateRequest,
     RoleUpdateRequest,
@@ -14,7 +16,7 @@ from backend.services.auth_service import (
     require_permission,
 )
 from config.settings import config
-from database.manager import database_manager
+from database.manager import database_manager, utc_now_iso
 
 
 router = APIRouter(prefix="/api/admin/access", tags=["Roles and Permissions"])
@@ -118,11 +120,38 @@ def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_cur
     with database_manager.control() as conn:
         try:
             cursor = conn.execute("""
-                INSERT INTO roles (company_id, name, code, description, is_system)
-                VALUES (?, ?, ?, ?, 0)
-            """, (company_id, payload.name.strip(), payload.code.strip().lower(), payload.description))
-        except Exception as exc:
-            raise HTTPException(status_code=409, detail="A role with this code already exists.") from exc
+                INSERT INTO roles (
+                    company_id, name, code, description, is_system, created_at
+                )
+                VALUES (?, ?, ?, ?, 0, ?)
+            """, (
+                company_id,
+                payload.name.strip(),
+                payload.code.strip().lower(),
+                payload.description,
+                utc_now_iso(),
+            ))
+        # `sqlcipher.IntegrityError`, not `sqlite3.IntegrityError` — these
+        # connections come from the SQLCipher driver and its exception classes
+        # are a separate hierarchy. `database/manager.py` catches
+        # `sqlcipher.Error` for the same reason.
+        #
+        # Narrow, and it has to be. This was `except Exception` reporting
+        # "A role with this code already exists", which turned every failure
+        # into that one sentence — including the one that was actually
+        # happening: the INSERT omitted `created_at`, which is NOT NULL with no
+        # default, so creating a role raised IntegrityError every single time
+        # and answered with a plausible lie about duplicate codes. Catching
+        # broadly is what let a completely broken button look like a validation
+        # message for as long as it did.
+        except sqlcipher.IntegrityError as exc:
+            if "UNIQUE" not in str(exc).upper():
+                raise
+
+            raise HTTPException(
+                status_code=409,
+                detail="A role with this code already exists.",
+            ) from exc
 
         role_id = cursor.lastrowid
         _set_role_permissions(conn, role_id, payload.permission_codes)
@@ -131,6 +160,17 @@ def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_cur
 
 
 def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> None:
+    """Replace a role's permissions with exactly the codes given.
+
+    `created_at` is supplied explicitly. It is NOT NULL with no default, and
+    omitting it here was worse than the same omission elsewhere in this file:
+    `INSERT OR IGNORE` suppresses a NOT NULL violation just as it suppresses a
+    duplicate, so every permission was silently discarded. Roles were created
+    and edited successfully, reported success, and came back holding nothing.
+
+    The OR IGNORE stays, for the duplicate it was meant for — a code listed
+    twice in the request.
+    """
     conn.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
     codes = sorted(set(permission_codes))
     if not codes:
@@ -139,9 +179,13 @@ def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> No
     permission_rows = conn.execute(
         f"SELECT id FROM permissions WHERE code IN ({placeholders})", codes
     ).fetchall()
+    now = utc_now_iso()
     conn.executemany(
-        "INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)",
-        [(role_id, row["id"]) for row in permission_rows],
+        """
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_id, created_at)
+        VALUES (?, ?, ?)
+        """,
+        [(role_id, row["id"], now) for row in permission_rows],
     )
 
 
@@ -186,9 +230,11 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
 
     with database_manager.control() as conn:
         conn.execute("""
-            INSERT INTO company_users (company_id, user_id, role_id, branch_id, status)
-            VALUES (?, ?, ?, ?, 'active')
-        """, (company_id, user_id, payload.role_id, payload.branch_id))
+            INSERT INTO company_users (
+                company_id, user_id, role_id, branch_id, status, created_at
+            )
+            VALUES (?, ?, ?, ?, 'active', ?)
+        """, (company_id, user_id, payload.role_id, payload.branch_id, utc_now_iso()))
         conn.commit()
     return {"success": True, "user_id": user_id}
 

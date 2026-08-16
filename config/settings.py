@@ -161,6 +161,55 @@ class AppConfig:
     )
     ALLOW_UNSIGNED_WEBHOOKS: bool = _env_bool("ALLOW_UNSIGNED_WEBHOOKS", False)
 
+    # The previous app secret, kept live during a rotation. Meta signs with
+    # whichever secret was current when it queued the delivery, so without an
+    # overlap every rotation drops the events already in flight.
+    META_APP_SECRET_PREVIOUS: str = os.getenv("META_APP_SECRET_PREVIOUS", "")
+    WHATSAPP_APP_SECRET_PREVIOUS: str = os.getenv(
+        "WHATSAPP_APP_SECRET_PREVIOUS",
+        os.getenv("META_APP_SECRET_PREVIOUS", ""),
+    )
+
+    # ------------------------------------------------------------------
+    # Hard platform ceilings
+    # ------------------------------------------------------------------
+    # One set of numbers for everybody, and deliberately not for sale. These
+    # protect the process itself, so no plan may raise them — a subscription
+    # that could buy a value which stalls the server is not a subscription
+    # tier, it is a defect. Commercial per-plan quotas sit *inside* these.
+
+    # Bigger than any genuine batch and far smaller than nginx's 25 MB, which
+    # has to cover customer media uploads too. Applied in the application so a
+    # deployment that never sees nginx is still bounded.
+    WEBHOOK_MAX_BODY_BYTES: int = int(
+        os.getenv("WEBHOOK_MAX_BODY_BYTES", str(5 * 1024 * 1024))
+    )
+
+    # Meta batches deliveries in tens. A single signed body was otherwise free
+    # to carry hundreds of thousands of events, each costing seven database
+    # writes and possibly an outbound Graph call.
+    WEBHOOK_MAX_EVENTS: int = int(os.getenv("WEBHOOK_MAX_EVENTS", "1000"))
+
+    # A pending batch holds the messages one customer sent while the assistant
+    # waited for them to finish typing. Past this the batch is delivered as it
+    # stands rather than growing without limit.
+    PENDING_REPLY_MAX_MESSAGES: int = int(
+        os.getenv("PENDING_REPLY_MAX_MESSAGES", "50")
+    )
+
+    # Every new message pushes the delivery time out, so a sustained flood at
+    # one customer kept its batch permanently deferred. This is the ceiling on
+    # that deferral: past it the batch goes regardless of new arrivals.
+    PENDING_REPLY_MAX_DEFERRAL_SECONDS: int = int(
+        os.getenv("PENDING_REPLY_MAX_DEFERRAL_SECONDS", "300")
+    )
+
+    # The customer-profile cache had no bound at all, so distinct sender ids
+    # grew it until the process ran out of memory.
+    PROFILE_CACHE_MAX_ENTRIES: int = int(
+        os.getenv("PROFILE_CACHE_MAX_ENTRIES", "10000")
+    )
+
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
 
     WHATSAPP_VERIFY_TOKEN: str = os.getenv("WHATSAPP_VERIFY_TOKEN", "")
