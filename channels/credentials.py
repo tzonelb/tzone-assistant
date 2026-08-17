@@ -38,21 +38,36 @@ def _single_company_fallback(company_id: int) -> bool:
         return False
 
 
-def resolve(company_id: int, channel: str) -> dict[str, Any]:
+def resolve(
+    company_id: int, channel: str, account_id: int | None = None
+) -> dict[str, Any]:
     """Return sending credentials for one company on one channel.
 
     Raises :class:`MissingChannelCredentials` rather than returning a partially
     filled result, so a caller can never send with someone else's token.
+
+    ``account_id`` names one of the company's own accounts, for a company that
+    has connected more than one on the same channel. When it is given and does
+    not match an active account of this company on this channel, this raises
+    rather than falling back to another account: the caller asked for a
+    specific page, and quietly publishing to a different one is the failure
+    being fixed, not an acceptable degradation.
     """
     company_id = int(company_id)
     normalized = str(channel or "").strip().lower()
 
     account = channel_account_service.credentials_for(
-        company_id=company_id, channel=normalized
+        company_id=company_id, channel=normalized, account_id=account_id
     )
 
     if account and account.get("access_token"):
         return account
+
+    if account_id:
+        raise MissingChannelCredentials(
+            f"Company {company_id} has no active {normalized} account with id "
+            f"{account_id} and a valid access token."
+        )
 
     if not _single_company_fallback(company_id):
         raise MissingChannelCredentials(

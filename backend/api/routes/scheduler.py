@@ -9,7 +9,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, field_validator
 
 from backend.services.auth_service import auth_service, require_permission
-from backend.services.scheduler_service import STATUSES, scheduler_service
+from backend.services.scheduler_service import (
+    STATUSES,
+    SchedulerError,
+    scheduler_service,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -101,16 +105,21 @@ def create_scheduled_post(
 ):
     company_id = auth_service.resolve_company_id(current_user)
 
-    post = scheduler_service.create_post(
-        company_id=company_id,
-        channel=payload.channel,
-        body=payload.body,
-        scheduled_for=payload.scheduled_for,
-        media_url=payload.media_url,
-        link_url=payload.link_url,
-        channel_account_id=payload.channel_account_id,
-        created_by_user_id=int(current_user["id"]),
-    )
+    # A refused account is the caller naming a page this company does not
+    # have, which is a bad request rather than a server fault.
+    try:
+        post = scheduler_service.create_post(
+            company_id=company_id,
+            channel=payload.channel,
+            body=payload.body,
+            scheduled_for=payload.scheduled_for,
+            media_url=payload.media_url,
+            link_url=payload.link_url,
+            channel_account_id=payload.channel_account_id,
+            created_by_user_id=int(current_user["id"]),
+        )
+    except SchedulerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"status": "created", "post": post}
 
@@ -137,11 +146,14 @@ def update_scheduled_post(
 ):
     company_id = auth_service.resolve_company_id(current_user)
 
-    post = scheduler_service.update_post(
-        company_id=company_id,
-        post_id=post_id,
-        values=payload.model_dump(exclude_unset=True),
-    )
+    try:
+        post = scheduler_service.update_post(
+            company_id=company_id,
+            post_id=post_id,
+            values=payload.model_dump(exclude_unset=True),
+        )
+    except SchedulerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not post:
         raise HTTPException(

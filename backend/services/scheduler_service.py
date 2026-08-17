@@ -14,6 +14,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from backend.services.channel_account_service import channel_account_service
 from backend.services.work_index_service import (
     KIND_SCHEDULED_POST,
     work_index_service,
@@ -48,10 +49,52 @@ def _iso_in(seconds: float) -> str:
     return (utc_now() + timedelta(seconds=seconds)).isoformat()
 
 
+class SchedulerError(ValueError):
+    """A post that cannot be scheduled as asked."""
+
+
 class SchedulerService:
     # ------------------------------------------------------------------
     # Authoring
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _resolve_account_id(company_id: int, channel: str, value: Any) -> int | None:
+        """Check the account this post will be published through.
+
+        The post lives in the company's own database and the account lives in
+        the control database, so nothing enforces the link. Ids are global
+        there, which means an id belonging to another company is a real row —
+        and now that the publisher honours this column, an unchecked value
+        would be an instruction to post through another company's page, with
+        that company's token.
+
+        The channel is checked with it. A post on `messenger` pointed at a
+        `whatsapp` account is not a leak, but it is a post that can never go
+        out, and finding that at publishing time means finding it after the
+        moment it was supposed to be published.
+        """
+        if value in (None, "", 0):
+            return None
+
+        try:
+            account_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise SchedulerError("Channel account id must be a number.") from exc
+
+        account = channel_account_service.get_account(int(company_id), account_id)
+
+        if not account:
+            raise SchedulerError(
+                "That channel account does not belong to this company."
+            )
+
+        if str(account.get("channel", "")).lower() != str(channel or "").lower():
+            raise SchedulerError(
+                "That channel account is not on the channel this post is for."
+            )
+
+        return account_id
 
     def create_post(
         self,
@@ -67,6 +110,10 @@ class SchedulerService:
     ) -> dict[str, Any]:
         company_id = int(company_id)
         now = utc_now_iso()
+        channel = str(channel).lower()
+        channel_account_id = self._resolve_account_id(
+            company_id, channel, channel_account_id
+        )
 
         with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
@@ -80,7 +127,7 @@ class SchedulerService:
                 """,
                 (
                     company_id,
-                    str(channel).lower(),
+                    channel,
                     channel_account_id,
                     body,
                     media_url,
@@ -111,6 +158,11 @@ class SchedulerService:
         company_id = int(company_id)
         editable = ("body", "media_url", "link_url", "scheduled_for", "channel")
 
+        existing = self.get_post(company_id=company_id, post_id=post_id)
+
+        if not existing:
+            return None
+
         assignments: list[str] = []
         params: list[Any] = []
 
@@ -119,8 +171,30 @@ class SchedulerService:
                 assignments.append(f"{column} = ?")
                 params.append(values[column])
 
+        # The account is validated against the channel the post will actually
+        # go out on, which may be the one being set in this same edit.
+        #
+        # `channel` is editable and `channel_account_id` was not, so moving a
+        # post from Messenger to WhatsApp left it pointing at a Messenger page.
+        # Nothing caught it until the publisher tried to send, which is after
+        # the moment the post was meant to go out. A channel change with no new
+        # account clears the pointer instead: the page the company picked does
+        # not exist on the channel it just moved to.
+        channel = str(values.get("channel", existing["channel"]) or "").lower()
+
+        if "channel_account_id" in values:
+            assignments.append("channel_account_id = ?")
+            params.append(
+                self._resolve_account_id(
+                    company_id, channel, values["channel_account_id"]
+                )
+            )
+        elif "channel" in values and channel != str(existing["channel"] or "").lower():
+            assignments.append("channel_account_id = ?")
+            params.append(None)
+
         if not assignments:
-            return self.get_post(company_id=company_id, post_id=post_id)
+            return existing
 
         assignments.append("updated_at = ?")
         params.extend([utc_now_iso(), int(post_id), company_id])

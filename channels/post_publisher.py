@@ -29,16 +29,24 @@ def publish_post(
     body: str,
     media_url: str | None = None,
     link_url: str | None = None,
+    channel_account_id: int | None = None,
 ) -> dict[str, Any]:
     """Publish and return a normalised result. Never raises.
 
     The caller records the outcome and retries, so an exception escaping here
     would only turn a retryable failure into a lost post.
+
+    ``channel_account_id`` is the account the post was scheduled against. It
+    was stored on the row from the day the scheduler shipped and never read:
+    the post went out through whichever account `resolve` picked, which is the
+    lowest id. For a company with one page that is the same page. For a company
+    with two, it published to the wrong audience — and unlike a setting that
+    saves and does nothing, the result was public.
     """
     normalized_channel = str(channel or "messenger").strip().lower()
 
     try:
-        credentials = resolve(company_id, normalized_channel)
+        credentials = resolve(company_id, normalized_channel, channel_account_id)
     except MissingChannelCredentials as exc:
         logger.error("Cannot publish for company %s: %s", company_id, exc)
         return {"ok": False, "reason": "missing_credentials", "error": str(exc)}
@@ -111,6 +119,7 @@ def publish_due_posts(company_id: int) -> int:
             body=post["body"],
             media_url=post.get("media_url"),
             link_url=post.get("link_url"),
+            channel_account_id=post.get("channel_account_id"),
         )
 
         if result.get("ok"):

@@ -574,26 +574,48 @@ class ChannelAccountService:
         *,
         company_id: int,
         channel: str,
+        account_id: int | None = None,
     ) -> dict[str, Any] | None:
         """Return the sending credentials for a company's channel.
 
         Returns ``None`` when the company has no active account on that channel,
         which the caller must treat as "cannot send" — never as "fall back to
         someone else's token".
+
+        ``account_id`` names *which* account, for a company that has connected
+        more than one on the same channel. Without it the lowest id wins, which
+        is fine for a reply — that goes back out on the account the message
+        arrived on — but wrong for a scheduled post, where the company picked a
+        page and the post went to whichever one happened to be connected first.
+
+        The id is matched together with the company, the channel and the active
+        status rather than on its own, so an id belonging to another company
+        selects nothing and the caller is told it cannot send.
         """
         company_id = int(company_id)
         normalized = str(channel or "").strip().lower()
 
         with database_manager.control() as conn:
-            row = conn.execute(
-                """
-                SELECT * FROM channel_accounts
-                WHERE company_id = ? AND channel = ? AND status = 'active'
-                ORDER BY id ASC
-                LIMIT 1
-                """,
-                (company_id, normalized),
-            ).fetchone()
+            if account_id:
+                row = conn.execute(
+                    """
+                    SELECT * FROM channel_accounts
+                    WHERE id = ? AND company_id = ? AND channel = ?
+                      AND status = 'active'
+                    LIMIT 1
+                    """,
+                    (int(account_id), company_id, normalized),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    """
+                    SELECT * FROM channel_accounts
+                    WHERE company_id = ? AND channel = ? AND status = 'active'
+                    ORDER BY id ASC
+                    LIMIT 1
+                    """,
+                    (company_id, normalized),
+                ).fetchone()
 
         if not row:
             return None
