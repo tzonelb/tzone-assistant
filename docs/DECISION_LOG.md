@@ -541,3 +541,45 @@ element. The three exported token functions stayed — a dozen screens import
 them — but now answer whether a session exists rather than what it is, and they
 also clear the old `localStorage` keys, since leaving one would strand a real
 token in storage indefinitely.
+
+## D-020 — A value in scope that nobody passed
+
+Two defects of one shape, both found by sweeping the source rather than by
+testing behaviour, and both fixed by threading a value that was already there.
+
+**The welcome was always Messenger's.** `build_main_menu_response` takes a
+`channel`, defaulting to messenger for the preview. Five call sites in
+`core/engine.py` had `request.channel` in scope and passed none of them — so a
+company that wrote a different greeting for WhatsApp, or turned the greeting off
+for one channel, got the Messenger answer everywhere. The switch saved, the
+screen showed it, and the customer never saw it.
+
+Four were found by reading; the fifth was found by the test written for the
+first four, which is the argument for the test existing at all.
+
+**Pinning was recorded and hidden.** `set_pinned` writes `conversation_pinned`,
+and the timeline's `meaningful_types` allow-list left it out — so the row was
+written and then filtered away. Nobody could ever see it, and nothing said so.
+
+The general rule, now asserted: an event worth writing is an event somebody has
+to be able to read. A name that appears exactly once in that service is either
+written and never shown, or listed and never written.
+
+## D-021 — Telegram does not work, and fixing it is a product decision
+
+`channels/telegram/bot.py` calls `message_gateway.handle_text` without
+`company_id`, which has been a required argument since the platform became
+multi-tenant. Every message raises `TypeError`. Verified directly rather than
+inferred.
+
+The module is not imported by `main.py`, has no tests, and cannot run, so
+nothing depends on it today. It is left in place and recorded here rather than
+quietly deleted or quietly repaired, because the fix is not mechanical: a
+Telegram bot has one token per bot, so supporting it means a per-company account
+type, credentials, routing and a place in `SUPPORTED_CHANNELS` — which is
+currently `messenger`, `instagram`, `whatsapp`.
+
+Whether this platform sells Telegram is not a question the code can answer.
+Until it is answered, the interface offers Telegram in three places
+(`ConversationsPage`, `NotificationsPage`, `UISettingsPage`) that the backend
+does not support, and that mismatch is the visible half of the same decision.

@@ -2063,6 +2063,11 @@ class ConversationControlService:
             "folder_changed",
             "conversation_starred",
             "conversation_unstarred",
+            # Written by `set_pinned` and absent from this list, so pinning a
+            # conversation recorded an event the timeline then filtered out.
+            # The row was there; nobody could ever see it.
+            "conversation_pinned",
+            "conversation_unpinned",
             "tags_changed",
             "human_takeover",
             "conversation_released",

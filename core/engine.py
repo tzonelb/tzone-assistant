@@ -115,6 +115,10 @@ class Engine:
                 return self.build_main_menu_response(
                     language,
                     company_id=request.company_id,
+                    channel=request.channel,
+                    channel_account_id=getattr(
+                        request, "channel_account_id", None
+                    ),
                 )
 
             explicit_language = self.get_explicit_language(request.message)
@@ -149,6 +153,10 @@ class Engine:
                 return self.build_main_menu_response(
                     language,
                     company_id=request.company_id,
+                    channel=request.channel,
+                    channel_account_id=getattr(
+                        request, "channel_account_id", None
+                    ),
                 )
 
             if request.message == "start":
@@ -219,6 +227,10 @@ class Engine:
                 return self.build_main_menu_response(
                     language,
                     company_id=request.company_id,
+                    channel=request.channel,
+                    channel_account_id=getattr(
+                        request, "channel_account_id", None
+                    ),
                 )
 
             if request.message in self.BACK_BUTTONS:
@@ -351,6 +363,8 @@ class Engine:
             return self.build_main_menu_response(
                 language,
                 company_id=request.company_id,
+                channel=request.channel,
+                channel_account_id=getattr(request, "channel_account_id", None),
             )
 
         if request.channel == "telegram":
@@ -382,6 +396,8 @@ class Engine:
         return self.build_main_menu_response(
             language,
             company_id=request.company_id,
+            channel=request.channel,
+            channel_account_id=getattr(request, "channel_account_id", None),
         )
 
     def build_language_changed_response(
@@ -489,6 +505,15 @@ class Engine:
         channel="messenger",
         channel_account_id=None,
     ):
+        """The company's menu, greeted in the way that channel is configured.
+
+        `channel` defaults to messenger for the preview and the tests, and every
+        live caller passes the real one. They did not: four call sites here had
+        `request.channel` in scope and left it out, so a company that wrote a
+        different welcome for WhatsApp — or turned the greeting off for one
+        channel — got the messenger answer on all of them. The switch saved, the
+        screen showed it, and the customer never saw it.
+        """
         language = "en" if language == "en" else "ar"
 
         greeting = response_policy.get_welcome_message(
