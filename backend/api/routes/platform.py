@@ -40,6 +40,7 @@ from backend.services.auth_service import (
     get_platform_admin_enrolling,
 )
 from backend.services.plan_service import LIMIT_KEYS, plan_service
+from backend.services.health_service import health_service
 from backend.services.totp_service import TotpError, totp_service
 from backend.services.platform_service import (
     PlatformConflict,
@@ -685,6 +686,54 @@ def revoke_platform_admin(
 @router.get("/health")
 def platform_health(current_user: dict[str, Any] = Depends(get_platform_admin)):
     return platform_service.platform_health()
+
+
+@router.get("/health/report")
+def platform_health_report(
+    deep: bool = Query(
+        default=False,
+        description=(
+            "Run SQLite's integrity check over every company database. It "
+            "reads every page, so it is slow on a large platform — the "
+            "background self-check already does this every fifteen minutes and "
+            "its result is on /health/last."
+        ),
+    ),
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Can the platform serve, right now, and prove it.
+
+    The master key, the control database, every company database and the disk —
+    plus the host's load, memory and uptime. `/health` on the public router
+    stays a constant on purpose: a liveness probe that checks dependencies
+    restarts the process when a database is slow, which is when restarting
+    helps least.
+    """
+    return health_service.report(deep=deep)
+
+
+@router.get("/health/last")
+def platform_health_last(
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """The most recent background sweep, without running another.
+
+    What a dashboard should poll. The deep check reads every page of every
+    company database, and a screen that re-ran it on each refresh would be its
+    own load problem.
+    """
+    report = health_service.last_report()
+
+    if report is None:
+        return {
+            "status": "pending",
+            "detail": (
+                "No self-check has completed yet. The first runs within seconds "
+                "of startup; call /health/report to check now."
+            ),
+        }
+
+    return report
 
 
 @router.get("/audit")

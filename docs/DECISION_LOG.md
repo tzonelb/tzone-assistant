@@ -416,3 +416,62 @@ endpoint because whoever can run it already holds the master key and the
 database, so it grants nothing they did not have — an endpoint would be a way to
 strip anybody's second factor over the network. The account is left
 **unenrolled**, not exempt: the requirement stands at the next sign-in.
+
+## D-018 — A health endpoint that can fail, and a check that runs unasked
+
+`health.py` returned a constant. It said `{"status": "ok"}` whether or not the
+master key was loadable, whether or not a single company database could be
+opened, and whether or not the disk had run out — so the one endpoint a monitor
+watches was the only thing on the platform that could not fail.
+
+`PRAGMA integrity_check` appeared nowhere in the repository, so silent
+corruption had nothing looking for it. `upgrade_all_tenants` existed and had no
+callers at all — not even at boot — so a release that added a column left every
+existing company failing at query time until somebody remembered the CLI.
+
+### Liveness stays a constant, deliberately now
+
+`GET /health` still returns a constant, and that is correct: a liveness probe
+that checks its dependencies restarts the process when a database is slow, which
+is when restarting helps least — the new process finds the same slow database
+and the restart loop becomes the outage. What the platform can actually *do*
+lives behind the console at `/api/platform/health/report`, which opens every
+company database and reads the host's memory and disk. Neither belongs on an
+unauthenticated URL a load balancer polls every few seconds.
+
+### On a timer, not on a click
+
+A corrupt company database discovered when a customer writes in is an incident.
+The same corruption found by a sweep at three in the morning is a restore. The
+self-check runs every fifteen minutes with the deep integrity check on, logs at
+error when anything is not `ok`, and keeps its last result for a dashboard to
+read without paying for another pass.
+
+### Three traps, each now a test
+
+* **Suspended companies.** `list_company_ids` filters to active ones, correctly
+  — a sweep must not deliver a suspended company's replies. A health check that
+  reused it would report a clean platform while a suspended company's file was
+  corrupt. `list_all_company_ids` exists for anything that inspects rather than
+  serves.
+* **The two schema versions disagreed from birth.** `provision_company` recorded
+  `company_databases.schema_version` while `_build_tenant_schema` never stamped
+  `PRAGMA user_version`, so a fresh company had version N in one place and 0 in
+  the other. Nothing read them, so nothing noticed — and a version check would
+  have flagged every new company, which is exactly the false alarm that teaches
+  an operator to ignore the check.
+* **A missing reading is `None`, never zero.** A monitor cannot tell a real zero
+  from an absent one, and "0% memory used" reads as healthy.
+
+### The startup upgrade opens only what is behind
+
+`upgrade_all_tenants` opens every company database, which at a thousand
+companies is a thousand decryptions before the first request is served.
+`upgrade_outdated_tenants` reads the recorded version from the control plane —
+one cheap query — and opens only the companies that are behind, suspended ones
+included, because a company reinstated after two releases still has to open.
+
+### The server metrics use no new dependency
+
+`psutil` would be one more package to install, pin and audit for a handful of
+numbers this platform's Linux host already publishes in `/proc`.

@@ -43,6 +43,7 @@ from backend.api.routes import (
 )
 from backend.api.middleware import SecurityHeadersMiddleware
 from backend.services.activity_service import activity_service
+from backend.services.health_service import health_service
 from backend.security.keyring import KeyringError
 from backend.services.auth_service import auth_service
 from backend.services.module_access import require_module
@@ -74,6 +75,12 @@ TAKEOVER_SWEEP_SECONDS = 10
 PENDING_REPLY_SWEEP_SECONDS = 2
 SCHEDULED_POST_SWEEP_SECONDS = 30
 ATTEMPT_PRUNE_SECONDS = 3600
+
+# How often the platform checks itself. Fifteen minutes is often enough that a
+# corrupt database is found the same hour it happens, and rare enough that the
+# deep check — which reads every page of every company file — is not competing
+# with live traffic for the disk.
+SELF_CHECK_SECONDS = 900
 
 
 def _sweep_concurrency() -> int:
@@ -200,6 +207,44 @@ async def scheduled_post_worker() -> None:
         await asyncio.sleep(SCHEDULED_POST_SWEEP_SECONDS)
 
 
+async def self_check_worker() -> None:
+    """Verify the platform can serve, on a timer rather than on a click.
+
+    The distinction is the whole point: a corrupt company database discovered
+    when a customer writes in is an incident, and the same corruption found by a
+    sweep at three in the morning is a restore.
+
+    The first pass runs immediately so a broken deployment is visible in the log
+    within seconds of boot rather than a quarter of an hour later.
+    """
+    while True:
+        try:
+            report = await asyncio.to_thread(health_service.report, deep=True)
+
+            if report["status"] != "ok":
+                # Logged at error, with the failing companies named. A warning
+                # here would sit in a log nobody greps.
+                logger.error(
+                    "Self-check reported %s: %s",
+                    report["status"],
+                    {
+                        name: check.get("detail")
+                        for name, check in report["checks"].items()
+                        if check.get("status") != "ok"
+                    },
+                )
+            else:
+                logger.info(
+                    "Self-check passed in %sms across %s company database(s)",
+                    report["duration_ms"],
+                    report["checks"]["companies"]["checked"],
+                )
+        except Exception:
+            logger.exception("Self-check failed to run")
+
+        await asyncio.sleep(SELF_CHECK_SECONDS)
+
+
 async def maintenance_worker() -> None:
     """Housekeeping that would otherwise grow without bound."""
     while True:
@@ -310,6 +355,27 @@ async def lifespan(app: FastAPI):
     # from those tables carries that guarantee forward. It is also the upgrade
     # path — a database written before this index existed arrives with work and
     # no entries.
+    # Bring any company behind the current schema up to it, before the sweeps
+    # start reading their tables. `upgrade_all_tenants` existed and had no
+    # callers anywhere — not even at boot — so a release that added a column
+    # left every existing company failing at query time until somebody
+    # remembered to run the CLI.
+    #
+    # Only the outdated ones are opened: the recorded version is one cheap read
+    # of the control plane, so a release that changed nothing opens nothing,
+    # and a thousand companies do not cost a thousand decryptions at every boot.
+    try:
+        upgraded = await asyncio.to_thread(database_manager.upgrade_outdated_tenants)
+
+        if upgraded:
+            logger.info(
+                "Upgraded the schema of %s company database(s): %s",
+                len(upgraded),
+                {company: changes for company, changes in upgraded.items() if changes},
+            )
+    except Exception:
+        logger.exception("Schema upgrade at startup failed")
+
     try:
         summary = await asyncio.to_thread(work_index_service.reconcile_all)
         logger.info(
@@ -336,6 +402,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(pending_reply_worker()),
         asyncio.create_task(scheduled_post_worker()),
         asyncio.create_task(maintenance_worker()),
+        asyncio.create_task(self_check_worker()),
     ]
 
     try:

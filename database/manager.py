@@ -95,6 +95,16 @@ class DatabaseManager:
     # Key handling
     # ------------------------------------------------------------------
 
+    @property
+    def data_dir(self) -> Path:
+        """Where every database and backup on this host lives.
+
+        Public because the health check reports free space on it, and reaching
+        into `_data_dir` from another module would make a private name part of
+        the interface without saying so.
+        """
+        return self._data_dir
+
     def master_key(self) -> bytes:
         with self._lock:
             if self._master_key is None:
@@ -339,6 +349,16 @@ class DatabaseManager:
         self._create_tenant_tables(connection)
         self._add_missing_tenant_columns(connection)
         self._create_tenant_indexes(connection)
+
+        # Stamped here as well as in `upgrade_tenant`. Without it a freshly
+        # provisioned company had `company_databases.schema_version = N` in the
+        # control plane and `PRAGMA user_version = 0` in its own file — two
+        # records of the same fact that disagreed from the moment the company
+        # was created. Nothing read them, so nothing noticed; a health check
+        # that compares them would have reported every new company as out of
+        # date, which is the kind of false alarm that teaches an operator to
+        # ignore the check.
+        connection.execute("PRAGMA user_version = %d" % TENANT_SCHEMA_VERSION)
 
     def upgrade_tenant(self, company_id: int) -> list[str]:
         """Bring one company's database up to the current schema.
@@ -662,19 +682,80 @@ class DatabaseManager:
         return None
 
     def list_company_ids(self) -> list[int]:
+        """Every **active** company with a provisioned database.
+
+        Active only, because the callers are the sweeps: a suspended company
+        must not have its replies delivered or its posts published.
+
+        Anything that inspects rather than serves wants
+        :meth:`list_all_company_ids` instead — a suspended company's data is
+        still on disk, still encrypted, and still the operator's
+        responsibility, so a health check that skipped it would report a clean
+        platform while a suspended company's file was corrupt.
+        """
+        return self._company_ids(active_only=True)
+
+    def list_all_company_ids(self) -> list[int]:
+        """Every provisioned company, suspended ones included."""
+        return self._company_ids(active_only=False)
+
+    def _company_ids(self, *, active_only: bool) -> list[int]:
+        clause = "WHERE companies.status = 'active'" if active_only else ""
+
         with self.control() as conn:
             rows = conn.execute(
-                """
+                f"""
                 SELECT companies.id
                 FROM companies
                 JOIN company_databases
                     ON company_databases.company_id = companies.id
-                WHERE companies.status = 'active'
+                {clause}
                 ORDER BY companies.id
                 """
             ).fetchall()
 
         return [int(row["id"]) for row in rows]
+
+    def tenant_schema_version(self, company_id: int) -> int:
+        """The version stamped inside the company's own file."""
+        with self.tenant(int(company_id)) as conn:
+            row = conn.execute("PRAGMA user_version").fetchone()
+
+        return int(row[0]) if row else 0
+
+    def upgrade_outdated_tenants(self) -> dict[int, list[str]]:
+        """Upgrade only the companies the control plane says are behind.
+
+        `upgrade_all_tenants` opens every company database, which at a thousand
+        companies is a thousand decryptions before the server answers its first
+        request. The recorded version is one cheap read of the control plane, so
+        a release that changed nothing opens nothing.
+
+        Suspended companies are included: their data is still on disk and still
+        has to be readable when they are reinstated, and skipping them would
+        leave a company that came back after two releases unable to open.
+        """
+        results: dict[int, list[str]] = {}
+
+        with self.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT company_id FROM company_databases
+                WHERE schema_version IS NULL OR schema_version < ?
+                ORDER BY company_id
+                """,
+                (TENANT_SCHEMA_VERSION,),
+            ).fetchall()
+
+        for row in rows:
+            company_id = int(row["company_id"])
+
+            try:
+                results[company_id] = self.upgrade_tenant(company_id)
+            except Exception:
+                logger.exception("Schema upgrade failed for company %s", company_id)
+
+        return results
 
 
 database_manager = DatabaseManager()
