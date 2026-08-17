@@ -30,11 +30,13 @@ from channels.meta.parser import (
 from channels.inbound import process_inbound_event
 from backend.services.comment_service import comment_service
 from backend.services.module_gate import module_gate
+from backend.services.auth_service import client_ip
 from channels.webhook_limits import dispatch, read_capped_body
 from channels.webhook_security import (
     WebhookVerificationError,
     SIGNATURE_HEADER,
     SOURCE_CURRENT,
+    record_signature_rejection,
     verify_token_challenge,
     verify_webhook_signature,
 )
@@ -85,6 +87,9 @@ async def receive_meta_webhook(request: Request):
     except WebhookVerificationError as exc:
         log_meta_event("webhook_rejected", {"reason": str(exc)})
         logger.warning("Rejected unsigned or mis-signed Meta webhook: %s", exc)
+        record_signature_rejection(
+            source="meta", ip_address=client_ip(request), reason=str(exc)
+        )
         # 403 rather than 200: an unverified body is not something we accept.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

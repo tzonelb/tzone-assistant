@@ -10,10 +10,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 from backend.services.comment_service import STATUSES, comment_service
 from channels.comment_sender import publish_comment_reply
 
@@ -81,6 +86,7 @@ def get_comment(
 def reply_to_comment(
     comment_id: int,
     payload: CommentReplyRequest,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_permission("comments.reply")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -116,6 +122,28 @@ def reply_to_comment(
                 f"{result.get('error') or result.get('reason')}"
             ),
         )
+
+    # After the publish check, not before it: this entry says the company
+    # answered in public, and a reply that only reached the local table did
+    # not. The failed attempt is still on the comment thread with its error.
+    #
+    # Which comment was answered, never the text of it or of the reply — the
+    # comment carries a customer's own words and their public account name, and
+    # the thread already holds both.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.COMMENT_REPLIED,
+        category="comments",
+        target_type="comment",
+        target_id=comment_id,
+        summary=f"Replied to a {comment['channel']} comment",
+        after={
+            "channel": comment["channel"],
+            "provider_reply_id": result.get("provider_reply_id"),
+        },
+        ip_address=client_ip(request),
+    )
 
     return {
         "status": "published",

@@ -481,7 +481,16 @@ DEFAULT_PERMISSIONS: tuple[tuple[str, str, str], ...] = (
     ("settings.view", "View Settings", "Open company settings."),
     ("settings.manage", "Manage Settings", "Change company settings, including assistant behaviour."),
     ("subscriptions.view", "View Subscription", "See the current plan and billing status."),
-    ("subscriptions.manage", "Manage Subscription", "Change the plan and billing details."),
+    # `subscriptions.manage` was here, described as "Change the plan and billing
+    # details", and no endpoint has ever checked it. There is nothing for it to
+    # guard: a company cannot change its own plan, by design — plans and
+    # per-company overrides are set from the operator console. So the Roles
+    # screen offered an owner a switch that granted a capability the platform
+    # does not have, and taking it away restricted nothing.
+    #
+    # Retired rather than left in place. A permission that decides nothing is
+    # the same defect as a setting that saves and decides nothing, except that
+    # this one tells an owner they have limited what somebody can do.
     ("tasks.view", "View Tasks", "See the team's tasks and follow-ups."),
     ("tasks.manage", "Manage Tasks", "Create, assign, edit and close tasks."),
     ("catalogue.view", "View Catalogue", "Browse the product catalogue."),

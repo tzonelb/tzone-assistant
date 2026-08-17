@@ -543,6 +543,7 @@ def _client(company_id: int, actor_user_id: int = 1):
     app.dependency_overrides[ai_teaching.manage_actor] = lambda: {
         "company_id": company_id,
         "actor_user_id": actor_user_id,
+        "user": {"id": actor_user_id, "full_name": "Test Actor"},
     }
 
     return TestClient(app)

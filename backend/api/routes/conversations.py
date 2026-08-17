@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from reportlab.lib.pagesizes import A4
@@ -33,8 +33,10 @@ except ImportError:  # Optional Arabic PDF shaping.
     arabic_reshaper = None
     get_display = None
 
+from backend.services.activity_service import Action, activity_service
 from backend.services.auth_service import (
     auth_service,
+    client_ip,
     require_permission,
 )
 from backend.services.conversation_control_service import (
@@ -431,6 +433,7 @@ async def live_conversation_events(
 def read_conversation(
     channel: str,
     user_id: str,
+    request: Request,
     limit: int = Query(default=50, ge=1, le=500),
     current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
 ):
@@ -451,6 +454,23 @@ def read_conversation(
         channel=channel,
         external_user_id=user_id,
         actor_user_id=int(current_user["id"]),
+    )
+
+    # Reading is recorded, not only writing. A customer's conversation holds
+    # what they told this company in confidence, and who read it is a fact the
+    # owner is answerable for even when nothing was changed. `kind="read"`
+    # carries its own retention — 90 days against 730 for changes — so the
+    # volume of ordinary work does not bury the record of who touched what.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CONVERSATION_OPENED,
+        category="conversations",
+        kind="read",
+        target_type="conversation",
+        target_id=f"{channel}:{user_id}",
+        summary=f"Opened a {channel} conversation",
+        ip_address=client_ip(request),
     )
 
     return {
@@ -742,6 +762,7 @@ def _company_name(company_id: int) -> str:
 def export_conversation(
     channel: str,
     user_id: str,
+    request: Request,
     scope: Literal["chat", "timeline", "full"] = Query(default="full"),
     file_format: Literal["json", "csv", "txt", "pdf"] = Query(
         default="json", alias="format"
@@ -749,6 +770,23 @@ def export_conversation(
     current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+
+    # An export is the one read that leaves the platform. Whatever the file is
+    # used for afterwards, the record that it was taken — by whom, of which
+    # conversation, in what format — has to survive here.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CONVERSATION_EXPORTED,
+        category="conversations",
+        kind="read",
+        target_type="conversation",
+        target_id=f"{channel}:{user_id}",
+        summary=f"Exported a {channel} conversation as {file_format}",
+        severity="notice",
+        after={"scope": scope, "format": file_format},
+        ip_address=client_ip(request),
+    )
 
     messages = message_service.list_messages(
         company_id=company_id,

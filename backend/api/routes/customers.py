@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.api.schemas.customers import CustomerUpdateRequest
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import auth_service, client_ip, require_permission
 from backend.services.customer_service import customer_service
 
 
@@ -37,12 +38,33 @@ def list_customers(
 
 
 @router.get("/{customer_id}")
-def get_customer(customer_id: int, context=Depends(view_context)):
-    _, company_id = context
+def get_customer(customer_id: int, request: Request, context=Depends(view_context)):
+    current_user, company_id = context
+
     try:
-        return customer_service.get_customer(company_id=company_id, customer_id=customer_id)
+        customer = customer_service.get_customer(
+            company_id=company_id, customer_id=customer_id
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # After the record is found, so a probe for a customer id that does not
+    # exist does not leave an entry saying somebody read it. A customer file
+    # holds contact details the person gave this company and nobody else, so
+    # who opened it is the owner's to see even though nothing changed.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CUSTOMER_OPENED,
+        category="customers",
+        kind="read",
+        target_type="customer",
+        target_id=customer_id,
+        summary="Opened a customer record",
+        ip_address=client_ip(request),
+    )
+
+    return customer
 
 
 @router.put("/{customer_id}")

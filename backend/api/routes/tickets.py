@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
 from backend.api.schemas.tasks import (
@@ -28,7 +28,12 @@ from backend.api.schemas.tasks import (
     TaskStatusChange,
     TaskUpdate,
 )
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 from backend.services.ticket_service import ticket_service
 
 
@@ -286,6 +291,7 @@ def task_summary(
 @tasks_router.post("", status_code=status.HTTP_201_CREATED)
 def create_task(
     payload: TaskCreate,
+    request: Request,
     context: tuple[dict[str, Any], int] = Depends(task_manage_context),
 ):
     current_user, company_id = context
@@ -303,6 +309,27 @@ def create_task(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # The title and the routing fields, never `problem`. A task raised from a
+    # conversation carries the customer's own description of their fault, which
+    # belongs in the task and not in a second table with its own retention.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.TASK_CREATED,
+        category="tasks",
+        target_type="task",
+        target_id=task.get("id"),
+        summary=f"Created the task: {task.get('title')}",
+        after={
+            "title": task.get("title"),
+            "task_type": task.get("task_type"),
+            "priority": task.get("priority"),
+            "status": task.get("status"),
+            "assigned_user_id": task.get("assigned_user_id"),
+        },
+        ip_address=client_ip(request),
+    )
 
     return with_display_names(company_id, [task])[0]
 
@@ -329,13 +356,45 @@ def get_task(
     return task
 
 
+def _record_task_change(
+    current_user: dict[str, Any],
+    request: Request,
+    *,
+    company_id: int,
+    task: dict[str, Any],
+    summary: str,
+) -> None:
+    """One entry for whichever of the three task writes was made.
+
+    Status and assignment have their own endpoints but are the same event to
+    someone reading the log: the task changed, and this is who changed it.
+    """
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.TASK_UPDATED,
+        category="tasks",
+        target_type="task",
+        target_id=task.get("id"),
+        summary=summary,
+        after={
+            "title": task.get("title"),
+            "priority": task.get("priority"),
+            "status": task.get("status"),
+            "assigned_user_id": task.get("assigned_user_id"),
+        },
+        ip_address=client_ip(request),
+    )
+
+
 @tasks_router.put("/{task_id}")
 def update_task(
     task_id: int,
     payload: TaskUpdate,
+    request: Request,
     context: tuple[dict[str, Any], int] = Depends(task_manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     values = payload.model_dump(exclude_unset=True)
 
@@ -355,6 +414,17 @@ def update_task(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    _record_task_change(
+        current_user,
+        request,
+        company_id=company_id,
+        task=task,
+        summary=(
+            f"Edited the task {task.get('title')}: "
+            f"{', '.join(sorted(values)) or 'no fields'}"
+        ),
+    )
+
     return with_display_names(company_id, [task])[0]
 
 
@@ -362,9 +432,10 @@ def update_task(
 def change_task_status(
     task_id: int,
     payload: TaskStatusChange,
+    request: Request,
     context: tuple[dict[str, Any], int] = Depends(task_manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     try:
         task = ticket_service.change_status(
@@ -377,6 +448,14 @@ def change_task_status(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    _record_task_change(
+        current_user,
+        request,
+        company_id=company_id,
+        task=task,
+        summary=f"Moved the task {task.get('title')} to {payload.status}",
+    )
+
     return with_display_names(company_id, [task])[0]
 
 
@@ -384,9 +463,10 @@ def change_task_status(
 def assign_task(
     task_id: int,
     payload: TaskAssign,
+    request: Request,
     context: tuple[dict[str, Any], int] = Depends(task_manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     assigned_user_id = require_company_employee(
         company_id, payload.assigned_user_id
@@ -400,6 +480,18 @@ def assign_task(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Task not found.") from exc
+
+    _record_task_change(
+        current_user,
+        request,
+        company_id=company_id,
+        task=task,
+        summary=(
+            f"Assigned the task {task.get('title')} to user {assigned_user_id}"
+            if assigned_user_id
+            else f"Unassigned the task {task.get('title')}"
+        ),
+    )
 
     return with_display_names(company_id, [task])[0]
 

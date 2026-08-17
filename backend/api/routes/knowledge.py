@@ -65,18 +65,36 @@ def list_categories(context=Depends(view_context)):
 @router.post("/categories", status_code=status.HTTP_201_CREATED)
 def create_category(
     payload: KnowledgeCategoryCreate,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     try:
-        return knowledge_service.create_category(
+        category = knowledge_service.create_category(
             company_id=company_id,
             name=payload.name,
             department=payload.department,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.KNOWLEDGE_CATEGORY_CREATED,
+        category="knowledge",
+        target_type="knowledge_category",
+        target_id=category.get("id"),
+        summary=f"Added the knowledge category: {category.get('name')}",
+        after={
+            "name": category.get("name"),
+            "department": category.get("department"),
+        },
+        ip_address=client_ip(request),
+    )
+
+    return category
 
 
 @router.get("/options")

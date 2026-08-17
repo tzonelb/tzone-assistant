@@ -18,7 +18,14 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status as http_status,
+)
 
 from backend.api.schemas.appointments import (
     AppointmentCancelRequest,
@@ -35,7 +42,12 @@ from backend.services.appointment_service import (
     SlotConflict,
     appointment_service,
 )
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -96,6 +108,42 @@ def _with_staff_names(company_id: int, items: list[dict[str, Any]]) -> list[dict
 
 def _single(company_id: int, appointment: dict[str, Any]) -> dict[str, Any]:
     return _with_staff_names(company_id, [appointment])[0]
+
+
+def _record(
+    current_user: dict[str, Any],
+    request: Request,
+    *,
+    company_id: int,
+    action: str,
+    appointment: dict[str, Any],
+    summary: str,
+) -> None:
+    """File one calendar change.
+
+    The slot, the staff member and the customer's id — never `notes`, which is
+    free text an employee typed about a customer and often carries the phone
+    number or address the booking was arranged on. The appointment itself keeps
+    it; the log records that the booking moved and who moved it.
+    """
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=action,
+        category="appointments",
+        target_type="appointment",
+        target_id=appointment.get("id"),
+        summary=summary,
+        after={
+            "title": appointment.get("title"),
+            "starts_at": appointment.get("starts_at"),
+            "ends_at": appointment.get("ends_at"),
+            "status": appointment.get("status"),
+            "staff_user_id": appointment.get("staff_user_id"),
+            "customer_id": appointment.get("customer_id"),
+        },
+        ip_address=client_ip(request),
+    )
 
 
 def _handle(call):
@@ -285,6 +333,7 @@ def list_appointments(
 @router.post("", status_code=http_status.HTTP_201_CREATED)
 def create_appointment(
     payload: AppointmentCreateRequest,
+    request: Request,
     context=Depends(manage_context),
 ):
     current_user, company_id = context
@@ -295,6 +344,17 @@ def create_appointment(
             created_by_user_id=current_user.get("id"),
             **payload.model_dump(),
         )
+    )
+
+    _record(
+        current_user,
+        request,
+        company_id=company_id,
+        action=Action.APPOINTMENT_CREATED,
+        appointment=appointment,
+        summary=(
+            f"Booked {appointment.get('title')} at {appointment.get('starts_at')}"
+        ),
     )
 
     return _single(company_id, appointment)
@@ -318,9 +378,10 @@ def get_appointment(appointment_id: int, context=Depends(view_context)):
 def reschedule_appointment(
     appointment_id: int,
     payload: AppointmentRescheduleRequest,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     appointment = _handle(
         lambda: appointment_service.reschedule(
@@ -330,6 +391,17 @@ def reschedule_appointment(
         )
     )
 
+    _record(
+        current_user,
+        request,
+        company_id=company_id,
+        action=Action.APPOINTMENT_UPDATED,
+        appointment=appointment,
+        summary=(
+            f"Moved {appointment.get('title')} to {appointment.get('starts_at')}"
+        ),
+    )
+
     return _single(company_id, appointment)
 
 
@@ -337,9 +409,10 @@ def reschedule_appointment(
 def cancel_appointment(
     appointment_id: int,
     payload: AppointmentCancelRequest,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     appointment = _handle(
         lambda: appointment_service.cancel(
@@ -349,6 +422,17 @@ def cancel_appointment(
         )
     )
 
+    # The reason is left out of the entry for the same reason `notes` is: it is
+    # free text about a customer, and the appointment already holds it.
+    _record(
+        current_user,
+        request,
+        company_id=company_id,
+        action=Action.APPOINTMENT_UPDATED,
+        appointment=appointment,
+        summary=f"Cancelled {appointment.get('title')}",
+    )
+
     return _single(company_id, appointment)
 
 
@@ -356,9 +440,10 @@ def cancel_appointment(
 def update_appointment_status(
     appointment_id: int,
     payload: AppointmentStatusRequest,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     appointment = _handle(
         lambda: appointment_service.set_status(
@@ -366,6 +451,15 @@ def update_appointment_status(
             appointment_id=appointment_id,
             status=payload.status,
         )
+    )
+
+    _record(
+        current_user,
+        request,
+        company_id=company_id,
+        action=Action.APPOINTMENT_UPDATED,
+        appointment=appointment,
+        summary=f"Marked {appointment.get('title')} as {payload.status}",
     )
 
     return _single(company_id, appointment)

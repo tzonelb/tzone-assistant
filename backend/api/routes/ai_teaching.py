@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from backend.api.schemas.ai_teaching import (
     BotProfileBindingUpdate,
@@ -32,7 +32,12 @@ from backend.api.schemas.ai_teaching import (
     DryRunRequest,
     ReplyPolicyUpdate,
 )
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 from backend.services.bot_profile_service import (
     PREVIEW_CHANNELS,
     SUGGESTED_TONES,
@@ -73,10 +78,15 @@ def manage_actor(
     The reply policy is stored through ``company_settings_service``, which keeps
     a change audit; an audit row with no actor answers "what changed" and not
     "who changed it".
+
+    ``user`` is the whole session user rather than only its id, because the
+    activity log copies the actor's display name in at write time — see
+    ``activity_service`` for why it cannot be joined back afterwards.
     """
     return {
         "company_id": _company_id(current_user),
         "actor_user_id": int(current_user["id"]),
+        "user": current_user,
     }
 
 
@@ -115,17 +125,43 @@ def get_profile(company_id: int = Depends(view_context)):
 @router.put("/profile")
 def update_profile(
     payload: BotProfileUpdate,
-    company_id: int = Depends(manage_context),
+    request: Request,
+    actor: dict[str, Any] = Depends(manage_actor),
 ):
+    company_id = actor["company_id"]
+    values = _payload(payload)
+
     try:
-        return {
-            "profile": bot_profile_service.update_default(
-                company_id=company_id,
-                values=_payload(payload),
-            )
-        }
+        profile = bot_profile_service.update_default(
+            company_id=company_id,
+            values=values,
+        )
     except BotProfileError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # The field names, not the instructions themselves. The prompt, the welcome
+    # messages and the taught examples are the profile's own record and are
+    # readable on this screen; copying them into every audit row would put a
+    # full history of the assistant's script in a table with different
+    # retention.
+    activity_service.record_for(
+        actor["user"],
+        company_id=company_id,
+        action=Action.BOT_PROFILE_UPDATED,
+        category="ai_teaching",
+        target_type="bot_profile",
+        target_id=profile.get("id"),
+        summary=f"Changed the assistant: {', '.join(sorted(values)) or 'no fields'}",
+        after={
+            "changed_fields": sorted(values),
+            "ai_enabled": profile.get("ai_enabled"),
+            "ai_model": profile.get("ai_model"),
+            "status": profile.get("status"),
+        },
+        ip_address=client_ip(request),
+    )
+
+    return {"profile": profile}
 
 
 @router.get("/profile/prompt")
@@ -186,18 +222,45 @@ def get_one_profile(profile_id: int, company_id: int = Depends(view_context)):
 def update_one_profile(
     profile_id: int,
     payload: BotProfileBindingUpdate,
-    company_id: int = Depends(manage_context),
+    request: Request,
+    actor: dict[str, Any] = Depends(manage_actor),
 ):
+    company_id = actor["company_id"]
+    values = _payload(payload)
+
     try:
-        return {
-            "profile": bot_profile_service.update_profile(
-                company_id=company_id,
-                profile_id=profile_id,
-                values=_payload(payload),
-            )
-        }
+        profile = bot_profile_service.update_profile(
+            company_id=company_id,
+            profile_id=profile_id,
+            values=values,
+        )
     except BotProfileError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Recorded under the same action as the default profile: an owner asking
+    # who changed the assistant means whichever profile actually answers their
+    # customers, and the bound one does so on its own channel account.
+    activity_service.record_for(
+        actor["user"],
+        company_id=company_id,
+        action=Action.BOT_PROFILE_UPDATED,
+        category="ai_teaching",
+        target_type="bot_profile",
+        target_id=profile_id,
+        summary=(
+            f"Changed the assistant profile {profile.get('name')}: "
+            f"{', '.join(sorted(values)) or 'no fields'}"
+        ),
+        after={
+            "changed_fields": sorted(values),
+            "name": profile.get("name"),
+            "channel_account_id": profile.get("channel_account_id"),
+            "status": profile.get("status"),
+        },
+        ip_address=client_ip(request),
+    )
+
+    return {"profile": profile}
 
 
 @router.delete("/profiles/{profile_id}")
@@ -241,17 +304,37 @@ def list_departments(company_id: int = Depends(view_context)):
 @router.post("/departments", status_code=status.HTTP_201_CREATED)
 def create_department(
     payload: BusinessDepartmentCreate,
-    company_id: int = Depends(manage_context),
+    request: Request,
+    actor: dict[str, Any] = Depends(manage_actor),
 ):
+    company_id = actor["company_id"]
+
     try:
-        return {
-            "department": business_department_service.create_department(
-                company_id=company_id,
-                data=payload.model_dump(exclude_unset=True),
-            )
-        }
+        department = business_department_service.create_department(
+            company_id=company_id,
+            data=payload.model_dump(exclude_unset=True),
+        )
     except BusinessDepartmentError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    activity_service.record_for(
+        actor["user"],
+        company_id=company_id,
+        action=Action.DEPARTMENT_CREATED,
+        category="departments",
+        target_type="business_department",
+        target_id=department.get("id"),
+        summary=f"Added the section {department.get('code')}",
+        after={
+            "code": department.get("code"),
+            "name_en": department.get("name_en"),
+            "name_ar": department.get("name_ar"),
+            "enabled": department.get("enabled"),
+        },
+        ip_address=client_ip(request),
+    )
+
+    return {"department": department}
 
 
 @router.post("/departments/reorder")
@@ -283,8 +366,15 @@ def get_department(department_id: int, company_id: int = Depends(view_context)):
 def update_department(
     department_id: int,
     payload: BusinessDepartmentUpdate,
-    company_id: int = Depends(manage_context),
+    request: Request,
+    actor: dict[str, Any] = Depends(manage_actor),
 ):
+    company_id = actor["company_id"]
+
+    previous = business_department_service.get_department(
+        company_id=company_id, department_id=department_id
+    )
+
     try:
         department = business_department_service.update_department(
             company_id=company_id,
@@ -297,18 +387,70 @@ def update_department(
     if not department:
         raise HTTPException(status_code=404, detail="Department not found.")
 
+    activity_service.record_for(
+        actor["user"],
+        company_id=company_id,
+        action=Action.DEPARTMENT_UPDATED,
+        category="departments",
+        target_type="business_department",
+        target_id=department_id,
+        summary=f"Edited the section {department.get('code')}",
+        before={
+            "code": (previous or {}).get("code"),
+            "name_en": (previous or {}).get("name_en"),
+            "name_ar": (previous or {}).get("name_ar"),
+            "enabled": (previous or {}).get("enabled"),
+        },
+        after={
+            "code": department.get("code"),
+            "name_en": department.get("name_en"),
+            "name_ar": department.get("name_ar"),
+            "enabled": department.get("enabled"),
+        },
+        ip_address=client_ip(request),
+    )
+
     return {"department": department}
 
 
 @router.delete("/departments/{department_id}")
 def delete_department(
     department_id: int,
-    company_id: int = Depends(manage_context),
+    request: Request,
+    actor: dict[str, Any] = Depends(manage_actor),
 ):
+    company_id = actor["company_id"]
+
+    # Read before the delete: afterwards there is nothing left to name the
+    # section by, and an entry saying only that department 7 was removed does
+    # not tell an owner which menu their customers stopped being offered.
+    previous = business_department_service.get_department(
+        company_id=company_id, department_id=department_id
+    )
+
     if not business_department_service.delete_department(
         company_id=company_id, department_id=department_id
     ):
         raise HTTPException(status_code=404, detail="Department not found.")
+
+    activity_service.record_for(
+        actor["user"],
+        company_id=company_id,
+        action=Action.DEPARTMENT_DELETED,
+        category="departments",
+        target_type="business_department",
+        target_id=department_id,
+        summary=(
+            f"Removed the section "
+            f"{(previous or {}).get('code') or department_id}"
+        ),
+        before={
+            "code": (previous or {}).get("code"),
+            "name_en": (previous or {}).get("name_en"),
+            "name_ar": (previous or {}).get("name_ar"),
+        },
+        ip_address=client_ip(request),
+    )
 
     return {"success": True}
 
@@ -337,9 +479,40 @@ def get_reply_policy(company_id: int = Depends(view_context)):
     return _policy_view(company_id)
 
 
+def _record_policy_change(
+    actor: dict[str, Any],
+    request: Request,
+    *,
+    scope: str,
+    summary: str,
+    changed: dict[str, Any],
+) -> None:
+    """One entry for whichever of the three policy writes was made.
+
+    The values are recorded here, unlike the settings section this is stored
+    in: a reply policy is a small set of named decisions about how the company
+    answers — whether the assistant replies at all, how fast, when it hands
+    over — and "who turned the assistant off on WhatsApp" is unanswerable
+    without them. The service has already refused any key that is not one of
+    those, so nothing arbitrary reaches this row.
+    """
+    activity_service.record_for(
+        actor["user"],
+        company_id=actor["company_id"],
+        action=Action.REPLY_POLICY_UPDATED,
+        category="ai_teaching",
+        target_type="reply_policy",
+        target_id=scope,
+        summary=summary,
+        after=changed,
+        ip_address=client_ip(request),
+    )
+
+
 @router.put("/reply-policy")
 def update_reply_policy_default(
     payload: ReplyPolicyUpdate,
+    request: Request,
     actor: dict[str, Any] = Depends(manage_actor),
 ):
     """The company's own default, applied to every channel it has not overridden."""
@@ -357,6 +530,14 @@ def update_reply_policy_default(
         # operator typed is wrong, they are simply not the one who decides it.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    _record_policy_change(
+        actor,
+        request,
+        scope="company_default",
+        summary="Changed the company's default reply policy",
+        changed={"set": payload.values, "cleared": payload.clear},
+    )
+
     return _policy_view(actor["company_id"])
 
 
@@ -364,6 +545,7 @@ def update_reply_policy_default(
 def update_reply_policy_channel(
     channel: str,
     payload: ReplyPolicyUpdate,
+    request: Request,
     actor: dict[str, Any] = Depends(manage_actor),
 ):
     try:
@@ -381,12 +563,21 @@ def update_reply_policy_channel(
         # operator typed is wrong, they are simply not the one who decides it.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    _record_policy_change(
+        actor,
+        request,
+        scope=channel,
+        summary=f"Changed the reply policy on {channel}",
+        changed={"set": payload.values, "cleared": payload.clear},
+    )
+
     return _policy_view(actor["company_id"])
 
 
 @router.delete("/reply-policy/channels/{channel}")
 def clear_reply_policy_channel(
     channel: str,
+    request: Request,
     actor: dict[str, Any] = Depends(manage_actor),
 ):
     """Back to inheriting the company default, with nothing frozen in place."""
@@ -402,6 +593,14 @@ def clear_reply_policy_channel(
         # A Super Admin lock on this section. 409 rather than 400: nothing the
         # operator typed is wrong, they are simply not the one who decides it.
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    _record_policy_change(
+        actor,
+        request,
+        scope=channel,
+        summary=f"Cleared the reply policy override on {channel}",
+        changed={"inherits_company_default": True},
+    )
 
     return _policy_view(actor["company_id"])
 

@@ -526,6 +526,11 @@ def _client(company_id: int):
     app.include_router(ai_teaching.router)
     app.dependency_overrides[ai_teaching.view_context] = lambda: company_id
     app.dependency_overrides[ai_teaching.manage_context] = lambda: company_id
+    app.dependency_overrides[ai_teaching.manage_actor] = lambda: {
+        "company_id": company_id,
+        "actor_user_id": 1,
+        "user": {"id": 1, "full_name": "Test Actor"},
+    }
 
     return TestClient(app)
 

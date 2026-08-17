@@ -28,6 +28,7 @@ import hashlib
 import hmac
 import json
 import logging
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import Any, Callable, NamedTuple
 
@@ -355,3 +356,53 @@ def verify_token_challenge(
         return False
 
     return hmac.compare_digest(str(token or ""), expected_token)
+
+
+# A rejected webhook is anonymous by construction: the signature failed, so the
+# body was never parsed and no company is known. It goes to the control plane
+# unattributed, where an operator can see the shape of it across the platform.
+#
+# Bounded, because forging webhooks costs an attacker nothing and a write per
+# attempt would make the audit trail the payload. One entry a minute per source
+# says everything a hundred would.
+REJECTION_WINDOW_SECONDS = 60
+
+_rejections_seen: dict[tuple[str, str | None], datetime] = {}
+
+
+def record_signature_rejection(
+    *, source: str, ip_address: str | None, reason: str
+) -> None:
+    """File a refused webhook, at most once a minute per source and address.
+
+    `Action.WEBHOOK_SIGNATURE_REJECTED` was declared when the security mirror
+    was built and nothing ever raised it. A forged delivery is the one attack
+    against this platform that needs no account at all, and it left no trace an
+    operator could read — only a line in the process log.
+
+    Never raises: the request is already being refused, and a log entry must not
+    be able to turn a correct 403 into a 500.
+    """
+    now = datetime.now(timezone.utc)
+    key = (source, ip_address)
+    last = _rejections_seen.get(key)
+
+    if last and (now - last).total_seconds() < REJECTION_WINDOW_SECONDS:
+        return
+
+    _rejections_seen[key] = now
+
+    if len(_rejections_seen) > 10_000:
+        _rejections_seen.clear()
+        _rejections_seen[key] = now
+
+    try:
+        from backend.services.activity_service import Action, activity_service
+
+        activity_service.record_unattributed(
+            action=Action.WEBHOOK_SIGNATURE_REJECTED,
+            summary=f"Refused a {source} webhook: {reason}",
+            ip_address=ip_address,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not record a webhook signature rejection")

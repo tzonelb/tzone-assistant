@@ -329,12 +329,47 @@ class PlanService:
             return
 
         if int(used) >= allowance:
+            # Recorded here rather than at each call site, because every call
+            # site that enforces a limit is a place that could forget to. The
+            # owner sees a colleague refused and the number that refused them;
+            # without this the only trace is the error message on one screen,
+            # gone as soon as it is dismissed.
+            self._record_limit_hit(
+                company_id=int(company_id),
+                limit_key=limit_key,
+                limit=allowance,
+                used=int(used),
+            )
+
             raise PlanLimitExceeded(
                 limit_key=limit_key,
                 limit=allowance,
                 used=int(used),
                 company_id=int(company_id),
             )
+
+    @staticmethod
+    def _record_limit_hit(
+        *, company_id: int, limit_key: str, limit: int, used: int
+    ) -> None:
+        """Never let recording the refusal change the refusal."""
+        try:
+            from backend.services.activity_service import Action, activity_service
+
+            activity_service.record(
+                company_id=company_id,
+                action=Action.PLAN_LIMIT_HIT,
+                category="plan",
+                kind="security",
+                summary=(
+                    f"Refused: {LIMIT_LABELS.get(limit_key, limit_key)} limit of "
+                    f"{limit} reached"
+                ),
+                severity="warning",
+                after={"limit_key": limit_key, "limit": limit, "used": used},
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not record a plan limit refusal")
 
     def headroom(self, company_id: int, limit_key: str, used: int) -> dict[str, Any]:
         """How much of one allowance is left, for a screen or a warning."""

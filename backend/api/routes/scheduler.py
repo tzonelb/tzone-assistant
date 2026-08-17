@@ -5,10 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, field_validator
 
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 from backend.services.scheduler_service import (
     STATUSES,
     SchedulerError,
@@ -101,6 +106,7 @@ def list_scheduled_posts(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_scheduled_post(
     payload: ScheduledPostCreate,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_permission("scheduler.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -120,6 +126,28 @@ def create_scheduled_post(
         )
     except SchedulerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # When it goes out and where, not the copy itself. The post is the record
+    # of what it says, and it is still editable until it publishes — a copy
+    # taken here would be of a draft nobody sent.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.POST_SCHEDULED,
+        category="scheduler",
+        target_type="scheduled_post",
+        target_id=post.get("id"),
+        summary=(
+            f"Scheduled a {payload.channel} post for {payload.scheduled_for}"
+        ),
+        after={
+            "channel": payload.channel,
+            "scheduled_for": payload.scheduled_for,
+            "status": post.get("status"),
+            "channel_account_id": post.get("channel_account_id"),
+        },
+        ip_address=client_ip(request),
+    )
 
     return {"status": "created", "post": post}
 
@@ -167,6 +195,7 @@ def update_scheduled_post(
 @router.post("/{post_id}/approve")
 def approve_scheduled_post(
     post_id: int,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_permission("scheduler.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -181,10 +210,28 @@ def approve_scheduled_post(
             detail="Only a draft or a failed post can be approved.",
         )
 
-    return {
-        "status": "approved",
-        "post": scheduler_service.get_post(company_id=company_id, post_id=post_id),
-    }
+    post = scheduler_service.get_post(company_id=company_id, post_id=post_id)
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.POST_APPROVED,
+        category="scheduler",
+        target_type="scheduled_post",
+        target_id=post_id,
+        summary=(
+            f"Approved a {(post or {}).get('channel')} post for "
+            f"{(post or {}).get('scheduled_for')}"
+        ),
+        after={
+            "channel": (post or {}).get("channel"),
+            "scheduled_for": (post or {}).get("scheduled_for"),
+            "status": (post or {}).get("status"),
+        },
+        ip_address=client_ip(request),
+    )
+
+    return {"status": "approved", "post": post}
 
 
 @router.post("/{post_id}/cancel")

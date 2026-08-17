@@ -22,6 +22,7 @@ from fastapi.responses import PlainTextResponse
 
 from channels.inbound import process_inbound_event
 from channels.meta.logger import log_meta_event
+from backend.services.auth_service import client_ip
 from channels.webhook_limits import (
     dispatch,
     event_limit,
@@ -32,6 +33,7 @@ from channels.webhook_security import (
     SIGNATURE_HEADER,
     SOURCE_CURRENT,
     WebhookVerificationError,
+    record_signature_rejection,
     verify_token_challenge,
     verify_webhook_signature,
 )
@@ -150,6 +152,9 @@ async def receive_message(request: Request):
     except WebhookVerificationError as exc:
         log_meta_event("whatsapp_webhook_rejected", {"reason": str(exc)})
         logger.warning("Rejected unsigned or mis-signed WhatsApp webhook: %s", exc)
+        record_signature_rejection(
+            source="whatsapp", ip_address=client_ip(request), reason=str(exc)
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid webhook signature.",

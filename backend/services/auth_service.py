@@ -402,6 +402,44 @@ class AuthService:
     # Authentication
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _record_workspace_code_rejection(
+        *,
+        company_id: int,
+        user_id: int,
+        email: str,
+        ip_address: str | None,
+    ) -> None:
+        """File the rejection, and never let filing it change the answer.
+
+        Imported here rather than at module scope because `activity_service`
+        writes to a company's own encrypted database, and importing it at the
+        top of the module that every route depends on would pull the tenant
+        layer into the import graph of the login path itself.
+
+        Wrapped because a log entry must not be able to turn a correct refusal
+        into a 500. The refusal has already been decided; this only records it.
+        """
+        try:
+            from backend.services.activity_service import Action, activity_service
+
+            activity_service.record(
+                company_id=company_id,
+                action=Action.WORKSPACE_CODE_REJECTED,
+                category="auth",
+                kind="security",
+                actor_user_id=user_id,
+                actor_label=email,
+                summary=(
+                    "A sign-in with the correct password was refused by the "
+                    "workspace code"
+                ),
+                severity="warning",
+                ip_address=ip_address,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not record a workspace code rejection")
+
     def authenticate(
         self,
         *,
@@ -409,12 +447,20 @@ class AuthService:
         company: str,
         email: str,
         password: str,
+        ip_address: str | None = None,
     ) -> dict[str, Any] | None:
         """Verify all four credentials and return the user, or None.
 
         The failure reason is deliberately not returned to the caller: the API
         answers every failure identically so nobody can probe which companies,
         codes or emails exist.
+
+        `ip_address` is not used to decide anything. It is here because one of
+        the failures below is worth telling the company's owner about, and the
+        caller cannot tell which failure happened — that is the whole point of
+        the uniform answer. Withholding the reason from the attacker and
+        withholding it from the owner are different things, and only the first
+        was ever intended.
         """
         normalized_email = self.normalize_email(email)
         normalized_company = str(company or "").strip().lower()
@@ -492,6 +538,33 @@ class AuthService:
             logger.warning(
                 "Login rejected: bad workspace code for company id=%s", company_id
             )
+
+            # The strongest signal this platform produces, and until now it went
+            # nowhere but a log file on the server.
+            #
+            # Every check above has already passed to get here: the email is a
+            # real employee, the account is active, the company exists and they
+            # belong to it, and — decisively — the password was correct. Someone
+            # is holding a working password for this company's employee and is
+            # being stopped by the workspace code alone. That is either the
+            # employee having forgotten one of their four credentials, or a
+            # compromised password one secret away from an open door.
+            #
+            # The owner is the only person who can tell those apart, and the
+            # only one who can act. `Action.WORKSPACE_CODE_REJECTED` was
+            # declared for exactly this and nothing ever raised it.
+            #
+            # Filed in the company's own log rather than unattributed, unlike a
+            # plain refusal: there is no user-enumeration concern left when the
+            # password has already been verified, and the entry is useless to an
+            # owner who cannot see it.
+            self._record_workspace_code_rejection(
+                company_id=company_id,
+                user_id=int(user_data["id"]),
+                email=normalized_email,
+                ip_address=ip_address,
+            )
+
             return None
 
         with database_manager.control() as conn:
@@ -1500,6 +1573,71 @@ async def get_platform_admin_enrolling(
     return user
 
 
+# A refusal per (employee, permission) at most this often. An authenticated
+# employee can hammer a forbidden endpoint as fast as the network allows, and a
+# log entry per attempt would turn the audit trail into the attack's payload —
+# unbounded writes into the company's own encrypted database, drowning the
+# entries an owner actually needs to see.
+#
+# The first refusal in each window is what carries the information. A hundred
+# more in the same minute say the same thing and cost a hundred writes.
+PERMISSION_DENIED_WINDOW_SECONDS = 60
+
+_permission_denied_seen: dict[tuple[int, int, str], datetime] = {}
+
+
+def _record_permission_denied(
+    *,
+    current_user: dict[str, Any],
+    company_id: int,
+    permission_code: str,
+    request: Request,
+) -> None:
+    """File a 403 in the company's own log, at most once a minute per employee.
+
+    An employee reaching for something their role does not cover is worth the
+    owner knowing about: either a role that is drawn too tightly for the job, or
+    somebody looking where they should not. Both are the owner's to judge, and
+    neither reaches them today.
+    """
+    user_id = int(current_user.get("id") or 0)
+    key = (user_id, int(company_id), permission_code)
+    now = datetime.now(timezone.utc)
+    last = _permission_denied_seen.get(key)
+
+    if last and (now - last).total_seconds() < PERMISSION_DENIED_WINDOW_SECONDS:
+        return
+
+    _permission_denied_seen[key] = now
+
+    # Bounded so a long-running process cannot accumulate a key per employee per
+    # permission for ever. Cleared wholesale rather than evicted one at a time:
+    # the worst a cleared window costs is one extra entry, and the alternative
+    # is an eviction policy nobody will read again.
+    if len(_permission_denied_seen) > 10_000:
+        _permission_denied_seen.clear()
+        _permission_denied_seen[key] = now
+
+    try:
+        from backend.services.activity_service import Action, activity_service
+
+        activity_service.record_for(
+            current_user,
+            company_id=int(company_id),
+            action=Action.PERMISSION_DENIED,
+            category="auth",
+            kind="security",
+            summary=f"Refused an action needing '{permission_code}'",
+            severity="notice",
+            # The path, not the payload. What was attempted is the useful part;
+            # the body of a refused request may hold anything.
+            after={"permission": permission_code, "path": request.url.path},
+            ip_address=client_ip(request),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not record a permission denial")
+
+
 def require_permission(permission_code: str) -> Callable:
     """Build a dependency that enforces one permission.
 
@@ -1510,6 +1648,7 @@ def require_permission(permission_code: str) -> Callable:
     """
 
     def dependency(
+        request: Request,
         current_user: dict[str, Any] = Depends(get_current_user),
     ) -> dict[str, Any]:
         company_id = auth_service.resolve_company_id(current_user)
@@ -1522,6 +1661,13 @@ def require_permission(permission_code: str) -> Callable:
         )
 
         if not allowed:
+            _record_permission_denied(
+                current_user=current_user,
+                company_id=company_id,
+                permission_code=permission_code,
+                request=request,
+            )
+
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This action requires the '{permission_code}' permission.",

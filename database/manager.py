@@ -290,6 +290,22 @@ class DatabaseManager:
                 [(code, name, desc, now) for code, name, desc in DEFAULT_PERMISSIONS],
             )
 
+            # The catalogue is the source of truth, which the upsert above
+            # already assumes for a permission's name and description. Retiring
+            # one has to work the same way, or a permission the code stopped
+            # enforcing keeps appearing on the Roles screen of every company
+            # that was provisioned before it was dropped — offering an owner a
+            # switch that restricts nothing.
+            #
+            # `role_permissions` cascades on delete, so any role still granting
+            # a retired permission loses the grant with it. That changes no
+            # access: nothing was checking it.
+            placeholders = ",".join("?" for _ in DEFAULT_PERMISSIONS)
+            connection.execute(
+                f"DELETE FROM permissions WHERE code NOT IN ({placeholders})",
+                [code for code, _, _ in DEFAULT_PERMISSIONS],
+            )
+
             connection.executemany(
                 """
                 INSERT OR IGNORE INTO plans (

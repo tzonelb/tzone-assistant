@@ -132,6 +132,7 @@ def login(payload: LoginRequest, request: Request, response: Response):
         company=payload.company,
         email=email,
         password=payload.password,
+        ip_address=ip_address,
     )
 
     if not user:

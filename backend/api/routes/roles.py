@@ -544,6 +544,22 @@ def force_password_reset(
             detail=f"The reset link could not be sent. {result.reason}",
         )
 
+    # After the link is actually sent, not before. A forced reset that failed
+    # to deliver ends every one of that employee's sessions and gives them no
+    # way back, and recording it as done would hide exactly that.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.USER_PASSWORD_RESET,
+        category="roles",
+        kind="security",
+        target_type="user",
+        target_id=user_id,
+        summary=f"Forced a password reset for {target['email']}",
+        severity="warning",
+        ip_address=client_ip(request),
+    )
+
     return {
         "success": True,
         "message": f"A reset link was sent to {target['email']}.",
@@ -551,7 +567,11 @@ def force_password_reset(
 
 
 @router.post("/users/{user_id}/unlock")
-def unlock_user(user_id: int, current_user: dict = Depends(get_current_user)):
+def unlock_user(
+    user_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Clear a lockout without touching the password.
 
     For the ordinary case: an employee mistyped their password five times and
@@ -564,5 +584,21 @@ def unlock_user(user_id: int, current_user: dict = Depends(get_current_user)):
         _assert_member(conn, company_id, user_id)
 
     auth_service.unlock_account(user_id=user_id)
+
+    # An account is locked because five sign-ins failed, which is either a
+    # forgetful employee or somebody guessing at their password. Who reopened
+    # it, and when, is the other half of that record.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.USER_UNLOCKED,
+        category="roles",
+        kind="security",
+        target_type="user",
+        target_id=user_id,
+        summary=f"Unlocked team member {user_id}",
+        severity="notice",
+        ip_address=client_ip(request),
+    )
 
     return {"success": True, "message": "Account unlocked."}
