@@ -22,6 +22,9 @@ from backend.api.schemas.platform import (
     CompanyCreateRequest,
     CompanyStatusRequest,
     PlanAssignRequest,
+    PlanCreateRequest,
+    PlanOverrideRequest,
+    PlanUpdateRequest,
     PlatformConfigUpdate,
     PlatformLoginRequest,
     PlatformLoginResponse,
@@ -34,6 +37,7 @@ from backend.services.auth_service import (
     client_ip,
     get_platform_admin,
 )
+from backend.services.plan_service import LIMIT_KEYS, plan_service
 from backend.services.platform_service import (
     PlatformConflict,
     PlatformError,
@@ -337,7 +341,176 @@ def update_platform_config(
 
 @router.get("/plans")
 def list_plans(current_user: dict[str, Any] = Depends(get_platform_admin)):
-    return {"items": platform_service.list_plans()}
+    plans = platform_service.list_plans()
+
+    # How many companies each plan carries, so an operator editing a ceiling
+    # can see how many businesses the edit moves before making it.
+    for plan in plans:
+        plan["companies"] = platform_service.plan_usage(plan["code"])
+
+    return {"items": plans, "limit_keys": list(LIMIT_KEYS)}
+
+
+@router.post("/plans", status_code=status.HTTP_201_CREATED)
+def create_plan(
+    payload: PlanCreateRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Add a plan.
+
+    Until now the three seeded plans were the only ones there could ever be:
+    they were written with `INSERT OR IGNORE` at first boot and no endpoint
+    created or changed one, so the commercial offer was frozen at whatever
+    shipped.
+    """
+    try:
+        return platform_service.create_plan(
+            code=payload.code,
+            values={**payload.values, "name": payload.name},
+            actor_user_id=_actor(current_user),
+            ip_address=client_ip(request),
+        )
+    except PlatformError as exc:
+        raise _handle(exc) from exc
+
+
+@router.patch("/plans/{code}")
+def update_plan(
+    code: str,
+    payload: PlanUpdateRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Change a plan's numbers. Every company on it moves with it.
+
+    That is intended, and it is also why per-company overrides exist:
+    accommodating one customer by editing the plan raises the ceiling for
+    everybody on it and records nothing about why.
+    """
+    try:
+        return platform_service.update_plan(
+            code=code,
+            values=payload.values,
+            actor_user_id=_actor(current_user),
+            ip_address=client_ip(request),
+        )
+    except PlatformError as exc:
+        raise _handle(exc) from exc
+
+
+# ----------------------------------------------------------------------
+# Per-company allowances and usage
+# ----------------------------------------------------------------------
+
+
+@router.get("/companies/{company_id}/limits")
+def company_limits(
+    company_id: int,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """The effective allowance for each limit, and where each one came from."""
+    try:
+        overrides = plan_service.overrides(company_id)
+        subscription = plan_service.subscription(company_id)
+
+        return {
+            "company_id": company_id,
+            "limits": plan_service.limits(company_id),
+            "overrides": overrides,
+            "features": plan_service.features(company_id),
+            "plan_code": (subscription or {}).get("plan_code"),
+            "subscription_active": plan_service.is_active(subscription),
+            "sources": {
+                key: ("override" if key in overrides else "plan")
+                for key in LIMIT_KEYS
+            },
+        }
+    except PlatformError as exc:
+        raise _handle(exc) from exc
+
+
+@router.put("/companies/{company_id}/limits/{limit_key}")
+def set_company_limit(
+    company_id: int,
+    limit_key: str,
+    payload: PlanOverrideRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    try:
+        limits = plan_service.set_override(
+            company_id=company_id,
+            limit_key=limit_key,
+            value=payload.value,
+            note=payload.note,
+            actor_user_id=_actor(current_user),
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    platform_service.record_audit(
+        action="company.limit_override_set",
+        actor_user_id=_actor(current_user),
+        company_id=company_id,
+        target_type="company",
+        target_id=company_id,
+        data={"limit_key": limit_key, "value": payload.value, "note": payload.note},
+        ip_address=client_ip(request),
+    )
+
+    return {"company_id": company_id, "limits": limits}
+
+
+@router.delete("/companies/{company_id}/limits/{limit_key}")
+def clear_company_limit(
+    company_id: int,
+    limit_key: str,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Put this company back on its plan for one allowance."""
+    limits = plan_service.clear_override(
+        company_id=company_id, limit_key=limit_key
+    )
+
+    platform_service.record_audit(
+        action="company.limit_override_cleared",
+        actor_user_id=_actor(current_user),
+        company_id=company_id,
+        target_type="company",
+        target_id=company_id,
+        data={"limit_key": limit_key},
+        ip_address=client_ip(request),
+    )
+
+    return {"company_id": company_id, "limits": limits}
+
+
+@router.get("/companies/{company_id}/usage")
+def company_usage(
+    company_id: int,
+    period: str | None = Query(default=None, max_length=7),
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """What this company used in a month. Numbers only, never content."""
+    from backend.services.plan_service import current_period
+
+    resolved = period or current_period()
+
+    return {
+        "company_id": company_id,
+        "period": resolved,
+        "breakdown": plan_service.usage_breakdown(
+            company_id=company_id, period=resolved
+        ),
+        "ai_replies": plan_service.usage_total(
+            company_id=company_id, metric="ai_replies", period=resolved
+        ),
+        "limits": plan_service.limits(company_id),
+    }
 
 
 # ----------------------------------------------------------------------

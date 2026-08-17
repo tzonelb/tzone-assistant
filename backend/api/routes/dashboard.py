@@ -247,7 +247,111 @@ def get_subscription(
     return {
         "subscription": subscription,
         "active": _subscription_is_active(subscription),
+        # The effective allowances, which are not always the plan's: an
+        # operator may have raised one for this company alone. A screen that
+        # showed the plan's numbers would tell a company it was about to be
+        # refused when it was not, or the reverse.
+        "limits": plan_service.limits(resolved_company_id),
+        "features": plan_service.features(resolved_company_id),
     }
+
+
+@router.get("/usage")
+def get_usage(
+    period: str | None = Query(default=None, max_length=7),
+    company_id: int | None = Query(default=None, ge=1),
+    current_user: dict = Depends(require_permission("subscriptions.view")),
+):
+    """What this company has used this month, against what it may use.
+
+    Behind `subscriptions.view` rather than `dashboard.view`: this is
+    commercial information about the business, and the wider permission is one
+    almost every employee holds.
+
+    Numbers only. The counters record a channel and a department and never a
+    word of what was said, so nothing here can leak a conversation.
+    """
+    from backend.services.plan_service import current_period
+
+    resolved_company_id = auth_service.resolve_company_id(
+        current_user=current_user,
+        requested_company_id=company_id,
+    )
+
+    resolved_period = period or current_period()
+
+    counts = _company_counts(resolved_company_id)
+
+    return {
+        "period": resolved_period,
+        "breakdown": plan_service.usage_breakdown(
+            company_id=resolved_company_id, period=resolved_period
+        ),
+        "allowances": [
+            plan_service.headroom(resolved_company_id, "max_ai_messages", used=(
+                plan_service.usage_total(
+                    company_id=resolved_company_id,
+                    metric="ai_replies",
+                    period=resolved_period,
+                )
+            )),
+            plan_service.headroom(
+                resolved_company_id, "max_users", used=counts["users"]
+            ),
+            plan_service.headroom(
+                resolved_company_id,
+                "max_channel_accounts",
+                used=counts["channel_accounts"],
+            ),
+            plan_service.headroom(
+                resolved_company_id,
+                "max_knowledge_items",
+                used=counts["knowledge_items"],
+            ),
+        ],
+    }
+
+
+def _company_counts(company_id: int) -> dict[str, int]:
+    """What this company currently occupies of each allowance.
+
+    Counted the same way the guards count it, so the number on the usage screen
+    is the number that will refuse the next write. A screen that counted
+    differently would tell a company it had room it did not have.
+    """
+    counts = {"users": 0, "channel_accounts": 0, "knowledge_items": 0}
+
+    try:
+        with database_manager.control() as conn:
+            counts["users"] = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS total FROM company_users "
+                    "WHERE company_id = ? AND status = 'active'",
+                    (company_id,),
+                ).fetchone()["total"]
+            )
+            counts["channel_accounts"] = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS total FROM channel_accounts "
+                    "WHERE company_id = ? AND status = 'active'",
+                    (company_id,),
+                ).fetchone()["total"]
+            )
+    except DatabaseError:
+        logger.exception("Could not count control-plane usage for company %s", company_id)
+
+    try:
+        with database_manager.tenant(company_id) as conn:
+            counts["knowledge_items"] = int(
+                conn.execute(
+                    "SELECT COUNT(*) AS total FROM knowledge_items WHERE company_id = ?",
+                    (company_id,),
+                ).fetchone()["total"]
+            )
+    except DatabaseError:
+        logger.exception("Could not count knowledge for company %s", company_id)
+
+    return counts
 
 
 @router.get("/channels")

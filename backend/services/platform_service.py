@@ -1085,6 +1085,220 @@ class PlatformService:
 
         return [dict(row) for row in rows]
 
+    # Editable on a plan. `code` is absent deliberately: it is what every
+    # subscription row points at by name, and renaming it would silently move
+    # every company on that plan onto a plan that no longer exists.
+    PLAN_NUMERIC_FIELDS: tuple[str, ...] = (
+        "price_monthly",
+        "max_users",
+        "max_channel_accounts",
+        "max_ai_messages",
+        "max_knowledge_items",
+    )
+
+    PLAN_FLAG_FIELDS: tuple[str, ...] = (
+        "voice_ai_enabled",
+        "image_ai_enabled",
+        "accounting_connector_enabled",
+        "product_connector_enabled",
+    )
+
+    def _clean_plan_values(self, values: dict[str, Any]) -> dict[str, Any]:
+        """Validate a plan's numbers before they become somebody's ceiling.
+
+        Unknown keys are refused rather than dropped. A stored typo looks like
+        a setting that was applied, and the operator would believe they had
+        raised a limit that never moved.
+        """
+        if not isinstance(values, dict):
+            raise PlatformError("Plan values must be an object.")
+
+        allowed = set(self.PLAN_NUMERIC_FIELDS) | set(self.PLAN_FLAG_FIELDS) | {"name"}
+        unknown = sorted(set(values) - allowed)
+
+        if unknown:
+            raise PlatformError(
+                f"Unknown plan field(s): {', '.join(unknown)}. "
+                f"Valid fields are: {', '.join(sorted(allowed))}."
+            )
+
+        clean: dict[str, Any] = {}
+
+        if "name" in values:
+            name = str(values["name"] or "").strip()
+
+            if not name:
+                raise PlatformError("A plan needs a name.")
+
+            clean["name"] = name
+
+        for field in self.PLAN_NUMERIC_FIELDS:
+            if field not in values:
+                continue
+
+            try:
+                number = float(values[field])
+            except (TypeError, ValueError) as exc:
+                raise PlatformError(f"{field} must be a number.") from exc
+
+            if number < 0:
+                raise PlatformError(f"{field} cannot be negative.")
+
+            clean[field] = (
+                round(number, 2) if field == "price_monthly" else int(number)
+            )
+
+        for field in self.PLAN_FLAG_FIELDS:
+            if field in values:
+                clean[field] = 1 if values[field] else 0
+
+        return clean
+
+    def create_plan(
+        self,
+        *,
+        code: str,
+        values: dict[str, Any],
+        actor_user_id: int | None = None,
+        ip_address: str | None = None,
+    ) -> dict[str, Any]:
+        """Add a plan. Until now the three seeded plans were the only ones.
+
+        They were written with `INSERT OR IGNORE` at first boot and there was no
+        endpoint to add or change one, so the commercial offer was frozen at
+        whatever shipped.
+        """
+        code = str(code or "").strip().lower()
+
+        if not code:
+            raise PlatformError("A plan needs a code.")
+
+        if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,39}", code):
+            raise PlatformError(
+                "A plan code may use lower-case letters, digits, hyphens and "
+                "underscores, and must start with a letter or digit."
+            )
+
+        clean = self._clean_plan_values(values)
+
+        if not clean.get("name"):
+            raise PlatformError("A plan needs a name.")
+
+        columns = ["code", "created_at", *sorted(clean)]
+        params = [code, utc_now_iso(), *(clean[key] for key in sorted(clean))]
+
+        with database_manager.control() as conn:
+            existing = conn.execute(
+                "SELECT id FROM plans WHERE code = ? LIMIT 1", (code,)
+            ).fetchone()
+
+            if existing:
+                raise PlatformError(f"A plan with the code {code!r} already exists.")
+
+            conn.execute(
+                f"""
+                INSERT INTO plans ({', '.join(columns)})
+                VALUES ({', '.join('?' for _ in columns)})
+                """,
+                params,
+            )
+
+            self.record_audit(
+                conn=conn,
+                action="plan.created",
+                actor_user_id=actor_user_id,
+                target_type="plan",
+                target_id=code,
+                data={"code": code, **clean},
+                ip_address=ip_address,
+            )
+
+            conn.commit()
+
+        return self.plan(code)
+
+    def update_plan(
+        self,
+        *,
+        code: str,
+        values: dict[str, Any],
+        actor_user_id: int | None = None,
+        ip_address: str | None = None,
+    ) -> dict[str, Any]:
+        """Change a plan's numbers. Every company on it moves with it.
+
+        That is the intended behaviour and also the reason per-company
+        overrides exist: accommodating one customer by editing the plan raises
+        the ceiling for everybody on it, and records nothing about why.
+        """
+        code = str(code or "").strip().lower()
+        clean = self._clean_plan_values(values)
+
+        if not clean:
+            raise PlatformError("Nothing to change.")
+
+        with database_manager.control() as conn:
+            existing = conn.execute(
+                "SELECT * FROM plans WHERE code = ? LIMIT 1", (code,)
+            ).fetchone()
+
+            if not existing:
+                raise PlatformNotFound(f"No plan with the code {code!r}.")
+
+            before = {key: dict(existing).get(key) for key in clean}
+
+            conn.execute(
+                f"""
+                UPDATE plans SET {', '.join(f'{key} = ?' for key in sorted(clean))}
+                WHERE code = ?
+                """,
+                [*(clean[key] for key in sorted(clean)), code],
+            )
+
+            self.record_audit(
+                conn=conn,
+                action="plan.updated",
+                actor_user_id=actor_user_id,
+                target_type="plan",
+                target_id=code,
+                # Before and after, so an operator reviewing the log can see
+                # what a company's ceiling used to be rather than only that it
+                # changed.
+                data={"code": code, "before": before, "after": clean},
+                ip_address=ip_address,
+            )
+
+            conn.commit()
+
+        return self.plan(code)
+
+    def plan(self, code: str) -> dict[str, Any]:
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT * FROM plans WHERE code = ? LIMIT 1",
+                (str(code or "").strip().lower(),),
+            ).fetchone()
+
+        if not row:
+            raise PlatformNotFound(f"No plan with the code {code!r}.")
+
+        return dict(row)
+
+    def plan_usage(self, code: str) -> int:
+        """How many companies are on this plan, for a confirmation prompt."""
+        with database_manager.control() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(DISTINCT subscriptions.company_id) AS total
+                FROM subscriptions
+                JOIN plans ON plans.id = subscriptions.plan_id
+                WHERE plans.code = ?
+                """,
+                (str(code or "").strip().lower(),),
+            ).fetchone()
+
+        return int(row["total"]) if row else 0
+
     def assign_plan(
         self,
         *,

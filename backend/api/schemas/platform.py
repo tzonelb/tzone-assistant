@@ -91,3 +91,36 @@ class PlatformConfigUpdate(BaseModel):
     modules: dict[str, bool] | None = None
     branding: dict[str, Any] | None = None
     layout: dict[str, bool] | None = None
+
+
+class PlanCreateRequest(BaseModel):
+    """A new plan.
+
+    The numbers are validated in the service rather than here — the same
+    validation has to hold for the CLI and for tests, and duplicating it is how
+    two rules that were meant to be one drift apart.
+    """
+
+    code: str = Field(min_length=2, max_length=40)
+    name: str = Field(min_length=1, max_length=120)
+    values: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlanUpdateRequest(BaseModel):
+    """A partial edit. `code` is deliberately absent: every subscription points
+    at a plan by code, so renaming one would move every company on it onto a
+    plan that no longer exists."""
+
+    values: dict[str, Any] = Field(default_factory=dict)
+
+
+class PlanOverrideRequest(BaseModel):
+    """One company's departure from its plan's allowance.
+
+    A note rather than a free hand: an override with no reason is a number
+    nobody can review later, and reviewing them is the point of keeping them
+    out of the plan row.
+    """
+
+    value: int = Field(ge=0)
+    note: str | None = Field(default=None, max_length=500)
