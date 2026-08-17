@@ -723,3 +723,129 @@ the console showed it as applied.
 
 The audit records the key and whether it is locked, never the value: a settings
 value can hold a workspace code, and `audit_log` is shared across companies.
+
+## D-025 — A branch id that was not yours
+
+Every table in both schemas was checked for readers and writers. `branches` had
+four readers and no writer anywhere, which is what drew attention to it. The
+readers turned out to be the more serious half.
+
+`channel_accounts.branch_id` and `company_users.branch_id` were written straight
+from the request payload, and ids in the control database are global — another
+company's branch id is a valid row. Three read joins matched on the id alone
+with no company condition, so the other company's branch *name* came back on the
+Channels screen, the dashboard and the team list. Proved before fixing: with two
+companies provisioned, Alpha's channel list returned
+`branch_name = 'Beta Secret Warehouse'`.
+
+One name per row, not a bulk dump. It is treated as a leak anyway, because the
+size of one is not what makes it one.
+
+What let it survive is the part worth remembering. At both write sites the
+neighbouring pointer *was* checked, each with a comment explaining why an id
+from another company must be refused — `department_id` in
+`channel_account_service`, `role_id` in `roles.py`. `branch_id` sat in the same
+argument list and the same plain-column tuple and was not. The reasoning had
+already been done and applied to the field beside it.
+
+Closed on both sides: refused at the write, because a stored pointer to someone
+else's row is wrong even while nothing displays it, and the joins scoped by
+company so a row written before the change displays nothing either.
+
+Recorded and deliberately not fixed: nothing on the platform can create a
+branch. Two screens offer the field and both lists are permanently empty.
+Closing that needs a screen for managing branches, and the design is frozen by
+instruction, so a test states the gap and fails the day a writer appears.
+
+## D-026 — The page the company chose, and the page the post went to
+
+`scheduled_posts.channel_account_id` shipped with the scheduler. The create
+endpoint accepted it, the row stored it, and nothing read it back — the
+publisher called `resolve(company_id, channel)`, which returns the company's
+lowest-numbered active account on that channel.
+
+For a company with one page that is the same page, which is why nobody noticed.
+For a company with two, the post went to the wrong audience. It is a switch that
+saves and decides nothing with a worse ending: the result is public, on the
+company's own followers, at a time nobody is watching.
+
+The ownership check lands in the same change as the feature, not after it. While
+nothing read the column an unvalidated value was inert; honouring it is exactly
+what would turn an id from another company into an instruction to publish
+through that company's page with that company's token.
+
+When an account is named and does not resolve, sending raises rather than
+falling back. The caller asked for a specific page, and quietly publishing to a
+different one is the defect being fixed, not an acceptable degradation.
+
+## D-027 — Not connected, and not connectable
+
+Two screens kept their own copy of the channel list and both ended in `website`.
+It is not in `SUPPORTED_CHANNELS`, has no routing field, no webhook and no
+sender, and cannot be chosen on the Channels screen. Every company saw a Website
+tab on its inbox, captioned "Website is not connected yet", and a Website option
+in its notification filter.
+
+The word was not a typo. It was a copy of the catalogue that nobody updated when
+the real one changed, so deleting it would leave the next copy to drift the same
+way. The inbox now reads `supported_channels` off the response, and the single
+remaining constant is only what a screen shows before the first response
+arrives. A test fails on any screen that names the channels in a row rather than
+importing them.
+
+## D-028 — Twenty-three events that were named and never raised
+
+`Action` names 43 things worth recording, and the company owner reads them
+through one unified log built for exactly that. Twenty of the names were ever
+written by anything.
+
+Nothing here is a crash or a wrong answer, which is why it lasted. It is worse
+in one specific way: the owner opens a log built to tell them what happened in
+their company, reads it to the end, and concludes nothing else did.
+
+Two of the missing events matter more than the rest.
+
+**A rejected workspace code.** `authenticate` checks the code last — after the
+email matches, the account is active, the company resolves, and the password
+verifies. Reaching that branch means somebody holds a working password for one
+of this company's employees and is stopped by the workspace code alone: either
+an employee who forgot one of their four credentials, or a compromised password
+one secret away from an open door. Only the owner can tell those apart. It went
+to a log file on the server and nowhere else.
+
+The uniform 401 is unchanged, and tested. Withholding the reason from an
+attacker and withholding it from the owner were never the same decision, and
+only the first was ever intended.
+
+**A refused webhook.** Forging a delivery is the one attack on this platform
+that needs no account at all. The signature check was correct and fail-closed
+from the start; there was no record an operator could read.
+
+Two properties are enforced rather than assumed. Entries carry field names, ids,
+statuses and timestamps — never message bodies, tokens or contact details; a
+settings section in particular is an open bag that can hold credentials. And the
+two events whose rate an attacker controls, a refused webhook and a refused
+action, are throttled per source and per employee-and-permission, so the audit
+trail cannot be made into the payload.
+
+## D-029 — A permission that restricted nothing
+
+`subscriptions.manage` was seeded into every company's control database,
+described as "Change the plan and billing details", listed on the Roles screen
+beside the ones that work, and checked by no endpoint. Nor could it be: a
+company cannot change its own plan by design — plans and per-company overrides
+are set from the operator console.
+
+`require_permission` already said why this matters, in its own docstring: a role
+screen that lists permissions the API never checks is worse than no role screen
+at all, because it tells an administrator they have restricted somebody when
+they have not. A permission is a claim about what someone is prevented from
+doing, and an owner who believes a restriction is in place stops looking.
+
+Retiring it from the catalogue is only half. The seed upserts on every boot, so
+a dropped permission would keep its row for ever in every database provisioned
+before the change — which is every database in production. The seed now deletes
+permissions that are no longer in the catalogue, the same way it already treats
+the catalogue as the authority for a permission's name and description.
+`role_permissions` cascades, so a role still granting a retired permission loses
+the grant. That changes no access: nothing was checking it.

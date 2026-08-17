@@ -47,6 +47,30 @@ being true on the day somebody checked. Names are the tests that hold it.
       reach the console. `test_session_scope.py`, `test_platform_admin.py`
 - [x] A module switched off by the operator closes its API for that company
       and nobody else. `test_module_gating.py`
+- [x] A branch id belonging to another company is refused at the write, and a
+      row already holding one displays nothing. `test_branch_ownership.py`
+- [x] A scheduled post publishes through the page the company chose, and an
+      account belonging to another company cannot fetch its token.
+      `test_scheduled_post_account.py`
+- [x] A ticket cannot be assigned to somebody who does not work here, checked
+      by walking the source so a new endpoint cannot forget. `test_tasks.py`
+- [x] A sign-in stopped only by the workspace code — meaning the password was
+      correct — reaches the owner's log, while the caller still gets the same
+      401 as any other failure. `test_security_events.py`
+- [x] A refused webhook is recorded, and a flood of them writes one entry a
+      minute per source rather than one per attempt.
+- [x] A refused action reaches the owner's log, throttled per employee and
+      permission so hammering a 403 cannot bury the log in its own entries.
+- [x] Every `Action` the platform declares is raised somewhere. An event named
+      and never written makes the owner's log lie by omission.
+- [x] Every permission the Roles screen offers is enforced by some endpoint,
+      and every permission an endpoint requires is one a company can hold.
+      `test_permissions_are_enforced.py`
+- [x] Every setting a company can store is either read by something or
+      declared unimplemented, and no screen offers an unimplemented one.
+      `test_settings_are_implemented.py`
+- [x] The channels a screen offers are the channels the platform can connect.
+      `test_channel_catalogue.py`
 
 ## Security — manual, before launch
 
@@ -127,10 +151,20 @@ deployment:
 
 ## Current conclusion
 
-The security work listed above is complete and covered by the test suite. What
-remains before launch is the manual list — every item on it depends on the real
-server, the real domain and a real mailbox, so none of it can be closed from a
-development machine — together with manual QA, merge and the deployment record.
+The security work listed above is complete and covered by the test suite — 833
+tests at the time of writing. What remains before launch is the manual list —
+every item on it depends on the real server, the real domain and a real mailbox,
+so none of it can be closed from a development machine — together with manual
+QA, merge and the deployment record.
+
+One gap is known and open rather than closed, and is recorded here so it is not
+discovered as a surprise: **nothing on the platform can create a branch.** The
+Roles screen has a branch selector for every team member and the Channels form
+asks for a branch, and both lists are permanently empty, because no endpoint,
+service or CLI command inserts a row. The security half — a branch id belonging
+to another company — is fixed and tested. The missing half needs a screen for
+managing branches, which is a design change and therefore a decision for the
+owner of this product rather than one to take while closing defects.
 
 The state is therefore **not yet approved for launch**, and the reason is now a
 short, specific list rather than an open question.
