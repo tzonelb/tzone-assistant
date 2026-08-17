@@ -244,3 +244,32 @@ stalls the server.
 
 An unreadable control plane allows the write and allows the reply. Refusing
 would take a working company's workspace down over a number nobody changed.
+
+## D-015 — The checks that read the codebase itself
+
+Three defects in this repository shared a shape: nothing about the code looked
+wrong. An INSERT omitted a `NOT NULL` column and failed on every execution for
+the whole life of the feature (D-010). An `INSERT OR IGNORE` silently discarded
+every permission assigned to a role. A route with no dependency works, passes
+its own tests, and is reachable by anybody who knows the path.
+
+None of these is caught by testing behaviour, because the behaviour under test
+is the wrong behaviour. They are caught by reading the source and comparing it
+against a rule, which is what `tests/test_schema_contract.py` and
+`tests/test_route_exposure.py` do on every run:
+
+* every INSERT supplies every `NOT NULL`-with-no-default column of its table,
+  parsed from the schema rather than listed by hand;
+* every `INSERT OR IGNORE` names the constraint it means to ignore;
+* every route has an authorisation dependency, resolved through local helpers
+  (`view_context` and friends never name `require_permission` themselves — what
+  they depend on does);
+* every exemption carries a reason, and an exemption naming a route that no
+  longer exists fails, so the lists cannot rot into cover for a real hole.
+
+Both files were verified by reintroducing the original defects: the D-010
+INSERT, and a new route with no dependency. Both were caught.
+
+At the time of writing there are **no** real findings in either — the two
+dynamic INSERTs and the eleven identity-only routes were each read and are
+correct. The value is not this run; it is the next person adding a route.
