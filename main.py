@@ -61,6 +61,7 @@ from channels.meta import webhook as meta_webhook
 from channels.meta.smart_reply import process_due_replies
 from channels.post_publisher import publish_due_posts
 from channels.webhook_limits import drain as drain_webhook_work
+from channels.telegram import webhook as telegram_webhook
 from channels.whatsapp import webhook as whatsapp_webhook
 from config.settings import config
 from database.manager import database_manager
@@ -511,6 +512,7 @@ app.include_router(developer_center.router)
 
 app.include_router(whatsapp_webhook.router)
 app.include_router(meta_webhook.router)
+app.include_router(telegram_webhook.router)
 
 
 @app.get("/")

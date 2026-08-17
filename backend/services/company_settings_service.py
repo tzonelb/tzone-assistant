@@ -26,6 +26,10 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Distinguishes "leave the pinned value alone" from "pin the value None".
+# `None` is a legitimate thing to pin, so it cannot double as the sentinel.
+_UNSET = object()
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     # The real values come from this company's control-plane row, resolved in
     # `_defaults_for`. The keys are listed here so the section exists and so
@@ -301,6 +305,183 @@ class CompanySettingsService:
             actor_user_id,
         )
         return self.get_section(company_id, normalized)
+
+    # ------------------------------------------------------------------
+    # Operator overrides
+    #
+    # `super_admin_setting_overrides` has been read by `get_section` since the
+    # table shipped — it pins a value and can mark a key locked, and
+    # `update_section` refuses to write a locked key. Nothing ever wrote a row.
+    # The feature existed on the read side, was enforced on the write side, and
+    # was unreachable: every company's `locked_keys` was `[]` for ever, because
+    # there was no way to put anything in it.
+    # ------------------------------------------------------------------
+
+    def set_override(
+        self,
+        *,
+        company_id: int,
+        section: str,
+        setting_key: str,
+        value: Any = _UNSET,
+        is_locked: bool | None = None,
+        actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Pin a setting for one company, lock it, or both.
+
+        `value` and `is_locked` are independent on purpose. An operator may want
+        to lock a company to whatever it has already chosen — a support
+        agreement, a compliance requirement — without deciding the value for
+        them; and may want to correct a value without taking the control away.
+        Forcing both would make the gentler action impossible.
+
+        Omitting `value` leaves the stored pin untouched, which is why the
+        default is a sentinel rather than `None`: `None` is a legitimate value
+        to pin.
+        """
+        company_id = int(company_id)
+        normalized = self._normalize_section(section)
+        key = str(setting_key or "").strip()
+
+        if not key:
+            raise ValueError("An override needs a setting key.")
+
+        defaults = self._defaults_for(company_id, normalized)
+
+        # Refused rather than stored. A key no section defines would sit in the
+        # table for ever, pinning nothing and locking nothing, while the console
+        # showed it as applied — the same shape as every "setting that saved and
+        # did nothing" this codebase has been unpicking.
+        if defaults and key not in defaults:
+            raise ValueError(
+                f"{key!r} is not a setting in the {normalized!r} section. "
+                f"Valid keys are: {', '.join(sorted(defaults))}."
+            )
+
+        now = utc_now_iso()
+
+        with database_manager.tenant(company_id) as conn:
+            existing = conn.execute(
+                """
+                SELECT value_json, is_locked FROM super_admin_setting_overrides
+                WHERE company_id = ? AND section = ? AND setting_key = ?
+                LIMIT 1
+                """,
+                (company_id, normalized, key),
+            ).fetchone()
+
+            value_json = (
+                json.dumps(value, ensure_ascii=False, default=str)
+                if value is not _UNSET
+                else (existing["value_json"] if existing else None)
+            )
+            locked = (
+                int(bool(is_locked))
+                if is_locked is not None
+                else (int(existing["is_locked"]) if existing else 0)
+            )
+
+            conn.execute(
+                """
+                INSERT INTO super_admin_setting_overrides (
+                    company_id, section, setting_key, value_json, is_locked,
+                    updated_by_user_id, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(company_id, section, setting_key)
+                DO UPDATE SET
+                    value_json = excluded.value_json,
+                    is_locked = excluded.is_locked,
+                    updated_by_user_id = excluded.updated_by_user_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    company_id,
+                    normalized,
+                    key,
+                    value_json,
+                    locked,
+                    actor_user_id,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
+        logger.info(
+            "Override set company id=%s section=%s key=%s locked=%s actor id=%s",
+            company_id,
+            normalized,
+            key,
+            bool(locked),
+            actor_user_id,
+        )
+
+        return self.get_section(company_id, normalized)
+
+    def clear_override(
+        self,
+        *,
+        company_id: int,
+        section: str,
+        setting_key: str,
+    ) -> dict[str, Any]:
+        """Hand the setting back to the company.
+
+        Deleting the row rather than setting `is_locked = 0` and blanking the
+        value: a row that pins nothing and locks nothing is a row that says an
+        override exists when none does, and `list_overrides` would keep
+        reporting it.
+        """
+        company_id = int(company_id)
+        normalized = self._normalize_section(section)
+
+        with database_manager.tenant(company_id) as conn:
+            conn.execute(
+                """
+                DELETE FROM super_admin_setting_overrides
+                WHERE company_id = ? AND section = ? AND setting_key = ?
+                """,
+                (company_id, normalized, str(setting_key or "").strip()),
+            )
+            conn.commit()
+
+        return self.get_section(company_id, normalized)
+
+    def list_overrides(self, company_id: int) -> list[dict[str, Any]]:
+        """Every override on this company, for the console to show and undo."""
+        with database_manager.tenant(int(company_id)) as conn:
+            rows = conn.execute(
+                """
+                SELECT section, setting_key, value_json, is_locked,
+                       updated_by_user_id, updated_at
+                FROM super_admin_setting_overrides
+                WHERE company_id = ?
+                ORDER BY section, setting_key
+                """,
+                (int(company_id),),
+            ).fetchall()
+
+        overrides = []
+
+        for row in rows:
+            entry = dict(row)
+            entry["value"] = self._loads(entry.pop("value_json", None), None)
+            entry["is_locked"] = bool(entry["is_locked"])
+            overrides.append(entry)
+
+        return overrides
+
+    def _normalize_section(self, section: str) -> str:
+        normalized = str(section or "").strip().lower()
+
+        if normalized not in DEFAULT_SETTINGS:
+            raise ValueError(
+                f"{normalized!r} is not a settings section. "
+                f"Valid sections are: {', '.join(sorted(DEFAULT_SETTINGS))}."
+            )
+
+        return normalized
 
 
 company_settings_service = CompanySettingsService()

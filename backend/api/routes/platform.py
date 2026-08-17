@@ -30,6 +30,7 @@ from backend.api.schemas.platform import (
     PlatformLoginResponse,
     PlatformLogoutResponse,
     PlatformUserResponse,
+    SettingOverrideRequest,
     TotpConfirmRequest,
 )
 from backend.services.auth_service import (
@@ -702,6 +703,108 @@ def revoke_platform_admin(
 # ----------------------------------------------------------------------
 # Health and audit
 # ----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
+# Per-company setting overrides
+#
+# `super_admin_setting_overrides` has been read by `company_settings_service`
+# since the table shipped, and `update_section` already refuses to write a key
+# it marks as locked. Nothing ever wrote a row, so every company's `locked_keys`
+# was empty for ever and the feature was unreachable from either end.
+# ----------------------------------------------------------------------
+
+
+@router.get("/companies/{company_id}/setting-overrides")
+def list_setting_overrides(
+    company_id: int,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    from backend.services.company_settings_service import company_settings_service
+
+    return {
+        "company_id": company_id,
+        "items": company_settings_service.list_overrides(company_id),
+    }
+
+
+@router.put("/companies/{company_id}/setting-overrides")
+def set_setting_override(
+    company_id: int,
+    payload: SettingOverrideRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Pin or lock one of a company's settings."""
+    from backend.services.company_settings_service import (
+        _UNSET,
+        company_settings_service,
+    )
+
+    try:
+        section = company_settings_service.set_override(
+            company_id=company_id,
+            section=payload.section,
+            setting_key=payload.setting_key,
+            # `set_value` rather than checking `value is None`: pinning a
+            # setting to null is a real thing an operator may want.
+            value=payload.value if payload.set_value else _UNSET,
+            is_locked=payload.is_locked,
+            actor_user_id=_actor(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    platform_service.record_audit(
+        action="company.setting_override_set",
+        actor_user_id=_actor(current_user),
+        company_id=company_id,
+        target_type="company_setting",
+        target_id=f"{payload.section}.{payload.setting_key}",
+        # The key and whether it is locked, never the value: a settings value
+        # can hold a workspace code, and this table is shared across companies.
+        data={
+            "section": payload.section,
+            "setting_key": payload.setting_key,
+            "locked": payload.is_locked,
+            "value_pinned": payload.set_value,
+            "note": payload.note,
+        },
+        ip_address=client_ip(request),
+    )
+
+    return section
+
+
+@router.delete("/companies/{company_id}/setting-overrides")
+def clear_setting_override(
+    company_id: int,
+    section: str = Query(min_length=2, max_length=60),
+    setting_key: str = Query(min_length=1, max_length=80),
+    request: Request = None,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Hand the setting back to the company."""
+    from backend.services.company_settings_service import company_settings_service
+
+    try:
+        result = company_settings_service.clear_override(
+            company_id=company_id, section=section, setting_key=setting_key
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    platform_service.record_audit(
+        action="company.setting_override_cleared",
+        actor_user_id=_actor(current_user),
+        company_id=company_id,
+        target_type="company_setting",
+        target_id=f"{section}.{setting_key}",
+        data={"section": section, "setting_key": setting_key},
+        ip_address=client_ip(request) if request else None,
+    )
+
+    return result
 
 
 @router.get("/health")

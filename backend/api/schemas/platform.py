@@ -150,3 +150,21 @@ class TotpConfirmRequest(BaseModel):
     """
 
     code: str = Field(min_length=4, max_length=32)
+
+
+class SettingOverrideRequest(BaseModel):
+    """Pin a company's setting, lock it, or both.
+
+    `value` and `is_locked` are independent: an operator may lock a company to
+    whatever it has already chosen without deciding the value for them, or
+    correct a value without taking the control away. `value` omitted leaves any
+    existing pin untouched — `None` is a legitimate thing to pin, so it cannot
+    double as "leave it alone".
+    """
+
+    section: str = Field(min_length=2, max_length=60)
+    setting_key: str = Field(min_length=1, max_length=80)
+    value: Any = None
+    set_value: bool = False
+    is_locked: bool | None = None
+    note: str | None = Field(default=None, max_length=500)

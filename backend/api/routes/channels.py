@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 
-ChannelName = Literal["messenger", "instagram", "whatsapp"]
+ChannelName = Literal["messenger", "instagram", "whatsapp", "telegram"]
 
 
 class ChannelAccountCreate(BaseModel):

@@ -640,3 +640,86 @@ being answered.
 
 `core/menu.py` was deleted with this. It read `data/menus.json` — a third copy
 of the same T-ZONE menu — and had no callers at all.
+
+## D-023 — Telegram becomes a channel a company connects
+
+Telegram worked. `channels/telegram/bot.py` held `TELEGRAM_BOT_TOKEN` from the
+environment, polled, and answered customers — for exactly one company, because
+one process holds one token. Then the platform became multi-tenant,
+`message_gateway.handle_text` gained a required `company_id`, and nothing
+updated the one caller that lives outside the request path. Every message has
+raised `TypeError` since, silently: no test covers a standalone script and
+`main.py` never imports it.
+
+The regression is not the interesting part. The shape is: that bot went through
+the engine's Telegram branch, which pinned every conversation into
+`telegram_iptv_start` and forced the department to `iptv` — T-ZONE's own IPTV
+support script, applied to whichever company ran it. A channel is not a
+business, and nothing about Telegram implies IPTV.
+
+### One bot per company, routed by its own id
+
+`telegram` is now a channel account like the others. The company pastes the
+token BotFather gave it; the numeric prefix of that token *is* the bot id, so
+`channel_account_service` derives the routing identifier rather than asking an
+operator to type it — a mistyped id either receives nothing or claims an id
+another company was routing on. It is stored in `external_account_id`, which
+already carries a unique index per channel, so two companies cannot claim one
+bot.
+
+### The webhook, not the poller, is how a platform serves many
+
+`POST /webhook/telegram/{bot_id}` mirrors the Meta and WhatsApp webhooks. The
+bot id is in the path because Telegram delivers each bot's updates to whatever
+URL that bot registered, so the URL is where the identity belongs.
+
+Telegram has no request signature. What it has is a secret registered with
+`setWebhook` and echoed in `X-Telegram-Bot-Api-Secret-Token`, stored per account
+in the existing `verify_token_sealed` column and compared with
+`compare_digest`. An account with **no** secret registered is refused, not waved
+through: a bot id is public — it is in the bot's own username lookup — so an
+unauthenticated endpoint would let anybody post into that company's inbox as
+any customer they chose.
+
+The polling script is kept and fixed, because it is genuinely the right tool for
+local development and for a single-company install behind a firewall. It now
+resolves its own company from its token at startup and refuses to run on a token
+nobody has connected, rather than starting and answering as whichever company
+the engine happened to resolve.
+
+### The name arrives with the message
+
+`resolve_meta_profile` answers only for Messenger, by design — there is no Graph
+API to ask for anyone else. But Telegram sends the sender's name with every
+update, and `inbound.py` read only the profile lookup, so a Telegram customer
+would have appeared in the inbox as a numeric chat id while their name sat
+unread in the same request.
+
+## D-024 — A guard that was enforced and could never be armed
+
+`super_admin_setting_overrides` has been read by `company_settings_service`
+since the table shipped. It pins a value for one company, it can mark a key
+locked, and `update_section` already refuses to write a locked key.
+
+Nothing ever wrote a row. The read side worked, the enforcement worked, and the
+feature was unreachable from either end — every company's `locked_keys` was `[]`
+for ever, because there was no way to put anything in it.
+
+That is the same defect as a switch that saves and decides nothing, arriving
+from the opposite direction. Both leave an operator believing something is in
+force that is not.
+
+`value` and `is_locked` are independent, and deliberately so. An operator may
+want to lock a company to whatever it has already chosen — a support agreement,
+a compliance requirement — without deciding the value for them; and may want to
+correct a value without taking the control away. Requiring both would make the
+gentler action impossible.
+
+Omitting `value` leaves any existing pin untouched, which is why the parameter
+defaults to a sentinel rather than to `None`: `None` is a legitimate thing to
+pin. A setting key no section defines is refused rather than stored — it would
+otherwise sit in the table for ever, pinning nothing and locking nothing, while
+the console showed it as applied.
+
+The audit records the key and whether it is locked, never the value: a settings
+value can hold a workspace code, and `audit_log` is shared across companies.

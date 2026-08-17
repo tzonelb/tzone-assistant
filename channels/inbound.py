@@ -76,17 +76,26 @@ def process_inbound_event(
         channel=channel,
     )
 
+    # The name the provider put in the delivery itself, when there is one.
+    # `resolve_meta_profile` answers only for Messenger — it returns nothing for
+    # every other channel by design, since there is no Graph API to ask. But
+    # Telegram *does* send the sender's first and last name with every update,
+    # and without this the inbox would show a numeric chat id for a customer
+    # whose name arrived in the same request.
+    delivered_name = str(event.get("customer_name") or "").strip() or None
+
     customer = customer_service.upsert_from_channel(
         company_id=company_id,
         channel=channel,
         external_user_id=user_id,
-        display_name=official_profile.get("customer_name"),
+        display_name=official_profile.get("customer_name") or delivered_name,
         profile_picture=official_profile.get("customer_profile_picture"),
         username=official_profile.get("username"),
     )
 
     effective_customer_name = (
         official_profile.get("customer_name")
+        or delivered_name
         or customer.get("display_name")
         or next(
             (

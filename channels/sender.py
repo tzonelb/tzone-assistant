@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from channels.meta.sender import send_meta_buttons, send_meta_text
+from channels.telegram.sender import send_telegram_text
 from channels.whatsapp.sender import send_whatsapp_text
 
 
@@ -19,8 +20,9 @@ logger = logging.getLogger(__name__)
 
 META_CHANNELS = frozenset({"messenger", "instagram"})
 WHATSAPP_CHANNELS = frozenset({"whatsapp"})
+TELEGRAM_CHANNELS = frozenset({"telegram"})
 
-SUPPORTED_CHANNELS = META_CHANNELS | WHATSAPP_CHANNELS
+SUPPORTED_CHANNELS = META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS
 
 
 class UnsupportedChannel(ValueError):
@@ -77,6 +79,22 @@ def send_text(
             "channel": normalized,
             "recipient_id": recipient_id,
             **result,
+        }
+
+    if normalized in TELEGRAM_CHANNELS:
+        # Telegram was reachable only through a standalone polling script that
+        # spoke to the engine directly and had no dispatcher entry at all — so
+        # an employee's manual reply, a scheduled message and the takeover
+        # handback all had nowhere to go on this channel.
+        return {
+            "channel": normalized,
+            "recipient_id": recipient_id,
+            **send_telegram_text(
+                recipient_id=recipient_id,
+                text=text,
+                company_id=company_id,
+                buttons=buttons,
+            ),
         }
 
     raise UnsupportedChannel(

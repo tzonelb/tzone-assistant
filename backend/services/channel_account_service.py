@@ -44,6 +44,17 @@ ROUTING_FIELD = {
 }
 
 
+SECRET_FIELDS = {
+    "access_token": "access_token_sealed",
+    "verify_token": "verify_token_sealed",
+    "app_secret": "app_secret_sealed",
+}
+
+
+class ChannelAccountError(RuntimeError):
+    """A channel account could not be created or updated."""
+
+
 def telegram_bot_id(token: str) -> str:
     """The bot's numeric id, read out of its own token.
 
@@ -64,16 +75,6 @@ def telegram_bot_id(token: str) -> str:
         )
 
     return bot_id
-
-SECRET_FIELDS = {
-    "access_token": "access_token_sealed",
-    "verify_token": "verify_token_sealed",
-    "app_secret": "app_secret_sealed",
-}
-
-
-class ChannelAccountError(RuntimeError):
-    """A channel account could not be created or updated."""
 
 
 def utc_now_iso() -> str:
@@ -168,6 +169,21 @@ class ChannelAccountService:
             )
 
         routing_field = ROUTING_FIELD[normalized]
+
+        # Telegram is the one channel whose routing id is not typed in: it is
+        # the prefix of the bot token the operator is already pasting. Deriving
+        # it removes the only transcription error that would matter — a wrong
+        # id either receives nothing or, worse, claims an id another company
+        # was routing on.
+        if normalized == "telegram" and not values.get(routing_field):
+            token = values.get("access_token")
+
+            if not token:
+                raise ChannelAccountError(
+                    "A Telegram account needs the bot token from BotFather."
+                )
+
+            values[routing_field] = telegram_bot_id(token)
 
         if not values.get(routing_field):
             raise ChannelAccountError(
@@ -569,6 +585,55 @@ class ChannelAccountService:
     # ------------------------------------------------------------------
     # Credentials for the inbound path
     # ------------------------------------------------------------------
+
+    def verify_token_for(
+        self,
+        *,
+        company_id: int,
+        account_id: int,
+    ) -> str | None:
+        """The webhook secret registered on one account, unsealed.
+
+        Telegram has no request signature. What it has is a secret registered
+        with `setWebhook` and echoed on every delivery in
+        `X-Telegram-Bot-Api-Secret-Token`, so that value is this channel's whole
+        authentication and lives in the same sealed column Meta's verify token
+        does.
+
+        Returns ``None`` when there is none, and the caller **refuses** the
+        delivery rather than trusting it: a Telegram webhook URL carries only
+        the bot id, which is public, so an unauthenticated endpoint would let
+        anybody post into that company's inbox as any customer they chose.
+        """
+        with database_manager.control() as conn:
+            row = conn.execute(
+                """
+                SELECT verify_token_sealed FROM channel_accounts
+                WHERE id = ? AND company_id = ? AND status = 'active'
+                LIMIT 1
+                """,
+                (int(account_id), int(company_id)),
+            ).fetchone()
+
+        if not row or not row["verify_token_sealed"]:
+            return None
+
+        try:
+            return keyring.unseal_secret(
+                row["verify_token_sealed"],
+                database_manager.company_key(int(company_id)),
+                int(company_id),
+                "verify_token",
+            )
+        except CorruptedKeyMaterial:
+            logger.error(
+                "The webhook secret for company %s account %s could not be "
+                "unsealed; refusing the delivery rather than trusting it",
+                company_id,
+                account_id,
+            )
+
+            return None
 
     def app_secret_for_routing_id(
         self,
