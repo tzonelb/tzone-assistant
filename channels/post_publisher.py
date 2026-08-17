@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from backend.services.module_gate import module_gate
 from backend.services.scheduler_service import scheduler_service
 from config.settings import config
 
@@ -91,6 +92,16 @@ def publish_post(
 
 def publish_due_posts(company_id: int) -> int:
     """Publish every approved post whose time has come. Returns how many went out."""
+    # Scheduler off means nothing is published on this company's behalf. This
+    # is the one gate where the consequence is public: a post going out to a
+    # company's followers from a module its team can no longer open, and cannot
+    # cancel from inside the platform, is not a switch that was ignored — it is
+    # the company posting to its own audience without an operator.
+    #
+    # Nothing is claimed, so the queue is intact if the module comes back on.
+    if not module_gate.enabled(company_id, "scheduler"):
+        return 0
+
     published = 0
 
     for post in scheduler_service.claim_due(company_id):

@@ -18,6 +18,7 @@ from typing import Any
 
 from backend.security import keyring
 from backend.security.keyring import CorruptedKeyMaterial
+from backend.services.business_department_service import business_department_service
 from database.manager import database_manager
 
 
@@ -146,6 +147,39 @@ class ChannelAccountService:
 
         return normalized
 
+    @staticmethod
+    def _resolve_department_id(company_id: int, value: Any) -> int | None:
+        """Check the department this account is being pointed at.
+
+        The pointer lives in the control database and the department lives in
+        the company's own, so nothing enforces the link for us. An id the
+        company does not own is refused rather than stored: ids restart at 1 in
+        every company's database, so an unchecked value would silently point
+        one company's account at another company's section.
+
+        ``None`` and empty clear the pointer, which is how a company stops
+        routing an account by channel at all.
+        """
+        if value in (None, "", 0):
+            return None
+
+        try:
+            department_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ChannelAccountError("Department id must be a number.") from exc
+
+        department = business_department_service.get_department(
+            company_id=int(company_id),
+            department_id=department_id,
+        )
+
+        if not department:
+            raise ChannelAccountError(
+                "That department does not belong to this company."
+            )
+
+        return department_id
+
     def _assert_routing_id_is_free(
         self,
         conn,
@@ -196,6 +230,10 @@ class ChannelAccountService:
         # writing a record whose secrets could never be sealed.
         company_key = database_manager.company_key(company_id)
 
+        department_id = self._resolve_department_id(
+            company_id, values.get("department_id")
+        )
+
         with database_manager.control() as conn:
             conn.execute("BEGIN IMMEDIATE")
 
@@ -210,17 +248,18 @@ class ChannelAccountService:
                 cursor = conn.execute(
                     """
                     INSERT INTO channel_accounts (
-                        company_id, branch_id, channel, name,
+                        company_id, branch_id, department_id, channel, name,
                         external_account_id, phone_number_id, page_id,
                         instagram_business_id, status,
                         ai_enabled, flow_enabled, voice_ai_enabled, image_ai_enabled,
                         created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         company_id,
                         values.get("branch_id"),
+                        department_id,
                         normalized_channel,
                         str(name).strip(),
                         values.get("external_account_id") or values.get(routing_field),
@@ -315,6 +354,15 @@ class ChannelAccountService:
 
             assignments.append(f"{column} = ?")
             params.append(value)
+
+        # Validated rather than passed through with the other plain columns: it
+        # names a row in a different database, and an id from another company
+        # must be refused before it is written.
+        if "department_id" in values:
+            assignments.append("department_id = ?")
+            params.append(
+                self._resolve_department_id(company_id, values["department_id"])
+            )
 
         for field, column in SECRET_FIELDS.items():
             if field not in values:

@@ -1,10 +1,31 @@
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from database.manager import database_manager
+from backend.services.work_index_service import KIND_TAKEOVER, work_index_service
+from backend.services.business_department_service import business_department_service
 from backend.services.company_settings_service import company_settings_service
+
+
+# What `conversations.department` holds when the conversation belongs to no
+# section yet. It is the historic default of the column and the value the inbox
+# already renders, so it stays the sentinel rather than becoming a code no
+# company defined.
+UNASSIGNED_DEPARTMENT = "Unassigned"
+
+# Where a conversation's department came from, most specific first. Recorded on
+# the timeline event so an owner can see why a conversation landed where it did,
+# and used here to decide what may overwrite what: the customer's own choice
+# from the menu outranks the account default, which outranks the model's guess.
+DEPARTMENT_SOURCES = (
+    "customer_choice",
+    "channel_account",
+    "employee",
+    "ai_classification",
+)
 
 
 VALID_STATUSES = {
@@ -28,6 +49,42 @@ VALID_PRIORITIES = {
 }
 
 DEFAULT_TAKEOVER_MINUTES = 5
+
+logger = logging.getLogger(__name__)
+
+
+def _note_takeover_deadline(company_id: int, expires_at: Any) -> None:
+    """Tell the control-plane index this company has a takeover to expire.
+
+    The takeover sweep no longer opens every company's database every ten
+    seconds looking for lapsed ones; it opens the companies this index names. A
+    takeover that is never registered is a conversation that stays with an
+    employee who has walked away, until the hourly reconcile notices.
+
+    Registered after the conversation row is committed, and never allowed to
+    raise. This is the opposite of the rule the reply queue follows, and the
+    difference is who is waiting: an unregistered reply is a customer who is
+    never answered, so the enqueue fails loudly instead. Here the employee's
+    takeover has already succeeded, and failing their request — undoing a
+    takeover they can see on their screen — to protect a timer that only ever
+    hands the conversation *back* would be the worse trade. The reconcile is
+    the backstop.
+
+    Only ever moves the deadline earlier, so an extension leaves the old entry
+    in place: the sweep opens the company once, expires nothing, and rewrites
+    the entry with the real deadline.
+    """
+    if not expires_at:
+        return
+
+    try:
+        work_index_service.note(company_id, KIND_TAKEOVER, expires_at)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Could not register the takeover deadline for company %s; it will "
+            "be picked up by the next work index reconcile",
+            company_id,
+        )
 
 
 class ConversationOwnershipConflict(RuntimeError):
@@ -153,13 +210,34 @@ class ConversationControlService:
         company_id: int,
         channel: str,
         external_user_id: str,
+        channel_account_id: int | None = None,
     ) -> dict[str, Any]:
+        """The conversation for this customer on this channel, created if new.
+
+        ``channel_account_id`` is the account the message actually arrived on.
+        It is stored on the row because "which company" is not specific enough:
+        a company may run three Instagram accounts pointed at three different
+        sections, and without the account the chain company → channel account →
+        department → employee is broken at its second link.
+
+        A new conversation starts in the department that account feeds, when it
+        feeds one. That is the second-most-specific rule in the order the owner
+        described — only the customer's own choice from the menu outranks it —
+        and it is applied at creation so the very first message is already in
+        the right queue rather than waiting for the model to guess.
+        """
         normalized_channel = (
             channel.strip().lower()
         )
 
         normalized_user_id = (
             external_user_id.strip()
+        )
+
+        account_id = (
+            int(channel_account_id)
+            if channel_account_id is not None
+            else None
         )
 
         with database_manager.tenant(company_id) as conn:
@@ -181,11 +259,36 @@ class ConversationControlService:
             ).fetchone()
 
             if row:
+                # An existing conversation predating this column, or one created
+                # before the account was known, is filled in rather than left
+                # blank — but never re-pointed, because a conversation belongs
+                # to the account it started on.
+                if account_id is not None and row["channel_account_id"] is None:
+                    conn.execute(
+                        """
+                        UPDATE conversations
+                        SET channel_account_id = ?, updated_at = ?
+                        WHERE id = ? AND company_id = ?
+                        """,
+                        (account_id, utc_now_iso(), row["id"], company_id),
+                    )
+                    conn.commit()
+
+                    row = conn.execute(
+                        "SELECT * FROM conversations WHERE id = ?",
+                        (row["id"],),
+                    ).fetchone()
+
                 return self.row_to_dict(
                     row
                 )
 
             now = utc_now_iso()
+
+            default_department = business_department_service.for_channel_account(
+                company_id=company_id,
+                channel_account_id=account_id,
+            )
 
             cursor = conn.execute(
                 """
@@ -193,12 +296,14 @@ class ConversationControlService:
                     company_id,
                     channel,
                     external_user_id,
+                    channel_account_id,
                     status,
                     workflow_state,
                     ai_enabled,
                     handled_by_ai,
                     priority,
                     department,
+                    department_id,
                     needs_human,
                     unread_count,
                     last_message_at,
@@ -209,12 +314,14 @@ class ConversationControlService:
                     ?,
                     ?,
                     ?,
+                    ?,
                     'ai_handling',
                     'ai_active',
                     1,
                     1,
                     'normal',
-                    'Unassigned',
+                    ?,
+                    ?,
                     0,
                     0,
                     ?,
@@ -226,6 +333,13 @@ class ConversationControlService:
                     company_id,
                     normalized_channel,
                     normalized_user_id,
+                    account_id,
+                    (
+                        default_department["code"]
+                        if default_department
+                        else UNASSIGNED_DEPARTMENT
+                    ),
+                    default_department["id"] if default_department else None,
                     now,
                     now,
                     now,
@@ -564,6 +678,12 @@ class ConversationControlService:
             )
             conn.commit()
 
+        # Handing a conversation back to the assistant clears the deadline
+        # instead of setting one, and the stale entry is cleared by the sweep
+        # that next opens this company.
+        if not handled_by_ai:
+            _note_takeover_deadline(company_id, expires_at)
+
         return self.get_state(
             company_id=company_id,
             channel=channel,
@@ -734,6 +854,11 @@ class ConversationControlService:
 
             conn.commit()
 
+        # A renewal only ever pushes the deadline out, so this is normally a
+        # no-op. It is here for the case where the entry was lost: a renewed
+        # takeover is still a takeover somebody has to expire.
+        _note_takeover_deadline(company_id, expires_at)
+
         return self.get_state(
             company_id=company_id,
             channel=channel,
@@ -822,6 +947,12 @@ class ConversationControlService:
                 data={"from_user_id": actor_user_id},
             )
             conn.commit()
+
+        # A released conversation is still human-held: it waits for another
+        # employee and returns to the assistant on the same timer, so it has to
+        # stay in the sweep's list.
+        _note_takeover_deadline(company_id, release_expiry)
+
         return self.get_state(company_id, channel, external_user_id)
 
     def record_employee_reply(
@@ -882,6 +1013,9 @@ class ConversationControlService:
                 },
             )
             conn.commit()
+
+        _note_takeover_deadline(company_id, next_expiry)
+
         return self.get_state(company_id, channel, external_user_id)
 
     def seconds_until_ai_return(
@@ -1012,6 +1146,165 @@ class ConversationControlService:
             external_user_id=external_user_id,
         )
 
+    def resolve_department(
+        self,
+        company_id: int,
+        code: Any,
+    ) -> dict[str, Any] | None:
+        """The company's own department carrying this code, or ``None``.
+
+        The one vocabulary is ``business_departments.code``. Everything that
+        names a department — the model's answer, a menu press, an inbox
+        ``PATCH`` — is resolved through here, so a code this company never
+        defined resolves to nothing instead of being written to the row.
+        """
+        if not company_id or not code:
+            return None
+
+        text = str(code).strip()
+
+        if not text or text == UNASSIGNED_DEPARTMENT:
+            return None
+
+        try:
+            return business_department_service.find_by_code(
+                company_id=int(company_id),
+                code=text,
+            )
+        except Exception:  # noqa: BLE001
+            # Runs on the customer reply path: a department table that will not
+            # open costs the conversation its routing, never its answer.
+            return None
+
+    def find_state(
+        self,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+    ) -> dict[str, Any] | None:
+        """This conversation, or ``None`` — never created.
+
+        ``get_state`` creates on miss, which is right on the inbound path and
+        wrong everywhere else. The reply engine must be able to record a routing
+        decision without conjuring a conversation, so that the assistant preview
+        — which runs the real engine under a synthetic customer id — still
+        writes nothing to the company's database.
+        """
+        with database_manager.tenant(int(company_id)) as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM conversations
+                WHERE company_id = ?
+                  AND channel = ?
+                  AND external_user_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    int(company_id),
+                    str(channel).strip().lower(),
+                    str(external_user_id).strip(),
+                ),
+            ).fetchone()
+
+        return self.row_to_dict(row) if row else None
+
+    def assign_department(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        code: Any,
+        source: str,
+        actor_user_id: int | None = None,
+        only_if_unassigned: bool = False,
+    ) -> dict[str, Any] | None:
+        """Persist which of this company's sections a conversation belongs to.
+
+        This is the step that was missing. The assistant classified into
+        ``core/session.py``, which is in-process and gone on the next restart,
+        while the column an employee reads was written only by hand — so the
+        customer who picked "Bookings" from the menu was in no department at
+        all as far as anything durable was concerned.
+
+        ``only_if_unassigned`` expresses the order the owner asked for. The
+        customer's own choice and an employee's transfer are written
+        unconditionally; the model's classification is written only when nothing
+        more specific has claimed the conversation, so a guess can never
+        displace a choice.
+
+        A code this company did not define is ignored rather than stored: it
+        would be a department nothing can route to and nobody can filter on.
+
+        A conversation that does not exist is left alone rather than created.
+        By the time a reply is being composed, the inbound path has already
+        recorded the conversation; anything reaching here without one is not a
+        real customer — the assistant preview runs the whole engine under a
+        synthetic id — and must not leave a row behind.
+        """
+        state = self.find_state(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+        )
+
+        if state is None:
+            return None
+
+        if only_if_unassigned and state.get("department_id") is not None:
+            return state
+
+        department = self.resolve_department(company_id, code)
+
+        if not department:
+            return state
+
+        if state.get("department_id") == department["id"]:
+            return state
+
+        with database_manager.tenant(company_id) as conn:
+            conn.execute(
+                """
+                UPDATE conversations
+                SET department_id = ?,
+                    department = ?,
+                    updated_at = ?
+                WHERE id = ? AND company_id = ?
+                """,
+                (
+                    department["id"],
+                    department["code"],
+                    utc_now_iso(),
+                    state["id"],
+                    company_id,
+                ),
+            )
+
+            self.insert_event(
+                conn=conn,
+                conversation_id=state["id"],
+                company_id=company_id,
+                actor_user_id=actor_user_id,
+                event_type="department_changed",
+                data={
+                    "field": "department",
+                    "from": state.get("department"),
+                    "to": department["code"],
+                    "department_id": department["id"],
+                    "source": source if source in DEPARTMENT_SOURCES else "unknown",
+                },
+            )
+
+            conn.commit()
+
+        return self.find_state(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+        )
+
     def update_state(
         self,
         company_id: int,
@@ -1049,6 +1342,22 @@ class ConversationControlService:
             raise ValueError(
                 "Invalid conversation priority."
             )
+
+        # The backend is authoritative about the vocabulary too. The inbox
+        # checks this as well, so the employee gets a field-level message rather
+        # than a 500; checking it again here is what stops any other caller from
+        # writing a department the company never defined.
+        chosen_department = None
+
+        if department is not None and department != UNASSIGNED_DEPARTMENT:
+            chosen_department = self.resolve_department(company_id, department)
+
+            if not chosen_department:
+                raise ValueError(
+                    "That department does not belong to this company."
+                )
+
+            department = chosen_department["code"]
 
         requested_changes = {
             "status": status,
@@ -1145,6 +1454,11 @@ class ConversationControlService:
                 # instead of looking like a silent/normal reassignment.
                 admin_override = is_admin and is_reassign_away_from_someone_else
 
+            # Assigning a conversation to an employee is a takeover, and starts
+            # the same return-to-assistant timer. Kept here so it can be
+            # registered with the work index after the commit below.
+            takeover_expiry: str | None = None
+
             for (
                 field_name,
                 _,
@@ -1155,6 +1469,7 @@ class ConversationControlService:
                         utc_now()
                         + timedelta(minutes=_takeover_timeout_minutes(company_id))
                     ).isoformat()
+                    takeover_expiry = expires_at
                     conn.execute(
                         """
                         UPDATE conversations
@@ -1172,6 +1487,33 @@ class ConversationControlService:
                         (
                             new_value,
                             expires_at,
+                            utc_now_iso(),
+                            state["id"],
+                            company_id,
+                        ),
+                    )
+                elif field_name == "department":
+                    # Both columns move together. The text column is what the
+                    # inbox filter and every export already read; the id is the
+                    # link the rest of the chain routes on. Letting them drift
+                    # would mean a conversation that reads as transferred on
+                    # the screen and unassigned to the engine.
+                    conn.execute(
+                        """
+                        UPDATE conversations
+                        SET department = ?,
+                            department_id = ?,
+                            updated_at = ?
+                        WHERE id = ?
+                          AND company_id = ?
+                        """,
+                        (
+                            new_value,
+                            (
+                                chosen_department["id"]
+                                if chosen_department
+                                else None
+                            ),
                             utc_now_iso(),
                             state["id"],
                             company_id,
@@ -1223,6 +1565,8 @@ class ConversationControlService:
                 )
 
             conn.commit()
+
+        _note_takeover_deadline(company_id, takeover_expiry)
 
         return self.get_state(
             company_id=company_id,
@@ -1397,11 +1741,13 @@ class ConversationControlService:
         external_user_id: str,
         official_customer_name: str | None = None,
         customer_profile_picture: str | None = None,
+        channel_account_id: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_or_create(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
+            channel_account_id=channel_account_id,
         )
 
         old_folder = state.get("folder", "inbox")

@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 
+from backend.services.business_department_service import business_department_service
 from config.settings import config
 from core.prompt_builder import prompt_builder
 
@@ -13,17 +14,33 @@ logger = logging.getLogger(__name__)
 
 
 class AIRouter:
-    DEPARTMENTS = [
-        "sales",
-        "iptv",
-        "maintenance",
-        "accounting",
-        "telecom",
-        "orders",
-        "information",
-        "human_support",
-        "unknown",
-    ]
+    # The only two department values that do not belong to a company.
+    #
+    # ``unknown`` is the sentinel for "the model did not decide"; ``human_support``
+    # is the escape hatch the guardrails below and the engine's safe fallback
+    # both produce. Neither is a section a business defines, so neither is
+    # looked for in the company's own list.
+    #
+    # Everything else comes from ``business_departments`` in the asking
+    # company's database. This used to be a hardcoded list of nine — sales,
+    # iptv, maintenance, accounting, telecom, orders, information — one
+    # company's sections applied to every company on the platform. A business
+    # that defined "bookings" had the model correctly answer ``bookings`` and
+    # then had that answer thrown away as invalid and rewritten to ``unknown``,
+    # so its own vocabulary could never survive the round trip.
+    RESERVED_DEPARTMENTS = ("human_support", "unknown")
+
+    def allowed_departments(self, company_id: int | None) -> list[str]:
+        """The department codes a reply for this company may carry.
+
+        With no company there is nothing but the two reserved values — guessing
+        a company's sections here is the leak this replaces, and answering with
+        another company's vocabulary is worse than answering with none.
+        """
+        return [
+            *business_department_service.codes(company_id),
+            *self.RESERVED_DEPARTMENTS,
+        ]
 
     def route(
         self,
@@ -72,7 +89,7 @@ class AIRouter:
                 channel_account_id=channel_account_id,
             )
 
-            result = self.normalize_result(raw_result)
+            result = self.normalize_result(raw_result, company_id=company_id)
 
             return self.apply_guardrails(
                 result=result,
@@ -221,13 +238,28 @@ The JSON must contain:
     def normalize_result(
         self,
         result: dict[str, Any],
+        company_id: int | None = None,
     ) -> dict[str, Any]:
+        # Compared case-insensitively against the company's own codes, which are
+        # normalised to lowercase ascii on the way in. The model is shown those
+        # codes and usually returns one verbatim; a returned "Sales" that is
+        # discarded as unrecognised is a routing decision thrown away over
+        # capitalisation.
         department = str(
             result.get("department") or "unknown"
         ).strip()
 
-        if department not in self.DEPARTMENTS:
-            department = "unknown"
+        allowed = self.allowed_departments(company_id)
+        matched = next(
+            (
+                code
+                for code in allowed
+                if code.lower() == department.lower()
+            ),
+            None,
+        )
+
+        department = matched or "unknown"
 
         language = str(
             result.get("language") or "ar"

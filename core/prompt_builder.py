@@ -184,7 +184,7 @@ class PromptBuilder:
             "",
             self._core_rules(),
             "",
-            self._required_json(),
+            self._required_json(company_id=company_id),
         ]
 
         return "\n".join(sections).strip()
@@ -247,12 +247,27 @@ Core rules:
 - Return valid JSON only.
 """.strip()
 
-    @staticmethod
-    def _required_json() -> str:
-        return """
+    @classmethod
+    def _required_json(cls, company_id: int | None = None) -> str:
+        """The output contract, naming this company's own department codes.
+
+        The contract used to hardcode the same nine departments the router
+        validated against — sales, iptv, maintenance, accounting, telecom,
+        information, human_support, unknown — while the block above it injected
+        the company's real sections into the very same prompt. The model was
+        told to route to Bookings and, three lines later, that ``department``
+        had to be one of nine values that did not include it. Whichever it
+        obeyed, one of the two instructions was wrong.
+
+        Both halves now come from one place: ``business_departments`` in the
+        asking company's database.
+        """
+        codes = "|".join(cls._department_codes(company_id))
+
+        return f"""
 Required JSON:
-{
-  "department": "sales|iptv|maintenance|accounting|telecom|information|human_support|unknown",
+{{
+  "department": "{codes}",
   "intent": "short_intent_name",
   "topic": "short_conversation_topic",
   "language": "ar|en|unknown",
@@ -261,8 +276,23 @@ Required JSON:
   "buttons": ["button1", "button2"],
   "needs_human": false,
   "notes": "internal note"
-}
+}}
 """.strip()
+
+    # Not a company's sections: "the model did not decide" and "this needs a
+    # person" are platform-level answers every assistant may give, including one
+    # answering for nobody in particular.
+    RESERVED_DEPARTMENT_CODES = ("human_support", "unknown")
+
+    @classmethod
+    def _department_codes(cls, company_id: int | None) -> list[str]:
+        codes = [
+            str(row.get("code"))
+            for row in business_department_service.for_assistant(company_id)
+            if row.get("code")
+        ]
+
+        return [*codes, *cls.RESERVED_DEPARTMENT_CODES]
 
     @staticmethod
     def _examples(profile: dict[str, Any]) -> list[dict[str, str]]:

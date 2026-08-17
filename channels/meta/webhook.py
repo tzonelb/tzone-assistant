@@ -29,6 +29,7 @@ from channels.meta.parser import (
 )
 from channels.inbound import process_inbound_event
 from backend.services.comment_service import comment_service
+from backend.services.module_gate import module_gate
 from channels.webhook_limits import dispatch, read_capped_body
 from channels.webhook_security import (
     WebhookVerificationError,
@@ -156,6 +157,14 @@ def _process_comments(events: list[dict]) -> list[dict]:
             results.append({"status": "ignored", "reason": "unknown_account"})
             continue
 
+        # Comments off means the module is not there to receive one. Storing it
+        # anyway would fill a table the team cannot open, and every unanswered
+        # comment would sit in it invisibly — the company would believe it had
+        # switched comment handling off while the rows piled up.
+        if not module_gate.enabled(company_id, "comments"):
+            results.append({"status": "ignored", "reason": "module_disabled"})
+            continue
+
         try:
             stored = comment_service.record_incoming(
                 company_id=company_id,
@@ -205,7 +214,10 @@ def _process_events(events: list[dict]) -> list[dict]:
             )
             continue
 
-        company_id = database_manager.resolve_company_for_channel(
+        # Resolved as an account, not just a company. Two Instagram accounts
+        # belonging to the same company may feed different departments, so the
+        # company alone does not say where this message belongs.
+        account = database_manager.resolve_account_for_channel(
             channel=event.get("channel", "messenger"),
             page_id=event.get("page_id") or event.get("recipient_id"),
             instagram_business_id=(
@@ -214,6 +226,8 @@ def _process_events(events: list[dict]) -> list[dict]:
                 else None
             ),
         )
+
+        company_id = account["company_id"] if account else None
 
         if company_id is None:
             # The account this arrived on is not connected to any company.
@@ -234,7 +248,13 @@ def _process_events(events: list[dict]) -> list[dict]:
             continue
 
         try:
-            results.append(process_inbound_event(event=event, company_id=company_id))
+            results.append(
+                process_inbound_event(
+                    event=event,
+                    company_id=company_id,
+                    channel_account_id=account["account_id"],
+                )
+            )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to process Meta event")
             log_meta_event(

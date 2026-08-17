@@ -20,7 +20,7 @@ This module is the single source of truth for these tables.
 from __future__ import annotations
 
 
-TENANT_SCHEMA_VERSION = 1
+TENANT_SCHEMA_VERSION = 2
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -36,7 +36,14 @@ TENANT_TABLES: tuple[str, ...] = (
         ai_enabled INTEGER NOT NULL DEFAULT 1,
         handled_by_ai INTEGER NOT NULL DEFAULT 1,
         priority TEXT NOT NULL DEFAULT 'normal',
+        -- `department_id` is the identity link: company → channel account →
+        -- department → employee. `department` is the same department's code,
+        -- kept alongside it so the inbox filter, the export and every existing
+        -- query keep working unchanged. The two are always written together by
+        -- `conversation_control_service`; dropping the text column is a
+        -- separate change from adding this one.
         department TEXT DEFAULT 'Unassigned',
+        department_id INTEGER REFERENCES business_departments(id) ON DELETE SET NULL,
         topic TEXT,
         language TEXT,
         assigned_user_id INTEGER,
@@ -549,6 +556,16 @@ TENANT_TABLES: tuple[str, ...] = (
 # before a release would be missing them. `DatabaseManager.upgrade_tenant`
 # applies these; services must never patch their own tables at runtime.
 TENANT_COLUMNS: dict[str, dict[str, str]] = {
+    "conversations": {
+        # SQLite allows a REFERENCES clause on an added column only when the
+        # default is NULL, which it is. `ON DELETE SET NULL` rather than the
+        # default RESTRICT: a company retiring a section must still be able to
+        # delete it, and a conversation that outlives its department is
+        # unassigned, not undeletable.
+        "department_id": (
+            "INTEGER REFERENCES business_departments(id) ON DELETE SET NULL"
+        ),
+    },
     "tickets": {
         "title": "TEXT",
         "task_type": "TEXT NOT NULL DEFAULT 'support'",
@@ -563,6 +580,8 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(last_message_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_folder ON conversations(folder, last_message_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_department ON conversations(department_id, last_message_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_account ON conversations(channel_account_id)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_expiry ON conversations(takeover_expires_at) WHERE takeover_expires_at IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_messages_lookup ON messages(channel, external_user_id, created_at)",

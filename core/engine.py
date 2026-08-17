@@ -14,7 +14,9 @@ from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
 from core.business_modules import business_modules
+from backend.services.conversation_control_service import conversation_control_service
 from backend.services.knowledge_service import knowledge_service
+from backend.services.module_gate import module_gate
 from backend.services.ticket_service import ticket_service
 
 
@@ -165,9 +167,13 @@ class Engine:
                 or "telegram_iptv_start"
             )
 
+            # The session first because it is the cheapest, then the
+            # conversation row — which is where the department actually lives.
+            # A restart empties the session, and a customer whose choice was
+            # only ever in memory would silently fall back to unrouted.
             current_department = user_session.get(
                 "current_department"
-            )
+            ) or self.stored_department(request)
 
             state_data = flow_loader.get_state(
                 current_state
@@ -526,6 +532,99 @@ class Engine:
             if part and part.strip()
         )
 
+    # ------------------------------------------------------------------
+    # Where a conversation belongs
+    # ------------------------------------------------------------------
+    #
+    # The department a conversation is in has to outlive the process. It used to
+    # live only in `core/session.py`, which is an in-memory dictionary with a
+    # six-hour eviction: a customer who chose "Bookings" from the menu was in
+    # Bookings until the next deploy, and in nothing afterwards. Meanwhile the
+    # column an employee reads in the inbox was written only by an employee, so
+    # the assistant's routing and the team's view of it never met.
+    #
+    # Both are now written, in the order the owner specified — the customer's
+    # own choice first, then the account's default, then the model's
+    # classification. The account's default is applied when the conversation is
+    # created (`conversation_control_service.get_or_create`); the other two are
+    # applied here.
+    #
+    # Nothing on this path may create a conversation or fail a reply:
+    # `assign_department` updates an existing row or does nothing, and every
+    # call is wrapped, because a routing decision is never worth a customer's
+    # answer.
+
+    def remember_department(
+        self,
+        request,
+        code,
+        source,
+        only_if_unassigned=False,
+    ):
+        if not code:
+            return
+
+        applied = code
+
+        if getattr(request, "company_id", None):
+            try:
+                state = conversation_control_service.assign_department(
+                    company_id=request.company_id,
+                    channel=request.channel,
+                    external_user_id=request.user_id,
+                    code=code,
+                    source=source,
+                    only_if_unassigned=only_if_unassigned,
+                )
+
+                # The session follows the row, never the other way round. A
+                # model guess that was correctly refused because the customer
+                # had already chosen must not win in memory instead.
+                if state and state.get("department_id"):
+                    applied = state.get("department") or code
+            except Exception:
+                logger.exception(
+                    "Could not record department %s for company %s",
+                    code,
+                    request.company_id,
+                )
+
+        session.update(
+            request.user_id,
+            "current_department",
+            applied,
+        )
+
+    def stored_department(self, request):
+        """The department already on the conversation row, if any.
+
+        Read when the session has none, which is the ordinary case after a
+        restart. Without this the durable choice would be invisible to the very
+        engine that has to honour it, and the customer would be asked to choose
+        again.
+        """
+        if not getattr(request, "company_id", None):
+            return None
+
+        try:
+            state = conversation_control_service.find_state(
+                company_id=request.company_id,
+                channel=request.channel,
+                external_user_id=request.user_id,
+            )
+        except Exception:
+            logger.exception(
+                "Could not read the department of a conversation for company %s",
+                request.company_id,
+            )
+
+            return None
+
+        if not state or not state.get("department_id"):
+            return None
+
+        return state.get("department")
+
     def load_company_knowledge(
         self,
         request,
@@ -557,6 +656,14 @@ class Engine:
                 getattr(request, "channel", "unknown"),
             )
 
+            return []
+
+        # A company that switched Knowledge off gets an assistant that does not
+        # have one. The switch used to hide the screen from the team while the
+        # assistant went on answering out of the base behind it, which made the
+        # owner's decision cosmetic. No knowledge is a supported state already:
+        # the router's guardrails escalate to a human rather than invent facts.
+        if not module_gate.enabled(company_id, "knowledge"):
             return []
 
         try:
@@ -597,10 +704,13 @@ class Engine:
         if module:
             module_id = module.get("id")
 
-            session.update(
-                request.user_id,
-                "current_department",
+            # The customer chose this from the menu the company defined. It is
+            # the most specific signal there is, so it overwrites whatever the
+            # account defaulted to and whatever the model previously guessed.
+            self.remember_department(
+                request,
                 module_id,
+                source="customer_choice",
             )
 
             session.update(
@@ -626,17 +736,23 @@ class Engine:
                 ai_result=greeting_result,
             )
 
+        # Matched against this company's own sections and nothing else. This
+        # used to consult a hardcoded Arabic keyword table describing one
+        # company's products, applied to every company's customers.
         detected_department = (
             intent_transition_manager.detect_department(
-                request.message
+                request.message,
+                company_id=request.company_id,
             )
         )
 
         if detected_department:
-            session.update(
-                request.user_id,
-                "current_department",
+            # Typing the name of a section is the customer choosing it, the
+            # same as pressing its button.
+            self.remember_department(
+                request,
                 detected_department,
+                source="customer_choice",
             )
 
             current_department = detected_department
@@ -1183,10 +1299,15 @@ class Engine:
         )
 
         if ai_result.get("department"):
-            session.update(
-                request.user_id,
-                "current_department",
+            # Least specific of the three, so it is written only when nothing
+            # more specific has claimed the conversation: a model guess must
+            # never displace the customer's own choice or the department the
+            # receiving account feeds.
+            self.remember_department(
+                request,
                 ai_result.get("department"),
+                source="ai_classification",
+                only_if_unassigned=True,
             )
 
             session.update(
@@ -1407,6 +1528,23 @@ class Engine:
         return response
 
     def create_ticket(self, request):
+        # Tasks off means no ticket is opened. A company that switched the
+        # module off cannot see, assign or close a ticket, so writing one would
+        # bury the customer's problem in a table nobody on that team can open —
+        # worse than not recording it, because the flow tells the customer a
+        # ticket exists.
+        if not module_gate.enabled(
+            getattr(request, "company_id", None),
+            "tasks",
+        ):
+            logger.info(
+                "Tasks is off for company %s; no ticket was opened for %s.",
+                getattr(request, "company_id", None),
+                request.user_id,
+            )
+
+            return
+
         user_session = (
             session.get(request.user_id)
             or {}

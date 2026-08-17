@@ -271,10 +271,15 @@ export default function ConversationDetailPage({
             ? controlResult.employees
             : [],
         );
+        // The company's own sections. `department_options` carries the name the
+        // company gave each one; `departments` is the same list as bare codes
+        // and is the fallback for a server that has not been updated yet.
         setDepartments(
-          Array.isArray(controlResult?.departments)
-            ? controlResult.departments
-            : [],
+          Array.isArray(controlResult?.department_options)
+            ? controlResult.department_options
+            : (Array.isArray(controlResult?.departments)
+              ? controlResult.departments.map((code) => ({ code, label: code }))
+              : []),
         );
         setCurrentUserId(
           controlResult?.current_user_id != null
@@ -1083,7 +1088,7 @@ export default function ConversationDetailPage({
                     onChange={(event) => handleDepartmentChange(event.target.value)}
                   >
                     {departments.map((item) => (
-                      <option value={item} key={item}>{item}</option>
+                      <option value={item.code} key={item.code}>{item.label}</option>
                     ))}
                   </select>
                 </label>

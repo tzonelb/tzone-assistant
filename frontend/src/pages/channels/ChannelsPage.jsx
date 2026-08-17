@@ -65,6 +65,7 @@ function emptyForm(channel = "messenger") {
     channel,
     name: "",
     branch_id: "",
+    department_id: "",
     status: "active",
     page_id: "",
     instagram_business_id: "",
@@ -86,6 +87,10 @@ function formFromAccount(account) {
       account.branch_id === null || account.branch_id === undefined
         ? ""
         : String(account.branch_id),
+    department_id:
+      account.department_id === null || account.department_id === undefined
+        ? ""
+        : String(account.department_id),
     status: account.status || "active",
     page_id: account.page_id || "",
     instagram_business_id: account.instagram_business_id || "",
@@ -105,6 +110,7 @@ export default function ChannelsPage() {
   const [items, setItems] = useState([]);
   const [supportedChannels, setSupportedChannels] = useState([]);
   const [routingFields, setRoutingFields] = useState({});
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -135,6 +141,7 @@ export default function ChannelsPage() {
           : [],
       );
       setRoutingFields(result?.routing_fields || {});
+      setDepartments(Array.isArray(result?.departments) ? result.departments : []);
     } catch (requestError) {
       setError(
         requestError.message || "Connected accounts could not be loaded.",
@@ -198,6 +205,7 @@ export default function ChannelsPage() {
         const values = {
           name: form.name.trim(),
           branch_id: form.branch_id ? Number(form.branch_id) : null,
+          department_id: form.department_id ? Number(form.department_id) : null,
           status: form.status,
           ai_enabled: form.ai_enabled,
           flow_enabled: form.flow_enabled,
@@ -233,6 +241,7 @@ export default function ChannelsPage() {
           channel: form.channel,
           name: form.name.trim(),
           branch_id: form.branch_id ? Number(form.branch_id) : null,
+          department_id: form.department_id ? Number(form.department_id) : null,
           ai_enabled: form.ai_enabled,
           flow_enabled: form.flow_enabled,
           voice_ai_enabled: form.voice_ai_enabled,
@@ -573,6 +582,36 @@ export default function ChannelsPage() {
                   </small>
                 </label>
               ) : null}
+
+              {/* Which section of the business this account feeds. Optional on
+                  purpose: a company may connect three accounts of the same type
+                  and point each at a different department, or point none of
+                  them anywhere and let the customer choose from the menu. */}
+              <label htmlFor="channel-department">
+                <span>Department (optional)</span>
+
+                <select
+                  id="channel-department"
+                  value={form.department_id}
+                  onChange={(event) =>
+                    updateField("department_id", event.target.value)
+                  }
+                >
+                  <option value="">
+                    No default — the customer chooses
+                  </option>
+                  {departments.map((item) => (
+                    <option value={String(item.id)} key={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+
+                <small>
+                  A message arriving on this account starts in this department.
+                  The customer choosing another one from the menu still wins.
+                </small>
+              </label>
 
               <label htmlFor="channel-branch">
                 <span>Branch id (optional)</span>

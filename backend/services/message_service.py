@@ -466,6 +466,7 @@ class MessageService:
             "is_pinned": bool(row["is_pinned"]),
             "tags": _loads(row["tags_json"], []),
             "department": row["department"] or "Unassigned",
+            "department_id": row["department_id"],
             "topic": row["topic"] or "General",
             "status": row["status"] or "open",
             "priority": row["priority"] or "normal",

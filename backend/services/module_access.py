@@ -22,27 +22,26 @@ from typing import Any, Callable
 from fastapi import Depends, HTTPException, status
 
 from backend.services.auth_service import auth_service, get_current_user
-from backend.services.platform_service import PLATFORM_MODULES, platform_service
-from database.manager import DatabaseError
+from backend.services.module_gate import UnknownModule, module_gate
+from backend.services.platform_service import PLATFORM_MODULES
 
 
 logger = logging.getLogger(__name__)
 
 
-class UnknownModule(KeyError):
-    """A module key that the platform does not define."""
+# Re-exported: `UnknownModule` was raised from here before the gate existed, and
+# callers that catch it should keep working. There is one class, not two, so a
+# handler cannot miss the half it was not told about.
+__all__ = ["UnknownModule", "module_states", "module_enabled", "require_module"]
 
 
 def module_states(company_id: int) -> dict[str, bool]:
     """Every module key with its resolved on/off state for this company."""
-    return platform_service.get_platform_config(company_id)["modules"]
+    return module_gate.states(company_id)
 
 
 def module_enabled(company_id: int, module_key: str) -> bool:
-    if module_key not in PLATFORM_MODULES:
-        raise UnknownModule(module_key)
-
-    return bool(module_states(company_id).get(module_key, True))
+    return module_gate.enabled(company_id, module_key)
 
 
 def require_module(module_key: str) -> Callable:
@@ -63,20 +62,11 @@ def require_module(module_key: str) -> Callable:
     ) -> dict[str, Any]:
         company_id = auth_service.resolve_company_id(current_user)
 
-        try:
-            enabled = module_enabled(company_id, module_key)
-        except DatabaseError:
-            # Refusing on a control-plane failure would take the whole customer
-            # workspace down over a switch nobody flipped. Log it and let the
-            # request through — the permission check behind this one still runs.
-            logger.exception(
-                "Could not read module config for company %s; allowing %s.",
-                company_id,
-                module_key,
-            )
-            return current_user
-
-        if not enabled:
+        # No `DatabaseError` handling here any more: the gate fails open on a
+        # control-plane failure and says so in the log. Catching it a second
+        # time was how the two layers could have drifted apart — one of them
+        # allowing on error while the other refused.
+        if not module_gate.enabled(company_id, module_key):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

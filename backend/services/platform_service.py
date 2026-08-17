@@ -1360,6 +1360,19 @@ class PlatformService:
 
             conn.commit()
 
+        # The switch is read on every inbound message through a cache, so it has
+        # to be dropped the moment it changes. Without this an operator turning
+        # a module off would watch the screen disappear while the assistant kept
+        # using it for another half minute — and would reasonably conclude the
+        # switch does not work.
+        #
+        # Imported here rather than at module scope: `module_gate` imports this
+        # module for `PLATFORM_MODULES`, and a top-level import either way round
+        # is a cycle.
+        from backend.services.module_gate import module_gate
+
+        module_gate.invalidate(company_id)
+
         return self.get_platform_config(company_id)
 
     # ------------------------------------------------------------------

@@ -204,6 +204,38 @@ class AppConfig:
         os.getenv("PENDING_REPLY_MAX_DEFERRAL_SECONDS", "300")
     )
 
+    # How many companies one background sweep may work on at the same time.
+    #
+    # The sweeps used to run strictly one company after another, so a hundred
+    # companies with work due meant a hundred sequential round trips and a
+    # two-second cadence that quietly became a two-minute one. Some concurrency
+    # is therefore not a nicety; without it the control-plane work index only
+    # fixes the companies with *nothing* to do.
+    #
+    # It has to be bounded, and low, for three reasons that all point the same
+    # way:
+    #
+    #   * The API is a single uvicorn worker. Sweep work runs on the same
+    #     default thread pool (`asyncio.to_thread`) that every blocking call in
+    #     a request handler uses, so an unbounded sweep starves the customers
+    #     who are waiting on the platform right now — the pool holds
+    #     `min(32, cpu_count + 4)` threads and nothing reserves any of them for
+    #     requests.
+    #   * Each company in flight can be an OpenAI call, and the assistant path
+    #     has no concurrency limit of its own. N companies at once is N model
+    #     calls at once, against a rate limit shared by the whole platform.
+    #   * Each one also holds an open SQLCipher connection and a write lock on
+    #     that company's database.
+    #
+    # Eight is chosen to cut a large sweep's latency by roughly an order of
+    # magnitude while leaving most of the thread pool — and most of the model
+    # rate limit — for live traffic. Raise it only with the rate limit and the
+    # worker count in front of you: on a host running several uvicorn workers
+    # the real concurrency is this number times the worker count.
+    SWEEP_MAX_CONCURRENT_COMPANIES: int = int(
+        os.getenv("SWEEP_MAX_CONCURRENT_COMPANIES", "8")
+    )
+
     # The customer-profile cache had no bound at all, so distinct sender ids
     # grew it until the process ran out of memory.
     PROFILE_CACHE_MAX_ENTRIES: int = int(

@@ -545,19 +545,27 @@ class DatabaseManager:
     # Webhook routing
     # ------------------------------------------------------------------
 
-    def resolve_company_for_channel(
+    def resolve_account_for_channel(
         self,
         *,
         channel: str,
         page_id: str | None = None,
         phone_number_id: str | None = None,
         instagram_business_id: str | None = None,
-    ) -> int | None:
-        """Map an inbound message to the company that owns the receiving account.
+    ) -> dict[str, Any] | None:
+        """Map an inbound message to the receiving account, not just its company.
 
-        Returns ``None`` when nothing matches, which the webhook treats as a
-        message for an account this platform does not serve. Guessing a company
-        here is what previously funnelled every company's traffic into company 1.
+        Returns ``{"company_id", "account_id", "department_id"}``, or ``None``
+        when nothing matches — which the webhook treats as a message for an
+        account this platform does not serve. Guessing a company here is what
+        previously funnelled every company's traffic into company 1.
+
+        The account id matters as much as the company id. A company may connect
+        several accounts of the same type, each pointed at a different
+        department, so "which company" is not enough to know where the message
+        belongs. Resolving both in one lookup is what lets the rest of the chain
+        — company → channel account → department → employee — stay unbroken;
+        resolving them separately would let the two disagree.
 
         Every lookup is filtered by ``channel``. It used to be accepted and then
         ignored, which mattered because of the last candidate: ``page_id`` was
@@ -589,7 +597,7 @@ class DatabaseManager:
 
                 row = conn.execute(
                     f"""
-                    SELECT company_id
+                    SELECT id, company_id, department_id
                     FROM channel_accounts
                     WHERE {column} = ?
                       AND channel = ?
@@ -600,9 +608,41 @@ class DatabaseManager:
                 ).fetchone()
 
                 if row:
-                    return int(row["company_id"])
+                    return {
+                        "company_id": int(row["company_id"]),
+                        "account_id": int(row["id"]),
+                        "department_id": (
+                            int(row["department_id"])
+                            if row["department_id"] is not None
+                            else None
+                        ),
+                    }
 
         return None
+
+    def resolve_company_for_channel(
+        self,
+        *,
+        channel: str,
+        page_id: str | None = None,
+        phone_number_id: str | None = None,
+        instagram_business_id: str | None = None,
+    ) -> int | None:
+        """The company half of :meth:`resolve_account_for_channel`.
+
+        Kept because several callers only ever needed the company. It delegates
+        rather than repeating the query: two implementations of "whose message
+        is this" would eventually disagree, and the disagreement would show up
+        as one company's customer appearing in another company's inbox.
+        """
+        match = self.resolve_account_for_channel(
+            channel=channel,
+            page_id=page_id,
+            phone_number_id=phone_number_id,
+            instagram_business_id=instagram_business_id,
+        )
+
+        return match["company_id"] if match else None
 
     def default_company_id(self) -> int | None:
         """Return the only active company, when the platform serves exactly one.

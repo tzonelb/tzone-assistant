@@ -166,18 +166,26 @@ def _process_batch(batch: dict[str, Any]) -> bool:
 
     combined_message = "\n".join(messages)
 
-    conversation_control_service.mark_ai_processing(
+    state = conversation_control_service.mark_ai_processing(
         company_id=company_id,
         channel=channel,
         external_user_id=user_id,
     )
 
+    # The account this conversation arrived on, recovered from the conversation
+    # row rather than carried on the queued batch. A pending batch is keyed by
+    # exactly (company, channel, customer) — the same key as the conversation —
+    # so the row is where that fact already lives durably; storing it twice
+    # would only create somewhere for the two to disagree. Either way it
+    # survives a restart, which the in-process buffer this queue replaced did
+    # not.
     started_at = time.perf_counter()
     response = message_gateway.handle_text(
         channel=channel,
         user_id=user_id,
         company_id=company_id,
         message=combined_message,
+        channel_account_id=(state or {}).get("channel_account_id"),
     )
 
     # Generating can take many seconds; an employee may have taken over in the

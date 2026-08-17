@@ -14,6 +14,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from backend.services.work_index_service import (
+    KIND_SCHEDULED_POST,
+    work_index_service,
+)
 from database.manager import database_manager
 
 
@@ -88,6 +92,10 @@ class SchedulerService:
                     now,
                 ),
             )
+            # Nothing is registered in the work index here. A draft is never
+            # claimed, so a sweep that opened this company would find nothing —
+            # the post enters the index when it is approved, which is the moment
+            # it becomes work.
             conn.commit()
 
         return self.get_post(company_id=company_id, post_id=int(cursor.lastrowid))
@@ -127,6 +135,13 @@ class SchedulerService:
                 """,
                 params,
             )
+
+            # Moving an approved post *earlier* moves the company's deadline
+            # with it. Registered before the commit, for the same reason the
+            # reply queue does it: an unregistered post is a post nobody
+            # publishes.
+            self._register_deadline(conn, company_id, post_id)
+
             conn.commit()
 
         if cursor.rowcount == 0:
@@ -159,9 +174,43 @@ class SchedulerService:
                     FAILED,
                 ),
             )
+
+            # Approval is the moment a post becomes work, so it is the moment
+            # the company has to appear in the sweep's list.
+            if cursor.rowcount:
+                self._register_deadline(conn, company_id, post_id)
+
             conn.commit()
 
         return cursor.rowcount > 0
+
+    @staticmethod
+    def _register_deadline(conn, company_id: int, post_id: int) -> None:
+        """Tell the control-plane index this company has a post due.
+
+        Read back inside the caller's open transaction rather than taking the
+        time from the caller's arguments, so an edit and an approval that arrive
+        together cannot register a time the row does not hold.
+
+        Only approved posts count: they are the only ones ``claim_due`` takes.
+        A post leaving that state — published, cancelled, finally failed — is
+        not deregistered here. Removing an entry is a sweep's job, because a
+        sweep has just re-read the table and can tell the difference between
+        "this company is finished" and "this company has something else".
+        """
+        row = conn.execute(
+            """
+            SELECT status, scheduled_for FROM scheduled_posts
+            WHERE id = ? AND company_id = ?
+            LIMIT 1
+            """,
+            (int(post_id), int(company_id)),
+        ).fetchone()
+
+        if not row or str(row["status"]) != APPROVED:
+            return
+
+        work_index_service.note(company_id, KIND_SCHEDULED_POST, row["scheduled_for"])
 
     def cancel(self, *, company_id: int, post_id: int) -> bool:
         with database_manager.tenant(int(company_id)) as conn:

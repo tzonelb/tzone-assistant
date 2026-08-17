@@ -200,6 +200,7 @@ CONTROL_TABLES: tuple[str, ...] = (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company_id INTEGER NOT NULL,
         branch_id INTEGER,
+        department_id INTEGER,
         channel TEXT NOT NULL,
         name TEXT NOT NULL,
         external_account_id TEXT,
@@ -269,6 +270,36 @@ CONTROL_TABLES: tuple[str, ...] = (
         FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE RESTRICT
     )
     """,
+    # Which companies have background work outstanding, and when the earliest
+    # piece of it comes due. Control-plane for the same reason the webhook
+    # routing table is: a sweep has to know *whether* to open a company's
+    # encrypted database before it opens it, and this is the only place it can
+    # read without opening one.
+    #
+    # Nothing a company owns appears here. "Company 42 has a reply due at
+    # 12:01:03" is a scheduling fact about the platform's own queue — no
+    # customer, no channel, no message, no content.
+    #
+    # One row per (company, kind). `due_at` is the earliest outstanding item of
+    # that kind, as an ISO-8601 UTC timestamp, so it sorts and compares as text
+    # exactly the way the tenant queues already compare their own deadlines.
+    #
+    # `revision` exists so a sweep can *remove* an entry without racing a writer
+    # that is adding one: the sweep re-reads the tenant tables and then writes
+    # back only if the revision it read is still current. Adding is unconditional
+    # — see `work_index_service` for which direction each caller is allowed to
+    # move, and why.
+    """
+    CREATE TABLE IF NOT EXISTS company_work_index (
+        company_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        due_at TEXT NOT NULL,
+        revision INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (company_id, kind),
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -292,6 +323,22 @@ CONTROL_TABLES: tuple[str, ...] = (
 CONTROL_COLUMNS: dict[str, dict[str, str]] = {
     "auth_sessions": {
         "scope": "TEXT NOT NULL DEFAULT 'company'",
+    },
+    "channel_accounts": {
+        # The department this account feeds by default: a company that runs
+        # three Instagram accounts can point each one at a different section,
+        # and a message arriving on it starts there instead of waiting for the
+        # model to guess.
+        #
+        # No foreign key, deliberately. `business_departments` lives inside the
+        # company's own encrypted database and SQLite cannot enforce a key
+        # across files — the same reason every other cross-file column here
+        # carries no constraint. Ownership is checked in
+        # `channel_account_service` before the value is written.
+        #
+        # Nullable because routing by channel is optional: a company may want
+        # every account to fall through to the customer's own choice.
+        "department_id": "INTEGER",
     },
     "users": {
         # When the password was last set. Shown on the user's own record so an
@@ -326,6 +373,7 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_reset_tokens(token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_reset_tokens(user_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_company ON channel_accounts(company_id)",
+    "CREATE INDEX IF NOT EXISTS idx_channel_accounts_department ON channel_accounts(company_id, department_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_page ON channel_accounts(page_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_phone ON channel_accounts(phone_number_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_instagram ON channel_accounts(instagram_business_id)",

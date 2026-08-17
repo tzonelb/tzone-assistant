@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, model_validator
 
 from backend.services.auth_service import auth_service, require_permission
+from backend.services.business_department_service import business_department_service
 from backend.services.channel_account_service import (
     ChannelAccountError,
     ROUTING_FIELD,
@@ -33,6 +34,10 @@ class ChannelAccountCreate(BaseModel):
     channel: ChannelName
     name: str = Field(min_length=1, max_length=120)
     branch_id: int | None = None
+    # The section this account feeds. Optional: a company may connect three
+    # Instagram accounts and point each at a different department, or point
+    # none of them anywhere and let the customer choose from the menu.
+    department_id: int | None = None
 
     page_id: str | None = Field(default=None, max_length=120)
     instagram_business_id: str | None = Field(default=None, max_length=120)
@@ -66,6 +71,9 @@ class ChannelAccountCreate(BaseModel):
 class ChannelAccountUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=120)
     branch_id: int | None = None
+    # Sent explicitly as null to stop routing this account by channel; omitted
+    # to leave the current pointer alone.
+    department_id: int | None = None
     status: Literal["active", "disabled"] | None = None
 
     page_id: str | None = Field(default=None, max_length=120)
@@ -92,6 +100,21 @@ def list_channels(
         "items": channel_account_service.list_accounts(company_id),
         "supported_channels": list(ROUTING_FIELD.keys()),
         "routing_fields": ROUTING_FIELD,
+        # The sections an account may be pointed at, so the screen can offer
+        # them without a second round trip. This company's own, and only ever
+        # this company's — the id is written into a control-plane column that
+        # nothing else validates.
+        "departments": [
+            {
+                "id": row["id"],
+                "code": row["code"],
+                "label": row.get("name_en") or row.get("name_ar") or row["code"],
+            }
+            for row in business_department_service.list_departments(
+                company_id=company_id,
+                enabled_only=True,
+            )
+        ],
     }
 
 

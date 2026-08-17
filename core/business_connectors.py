@@ -26,6 +26,7 @@ import logging
 from pathlib import Path
 
 from backend.services.catalogue_service import catalogue_service
+from backend.services.module_gate import module_gate
 
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,16 @@ class BusinessConnectors:
                 "product facts rather than another company's catalogue."
             )
 
+            return self.catalogue_unavailable()
+
+        # Catalogue off means the assistant has no product facts to state. The
+        # switch used to hide the screen and leave this call in place, so a
+        # company that turned Catalogue off still had its assistant quoting
+        # prices out of it — from rows nobody on that team could open to
+        # correct. `catalogue_unavailable` is the existing no-facts answer, so
+        # the price guardrail keeps working exactly as it does for a company
+        # that never typed a product in.
+        if not module_gate.enabled(company_id, "catalogue"):
             return self.catalogue_unavailable()
 
         try:

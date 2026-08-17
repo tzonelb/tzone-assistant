@@ -41,6 +41,7 @@ from backend.services.conversation_control_service import (
     ConversationOwnershipConflict,
     conversation_control_service,
 )
+from backend.services.business_department_service import business_department_service
 from backend.services.message_service import message_service
 from database.manager import DatabaseError, database_manager
 
@@ -50,16 +51,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/conversations", tags=["Conversations"])
 
 
-DEPARTMENTS = [
-    "Unassigned",
-    "Sales",
-    "IPTV",
-    "Support",
-    "Accounting",
-    "Maintenance",
-    "Orders",
-    "Information",
-]
+# What the column holds when a conversation belongs to no section. Not a
+# department, so it is not looked for in the company's list — it is the absence
+# of one, and it is what the inbox has always rendered.
+UNASSIGNED = "Unassigned"
 
 LIVE_POLL_SECONDS = 2
 
@@ -97,6 +92,51 @@ def _pdf_display_text(value: Any) -> str:
             return text
 
     return text
+
+
+def _department_options(company_id: int) -> list[dict[str, str]]:
+    """The sections this company actually defined, plus "no section yet".
+
+    This endpoint used to serve a Title-Case constant — Sales, IPTV, Support,
+    Accounting, Maintenance, Orders, Information — hardcoded in this file. It
+    was one company's list shown to every company's employees, in a casing that
+    matched nothing: the assistant routes on ``business_departments.code``,
+    which is lower_snake, so a conversation the model put in ``sales`` and a
+    conversation an employee put in ``Sales`` were two different departments as
+    far as the inbox filter was concerned. Everything now speaks the code.
+
+    Never raises: a department table that will not open costs the inbox its
+    transfer list, not the employee their inbox.
+    """
+    options = [{"code": UNASSIGNED, "label": UNASSIGNED}]
+
+    try:
+        rows = business_department_service.list_departments(
+            company_id=company_id,
+            enabled_only=True,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Could not read the departments of company %s", company_id
+        )
+        return options
+
+    options.extend(
+        {
+            "code": str(row["code"]),
+            "label": str(
+                row.get("name_en") or row.get("name_ar") or row["code"]
+            ),
+        }
+        for row in rows
+        if row.get("code")
+    )
+
+    return options
+
+
+def _department_codes(company_id: int) -> list[str]:
+    return [option["code"] for option in _department_options(company_id)]
 
 
 def _is_conversation_admin(current_user: dict[str, Any], company_id: int) -> bool:
@@ -273,7 +313,11 @@ def list_conversations(
         "available_channels": result["available_channels"],
         "current_user_id": int(current_user["id"]),
         "current_user_is_admin": is_admin,
-        "departments": DEPARTMENTS,
+        # `departments` stays a list of plain codes, which is what the screen
+        # already binds a filter value to; `department_options` carries the name
+        # the company gave each one, for the label.
+        "departments": _department_codes(company_id),
+        "department_options": _department_options(company_id),
         "employees": _employees(current_user, company_id),
         "pagination": result["pagination"],
     }
@@ -287,7 +331,8 @@ def conversation_options(
 
     return {
         "status": "ok",
-        "departments": DEPARTMENTS,
+        "departments": _department_codes(company_id),
+        "department_options": _department_options(company_id),
         "employees": _employees(current_user, company_id),
     }
 
@@ -444,7 +489,8 @@ def read_control(
     )
 
     result["employees"] = _employees(current_user, company_id)
-    result["departments"] = DEPARTMENTS
+    result["departments"] = _department_codes(company_id)
+    result["department_options"] = _department_options(company_id)
     result["current_user_id"] = current_user_id
     result["current_user_is_admin"] = is_admin
     result["permissions"] = {
@@ -564,8 +610,18 @@ def update_control(
         external_user_id=user_id,
     )
 
-    if payload.department is not None and payload.department not in DEPARTMENTS:
-        raise HTTPException(status_code=422, detail="Invalid department.")
+    # Validated against this company's own sections. The constant this replaced
+    # accepted "Sales" from any company and rejected a code the company itself
+    # had defined, so the one screen an employee uses to transfer a conversation
+    # could not name most of the places it could be transferred to.
+    if (
+        payload.department is not None
+        and payload.department not in _department_codes(company_id)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="That department does not belong to this company.",
+        )
 
     if payload.assigned_user_id is not None:
         # Server-side validation, not a response: ids are all this needs, so it

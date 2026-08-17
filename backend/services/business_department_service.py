@@ -183,6 +183,106 @@ class BusinessDepartmentService:
 
         return self._row(row) if row else None
 
+    def find_by_code(
+        self,
+        *,
+        company_id: int,
+        code: Any,
+        enabled_only: bool = False,
+    ) -> dict[str, Any] | None:
+        """The department carrying this code, inside this company only.
+
+        The code is normalised the same way it was on the way in, so a value
+        that came back from the model as ``"Sales Team"`` still resolves to the
+        row stored as ``sales_team``. A code this company never defined returns
+        ``None`` — it is not looked for anywhere else, which is what stops
+        another company's vocabulary from routing this company's customer.
+        """
+        company_id = int(company_id)
+
+        try:
+            clean_code = self._normalize_code(code)
+        except BusinessDepartmentError:
+            return None
+
+        clause = "company_id = ? AND code = ?"
+        params: list[Any] = [company_id, clean_code]
+
+        if enabled_only:
+            clause += " AND enabled = 1"
+
+        with database_manager.tenant(company_id) as conn:
+            row = conn.execute(
+                f"SELECT * FROM business_departments WHERE {clause} LIMIT 1",
+                params,
+            ).fetchone()
+
+        return self._row(row) if row else None
+
+    def codes(self, company_id: int | None, enabled_only: bool = True) -> list[str]:
+        """Just the codes, for anywhere a vocabulary is needed.
+
+        This is the list ``AIRouter`` validates the model's answer against and
+        the list the inbox validates a ``PATCH`` against. Both used to carry a
+        hardcoded set of nine, so a code a company actually defined was thrown
+        away as invalid.
+        """
+        if not company_id:
+            return []
+
+        return [
+            str(row["code"])
+            for row in self.for_assistant(company_id)
+            if row.get("code") and (row.get("enabled") or not enabled_only)
+        ]
+
+    def for_channel_account(
+        self,
+        *,
+        company_id: int | None,
+        channel_account_id: int | None,
+    ) -> dict[str, Any] | None:
+        """The department an account feeds by default, or ``None``.
+
+        Reads the pointer from the control database and the department itself
+        from the company's own database, and checks the account really belongs
+        to the company being asked about — an account id is a small integer and
+        guessing one must not reach across a tenant boundary.
+
+        Never raises: this runs on the customer reply path, where a routing
+        default that cannot be read must cost the conversation its department,
+        not the customer their answer.
+        """
+        if not company_id or not channel_account_id:
+            return None
+
+        try:
+            with database_manager.control() as conn:
+                row = conn.execute(
+                    """
+                    SELECT department_id FROM channel_accounts
+                    WHERE id = ? AND company_id = ?
+                    LIMIT 1
+                    """,
+                    (int(channel_account_id), int(company_id)),
+                ).fetchone()
+
+            if not row or row["department_id"] is None:
+                return None
+
+            return self.get_department(
+                company_id=int(company_id),
+                department_id=int(row["department_id"]),
+            )
+        except Exception:
+            logger.exception(
+                "Could not read the default department of account %s "
+                "for company %s",
+                channel_account_id,
+                company_id,
+            )
+            return None
+
     def for_assistant(self, company_id: int | None) -> list[dict[str, Any]]:
         """The enabled departments, or nothing — never raises.
 

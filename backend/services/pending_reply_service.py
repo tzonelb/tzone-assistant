@@ -20,6 +20,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from backend.services.work_index_service import (
+    KIND_PENDING_REPLY,
+    work_index_service,
+)
 from config.settings import config
 from database.manager import database_manager
 
@@ -183,9 +187,11 @@ class PendingReplyService:
                         ),
                     )
                     count = len(messages)
+                    deadline = deliver_after
                 else:
                     dropped = False
                     capped = False
+                    deadline = _iso_in(delay)
                     conn.execute(
                         """
                         INSERT INTO pending_replies (
@@ -199,12 +205,32 @@ class PendingReplyService:
                             channel,
                             external_user_id,
                             json.dumps([message], ensure_ascii=False),
-                            _iso_in(delay),
+                            deadline,
                             now,
                             now,
                         ),
                     )
                     count = 1
+
+                # Registered in the control-plane index *before* this
+                # transaction commits, and deliberately not wrapped in a
+                # try/except. The sweep no longer opens every company on a
+                # timer, so a batch nobody registered is a batch nobody
+                # collects — the customer waits for a reply that never comes,
+                # with nothing in the log to say so. Failing the enqueue is far
+                # better: the webhook reports the failure and the provider
+                # redelivers.
+                #
+                # The other order — commit first, register second — can strand
+                # work. This order can only leave an entry for a batch that was
+                # rolled back, which costs the next sweep one wasted database
+                # open and is corrected the moment it looks.
+                #
+                # Opening the control database while holding this company's
+                # write lock is safe: nothing in the platform holds a control
+                # write open while waiting for a tenant lock, so there is no
+                # cycle to deadlock on.
+                work_index_service.note(company_id, KIND_PENDING_REPLY, deadline)
 
                 conn.commit()
 

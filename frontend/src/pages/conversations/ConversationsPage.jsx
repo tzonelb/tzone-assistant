@@ -81,6 +81,7 @@ export default function ConversationsPage() {
   const [channelCounts, setChannelCounts] = useState({});
   const [availableChannels, setAvailableChannels] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [departmentOptions, setDepartmentOptions] = useState([]);
   const [activeChannel, setActiveChannel] = useState("all");
   const [activeFolder, setActiveFolder] = useState("inbox");
   const [searchInput, setSearchInput] = useState("");
@@ -117,6 +118,9 @@ export default function ConversationsPage() {
       setChannelCounts(result?.channel_counts || {});
       setAvailableChannels(Array.isArray(result?.available_channels) ? result.available_channels : []);
       setEmployees(Array.isArray(result?.employees) ? result.employees : []);
+      setDepartmentOptions(
+        Array.isArray(result?.department_options) ? result.department_options : [],
+      );
     } catch (requestError) {
       setError(requestError.message || "Conversations could not be loaded.");
     } finally {
@@ -261,7 +265,14 @@ export default function ConversationsPage() {
                     <option value="all">All statuses</option><option value="ai_handling">AI handling</option><option value="human_handling">Human handling</option><option value="waiting_customer">Waiting customer</option><option value="waiting_agent">Waiting agent</option><option value="pending">Pending</option><option value="resolved">Resolved</option><option value="closed">Closed</option>
                   </select>
                   <select value={department} onChange={(event) => setDepartment(event.target.value)}>
-                    <option value="all">All departments</option><option value="Unassigned">Unassigned</option><option value="Sales">Sales</option><option value="IPTV">IPTV</option><option value="Support">Support</option><option value="Accounting">Accounting</option><option value="Maintenance">Maintenance</option><option value="Telecom">Telecom</option><option value="Information">Information</option>
+                    {/* The company's own sections, from the server. This list
+                        used to be eight hardcoded English names — another
+                        company's departments, offered to every company's team,
+                        filtering on values nothing in the database held. */}
+                    <option value="all">All departments</option>
+                    {departmentOptions.map((item) => (
+                      <option value={item.code} key={item.code}>{item.label}</option>
+                    ))}
                   </select>
                   <select value={assignedUserId} onChange={(event) => setAssignedUserId(event.target.value)}>
                     <option value="all">All employees</option>{employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}

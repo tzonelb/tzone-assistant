@@ -197,10 +197,14 @@ def _process_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
             results.append({"status": "ignored", "reason": event.get("reason")})
             continue
 
-        company_id = database_manager.resolve_company_for_channel(
+        # The account, not only its company: a company may run several numbers
+        # and point each at a different department.
+        account = database_manager.resolve_account_for_channel(
             channel="whatsapp",
             phone_number_id=event.get("phone_number_id"),
         )
+
+        company_id = account["company_id"] if account else None
 
         if company_id is None:
             log_meta_event(
@@ -216,7 +220,11 @@ def _process_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
         try:
             results.append(
-                process_inbound_event(event=event, company_id=company_id)
+                process_inbound_event(
+                    event=event,
+                    company_id=company_id,
+                    channel_account_id=account["account_id"],
+                )
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to process WhatsApp event")
