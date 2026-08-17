@@ -734,3 +734,73 @@ def test_an_assistant_ticket_still_creates_and_reads_back(service, alpha):
 
     listed = service.list(company_id=alpha["id"], status="open")
     assert listed["total"] == 1
+
+
+def test_every_endpoint_that_accepts_an_assignee_checks_it():
+    """The generalisation, because the specific case was missed once.
+
+    `require_company_employee` existed, its docstring explained exactly why it
+    mattered, the module docstring claimed "every employee id a request names is
+    checked against that company's own" — and `PATCH /api/tickets/{id}` passed
+    `payload.assigned_user_id` straight through. Three sibling endpoints in the
+    same file did check. Nothing noticed, because a guard being present in a
+    file says nothing about it being reached on every path.
+
+    An id belonging to no employee of this company does not leak a name —
+    `user_display_names` is scoped, so it resolves to nothing. It leaves the
+    ticket assigned to a phantom: `assigned_user_id` set, no assignee shown,
+    and matching nobody's "assigned to me". Assigned, unnamed, and lost.
+
+    So the rule is checked by walking the source rather than by remembering: a
+    handler whose payload type carries `assigned_user_id` must call the guard.
+    """
+    import ast
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parent.parent / "backend/api/routes/tickets.py"
+    tree = ast.parse(source.read_text())
+
+    # Which request models carry an assignee.
+    models_with_assignee = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+        and any(
+            isinstance(item, ast.AnnAssign)
+            and isinstance(item.target, ast.Name)
+            and item.target.id == "assigned_user_id"
+            for item in node.body
+        )
+    }
+
+    assert models_with_assignee, "No request model carries an assignee any more"
+
+    unguarded = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+
+        takes_assignee = any(
+            isinstance(arg.annotation, ast.Name)
+            and arg.annotation.id in models_with_assignee
+            for arg in node.args.args
+        )
+
+        if not takes_assignee:
+            continue
+
+        guarded = any(
+            isinstance(call.func, ast.Name)
+            and call.func.id == "require_company_employee"
+            for call in ast.walk(node)
+            if isinstance(call, ast.Call)
+        )
+
+        if not guarded:
+            unguarded.append(node.name)
+
+    assert not unguarded, (
+        "Endpoint(s) accepting an assignee without checking it belongs to this "
+        f"company: {unguarded}. Wrap the value in `require_company_employee`."
+    )

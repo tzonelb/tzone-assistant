@@ -27,9 +27,10 @@ import {
 import { AppButton, AppCard, ErrorState, StatusBadge } from "../../components/common";
 import { useConversationLive } from "../../contexts/ConversationLiveContext";
 import ConversationDetailPage from "./ConversationDetailPage";
+import { SUPPORTED_CHANNELS } from "../../utils/channels";
 import "./ConversationInbox.css";
 
-const CHANNELS = ["all", "messenger", "whatsapp", "instagram", "telegram", "website"];
+// Shown until the first response arrives; the server's list wins after that.
 const FOLDERS = [
   { value: "inbox", label: "Inbox", icon: AllInboxOutlined },
   { value: "assigned_to_me", label: "Assigned to me", icon: PersonOutlineOutlined },
@@ -80,6 +81,7 @@ export default function ConversationsPage() {
   const [rows, setRows] = useState([]);
   const [channelCounts, setChannelCounts] = useState({});
   const [availableChannels, setAvailableChannels] = useState([]);
+  const [supportedChannels, setSupportedChannels] = useState(SUPPORTED_CHANNELS);
   const [employees, setEmployees] = useState([]);
   const [departmentOptions, setDepartmentOptions] = useState([]);
   const [activeChannel, setActiveChannel] = useState("all");
@@ -117,6 +119,9 @@ export default function ConversationsPage() {
       setRows(Array.isArray(result?.items) ? result.items : []);
       setChannelCounts(result?.channel_counts || {});
       setAvailableChannels(Array.isArray(result?.available_channels) ? result.available_channels : []);
+      if (Array.isArray(result?.supported_channels) && result.supported_channels.length) {
+        setSupportedChannels(result.supported_channels);
+      }
       setEmployees(Array.isArray(result?.employees) ? result.employees : []);
       setDepartmentOptions(
         Array.isArray(result?.department_options) ? result.department_options : [],
@@ -155,6 +160,10 @@ export default function ConversationsPage() {
   }, [loadConversations]);
 
   const enabledChannels = useMemo(() => new Set(availableChannels), [availableChannels]);
+  const channelTabs = useMemo(
+    () => ["all", ...supportedChannels],
+    [supportedChannels],
+  );
   const availableTags = useMemo(() => {
     const values = new Set();
     rows.forEach((row) => (row.tags || []).forEach((item) => values.add(item)));
@@ -191,7 +200,7 @@ export default function ConversationsPage() {
     <div className={`unified-inbox-page channel-${activeChannel}`}>
       <AppCard padding="none" className="unified-inbox-shell">
         <nav className="global-channel-tabs" aria-label="Channels">
-          {CHANNELS.map((channelName) => {
+          {channelTabs.map((channelName) => {
             const Icon = CHANNEL_ICONS[channelName] || ForumOutlined;
             const connected = channelName === "all" || enabledChannels.has(channelName);
             const unreadCount = Number(channelCounts[channelName] || 0);

@@ -42,6 +42,7 @@ from backend.services.conversation_control_service import (
     conversation_control_service,
 )
 from backend.services.business_department_service import business_department_service
+from backend.services.channel_account_service import SUPPORTED_CHANNELS
 from backend.services.message_service import message_service
 from database.manager import DatabaseError, database_manager
 
@@ -311,6 +312,14 @@ def list_conversations(
         ),
         "channel_counts": result["channel_counts"],
         "available_channels": result["available_channels"],
+        # The whole catalogue, not just what this company has connected. The
+        # inbox draws a tab per channel and greys out the ones with no account,
+        # so it needs both lists. It used to hold its own hardcoded copy, which
+        # included `website` — a channel the platform has never supported and
+        # cannot be connected from the Channels screen, shown to every company
+        # with the tooltip "Website is not connected yet". Not connected, and
+        # not connectable.
+        "supported_channels": list(SUPPORTED_CHANNELS),
         "current_user_id": int(current_user["id"]),
         "current_user_is_admin": is_admin,
         # `departments` stays a list of plain codes, which is what the screen

@@ -108,11 +108,19 @@ def update_ticket_status(
 ):
     company_id = auth_service.resolve_company_id(current_user)
 
+    # The three task endpoints below have checked this since they shipped; the
+    # ticket endpoint did not, which left the module docstring's claim true
+    # everywhere except here. An id that is not an employee of this company
+    # resolves to no name — `user_display_names` is scoped — so the ticket came
+    # back showing no assignee while `assigned_user_id` was set, and matched
+    # nobody's "assigned to me". Assigned, unnamed, and on no one's list.
     updated = ticket_service.update_status(
         company_id=company_id,
         ticket_id=ticket_id,
         status=payload.status,
-        assigned_user_id=payload.assigned_user_id,
+        assigned_user_id=require_company_employee(
+            company_id, payload.assigned_user_id
+        ),
     )
 
     if not updated:
