@@ -455,6 +455,18 @@ def test_dry_run_asks_the_model_with_this_companys_profile(
     monkeypatch.setattr(config, "AI_ENABLED", True)
     monkeypatch.setattr(config, "OPENAI_API_KEY", "test-key")
 
+    # This test is about prompt isolation, not the guardrail, so the company is
+    # given a policy that permits a reply with nothing matched. Under the
+    # shipped policy (`grounded_ai`, no free reply) a company with an empty
+    # knowledge base answers with the safe fallback and never calls the model —
+    # which is correct, and is asserted in `test_reply_policy_enforcement.py`.
+    from backend.services.reply_policy_service import reply_policy_service
+
+    reply_policy_service.update_company_default(
+        company_id=alpha["id"],
+        values={"reply_mode": "knowledge_then_ai", "allow_ai_free_reply": True},
+    )
+
     captured: dict[str, str] = {}
 
     def fake_call(**kwargs):

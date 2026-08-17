@@ -14,6 +14,7 @@ from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
 from core.business_modules import business_modules
+from core import reply_decision
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.knowledge_service import knowledge_service
 from backend.services.module_gate import module_gate
@@ -806,6 +807,39 @@ class Engine:
             )
         )
 
+        # This company's five remaining switches, applied. Until now
+        # `reply_mode`, `grounded_ai_enabled`, `allow_ai_free_reply`,
+        # `minimum_match_confidence` and `fallback_to_human` were resolved,
+        # merged and serialised into the model payload without anything
+        # consulting them: an owner could set "keep it to what you taught it",
+        # watch it save, and get an assistant that answered whatever it liked.
+        decision = reply_decision.decide(
+            channel_policy,
+            match_result,
+            has_knowledge=bool(knowledge_items),
+        )
+
+        if not decision.use_knowledge:
+            selected_knowledge = []
+
+        if decision.blocked:
+            # No model call at all. Nothing here has cost the platform a model
+            # charge yet, which is the other half of honouring the switch.
+            return self.finalize_ai_response(
+                request=request,
+                user_session=user_session,
+                ai_result=self.build_safe_result(
+                    language=language,
+                    current_department=(
+                        match_result.get("department")
+                        if match_result.get("department") != "unknown"
+                        else current_department
+                    ),
+                    escalate=decision.escalate,
+                    reason=decision.reason,
+                ),
+            )
+
         connector_results = self.collect_connector_results(
             message=request.message,
             language=language,
@@ -826,7 +860,15 @@ class Engine:
             context=memory_context,
             knowledge=selected_knowledge,
             connector_results=connector_results,
-            response_policy=channel_policy,
+            # The resolved decision rather than the raw switches. The model is
+            # told what it may actually do on this message: a policy saying
+            # `allow_ai_free_reply: true` alongside a decision that refused one
+            # is an instruction to do the thing the owner just forbade.
+            response_policy={
+                **channel_policy,
+                "allow_ai_free_reply": decision.allow_free_reply,
+                "grounded_ai_enabled": decision.use_knowledge,
+            },
             match_result=match_result,
             company_id=request.company_id,
             channel_account_id=getattr(request, "channel_account_id", None),
@@ -840,6 +882,8 @@ class Engine:
                     if match_result.get("department") != "unknown"
                     else current_department
                 ),
+                escalate=reply_decision.fallback_to_human(channel_policy),
+                reason="model_returned_nothing",
             )
 
             return self.finalize_ai_response(
@@ -1082,12 +1126,26 @@ class Engine:
         self,
         language,
         current_department,
+        escalate=True,
+        reason=None,
     ):
+        """The reply for a message the company's rules leave no answer for.
+
+        ``escalate`` is the company's ``fallback_to_human`` switch. On, this
+        hands the conversation to a human and offers the support button. Off,
+        the customer is told plainly that the information is not confirmed and
+        the conversation stays where it is — which is what "answers anyway
+        instead of escalating" means for a message that has no answer.
+
+        The wording does not change between the two. A company that switched
+        escalation off did not ask its assistant to start guessing; it asked it
+        to stop handing conversations over.
+        """
         if language == "en":
-            return {
+            result = {
                 "department": (
                     current_department
-                    or "human_support"
+                    or ("human_support" if escalate else "unknown")
                 ),
                 "intent": "safe_fallback",
                 "topic": (
@@ -1102,10 +1160,39 @@ class Engine:
                     "Please send more detail, or our team "
                     "can check it for you."
                 ),
-                "buttons": [
-                    "Contact support"
+                "buttons": (
+                    ["Contact support"] if escalate else []
+                ),
+                "needs_human": bool(escalate),
+                "missing_information": [
+                    "verified business information"
                 ],
-                "needs_human": True,
+                "used_knowledge_ids": [],
+                "notes": "Safe fallback.",
+            }
+        else:
+            result = {
+                "department": (
+                    current_department
+                    or ("human_support" if escalate else "unknown")
+                ),
+                "intent": "safe_fallback",
+                "topic": (
+                    current_department
+                    or "unknown"
+                ),
+                "language": "ar",
+                "confidence": 1.0,
+                "reply": (
+                    "ما عندي معلومات مؤكدة كافية "
+                    "حتى جاوبك بدقة. ابعتلنا تفاصيل "
+                    "أكتر، أو فينا نحولك للفريق "
+                    "ليتأكدلك."
+                ),
+                "buttons": (
+                    ["التواصل مع الدعم"] if escalate else []
+                ),
+                "needs_human": bool(escalate),
                 "missing_information": [
                     "verified business information"
                 ],
@@ -1113,34 +1200,13 @@ class Engine:
                 "notes": "Safe fallback.",
             }
 
-        return {
-            "department": (
-                current_department
-                or "human_support"
-            ),
-            "intent": "safe_fallback",
-            "topic": (
-                current_department
-                or "unknown"
-            ),
-            "language": "ar",
-            "confidence": 1.0,
-            "reply": (
-                "ما عندي معلومات مؤكدة كافية "
-                "حتى جاوبك بدقة. ابعتلنا تفاصيل "
-                "أكتر، أو فينا نحولك للفريق "
-                "ليتأكدلك."
-            ),
-            "buttons": [
-                "التواصل مع الدعم"
-            ],
-            "needs_human": True,
-            "missing_information": [
-                "verified business information"
-            ],
-            "used_knowledge_ids": [],
-            "notes": "Safe fallback.",
-        }
+        if reason:
+            # Which switch produced the silence. Without it an owner who
+            # tightened `minimum_match_confidence` too far sees an assistant
+            # that stopped answering and nothing that says why.
+            result["notes"] = f"Safe fallback ({reason})."
+
+        return result
 
     def get_buttons_for_department(
         self,

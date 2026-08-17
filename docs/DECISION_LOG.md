@@ -125,3 +125,53 @@ would let one database blip silently strip a thousand companies' assistants of
 their knowledge and their catalogue mid-conversation, with nothing in the
 switch to explain it. Honouring a switch late is better than honouring one that
 was never set.
+
+## D-013 — A switch that shows a decision must make it
+
+Nine reply-policy switches are offered to a company on the AI TEACHING screen,
+each with a sentence explaining what it does to a customer. Four worked.
+
+`reply_mode`, `grounded_ai_enabled`, `allow_ai_free_reply`,
+`minimum_match_confidence` and `fallback_to_human` were validated on write,
+merged across the four scopes, serialised into the model's payload — and never
+consulted by anything that decided anything. `grounded_ai_enabled` did not
+appear anywhere in the codebase outside the field list that draws its toggle.
+
+So an owner could set "Off keeps it to what you taught it", watch it save, and
+get an assistant that went on answering whatever it liked. That is worse than
+having no control: the owner believes the guardrail is on.
+
+The rules now live in `core/reply_decision.py`, apart from the engine and
+touching no database, session, model or request, so nine interacting switches
+can be asserted directly rather than inferred from a reply.
+
+### Consequence to be aware of before launch
+
+The shipped policy in `config/response_policy.json` is `reply_mode: grounded_ai`
+with `allow_ai_free_reply: false` and `minimum_match_confidence: 0.62`. Enforced,
+that means **a company with an empty knowledge base answers every message with
+the safe fallback** — it has nothing confirmed to answer from, so it says so.
+
+That is the documented intent and the safe direction: an assistant that invents
+answers about a business it knows nothing about is the larger risk. It is also
+a real change from the previous behaviour, where every message reached the model
+with a free hand regardless of the switches. A company that wants the old
+behaviour turns `allow_ai_free_reply` on; the platform default can be changed in
+one value in that file.
+
+### The one combination with no consistent reading
+
+`allow_ai_free_reply` off with `fallback_to_human` off, on an unmatched message:
+"keep it to what you taught it" and "answer anyway instead of escalating" cannot
+both hold. The content switch wins — no invented answer — and
+`fallback_to_human` keeps its own meaning by not routing to a human. The other
+precedence would let a switch about *who* answers silently disable a switch
+about *what may be said*.
+
+### Out of range is corrupt, not extreme
+
+`minimum_match_confidence` outside 0–1 falls back to the shipped value rather
+than clamping. Clamping a stored `9` to `1.0` means nothing ever clears the bar
+and the assistant goes silent; clamping a stored `-3` to `0.0` switches the
+guardrail off. Both turn bad data into the most extreme setting available,
+without a word anywhere.
