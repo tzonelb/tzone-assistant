@@ -16,6 +16,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import (
+    activity,
     ai_teaching,
     analytics,
     appointments,
@@ -41,6 +42,7 @@ from backend.api.routes import (
     tickets,
 )
 from backend.api.middleware import SecurityHeadersMiddleware
+from backend.services.activity_service import activity_service
 from backend.security.keyring import KeyringError
 from backend.services.auth_service import auth_service
 from backend.services.module_access import require_module
@@ -243,6 +245,37 @@ async def maintenance_worker() -> None:
         except Exception:
             logger.exception("Work index reconciliation failed")
 
+        # The activity log has three retentions — a change is kept, a read
+        # expires sooner because it is by far the highest volume, and a
+        # security event is kept longest because an investigation starts after
+        # the damage. Without this sweep the read entries would bury the change
+        # entries within a year of ordinary use.
+        #
+        # Reuses the reconcile's own company list rather than opening every
+        # database a second time: it already opened them all in the step above.
+        try:
+            pruned = await asyncio.to_thread(_prune_activity_logs)
+            if pruned:
+                logger.info("Pruned %s expired activity log entries", pruned)
+        except Exception:
+            logger.exception("Activity log pruning failed")
+
+
+def _prune_activity_logs() -> int:
+    """Apply each kind's retention across every company. Returns rows removed.
+
+    A company whose database will not open is skipped rather than aborting the
+    sweep: one unreadable file must not stop every other company's log from
+    being kept to its retention.
+    """
+    total = 0
+
+    for company_id in database_manager.list_company_ids():
+        removed = activity_service.prune(company_id)
+        total += sum(removed.values())
+
+    return total
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -379,6 +412,9 @@ app.include_router(conversations.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
 app.include_router(company_settings.router, dependencies=_module("company_settings"))
+# The activity log rides with company_settings: it is read by the same
+# people, from the same screen area, under the same permission.
+app.include_router(activity.router, dependencies=_module("company_settings"))
 app.include_router(customers.router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))

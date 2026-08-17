@@ -11,6 +11,7 @@ from backend.api.schemas.auth import (
     PasswordChangeResponse,
     PasswordResetRequest,
 )
+from backend.services.activity_service import Action, activity_service
 from backend.services.auth_service import (
     auth_service,
     client_ip,
@@ -60,6 +61,59 @@ def _refused(gate: dict, ip_address: str | None) -> HTTPException:
     )
 
 
+def _record_auth_failure(
+    *,
+    email: str,
+    ip_address: str | None,
+    action: str,
+    summary: str,
+    user_id: int | None = None,
+    severity: str = "notice",
+) -> None:
+    """File a refused sign-in.
+
+    Where it goes depends on whether the account is known. A lock names a real
+    user, so their company's own log gets it — an owner learning about a locked
+    employee from a phone call is an owner who thinks the platform is down.
+
+    A plain refusal is *not* attributed. Looking the email up to find a company
+    would take a different amount of time depending on whether the account
+    exists, which is a timing oracle for enumerating employees on the one
+    endpoint an attacker is already pointed at. `authenticate` runs a dummy
+    password check to avoid exactly that; spending it back to write a tidier log
+    entry would be a poor trade. It goes to the control plane unattributed,
+    where the shape of the attack across the platform is what matters anyway.
+    """
+    if user_id is None:
+        activity_service.record_unattributed(
+            action=action, summary=summary, ip_address=ip_address
+        )
+
+        return
+
+    companies = auth_service.get_user_companies(user_id)
+    company_id = companies[0]["id"] if companies else None
+
+    if company_id is None:
+        activity_service.record_unattributed(
+            action=action, summary=summary, ip_address=ip_address
+        )
+
+        return
+
+    activity_service.record(
+        company_id=int(company_id),
+        action=action,
+        category="auth",
+        kind="security",
+        actor_user_id=user_id,
+        actor_label=email,
+        summary=summary,
+        severity=severity,
+        ip_address=ip_address,
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 def login(payload: LoginRequest, request: Request):
     ip_address = client_ip(request)
@@ -94,6 +148,27 @@ def login(payload: LoginRequest, request: Request):
                 ip_address,
             )
 
+            # The owner is told their employee's account was locked, in their
+            # own log, at the moment it happens. A lock the owner learns about
+            # from the employee's phone call is a lock that looks like an
+            # outage.
+            _record_auth_failure(
+                email=email,
+                ip_address=ip_address,
+                action=Action.ACCOUNT_LOCKED,
+                summary="Account locked after repeated failed sign-ins",
+                user_id=lock.get("user_id"),
+                severity="warning",
+            )
+        else:
+            _record_auth_failure(
+                email=email,
+                ip_address=ip_address,
+                action=Action.SIGN_IN_FAILED,
+                summary="A sign-in was refused",
+                severity="notice",
+            )
+
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=INVALID_CREDENTIALS,
@@ -105,6 +180,21 @@ def login(payload: LoginRequest, request: Request):
     auth_service.clear_login_attempts(email)
 
     company_id = int(user["active_company_id"])
+
+    # A sign-in belongs in the company's own log — an owner should be able to
+    # see who accessed their workspace and from where — and is mirrored to the
+    # control plane, because an attack spread across a thousand companies is
+    # invisible in any single one of their logs.
+    activity_service.record(
+        company_id=company_id,
+        action=Action.SIGNED_IN,
+        category="auth",
+        kind="security",
+        actor_user_id=user["id"],
+        actor_label=user.get("full_name") or user.get("email"),
+        summary="Signed in",
+        ip_address=ip_address,
+    )
 
     session_data = auth_service.create_session(
         user_id=user["id"],

@@ -548,6 +548,47 @@ TENANT_TABLES: tuple[str, ...] = (
         UNIQUE(company_id, channel, external_user_id)
     )
     """,
+    """
+    -- Everything that happened in this company's workspace, in one place.
+    --
+    -- Of seventeen modules, three wrote any audit at all and two of those had
+    -- no endpoint to read it back — the trail existed and nobody could see it.
+    -- An owner asking "who changed that price" had nowhere to look, and the
+    -- answer is the kind that matters: the assistant quotes catalogue prices to
+    -- customers as facts.
+    --
+    -- Inside the company's own encrypted database, not the control plane. This
+    -- is the company's record of its own business, and the control plane is
+    -- shared — the security mirror in `audit_log` carries only what an operator
+    -- needs, never the detail.
+    --
+    -- `actor_label` is a snapshot of the display name, not a join. `users`
+    -- lives in the control plane and SQLite cannot join across files: three
+    -- existing queries do `LEFT JOIN users` inside a tenant connection, match
+    -- nothing, and render every actor as "System". A snapshot also survives the
+    -- employee leaving, which a join never would.
+    --
+    -- `kind` separates three things that need different retention: a change is
+    -- kept, a read is high-volume and expires sooner, and a security event is
+    -- also mirrored to the control plane.
+    CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'change',
+        category TEXT NOT NULL,
+        action TEXT NOT NULL,
+        actor_user_id INTEGER,
+        actor_label TEXT,
+        target_type TEXT,
+        target_id TEXT,
+        summary TEXT,
+        before_json TEXT,
+        after_json TEXT,
+        ip_address TEXT,
+        severity TEXT NOT NULL DEFAULT 'info',
+        created_at TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -577,6 +618,12 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
 
 
 TENANT_INDEXES: tuple[str, ...] = (
+    # The log is read newest-first, filtered by category or by actor, and swept
+    # by kind for retention. Each index matches one of those three readings.
+    "CREATE INDEX IF NOT EXISTS idx_activity_recent ON activity_log(created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_activity_category ON activity_log(category, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_activity_actor ON activity_log(actor_user_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_activity_kind ON activity_log(kind, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_updated ON conversations(last_message_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_folder ON conversations(folder, last_message_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_conversations_assigned ON conversations(assigned_user_id)",

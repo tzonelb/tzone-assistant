@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from backend.api.schemas.catalogue import (
     ProductCategoryCreate,
@@ -22,7 +22,12 @@ from backend.api.schemas.catalogue import (
     ProductCreate,
     ProductUpdate,
 )
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
+from backend.services.activity_service import Action, activity_service
 from backend.services.catalogue_service import catalogue_service
 
 
@@ -42,6 +47,45 @@ def view_context(current_user=Depends(require_permission("catalogue.view"))):
 
 def manage_context(current_user=Depends(require_permission("catalogue.manage"))):
     return _context(current_user)
+
+
+def _record_product_change(
+    current_user: dict[str, Any],
+    *,
+    company_id: int,
+    previous: dict[str, Any],
+    product: dict[str, Any],
+    request: Request,
+) -> None:
+    """File an edit, and file a price change as its own event.
+
+    A price is not one field among many here: the assistant states it to
+    customers as a confirmed fact, and a wrong one is a promise the business
+    then has to keep. Separating it means an owner can filter the log down to
+    exactly the changes that reach a customer's screen.
+    """
+    changed_price = previous.get("price") != product.get("price")
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=(
+            Action.PRODUCT_PRICE_CHANGED if changed_price else Action.PRODUCT_UPDATED
+        ),
+        category="catalogue",
+        target_type="product",
+        target_id=product.get("id") or previous.get("id"),
+        summary=(
+            f"Changed the price of {product.get('name')} from "
+            f"{previous.get('price')} to {product.get('price')}"
+            if changed_price
+            else f"Edited {product.get('name')}"
+        ),
+        before={"name": previous.get("name"), "price": previous.get("price")},
+        after={"name": product.get("name"), "price": product.get("price")},
+        severity="notice" if changed_price else "info",
+        ip_address=client_ip(request),
+    )
 
 
 # ----------------------------------------------------------------------
@@ -159,17 +203,32 @@ def list_products(
 @router.post("/products", status_code=status.HTTP_201_CREATED)
 def create_product(
     payload: ProductCreate,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     try:
-        return catalogue_service.create_product(
+        product = catalogue_service.create_product(
             company_id=company_id,
             data=payload.model_dump(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.PRODUCT_CREATED,
+        category="catalogue",
+        target_type="product",
+        target_id=product.get("id"),
+        summary=f"Added {product.get('name')}",
+        after={"name": product.get("name"), "price": product.get("price")},
+        ip_address=client_ip(request),
+    )
+
+    return product
 
 
 @router.get("/products/{product_id}")
@@ -189,9 +248,18 @@ def get_product(product_id: int, context=Depends(view_context)):
 def update_product(
     product_id: int,
     payload: ProductUpdate,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+
+    # Read before the write, so the log can say what the price *was*. The
+    # assistant quotes catalogue prices to customers as confirmed facts, which
+    # makes "who changed that, and from what" the question an owner is most
+    # likely to need answered — and there was nowhere to look.
+    previous = catalogue_service.get_product(
+        company_id=company_id, product_id=product_id
+    )
 
     try:
         product = catalogue_service.update_product(
@@ -202,19 +270,53 @@ def update_product(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # After the 404, not before. Recording first would file an edit for a
+    # product that does not exist and was never changed — a log entry that is
+    # not merely useless but actively misleading during an investigation.
     if not product:
         raise HTTPException(status_code=404, detail="Product not found.")
+
+    _record_product_change(
+        current_user,
+        company_id=company_id,
+        previous=previous or {},
+        product=product,
+        request=request,
+    )
 
     return product
 
 
 @router.delete("/products/{product_id}")
-def delete_product(product_id: int, context=Depends(manage_context)):
-    _, company_id = context
+def delete_product(
+    product_id: int,
+    request: Request,
+    context=Depends(manage_context),
+):
+    current_user, company_id = context
+
+    previous = catalogue_service.get_product(
+        company_id=company_id, product_id=product_id
+    )
 
     if not catalogue_service.delete_product(
         company_id=company_id, product_id=product_id
     ):
         raise HTTPException(status_code=404, detail="Product not found.")
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.PRODUCT_DELETED,
+        category="catalogue",
+        target_type="product",
+        target_id=product_id,
+        summary=f"Removed {(previous or {}).get('name') or product_id}",
+        before={
+            "name": (previous or {}).get("name"),
+            "price": (previous or {}).get("price"),
+        },
+        ip_address=client_ip(request),
+    )
 
     return {"success": True}

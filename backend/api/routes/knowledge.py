@@ -15,14 +15,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from backend.api.schemas.knowledge import (
     KnowledgeCategoryCreate,
     KnowledgeItemCreate,
     KnowledgeItemUpdate,
 )
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 from backend.services.knowledge_service import knowledge_service
 
 
@@ -118,17 +123,36 @@ def list_items(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_item(
     payload: KnowledgeItemCreate,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
 
     try:
-        return knowledge_service.create_item(
+        item = knowledge_service.create_item(
             company_id=company_id,
             data=payload.model_dump(),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # The title, never the content. The log records that the assistant's
+    # knowledge changed and who changed it; a copy of the answer text would
+    # duplicate the base into a table with different retention, and the base is
+    # already the record of what it says.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.KNOWLEDGE_CREATED,
+        category="knowledge",
+        target_type="knowledge_item",
+        target_id=item.get("id"),
+        summary=f"Taught the assistant: {item.get('title')}",
+        after={"title": item.get("title"), "status": item.get("status")},
+        ip_address=client_ip(request),
+    )
+
+    return item
 
 
 @router.get("/{item_id}")
@@ -146,9 +170,12 @@ def get_item(item_id: int, context=Depends(view_context)):
 def update_item(
     item_id: int,
     payload: KnowledgeItemUpdate,
+    request: Request,
     context=Depends(manage_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+
+    previous = knowledge_service.get_item(company_id=company_id, item_id=item_id)
 
     try:
         item = knowledge_service.update_item(
@@ -162,14 +189,51 @@ def update_item(
     if not item:
         raise HTTPException(status_code=404, detail="Knowledge item not found.")
 
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.KNOWLEDGE_UPDATED,
+        category="knowledge",
+        target_type="knowledge_item",
+        target_id=item_id,
+        summary=f"Edited what the assistant knows about: {item.get('title')}",
+        before={
+            "title": (previous or {}).get("title"),
+            "status": (previous or {}).get("status"),
+        },
+        after={"title": item.get("title"), "status": item.get("status")},
+        ip_address=client_ip(request),
+    )
+
     return item
 
 
 @router.delete("/{item_id}")
-def delete_item(item_id: int, context=Depends(manage_context)):
-    _, company_id = context
+def delete_item(
+    item_id: int,
+    request: Request,
+    context=Depends(manage_context),
+):
+    current_user, company_id = context
+
+    previous = knowledge_service.get_item(company_id=company_id, item_id=item_id)
 
     if not knowledge_service.delete_item(company_id=company_id, item_id=item_id):
         raise HTTPException(status_code=404, detail="Knowledge item not found.")
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.KNOWLEDGE_DELETED,
+        category="knowledge",
+        target_type="knowledge_item",
+        target_id=item_id,
+        summary=(
+            f"Removed what the assistant knew about: "
+            f"{(previous or {}).get('title') or item_id}"
+        ),
+        before={"title": (previous or {}).get("title")},
+        ip_address=client_ip(request),
+    )
 
     return {"success": True}

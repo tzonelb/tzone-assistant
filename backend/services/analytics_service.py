@@ -12,6 +12,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from backend.services.conversation_control_service import (
+    EVENT_ASSIGNMENT_CHANGED,
+    EVENT_HUMAN_TAKEOVER,
+)
 from database.manager import database_manager
 
 
@@ -276,16 +280,24 @@ class AnalyticsService:
                 (start, end),
             ).fetchall()
 
+            # The event names here were `human_took_over` and
+            # `assigned_user_changed`; the writers in
+            # `conversation_control_service` have always written `human_takeover`
+            # and `assignment_changed`. The two never matched, so this counter
+            # read zero for every company since the report shipped — and a zero
+            # is exactly the kind of wrong answer nobody questions. The names now
+            # come from `conversation_control_service`, so a rename moves both
+            # ends at once.
             takeovers = conn.execute(
                 """
                 SELECT actor_user_id AS user_id, COUNT(*) AS takeovers
                 FROM conversation_events
-                WHERE event_type IN ('human_took_over', 'assigned_user_changed')
+                WHERE event_type IN (?, ?)
                   AND actor_user_id IS NOT NULL
                   AND created_at >= ? AND created_at <= ?
                 GROUP BY actor_user_id
                 """,
-                (start, end),
+                (EVENT_HUMAN_TAKEOVER, EVENT_ASSIGNMENT_CHANGED, start, end),
             ).fetchall()
 
         combined: dict[int, dict[str, Any]] = {}

@@ -10,10 +10,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field, model_validator
 
-from backend.services.auth_service import auth_service, require_permission
+from backend.services.activity_service import Action, activity_service
+from backend.services.auth_service import (
+    auth_service,
+    client_ip,
+    require_permission,
+)
 from backend.services.business_department_service import business_department_service
 from backend.services.channel_account_service import (
     ChannelAccountError,
@@ -121,6 +126,7 @@ def list_channels(
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_channel(
     payload: ChannelAccountCreate,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -137,6 +143,24 @@ def create_channel(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
+
+    # A security event as well as a business one: connecting a channel points
+    # a company's customers at this platform, and it is mirrored to the control
+    # plane so an operator can see it. The routing identifier is recorded, the
+    # access token never — it is sealed and unreadable by design.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CHANNEL_CONNECTED,
+        category="channels",
+        kind="security",
+        target_type="channel_account",
+        target_id=account.get("id"),
+        summary=f"Connected {payload.channel} account {payload.name}",
+        after={"channel": payload.channel, "name": payload.name},
+        severity="notice",
+        ip_address=client_ip(request),
+    )
 
     return {"status": "connected", "account": account}
 
@@ -159,9 +183,19 @@ def get_channel(
 def update_channel(
     account_id: int,
     payload: ChannelAccountUpdate,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    values = payload.model_dump(exclude_unset=True)
+
+    # Replacing a credential is its own event. It is the change that can
+    # silently redirect a company's messages, and it looks identical to a
+    # rename in a log that records only "account updated".
+    replaced_credentials = any(
+        key in values for key in ("access_token", "verify_token", "app_secret")
+    )
+    previous = channel_account_service.get_account(company_id, account_id)
 
     try:
         account = channel_account_service.update_account(
@@ -176,17 +210,64 @@ def update_channel(
             detail=message,
         ) from exc
 
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=(
+            Action.CHANNEL_CREDENTIALS_REPLACED
+            if replaced_credentials
+            else Action.CHANNEL_UPDATED
+        ),
+        category="channels",
+        kind="security" if replaced_credentials else "change",
+        target_type="channel_account",
+        target_id=account_id,
+        summary=(
+            f"Replaced the credentials for {account.get('name')}"
+            if replaced_credentials
+            else f"Edited the {account.get('name')} channel"
+        ),
+        before={
+            "name": (previous or {}).get("name"),
+            "status": (previous or {}).get("status"),
+        },
+        after={"name": account.get("name"), "status": account.get("status")},
+        severity="notice" if replaced_credentials else "info",
+        ip_address=client_ip(request),
+    )
+
     return {"status": "updated", "account": account}
 
 
 @router.delete("/{account_id}")
 def delete_channel(
     account_id: int,
+    request: Request,
     current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
+    previous = channel_account_service.get_account(company_id, account_id)
 
     if not channel_account_service.delete_account(company_id, account_id):
         raise HTTPException(status_code=404, detail="Channel account not found.")
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CHANNEL_DISCONNECTED,
+        category="channels",
+        kind="security",
+        target_type="channel_account",
+        target_id=account_id,
+        summary=(
+            f"Disconnected {(previous or {}).get('name') or account_id}"
+        ),
+        before={
+            "channel": (previous or {}).get("channel"),
+            "name": (previous or {}).get("name"),
+        },
+        severity="notice",
+        ip_address=client_ip(request),
+    )
 
     return {"status": "disconnected"}

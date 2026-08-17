@@ -9,6 +9,7 @@ from backend.api.schemas.roles import (
     UserCreateRequest,
 )
 from backend.services import mailer
+from backend.services.activity_service import Action, activity_service
 from backend.services.auth_service import (
     auth_service,
     client_ip,
@@ -151,7 +152,11 @@ def overview(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/roles")
-def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_current_user)):
+def create_role(
+    payload: RoleCreateRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
 
@@ -194,6 +199,24 @@ def create_role(payload: RoleCreateRequest, current_user: dict = Depends(get_cur
         role_id = cursor.lastrowid
         _set_role_permissions(conn, role_id, payload.permission_codes)
         conn.commit()
+
+    # A grant is a security event, mirrored to the control plane. Deciding who
+    # may read a customer file or replace a channel credential is the change
+    # most worth being able to review after the fact, and nothing recorded it.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.ROLE_CREATED,
+        category="roles",
+        kind="security",
+        target_type="role",
+        target_id=role_id,
+        summary=f"Created the role {payload.name}",
+        after={"code": payload.code, "permissions": sorted(payload.permission_codes)},
+        severity="notice",
+        ip_address=client_ip(request),
+    )
+
     return {"success": True, "role_id": role_id}
 
 
@@ -228,7 +251,12 @@ def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> No
 
 
 @router.patch("/roles/{role_id}")
-def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = Depends(get_current_user)):
+def update_role(
+    role_id: int,
+    payload: RoleUpdateRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
     with database_manager.control() as conn:
@@ -245,11 +273,42 @@ def update_role(role_id: int, payload: RoleUpdateRequest, current_user: dict = D
         if payload.permission_codes is not None:
             _set_role_permissions(conn, role_id, payload.permission_codes)
         conn.commit()
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=(
+            Action.PERMISSIONS_CHANGED
+            if payload.permission_codes is not None
+            else Action.ROLE_UPDATED
+        ),
+        category="roles",
+        kind="security" if payload.permission_codes is not None else "change",
+        target_type="role",
+        target_id=role_id,
+        summary=(
+            f"Changed what the {role['name']} role may do"
+            if payload.permission_codes is not None
+            else f"Renamed the {role['name']} role"
+        ),
+        after=(
+            {"permissions": sorted(payload.permission_codes)}
+            if payload.permission_codes is not None
+            else {"name": payload.name}
+        ),
+        severity="notice" if payload.permission_codes is not None else "info",
+        ip_address=client_ip(request),
+    )
+
     return {"success": True}
 
 
 @router.post("/users")
-def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_current_user)):
+def create_user(
+    payload: UserCreateRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
     with database_manager.control() as conn:
@@ -279,11 +338,31 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
             VALUES (?, ?, ?, ?, 'active', ?)
         """, (company_id, user_id, payload.role_id, payload.branch_id, utc_now_iso()))
         conn.commit()
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.USER_ADDED,
+        category="roles",
+        kind="security",
+        target_type="user",
+        target_id=user_id,
+        summary=f"Added {payload.full_name or payload.email} to the team",
+        after={"role_id": payload.role_id, "branch_id": payload.branch_id},
+        severity="notice",
+        ip_address=client_ip(request),
+    )
+
     return {"success": True, "user_id": user_id}
 
 
 @router.patch("/users/{user_id}")
-def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current_user: dict = Depends(get_current_user)):
+def update_user_assignment(
+    user_id: int,
+    payload: UserAssignmentRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
     if user_id == current_user["id"] and payload.status != "active":
@@ -316,6 +395,26 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
         if cursor.rowcount == 0:
             raise HTTPException(status_code=404, detail="Company user not found.")
         conn.commit()
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.USER_UPDATED,
+        category="roles",
+        kind="security",
+        target_type="user",
+        target_id=user_id,
+        summary=f"Changed the access of team member {user_id}",
+        before={"status": dict(existing)["status"] if existing else None},
+        after={
+            "role_id": payload.role_id,
+            "branch_id": payload.branch_id,
+            "status": payload.status,
+        },
+        severity="notice",
+        ip_address=client_ip(request),
+    )
+
     return {"success": True}
 
 

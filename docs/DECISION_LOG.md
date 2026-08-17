@@ -273,3 +273,69 @@ INSERT, and a new route with no dependency. Both were caught.
 At the time of writing there are **no** real findings in either — the two
 dynamic INSERTs and the eleven identity-only routes were each read and are
 correct. The value is not this run; it is the next person adding a route.
+
+## D-016 — One log, in the company's own database, with a security mirror
+
+Of seventeen modules, three wrote any audit at all — and two of those three had
+no endpoint to read it back, so the trail existed and nobody could see it.
+Nothing recorded a knowledge item being edited, a price being changed, a channel
+being connected, a permission being granted, or an employee signing in.
+
+The price one is the sharpest. The assistant quotes catalogue prices to
+customers as confirmed facts, so a wrong one is a promise the business then has
+to keep — and "who changed that, and from what" had nowhere to be answered. It
+is now its own action, separate from an ordinary product edit, so an owner can
+filter the log down to exactly the changes that reach a customer's screen.
+
+### The log lives with the company, the mirror with the operator
+
+`activity_log` is a tenant table. It is the company's record of its own
+business. `audit_log` in the control plane receives a **mirror of the security
+events only** — a sign-in, a lock, a permission change, a channel connected or
+disconnected — carrying who, when, from where and a one-line summary, and never
+the before/after values. An operator needs to see an attack, which is invisible
+in any single company's log when it is spread across a thousand. What a business
+sells or teaches its assistant is not part of that.
+
+### The actor's name is copied, not joined
+
+`users` lives in the control plane and the log in the tenant file, and SQLite
+cannot join across files. Three existing queries in
+`conversation_control_service` try: they `LEFT JOIN users` inside a tenant
+connection, match nothing, and render every actor as "System" — so anyone
+reading that timeline concludes the platform did it. A snapshot also survives
+the employee leaving, and a log that forgets who did something the moment they
+resign is not a log.
+
+### A refused sign-in is deliberately unattributed
+
+The email may belong to nobody. Looking it up to decide which company's log to
+write to would take a different amount of time depending on whether the account
+exists — a timing oracle for enumerating employees, on the one endpoint an
+attacker is already pointed at. `authenticate` already spends a dummy password
+check to avoid exactly that; spending it back to write a tidier log entry would
+be a poor trade. The entry goes to the control plane with no company. The
+**lock** that follows names a real user and does reach their company's log,
+because an owner who learns about a locked employee from a phone call thinks the
+platform is down.
+
+### Writing never fails the thing it records
+
+Every method swallows its own errors. An audit write that can fail a price
+update means the price does not change because the note about it could not be
+filed. A gap in the log is recoverable; refusing the customer's work is not.
+
+### Three retentions
+
+A change is kept, a read expires sooner because it is by far the highest volume,
+and a security event is kept longest because an investigation starts after the
+damage. Without the split, recording who read what would bury who changed what
+within a year of ordinary use. The maintenance worker applies it.
+
+### The two counters that read zero for ever
+
+`analytics_service` counted `'human_took_over'` and `'assigned_user_changed'`
+while the writers wrote `human_takeover` and `assignment_changed`. Neither
+matched, so both figures were zero for every company since the report shipped —
+and a zero is exactly the kind of wrong answer nobody questions. Both ends now
+import one constant.

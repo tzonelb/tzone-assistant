@@ -16,6 +16,20 @@ from backend.services.company_settings_service import company_settings_service
 # company defined.
 UNASSIGNED_DEPARTMENT = "Unassigned"
 
+# Timeline event names, defined where they are written.
+#
+# They used to be bare literals at both ends, and the two ends disagreed:
+# `analytics_service` counted `'human_took_over'` and `'assigned_user_changed'`
+# while this file wrote `human_takeover` and `assignment_changed`. The report
+# read zero for every company since it shipped, and a zero is exactly the kind
+# of wrong answer nobody questions.
+#
+# A constant does not prevent a typo; it makes one fail at import instead of
+# quietly returning nothing.
+EVENT_HUMAN_TAKEOVER = "human_takeover"
+EVENT_RETURNED_TO_AI = "returned_to_ai"
+EVENT_ASSIGNMENT_CHANGED = "assignment_changed"
+
 # Where a conversation's department came from, most specific first. Recorded on
 # the timeline event so an owner can see why a conversation landed where it did,
 # and used here to decide what may overwrite what: the customer's own choice
@@ -669,7 +683,7 @@ class ConversationControlService:
                 conversation_id=int(state["id"]),
                 company_id=company_id,
                 actor_user_id=actor_user_id,
-                event_type="returned_to_ai" if handled_by_ai else "human_takeover",
+                event_type=EVENT_RETURNED_TO_AI if handled_by_ai else EVENT_HUMAN_TAKEOVER,
                 data={
                     "from": old_status,
                     "to": new_status,
