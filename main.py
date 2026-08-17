@@ -41,7 +41,10 @@ from backend.api.routes import (
     team_chat,
     tickets,
 )
-from backend.api.middleware import SecurityHeadersMiddleware
+from backend.api.middleware import (
+    SecurityHeadersMiddleware,
+    SessionCookieMiddleware,
+)
 from backend.services.activity_service import activity_service
 from backend.services.health_service import health_service
 from backend.security.keyring import KeyringError
@@ -439,12 +442,21 @@ app = FastAPI(
 # responses raised inside the stack.
 app.add_middleware(SecurityHeadersMiddleware)
 
+# Added after CORS so it ends up *inside* it: a preflight must be answered by
+# CORS before this ever sees a request, and a browser that is refused at the
+# preflight never sends the real one — so a CSRF refusal here would be reported
+# to the page as a network failure with no explanation.
+app.add_middleware(SessionCookieMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept"],
+    # `X-CSRF-Token` has to be allowed explicitly: it is not a CORS-safelisted
+    # request header, so without it the browser refuses the preflight and every
+    # cookie-authenticated write fails before it is sent.
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-CSRF-Token"],
     # `Retry-After` is not a CORS-safelisted response header, so without this
     # the browser hides it from the application even though the server sent it.
     # The login screen uses it to say how long a lockout has left; withholding

@@ -12,7 +12,26 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000";
 
-const TOKEN_KEY = "tzone_platform_token";
+/*
+ * The console session token is no longer kept here either, and for the same
+ * reason with more at stake: this is the session that suspends companies and
+ * rotates workspace codes. The server sets it as an httpOnly cookie; this file
+ * only ever knows whether one exists.
+ */
+const SESSION_FLAG_KEY = "tzone_platform_signed_in";
+const CSRF_COOKIE = "tzone_csrf";
+
+function readCookie(name) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${name}=([^;]*)`),
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 /*
  * Where the console is mounted in App.jsx. Navigation inside the portal is
@@ -25,17 +44,21 @@ export const CONSOLE_BASE_PATH = "/superadmin";
 const LOGIN_PATH = `${CONSOLE_BASE_PATH}/login`;
 
 export function getPlatformToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  /* Truthy while a console session exists. Not the token, and not sendable. */
+  return localStorage.getItem(SESSION_FLAG_KEY);
 }
 
 export function savePlatformToken(token) {
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(SESSION_FLAG_KEY, "1");
   }
 }
 
 export function clearPlatformToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SESSION_FLAG_KEY);
+  /* The old key, for a browser that signed in before this change. Leaving it
+   * would strand a real platform token in storage indefinitely. */
+  localStorage.removeItem("tzone_platform_token");
 }
 
 let redirectingToLogin = false;
@@ -109,11 +132,14 @@ export async function platformRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  if (authenticated) {
-    const token = getPlatformToken();
+  /* No Authorization header: the browser sends the httpOnly session cookie
+   * itself. A write echoes the CSRF token, which a page on another origin
+   * cannot read. */
+  if (authenticated && method.toUpperCase() !== "GET") {
+    const csrf = readCookie(CSRF_COOKIE);
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    if (csrf) {
+      headers["X-CSRF-Token"] = csrf;
     }
   }
 
@@ -124,6 +150,10 @@ export async function platformRequest(
       method,
       headers,
       signal,
+      /* Without this the browser sends no cookies to a cross-origin API, and
+       * in development the console on :5173 and the API on :8000 are exactly
+       * that. */
+      credentials: "include",
       body: body !== null
         ? JSON.stringify(body)
         : undefined,

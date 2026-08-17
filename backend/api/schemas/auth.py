@@ -23,6 +23,10 @@ class LoginResponse(BaseModel):
     expires_in: int
     user: dict
     permissions: list[str] = []
+    # The double-submit partner to the session cookie. Returned in the body so
+    # a client does not have to parse cookies to find it; the cookie copy is
+    # what makes the comparison possible.
+    csrf_token: str | None = None
 
 
 class CurrentUserResponse(BaseModel):

@@ -3,20 +3,57 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000";
 
-const TOKEN_KEY = "tzone_access_token";
+/*
+ * The session token is no longer kept here.
+ *
+ * It lived in localStorage, which any script on the page can read: one XSS hole
+ * anywhere — in a dependency, in a rendered customer name — handed an attacker
+ * a working session that outlived the tab they stole it from. The server now
+ * sets it as an httpOnly cookie, which script cannot read at all, so the token
+ * never enters this file's reach.
+ *
+ * These three functions stay because a dozen screens import them. They are now
+ * about the *presence* of a session rather than its value: `getAccessToken`
+ * answers "does one exist" without being able to say what it is.
+ */
+const SESSION_FLAG_KEY = "tzone_signed_in";
+
+/* The CSRF partner. Deliberately readable — it is not a credential. It proves
+ * a request came from a page that could read this origin's cookies, which is
+ * exactly what a cross-origin attacker cannot do. */
+const CSRF_COOKIE = "tzone_csrf";
+
+function readCookie(name) {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  const match = document.cookie.match(
+    new RegExp(`(?:^|; )${name}=([^;]*)`),
+  );
+
+  return match ? decodeURIComponent(match[1]) : null;
+}
 
 export function getAccessToken() {
-  return localStorage.getItem(TOKEN_KEY);
+  /* Truthy while a session exists, so every `if (getAccessToken())` in the app
+   * keeps meaning what it meant. The value is not the token and must not be
+   * sent anywhere. */
+  return localStorage.getItem(SESSION_FLAG_KEY);
 }
 
 export function saveAccessToken(token) {
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token);
+    localStorage.setItem(SESSION_FLAG_KEY, "1");
   }
 }
 
 export function clearAccessToken() {
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(SESSION_FLAG_KEY);
+  /* The old key, in case this build is loaded in a browser that signed in
+   * before the change. Leaving it would strand a real token in storage
+   * indefinitely — exactly what this change exists to prevent. */
+  localStorage.removeItem("tzone_access_token");
 }
 
 const LOGIN_PATH = "/login";
@@ -92,11 +129,15 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  if (authenticated) {
-    const token = getAccessToken();
+  /* No Authorization header: the browser sends the httpOnly session cookie on
+   * its own. A cookie travels automatically, which is also how a form on
+   * another site could make the browser send it — so a write echoes the CSRF
+   * token, which that site cannot read. */
+  if (authenticated && method.toUpperCase() !== "GET") {
+    const csrf = readCookie(CSRF_COOKIE);
 
-    if (token) {
-      headers.Authorization = `Bearer ${token}`;
+    if (csrf) {
+      headers["X-CSRF-Token"] = csrf;
     }
   }
 
@@ -107,6 +148,10 @@ export async function apiRequest(
       method,
       headers,
       signal,
+      /* Without this the browser sends no cookies to a cross-origin API, and
+       * in development the app on :5173 and the API on :8000 are exactly
+       * that. */
+      credentials: "include",
       body: body !== null
         ? JSON.stringify(body)
         : undefined,

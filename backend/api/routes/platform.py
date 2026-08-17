@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from backend.api.schemas.platform import (
     CompanyCreateRequest,
@@ -40,6 +40,7 @@ from backend.services.auth_service import (
     get_platform_admin_enrolling,
 )
 from backend.services.plan_service import LIMIT_KEYS, plan_service
+from backend.api import session_cookies
 from backend.services.health_service import health_service
 from backend.services.totp_service import TotpError, totp_service
 from backend.services.platform_service import (
@@ -96,7 +97,11 @@ def _handle(exc: PlatformError) -> HTTPException:
 
 
 @router.post("/auth/login", response_model=PlatformLoginResponse)
-def platform_login(payload: PlatformLoginRequest, request: Request):
+def platform_login(
+    payload: PlatformLoginRequest,
+    request: Request,
+    response: Response,
+):
     """Mint a platform session. The only route here without a token.
 
     Rate limited through the same counters as the company login, so failures on
@@ -187,12 +192,23 @@ def platform_login(payload: PlatformLoginRequest, request: Request):
         ip_address=ip_address,
     )
 
+    # Same reasoning as the company sign-in, and more pointed here: this is the
+    # session that suspends companies and rotates workspace codes, so it is the
+    # one worth taking out of reach of any script on the page.
+    csrf_token = session_cookies.attach(
+        response,
+        request,
+        token=session_data["access_token"],
+        expires_in=session_data["expires_in"],
+    )
+
     return {
         "access_token": session_data["access_token"],
         "token_type": "bearer",
         "scope": session_data["scope"],
         "expires_in": session_data["expires_in"],
         "user": user,
+        "csrf_token": csrf_token,
         # An administrator who has not enrolled gets a session and nothing else:
         # `get_platform_admin` refuses every other route until they do. The flag
         # is here so the console can send them to enrolment rather than to a
@@ -284,11 +300,16 @@ def platform_me(current_user: dict[str, Any] = Depends(get_platform_admin)):
 
 
 @router.post("/auth/logout", response_model=PlatformLogoutResponse)
-def platform_logout(current_user: dict[str, Any] = Depends(get_platform_admin)):
+def platform_logout(
+    response: Response,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
     raw_token = current_user.get("_raw_token")
 
     if raw_token:
         auth_service.revoke_token(raw_token)
+
+    session_cookies.clear(response)
 
     return {"success": True, "message": "Signed out of the platform console."}
 

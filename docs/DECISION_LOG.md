@@ -475,3 +475,69 @@ included, because a company reinstated after two releases still has to open.
 
 `psutil` would be one more package to install, pin and audit for a handful of
 numbers this platform's Linux host already publishes in `/proc`.
+
+## D-019 — The session token leaves JavaScript's reach
+
+The token lived in `localStorage`, which any script on the page can read. One
+cross-site scripting hole anywhere — in a dependency, in a rendered customer
+name, in an error message — handed an attacker a working session that outlived
+the tab they stole it from.
+
+It is now set as an `httpOnly` cookie, which script cannot read at all. XSS can
+still *use* the session by making requests from the page, but it can no longer
+take the credential away: the difference between an incident that ends when the
+tab closes and one that ends when the token expires.
+
+### The Authorization header still works, and still wins
+
+Removing it would break the CLI, every test, and any integration a customer has
+built. The cookie is an additional path. When both arrive, the header wins: a
+client that sends a token is naming the session it means, and a stale cookie in
+the same browser must not override it.
+
+### CSRF only where a cookie is the credential
+
+A cookie is attached automatically, which is the point and the problem: a form
+on another site can make the browser send it. So a cookie-authenticated write
+carries a double-submit token — a second, script-readable cookie echoed in a
+header. An attacker on another origin can make the browser send the session
+cookie but cannot read it to copy the value, because that is what the
+same-origin policy prevents.
+
+The check does not touch bearer-token requests (nothing attaches an
+`Authorization` header automatically, so they cannot be forged cross-site), safe
+methods, or the webhook paths (a provider's callback carries no cookie and is
+authenticated by an HMAC over the raw body).
+
+`SameSite=Strict` is set as well. The double-submit token is the belt to its
+braces: SameSite is enforced by the browser, and a property enforced only by the
+client is one the server cannot rely on.
+
+### The routes that establish a session are exempt, and a test found out why
+
+With a stale cookie in the jar, signing in again was a cookie-authenticated
+write and the CSRF check refused it — so a user whose session had expired, or
+who wanted to sign in as somebody else, was told to reload a page that would
+fail identically. Requiring the *old* session's token in order to replace it is
+circular.
+
+It is safe because nothing on those paths reads the existing session: whatever
+cookie arrives is overwritten by the response. The residual concern is login
+CSRF, and `SameSite=Strict` is what answers it.
+
+### One middleware, not two
+
+The CSRF check and the cookie-to-header bridge run in the same middleware
+because the order between them matters, and two middlewares would leave that
+order to registration. It is registered *inside* CORS: a browser refused at the
+preflight never sends the real request, so a CSRF refusal outside CORS would
+reach the page as an unexplained network error.
+
+### What changed in the frontend
+
+Two files, both pure transport: `api/client.js` and
+`superadmin/platformClient.js`. No component, no stylesheet, no rendered
+element. The three exported token functions stayed — a dozen screens import
+them — but now answer whether a session exists rather than what it is, and they
+also clear the old `localStorage` keys, since leaving one would strand a real
+token in storage indefinitely.

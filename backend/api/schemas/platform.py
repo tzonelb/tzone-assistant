@@ -45,6 +45,10 @@ class PlatformLoginResponse(BaseModel):
     # console needs this to route them to enrolment rather than to a dashboard
     # that will 403 on every request it makes.
     totp: dict | None = None
+    # The double-submit partner to the session cookie. Returned in the body so
+    # a client does not have to parse cookies to find it; the cookie copy is
+    # what makes the comparison possible.
+    csrf_token: str | None = None
 
 
 class PlatformUserResponse(BaseModel):

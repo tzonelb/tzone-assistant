@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from backend.api import session_cookies
 from backend.api.schemas.platform import TotpConfirmRequest
 from backend.api.schemas.auth import (
     CurrentUserResponse,
@@ -117,7 +118,7 @@ def _record_auth_failure(
 
 
 @router.post("/login", response_model=LoginResponse)
-def login(payload: LoginRequest, request: Request):
+def login(payload: LoginRequest, request: Request, response: Response):
     ip_address = client_ip(request)
     email = str(payload.email)
 
@@ -233,12 +234,31 @@ def login(payload: LoginRequest, request: Request):
         company_id=company_id,
     )
 
+    # The token goes into an httpOnly cookie as well as the body. `localStorage`
+    # is readable by any script on the page, so one XSS hole anywhere — in a
+    # dependency, in a rendered customer name — hands an attacker a session that
+    # outlives the tab they stole it from. A cookie the script cannot read turns
+    # that into an attack that ends when the page closes.
+    #
+    # Still returned in the body, because removing it would break the CLI, the
+    # tests and any integration a customer has built. The cookie is an
+    # additional path, not a replacement.
+    csrf_token = session_cookies.attach(
+        response,
+        request,
+        token=session_data["access_token"],
+        expires_in=session_data["expires_in"],
+    )
+
     return {
         "access_token": session_data["access_token"],
         "token_type": "bearer",
         "expires_in": session_data["expires_in"],
         "user": user,
         "permissions": auth_service.user_permission_codes(user["id"], company_id),
+        # Also in the body so a client does not have to parse cookies to find
+        # it. The cookie copy is what makes the double-submit comparison work.
+        "csrf_token": csrf_token,
     }
 
 
@@ -276,11 +296,17 @@ def get_me(current_user: dict = Depends(get_user_changing_password)):
 
 
 @router.post("/logout", response_model=LogoutResponse)
-def logout(current_user: dict = Depends(get_current_user)):
+def logout(response: Response, current_user: dict = Depends(get_current_user)):
     raw_token = current_user.get("_raw_token")
 
     if raw_token:
         auth_service.revoke_token(raw_token)
+
+    # Revoked server-side *and* removed from the browser. Either alone leaves a
+    # half-signed-out state: a live cookie for a dead session means every
+    # request 401s with no way for the user to see why, and a revoked token
+    # still in the jar is a credential nobody meant to keep.
+    session_cookies.clear(response)
 
     return {"success": True, "message": "Logged out successfully."}
 
