@@ -471,7 +471,12 @@ class BotProfileService:
             getattr(config, "AI_ENABLED", False)
             and getattr(config, "OPENAI_API_KEY", "")
         )
-        ai_path = automation_policy.should_auto_reply_with_ai(channel)
+        # This company's own answer, not the platform's. Without the company
+        # the preview would tell an owner their channel is on the scripted path
+        # when they have set it to answer with the assistant.
+        ai_path = automation_policy.should_auto_reply_with_ai(
+            channel, company_id=company_id
+        )
 
         if not ai_path:
             note = (

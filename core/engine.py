@@ -185,7 +185,8 @@ class Engine:
             ) or self.stored_department(request)
 
             state_data = flow_loader.get_state(
-                current_state
+                current_state,
+                company_id=request.company_id,
             )
 
             self.log_request(
@@ -205,24 +206,20 @@ class Engine:
                     return ai_response
 
             if not state_data:
-                logger.error(
-                    "State not found: %s",
+                # Not an error. A company with no scripted flow of its own is
+                # the normal case, and the menu below is built from that
+                # company's own departments.
+                #
+                # Telegram used to be special-cased here into
+                # `telegram_iptv_start` — T-ZONE's IPTV language picker — which
+                # is how every company's Telegram customers were greeted by
+                # somebody else's business.
+                logger.debug(
+                    "No scripted state %s for company %s; answering from the "
+                    "company's own sections",
                     current_state,
+                    request.company_id,
                 )
-
-                if request.channel == "telegram":
-                    session.update(
-                        request.user_id,
-                        "state",
-                        "telegram_iptv_start",
-                    )
-
-                    return self.render(
-                        "telegram_iptv_start",
-                        language,
-                        request.user_id,
-                        request.channel,
-                    )
 
                 return self.build_main_menu_response(
                     language,
@@ -243,6 +240,7 @@ class Engine:
                     language,
                     request.user_id,
                     request.channel,
+                    company_id=request.company_id,
                 )
 
             matched_response = self.handle_button_state(
@@ -274,6 +272,7 @@ class Engine:
                 language,
                 request.user_id,
                 request.channel,
+                company_id=request.company_id,
             )
 
         except Exception as error:
@@ -352,13 +351,19 @@ class Engine:
         return "en"
 
     def should_ai_take_priority(self, request):
+        # The company, not just the channel. Without it this read a shared file
+        # that shipped WhatsApp and Telegram as non-AI channels for everybody,
+        # so every company's customers on those two fell through to a scripted
+        # flow that was T-ZONE's own.
         return automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            company_id=getattr(request, "company_id", None),
         )
 
     def handle_start(self, request, language):
         if automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            company_id=getattr(request, "company_id", None),
         ):
             return self.build_main_menu_response(
                 language,
@@ -367,26 +372,10 @@ class Engine:
                 channel_account_id=getattr(request, "channel_account_id", None),
             )
 
-        if request.channel == "telegram":
-            session.update(
-                request.user_id,
-                "state",
-                "telegram_iptv_start",
-            )
-
-            session.update(
-                request.user_id,
-                "current_department",
-                "iptv",
-            )
-
-            return self.render(
-                "telegram_iptv_start",
-                language,
-                request.user_id,
-                request.channel,
-            )
-
+        # Telegram used to be branched here into `telegram_iptv_start` with the
+        # department forced to `iptv` — T-ZONE's own support script and T-ZONE's
+        # own section, applied to every company on the platform. A channel is
+        # not a business, and nothing about Telegram implies IPTV.
         session.update(
             request.user_id,
             "state",
@@ -713,7 +702,8 @@ class Engine:
         current_department,
     ):
         if not automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            company_id=getattr(request, "company_id", None),
         ):
             return None
 
@@ -1505,6 +1495,7 @@ class Engine:
             language,
             request.user_id,
             request.channel,
+            company_id=request.company_id,
         )
 
     def handle_input_state(
@@ -1536,6 +1527,7 @@ class Engine:
             language,
             request.user_id,
             request.channel,
+            company_id=request.company_id,
         )
 
     def handle_button_state(
@@ -1588,6 +1580,7 @@ class Engine:
                 new_language,
                 request.user_id,
                 request.channel,
+                company_id=request.company_id,
             )
 
         return None
@@ -1598,12 +1591,14 @@ class Engine:
         language,
         user_id,
         channel,
+        company_id=None,
     ):
         response = self.render(
             current_state,
             language,
             user_id,
             channel,
+            company_id=company_id,
         )
 
         warning = self.INVALID_CHOICE_TEXT.get(
@@ -1675,7 +1670,15 @@ class Engine:
         language,
         user_id,
         channel,
+        company_id=None,
     ):
+        """Draw one scripted state.
+
+        ``company_id`` decides whether there is a script to draw at all. The
+        shipped `features/` flows are T-ZONE's own, and without this every
+        company's customers were rendered T-ZONE's IPTV menu on the two
+        channels that fall through to the flow path.
+        """
         if not state_name:
             return Response(
                 self.ERROR_TEXT.get(
@@ -1686,7 +1689,8 @@ class Engine:
             )
 
         state_data = flow_loader.get_state(
-            state_name
+            state_name,
+            company_id=company_id,
         )
 
         if not state_data:

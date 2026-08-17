@@ -583,3 +583,60 @@ Whether this platform sells Telegram is not a question the code can answer.
 Until it is answered, the interface offers Telegram in three places
 (`ConversationsPage`, `NotificationsPage`, `UISettingsPage`) that the backend
 does not support, and that mismatch is the visible half of the same decision.
+
+## D-022 — The shared flow was still reaching every company's customers
+
+The platform fixed this defect twice and missed the third copy. The shared
+`bot_profile.json` that put one company's persona in everybody's prompt was
+moved into each company's database (D-005). The shared branding and menu in the
+assistant's reply were moved too. The **scripted flow** was not.
+
+`features/*/flow.json` is T-ZONE's own IPTV support script — a language picker,
+then a menu reading "📺 IPTV · 🛍️ Sales · 📞 Telecom Services · ℹ️ About
+T-ZONE". `FlowLoader` read it once at import and served it to anyone who asked.
+
+What made it reachable was a second shared file. `config/automation_policy.json`
+shipped WhatsApp as `meta_agent_only` and Telegram as `flow_only`, so on those
+two channels `should_auto_reply_with_ai` was False **for every company on the
+platform** — the assistant never took priority and the engine fell through to
+that flow. Running the engine for an arbitrary company id returned T-ZONE's menu
+verbatim on both.
+
+`handle_start` made it worse: a branch on `channel == "telegram"` pinned the
+customer into `telegram_iptv_start` and forced their department to `iptv`. A
+channel is not a business, and nothing about Telegram implies IPTV.
+
+It survived because Messenger and Instagram shipped as `auto_reply` and never
+reached the flow at all — so the leak only ever showed on the two channels
+nobody was exercising.
+
+### A flow is a company's script, not platform code
+
+`FlowLoader.get_state` now takes the asking company and serves the shipped flows
+only to a **single-company installation** — the same test
+`channels/credentials.py` already uses before letting the environment's token
+stand in for a connected account. As soon as a second company exists there is no
+safe answer, so the answer is none. It fails **closed**: an unanswerable
+ownership question serves no flow, because the other direction answers a
+customer with somebody else's menu.
+
+A company with no flow of its own falls through to the assistant, which reads
+that company's own departments, knowledge and profile. That is already how
+Messenger and Instagram work, so this is not new behaviour — it is the existing
+behaviour, finally applied to the two channels that were missing it.
+
+### Automation is a company's decision
+
+`automation_policy` now resolves per company: the shipped file is the platform's
+starting point, and a company overrides it in its own `ai_behavior` settings
+under `channels`. The same relationship `config/response_policy.json` has to
+`reply_policy_service`. An unrecognised `ai_mode` is ignored rather than stored,
+because a typo would make `is_ai_enabled` false and leave that company answering
+nobody on that channel.
+
+Every read fails soft: an absent company, an absent section or an unreadable
+database all fall back to the shipped values. Nothing here can stop a customer
+being answered.
+
+`core/menu.py` was deleted with this. It read `data/menus.json` — a third copy
+of the same T-ZONE menu — and had no callers at all.

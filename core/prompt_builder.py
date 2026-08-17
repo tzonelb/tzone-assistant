@@ -150,7 +150,9 @@ class PromptBuilder:
             # carries the role, since a company binds a profile to a channel
             # account and writes that profile's own instructions and tone.
             "business_departments": self._departments(company_id),
-            "automation_policy": automation_policy.get_channel_policy(channel),
+            "automation_policy": automation_policy.get_channel_policy(
+                channel, company_id=company_id
+            ),
         }
 
         sections = [
@@ -206,6 +208,9 @@ class PromptBuilder:
         # departments anyway.
         context = {
             "channel": channel,
+            # No company, so the platform's shipped values — there is no
+            # company whose choices could apply, and reaching for another's
+            # would be the leak this whole prompt exists to avoid.
             "automation_policy": automation_policy.get_channel_policy(channel),
         }
 

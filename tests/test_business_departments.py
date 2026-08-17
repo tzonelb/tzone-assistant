@@ -517,7 +517,11 @@ def test_the_engine_routes_a_button_press_with_the_senders_company(
     monkeypatch.setattr(
         engine_module.automation_policy,
         "should_auto_reply_with_ai",
-        lambda channel: True,
+        # `**_` because the engine now names the company as well as the
+        # channel: the decision is per company, since the shared file shipped
+        # WhatsApp and Telegram as non-AI channels for everybody and sent their
+        # customers to a flow that was T-ZONE's own.
+        lambda channel, **_: True,
     )
     monkeypatch.setattr(engine_module.ai_router, "route", lambda **kwargs: None)
 

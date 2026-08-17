@@ -152,7 +152,11 @@ def test_assistant_matcher_receives_only_the_owning_companys_items(
     monkeypatch.setattr(
         engine_module.automation_policy,
         "should_auto_reply_with_ai",
-        lambda channel: True,
+        # `**_` because the engine now names the company as well as the
+        # channel: the decision is per company, since the shared file shipped
+        # WhatsApp and Telegram as non-AI channels for everybody and sent their
+        # customers to a flow that was T-ZONE's own.
+        lambda channel, **_: True,
     )
 
     for company, expected_id in ((beta, "beta-only"), (alpha, "alpha-only")):

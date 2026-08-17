@@ -26,15 +26,44 @@ from database.manager import database_manager
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp")
+SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp", "telegram")
 
 # Which identifier each channel is routed by. Getting this wrong sends one
 # company's customers to another, so it is declared once here.
+#
+# Telegram routes on `external_account_id`, which holds the bot's numeric id.
+# It has no column of its own because it needs none: a Telegram bot has exactly
+# one identity, the id is the prefix of its own token, and the existing unique
+# index on `(channel, external_account_id)` already stops two companies claiming
+# the same bot.
 ROUTING_FIELD = {
     "messenger": "page_id",
     "instagram": "instagram_business_id",
     "whatsapp": "phone_number_id",
+    "telegram": "external_account_id",
 }
+
+
+def telegram_bot_id(token: str) -> str:
+    """The bot's numeric id, read out of its own token.
+
+    A Telegram bot token is `<bot_id>:<secret>`. Deriving the id rather than
+    asking an operator to type it removes the one mistake that would matter
+    here — a mistyped id routes another company's customers into this inbox, or
+    silently receives nothing at all.
+
+    Raises rather than guessing: a token this cannot parse is not a token.
+    """
+    candidate = str(token or "").strip()
+    bot_id, separator, secret = candidate.partition(":")
+
+    if not separator or not bot_id.isdigit() or not secret:
+        raise ChannelAccountError(
+            "That does not look like a Telegram bot token. BotFather issues "
+            "them in the form 123456789:AA... — paste the whole line."
+        )
+
+    return bot_id
 
 SECRET_FIELDS = {
     "access_token": "access_token_sealed",
