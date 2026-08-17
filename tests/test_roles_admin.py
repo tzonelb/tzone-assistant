@@ -289,3 +289,155 @@ def test_an_ordinary_employee_cannot_manage_roles(client, service, alpha):
     )
 
     assert refused.status_code == 403, refused.text
+
+
+# ----------------------------------------------------------------------
+# Branch ownership
+#
+# `role_id` has been checked against the company since this endpoint shipped.
+# `branch_id` sat in the same payload, went into the same INSERT, and was not
+# checked at all — and the team list joins the branch name straight back out,
+# so an id belonging to another company put that company's branch name on this
+# company's Roles & Permissions screen.
+#
+# `tests/test_branch_ownership.py` covers the same defect on channel accounts
+# and explains it in full.
+# ----------------------------------------------------------------------
+
+
+def _agent_role_id(client, token):
+    overview = client.get(
+        "/api/admin/access/overview", headers=_bearer(token)
+    ).json()
+
+    return next(role for role in overview["roles"] if role["code"] == "agent")["id"]
+
+
+def _make_branch(platform, company_id, name):
+    from database.manager import utc_now_iso
+
+    now = utc_now_iso()
+
+    with platform["manager"].control() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO branches (
+                company_id, name, code, status, created_at, updated_at
+            )
+            VALUES (?, ?, NULL, 'active', ?, ?)
+            """,
+            (company_id, name, now, now),
+        )
+        conn.commit()
+
+    return int(cursor.lastrowid)
+
+
+def test_adding_a_member_to_another_companys_branch_is_refused(
+    client, admin_token, platform, beta
+):
+    foreign = _make_branch(platform, beta["id"], "Beta Secret Warehouse")
+
+    refused = client.post(
+        "/api/admin/access/users",
+        headers=_bearer(admin_token),
+        json={
+            "full_name": "New Person",
+            "email": "new@alpha.example.com",
+            "password": NEW_USER_PASSWORD,
+            "phone": None,
+            "role_id": _agent_role_id(client, admin_token),
+            "branch_id": foreign,
+        },
+    )
+
+    assert refused.status_code == 400, refused.text
+    assert "branch" in refused.json()["detail"].lower()
+
+
+def test_adding_a_member_to_the_companys_own_branch_still_works(
+    client, admin_token, platform, alpha
+):
+    """A check that refused every branch would satisfy the test above while
+    breaking the feature."""
+    own = _make_branch(platform, alpha["id"], "Alpha Downtown")
+
+    created = client.post(
+        "/api/admin/access/users",
+        headers=_bearer(admin_token),
+        json={
+            "full_name": "New Person",
+            "email": "new@alpha.example.com",
+            "password": NEW_USER_PASSWORD,
+            "phone": None,
+            "role_id": _agent_role_id(client, admin_token),
+            "branch_id": own,
+        },
+    )
+
+    assert created.status_code == 200, created.text
+
+    team = client.get(
+        "/api/admin/access/overview", headers=_bearer(admin_token)
+    ).json()["users"]
+    person = next(p for p in team if p["email"] == "new@alpha.example.com")
+
+    assert person["branch_id"] == own
+    assert person["branch_name"] == "Alpha Downtown"
+
+
+def test_moving_a_member_to_another_companys_branch_is_refused(
+    client, admin_token, platform, alpha, beta
+):
+    """The update endpoint is a second door into the same column."""
+    own = _make_branch(platform, alpha["id"], "Alpha Downtown")
+    foreign = _make_branch(platform, beta["id"], "Beta Secret Warehouse")
+    role_id = _agent_role_id(client, admin_token)
+
+    created = client.post(
+        "/api/admin/access/users",
+        headers=_bearer(admin_token),
+        json={
+            "full_name": "New Person",
+            "email": "new@alpha.example.com",
+            "password": NEW_USER_PASSWORD,
+            "phone": None,
+            "role_id": role_id,
+            "branch_id": own,
+        },
+    )
+    user_id = created.json()["user_id"]
+
+    refused = client.patch(
+        f"/api/admin/access/users/{user_id}",
+        headers=_bearer(admin_token),
+        json={"role_id": role_id, "branch_id": foreign, "status": "active"},
+    )
+
+    assert refused.status_code == 400, refused.text
+
+    team = client.get(
+        "/api/admin/access/overview", headers=_bearer(admin_token)
+    ).json()["users"]
+    person = next(p for p in team if p["email"] == "new@alpha.example.com")
+
+    assert person["branch_id"] == own
+
+
+def test_a_member_can_still_have_no_branch(client, admin_token):
+    """Optional means optional. Most companies have one location and the
+    dropdown's first entry is "All branches"."""
+    created = client.post(
+        "/api/admin/access/users",
+        headers=_bearer(admin_token),
+        json={
+            "full_name": "New Person",
+            "email": "new@alpha.example.com",
+            "password": NEW_USER_PASSWORD,
+            "phone": None,
+            "role_id": _agent_role_id(client, admin_token),
+            "branch_id": None,
+        },
+    )
+
+    assert created.status_code == 200, created.text

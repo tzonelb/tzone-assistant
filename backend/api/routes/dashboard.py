@@ -133,7 +133,9 @@ def dashboard_summary(
                 channel_accounts.image_ai_enabled,
                 branches.name AS branch_name
             FROM channel_accounts
-            LEFT JOIN branches ON branches.id = channel_accounts.branch_id
+            LEFT JOIN branches
+                   ON branches.id = channel_accounts.branch_id
+                  AND branches.company_id = channel_accounts.company_id
             WHERE channel_accounts.company_id = ?
             ORDER BY channel_accounts.id ASC
             """,
@@ -386,7 +388,9 @@ def get_channels(
                 channel_accounts.updated_at,
                 branches.name AS branch_name
             FROM channel_accounts
-            LEFT JOIN branches ON branches.id = channel_accounts.branch_id
+            LEFT JOIN branches
+                   ON branches.id = channel_accounts.branch_id
+                  AND branches.company_id = channel_accounts.company_id
             WHERE channel_accounts.company_id = ?
             ORDER BY channel_accounts.id ASC
             """,

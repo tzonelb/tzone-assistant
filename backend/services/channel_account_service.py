@@ -92,7 +92,9 @@ class ChannelAccountService:
                 """
                 SELECT channel_accounts.*, branches.name AS branch_name
                 FROM channel_accounts
-                LEFT JOIN branches ON branches.id = channel_accounts.branch_id
+                LEFT JOIN branches
+                       ON branches.id = channel_accounts.branch_id
+                      AND branches.company_id = channel_accounts.company_id
                 WHERE channel_accounts.company_id = ?
                 ORDER BY channel_accounts.id ASC
                 """,
@@ -227,6 +229,44 @@ class ChannelAccountService:
         return department_id
 
     @staticmethod
+    def _resolve_branch_id(company_id: int, value: Any) -> int | None:
+        """The same check for the branch, which never had one.
+
+        `branch_id` sat in the plain-column list and went into the row exactly
+        as it arrived. Both tables live in the control database, so unlike the
+        department there is no cross-database excuse — the join in
+        `list_accounts` simply matched on the branch id alone, with no company
+        condition. Setting an account's `branch_id` to a number belonging to
+        another company put that company's branch name in this company's
+        channel list and on its dashboard. Small in volume, one name, and
+        exactly the shape this platform must not have: a value from another
+        company's row on this company's screen.
+
+        Refused at the door rather than filtered at the read, because a stored
+        pointer to someone else's row is wrong even while nothing displays it.
+        """
+        if value in (None, "", 0):
+            return None
+
+        try:
+            branch_id = int(value)
+        except (TypeError, ValueError) as exc:
+            raise ChannelAccountError("Branch id must be a number.") from exc
+
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT id FROM branches WHERE id = ? AND company_id = ?",
+                (branch_id, int(company_id)),
+            ).fetchone()
+
+        if not row:
+            raise ChannelAccountError(
+                "That branch does not belong to this company."
+            )
+
+        return branch_id
+
+    @staticmethod
     def _active_account_count(conn: Any, company_id: int) -> int:
         row = conn.execute(
             """
@@ -312,6 +352,7 @@ class ChannelAccountService:
         department_id = self._resolve_department_id(
             company_id, values.get("department_id")
         )
+        branch_id = self._resolve_branch_id(company_id, values.get("branch_id"))
 
         with database_manager.control() as conn:
             conn.execute("BEGIN IMMEDIATE")
@@ -339,7 +380,7 @@ class ChannelAccountService:
                     """,
                     (
                         company_id,
-                        values.get("branch_id"),
+                        branch_id,
                         department_id,
                         normalized_channel,
                         str(name).strip(),
@@ -409,7 +450,6 @@ class ChannelAccountService:
 
         plain_columns = (
             "name",
-            "branch_id",
             "status",
             "external_account_id",
             "phone_number_id",
@@ -436,14 +476,20 @@ class ChannelAccountService:
             assignments.append(f"{column} = ?")
             params.append(value)
 
-        # Validated rather than passed through with the other plain columns: it
-        # names a row in a different database, and an id from another company
-        # must be refused before it is written.
+        # Validated rather than passed through with the other plain columns:
+        # each names a row this company must own, and an id from another
+        # company must be refused before it is written. `branch_id` was in the
+        # plain list until this was written, which is how an account came to be
+        # able to point at another company's branch.
         if "department_id" in values:
             assignments.append("department_id = ?")
             params.append(
                 self._resolve_department_id(company_id, values["department_id"])
             )
+
+        if "branch_id" in values:
+            assignments.append("branch_id = ?")
+            params.append(self._resolve_branch_id(company_id, values["branch_id"]))
 
         for field, column in SECRET_FIELDS.items():
             if field not in values:

@@ -124,7 +124,9 @@ def overview(current_user: dict = Depends(get_current_user)):
             FROM company_users
             JOIN users ON users.id = company_users.user_id
             LEFT JOIN roles ON roles.id = company_users.role_id
-            LEFT JOIN branches ON branches.id = company_users.branch_id
+            LEFT JOIN branches
+                   ON branches.id = company_users.branch_id
+                  AND branches.company_id = company_users.company_id
             WHERE company_users.company_id = ?
             ORDER BY users.full_name, users.email
         """, (company_id,)).fetchall()]
@@ -218,6 +220,27 @@ def create_role(
     )
 
     return {"success": True, "role_id": role_id}
+
+
+
+def _assert_branch_belongs(conn, company_id: int, branch_id) -> None:
+    """A branch id on a membership row must name a branch this company owns.
+
+    `role_id` was checked here from the start; `branch_id` sat beside it and
+    was written exactly as it arrived. Ids are global across the control
+    database, so an id from another company was a valid row — and the team
+    list joins the branch name back out.
+    """
+    if branch_id in (None, "", 0):
+        return
+
+    row = conn.execute(
+        "SELECT id FROM branches WHERE id = ? AND company_id = ?",
+        (int(branch_id), int(company_id)),
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=400, detail="Selected branch is invalid.")
 
 
 def _set_role_permissions(conn, role_id: int, permission_codes: list[str]) -> None:
@@ -315,6 +338,10 @@ def create_user(
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        # The same check the role gets. Without it a branch id belonging to
+        # another company was stored on this company's membership row and its
+        # name came back through the team list.
+        _assert_branch_belongs(conn, company_id, payload.branch_id)
         # Before the account is created, not after. `create_user` writes a row
         # to the shared `users` table; refusing afterwards would leave an
         # orphaned account belonging to no company, and the same email could
@@ -371,6 +398,10 @@ def update_user_assignment(
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        # The same check the role gets. Without it a branch id belonging to
+        # another company was stored on this company's membership row and its
+        # name came back through the team list.
+        _assert_branch_belongs(conn, company_id, payload.branch_id)
 
         existing = conn.execute(
             "SELECT status FROM company_users WHERE company_id = ? AND user_id = ? LIMIT 1",
