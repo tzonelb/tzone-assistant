@@ -1459,6 +1459,54 @@ def cmd_unlock_user(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_reset_totp(args: argparse.Namespace) -> int:
+    """Clear a second factor from the server, so the account can enrol again.
+
+    The emergency exit for the one account that has no other. A platform
+    administrator who has lost both their authenticator device and their
+    recovery codes cannot be helped from inside the product — there is nobody
+    above them to reset it, and the console refuses every route until they are
+    enrolled. Without this the platform would be permanently unadministrable
+    after a lost phone.
+
+    It is a command on the server rather than an endpoint for exactly that
+    reason: whoever can run it already has the master key and the database, so
+    it grants nothing they did not already hold. An endpoint would be a way to
+    strip anybody's second factor over the network.
+
+    The account is left **unenrolled**, not exempt. The next sign-in mints a
+    session that can reach nothing but enrolment, so the requirement stands.
+    """
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+
+    from backend.services.totp_service import totp_service
+
+    user = _find_user(database_manager, args.email)
+
+    totp_service.disable(int(user["id"]), force=True)
+
+    banner("TWO-FACTOR AUTHENTICATION CLEARED")
+    out()
+    out(f"  Account : {user['email']} (id {user['id']})")
+    out()
+    out("  The secret and every recovery code were discarded.")
+    out("  The password was not changed.")
+
+    if bool(user["is_super_admin"]):
+        out()
+        out("  This is a platform administrator, so enrolment is still")
+        out("  required: their next sign-in reaches the enrolment screen and")
+        out("  nothing else until they finish it.")
+
+    out()
+
+    return 0
+
+
 def cmd_reset_password(args: argparse.Namespace) -> int:
     """Set a password from the server, without granting anything.
 
@@ -1677,6 +1725,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Do not require the account to change it at next sign-in.",
     )
     reset_password.set_defaults(handler=cmd_reset_password)
+
+    reset_totp = subparsers.add_parser(
+        "reset-totp",
+        help=(
+            "Clear two-factor authentication on one account so it can enrol "
+            "again. The way back in after a lost device."
+        ),
+    )
+    reset_totp.add_argument("--email", required=True, help="Account address.")
+    reset_totp.set_defaults(handler=cmd_reset_totp)
 
     check = subparsers.add_parser(
         "check",

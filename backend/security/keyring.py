@@ -307,6 +307,59 @@ def unseal_secret(
     return raw.decode("utf-8")
 
 
+def _user_aad(user_id: int) -> bytes:
+    """Bind sealed material to one account so it cannot be replayed onto another."""
+    return f"tzone:user:{int(user_id)}".encode("utf-8")
+
+
+def seal_user_secret(
+    plaintext: str,
+    master_key: bytes,
+    user_id: int,
+    context: str,
+) -> str:
+    """Seal a secret that belongs to an account rather than to a company.
+
+    A TOTP secret is the case this exists for. It belongs to one person, and a
+    Super Admin belongs to no company at all — so there is no company key to
+    seal it under, and reusing `seal_secret` with a user id in the company slot
+    would make two different things share one namespace.
+
+    Sealed under the platform master key, bound to the account. A database dump
+    without the master key yields nothing, and a sealed value lifted from one
+    row cannot be pasted into another: the AAD names the account it was issued
+    to, so decryption fails rather than silently accepting somebody else's
+    second factor.
+    """
+    return _seal(
+        master_key,
+        str(plaintext).encode("utf-8"),
+        f"{_user_aad(user_id).decode()}:{context}".encode("utf-8"),
+    )
+
+
+def unseal_user_secret(
+    sealed: str,
+    master_key: bytes,
+    user_id: int,
+    context: str,
+) -> str:
+    """Recover a secret sealed by :func:`seal_user_secret`."""
+    try:
+        raw = _unseal(
+            master_key,
+            sealed,
+            f"{_user_aad(user_id).decode()}:{context}".encode("utf-8"),
+        )
+    except (InvalidTag, ValueError, TypeError) as exc:
+        raise CorruptedKeyMaterial(
+            f"A stored {context} for user {user_id} could not be authenticated. "
+            "It was written with a different key, or the row was tampered with."
+        ) from exc
+
+    return raw.decode("utf-8")
+
+
 def sqlcipher_key_literal(company_key: bytes) -> str:
     """Format a raw key for ``PRAGMA key``.
 

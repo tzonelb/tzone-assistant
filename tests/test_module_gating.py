@@ -120,12 +120,12 @@ def _platform_token(client, email="root@platform.example.com") -> str:
         email, PLATFORM_PASSWORD, full_name="Platform Root", is_super_admin=True
     )
 
-    response = client.post(
-        "/api/platform/auth/login",
-        json={"email": email, "password": PLATFORM_PASSWORD},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()["access_token"]
+    # Enrolment is mandatory for a platform administrator and every console
+    # route refuses until it is done, so a token that skipped it would reach
+    # nothing and every test here would fail on a 403 about the wrong thing.
+    from tests.test_platform_admin import _platform_token as _enrolled_token
+
+    return _enrolled_token(client, email)
 
 
 def _employee_token(client, platform, company, email) -> str:

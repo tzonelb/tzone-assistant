@@ -39,6 +39,16 @@ sqlcipher3-binary==0.6.0
 # AES-GCM for wrapping each company's database key.
 cryptography==50.0.0
 
+# --- Two-factor authentication -----------------------------------------
+# TOTP, the six-digit code an authenticator app produces. Chosen over SMS
+# deliberately: an SMS code can be intercepted by a SIM swap, which is a real
+# and routine attack against exactly the kind of account this protects, and it
+# would also make the platform depend on a paid gateway to let its operator in.
+pyotp==2.10.0
+# Renders the enrolment QR as an SVG the browser draws inline. No image
+# encoder, no temporary file, and the secret never leaves the response.
+segno==1.6.6
+
 # --- Configuration -----------------------------------------------------
 python-dotenv==1.2.2
 

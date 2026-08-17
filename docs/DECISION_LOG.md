@@ -339,3 +339,80 @@ while the writers wrote `human_takeover` and `assignment_changed`. Neither
 matched, so both figures were zero for every company since the report shipped —
 and a zero is exactly the kind of wrong answer nobody questions. Both ends now
 import one constant.
+
+## D-017 — Two factors for the account that has only one
+
+The Super Admin sign-in is deliberately one factor: an email and a password,
+with no workspace code, because a platform administrator belongs to no company
+and so has no code to type. It is also the account that suspends companies,
+rotates workspace codes and reads the platform audit. One guessed or reused
+password is the whole platform.
+
+So enrolment is **mandatory** there and **optional** everywhere else. The
+platform decides what protects the platform; a company's owner decides what
+protects the company, and can require it of their team by policy — they can see
+who has it on.
+
+### TOTP, not SMS
+
+An SMS code travels over a channel a SIM swap takes over, which is a routine
+attack against exactly this kind of account. It would also make signing in to
+the platform depend on a paid gateway staying up: the failure mode is the
+operator locked out of their own console during the incident that made them
+need it.
+
+### The session exists before the enrolment does
+
+An unenrolled administrator signs in successfully and can reach three routes:
+status, begin, confirm. Everything else answers 403. A dependency that refused
+the token outright would leave them with no way to satisfy the requirement — a
+locked door on the one account with nobody above it to open one. The permissive
+twin `get_platform_admin_enrolling` is used by exactly those three routes and
+still demands a platform-scoped token from a super admin.
+
+### What is stored, and what is not
+
+The secret is sealed under the platform master key and bound to the account, so
+a database dump yields nothing and a sealed value lifted from one row fails to
+decrypt on another. It is a password-equivalent: anyone holding it generates
+this account's codes for ever, so a readable copy would mean a dump hands over
+the second factor along with the first. Recovery codes are hashed, shown once,
+and consumed on use.
+
+`totp_enabled` goes on only after the user proves a code the secret produced.
+Turning it on when the secret is issued would lock out anybody whose
+authenticator failed to save the QR they had just scanned. Restarting enrolment
+issues a new secret and discards the old, so an abandoned attempt cannot be
+resumed by somebody who photographed the first QR.
+
+### Verification fails closed
+
+The opposite direction from almost every other guard in this codebase, and
+deliberately. The others fail open because refusing would deny a customer work
+they are entitled to. Allowing here would admit somebody who has not proved
+their second factor. The direction follows the consequence, not a house style.
+
+### A wrong code counts toward the lockout
+
+Otherwise an attacker who already has the password gets an unlimited number of
+guesses at six digits.
+
+### Nobody can enrol or remove somebody else's
+
+Every 2FA route acts on the session's own user id and takes none from a
+parameter. A permission that let an administrator strip an employee's second
+factor would make it a factor two people hold, and so not a second factor.
+Removing one's own requires a current code, or anybody at an unlocked screen
+could do it in a click — which would make the second factor only as strong as
+the session it exists to defend.
+
+### The emergency exit is a server command
+
+`python -m tools.manage_platform reset-totp --email <address>` clears it. An
+administrator who has lost both their device and their recovery codes cannot be
+helped from inside the product, and without this the platform would be
+permanently unadministrable after a lost phone. It is a command rather than an
+endpoint because whoever can run it already holds the master key and the
+database, so it grants nothing they did not have — an endpoint would be a way to
+strip anybody's second factor over the network. The account is left
+**unenrolled**, not exempt: the requirement stands at the next sign-in.

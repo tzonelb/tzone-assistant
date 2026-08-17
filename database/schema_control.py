@@ -404,6 +404,27 @@ CONTROL_COLUMNS: dict[str, dict[str, str]] = {
         # an address-side block at all.
         "locked_until": "TEXT",
         "locked_reason": "TEXT",
+        # --- Two-factor authentication.
+        #
+        # The TOTP secret is sealed, never stored in the clear. It is a
+        # password-equivalent: anyone holding it can generate this account's
+        # codes for ever, so a leaked database would hand over the second
+        # factor along with the first — which is the same as having neither.
+        #
+        # Sealed under the platform master key rather than a company key: a
+        # Super Admin belongs to no company, and their account is the one this
+        # protects most.
+        "totp_secret_sealed": "TEXT",
+        # Enrolment is two steps. A secret is issued and stored, then confirmed
+        # by the user typing a code it produced. Only after that does
+        # `totp_enabled` go on. Turning it on at issue time would lock out
+        # anybody who scanned the QR into an app that failed to save it.
+        "totp_enabled": "INTEGER NOT NULL DEFAULT 0",
+        "totp_confirmed_at": "TEXT",
+        # Recovery codes, hashed. Shown once at enrolment and never again —
+        # storing them readable would make them a second copy of the second
+        # factor. Same reasoning as `auth_sessions.token_hash`.
+        "totp_recovery_hashes": "TEXT",
     },
 }
 

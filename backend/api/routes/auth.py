@@ -2,6 +2,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from backend.api.schemas.platform import TotpConfirmRequest
 from backend.api.schemas.auth import (
     CurrentUserResponse,
     LoginRequest,
@@ -12,6 +13,7 @@ from backend.api.schemas.auth import (
     PasswordResetRequest,
 )
 from backend.services.activity_service import Action, activity_service
+from backend.services.totp_service import TotpError, totp_service
 from backend.services.auth_service import (
     auth_service,
     client_ip,
@@ -174,6 +176,34 @@ def login(payload: LoginRequest, request: Request):
             detail=INVALID_CREDENTIALS,
         )
 
+    # The second factor, when this employee has chosen to have one.
+    #
+    # Optional on a company account and mandatory only for a platform
+    # administrator: the platform decides what protects the platform, and the
+    # company's owner decides what protects the company. An owner can see who
+    # on their team has it on and require it of them by policy.
+    #
+    # A failed code counts toward the same lockout as a failed password. Not
+    # counting it would leave an attacker who already has the password an
+    # unlimited number of guesses at six digits.
+    if bool(user.get("totp_enabled")):
+        if not totp_service.verify(int(user["id"]), payload.totp_code or ""):
+            auth_service.record_login_attempt(
+                email=email,
+                ip_address=ip_address,
+                succeeded=False,
+                failure_reason="invalid_totp",
+            )
+            auth_service.register_failure(email=email, ip_address=ip_address)
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "totp_required",
+                    "message": "Enter the code from your authenticator app.",
+                },
+            )
+
     auth_service.record_login_attempt(
         email=email, ip_address=ip_address, succeeded=True
     )
@@ -323,3 +353,107 @@ def reset_password(token: str, payload: PasswordResetRequest, request: Request):
         "success": True,
         "message": "Password set. You can sign in now.",
     }
+
+
+# ----------------------------------------------------------------------
+# Two-factor authentication
+#
+# Optional on a company account, and the employee's own decision. These routes
+# act only on the caller's own record — a user id is never taken from a
+# parameter, so an administrator cannot enrol or disable somebody else's second
+# factor, which would defeat the point of it being a factor only they hold.
+# ----------------------------------------------------------------------
+
+
+@router.get("/totp")
+def totp_status(current_user: dict = Depends(get_current_user)):
+    return totp_service.status(int(current_user["id"]))
+
+
+@router.post("/totp/begin")
+def totp_begin(request: Request, current_user: dict = Depends(get_current_user)):
+    """Issue a secret and the QR that carries it.
+
+    The only response that ever contains the secret. Starting again issues a new
+    one and discards the old, so an abandoned attempt cannot be resumed by
+    somebody who photographed the first QR.
+    """
+    try:
+        return totp_service.begin_enrolment(int(current_user["id"]))
+    except TotpError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/totp/confirm")
+def totp_confirm(
+    payload: TotpConfirmRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Turn it on, and return the recovery codes once.
+
+    They are stored hashed, so this response is the only moment they exist in
+    readable form anywhere.
+    """
+    try:
+        result = totp_service.confirm_enrolment(int(current_user["id"]), payload.code)
+    except TotpError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    company_id = current_user.get("active_company_id")
+
+    if company_id is not None:
+        activity_service.record(
+            company_id=int(company_id),
+            action=Action.PASSWORD_CHANGED,
+            category="auth",
+            kind="security",
+            actor_user_id=int(current_user["id"]),
+            actor_label=current_user.get("full_name") or current_user.get("email"),
+            summary="Turned on two-factor authentication",
+            ip_address=client_ip(request),
+        )
+
+    return result
+
+
+@router.delete("/totp")
+def totp_disable(
+    payload: TotpConfirmRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Turn it off, after proving the caller still holds the second factor.
+
+    A code is required. Without it, anyone who walked up to an unlocked screen
+    could remove the protection with one click — which would make the second
+    factor only as strong as the session, and the session is what it exists to
+    defend.
+    """
+    if not totp_service.verify(int(current_user["id"]), payload.code):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Enter a current code, or one of your recovery codes.",
+        )
+
+    try:
+        totp_service.disable(int(current_user["id"]))
+    except TotpError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    company_id = current_user.get("active_company_id")
+
+    if company_id is not None:
+        activity_service.record(
+            company_id=int(company_id),
+            action=Action.PASSWORD_CHANGED,
+            category="auth",
+            kind="security",
+            actor_user_id=int(current_user["id"]),
+            actor_label=current_user.get("full_name") or current_user.get("email"),
+            summary="Turned off two-factor authentication",
+            severity="warning",
+            ip_address=client_ip(request),
+        )
+
+    return {"success": True, "enabled": False}

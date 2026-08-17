@@ -26,6 +26,12 @@ class PlatformLoginRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(min_length=8, max_length=200)
+    # The six-digit code, or a recovery code. Optional in the schema and
+    # required by the endpoint once the account is enrolled: the client asks
+    # for it only after the first response says it is needed, so a caller who
+    # does not know whether an account has a second factor learns nothing from
+    # the shape of the request.
+    totp_code: str | None = Field(default=None, max_length=32)
 
 
 class PlatformLoginResponse(BaseModel):
@@ -34,6 +40,11 @@ class PlatformLoginResponse(BaseModel):
     scope: str
     expires_in: int
     user: dict
+    # Whether this administrator still has to enrol. The session is minted
+    # either way and every other console route refuses until they do, so the
+    # console needs this to route them to enrolment rather than to a dashboard
+    # that will 403 on every request it makes.
+    totp: dict | None = None
 
 
 class PlatformUserResponse(BaseModel):
@@ -124,3 +135,14 @@ class PlanOverrideRequest(BaseModel):
 
     value: int = Field(ge=0)
     note: str | None = Field(default=None, max_length=500)
+
+
+class TotpConfirmRequest(BaseModel):
+    """The code from the authenticator app, proving the secret arrived.
+
+    Six digits, but not validated as such here: `pyotp` decides what a valid
+    code is, and a length rule in the schema would answer a wrong code with a
+    different error than an invalid one — which is a way to probe the account.
+    """
+
+    code: str = Field(min_length=4, max_length=32)

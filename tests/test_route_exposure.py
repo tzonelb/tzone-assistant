@@ -64,6 +64,18 @@ IDENTITY_ONLY_ROUTES: dict[str, str] = {
     "notifications.py:POST:/{notification_id}/unread": "Your own notification.",
     "notifications.py:POST:/read-all": "Your own notifications.",
     "notifications.py:DELETE:/clear-visible": "Your own notifications.",
+    # A second factor is something only its holder can set up or remove, and
+    # that is the whole point of it. A permission here would let an
+    # administrator enrol or strip somebody else's — which would make it a
+    # factor two people hold, and so not a second factor at all. Every one of
+    # these acts on the session's own user id and takes none from a parameter.
+    "auth.py:GET:/totp": "Your own second factor.",
+    "auth.py:POST:/totp/begin": "Your own second factor.",
+    "auth.py:POST:/totp/confirm": "Your own second factor.",
+    "auth.py:DELETE:/totp": (
+        "Your own second factor, and a current code is required to remove it — "
+        "otherwise anybody at an unlocked screen could strip it in one click."
+    ),
 }
 
 
@@ -73,6 +85,10 @@ GUARDS = (
     "require_permission",
     "require_module",
     "get_platform_admin",
+    # The permissive twin, used only by the enrolment routes. It still requires
+    # a platform-scoped token belonging to a super admin — what it does not
+    # require is the second factor those routes exist to set up.
+    "get_platform_admin_enrolling",
     "get_user_changing_password",
     "_require_access_admin",
     "has_permission",

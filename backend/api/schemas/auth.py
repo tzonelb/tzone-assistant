@@ -11,6 +11,10 @@ class LoginRequest(BaseModel):
     # this schema accepted a length no account could ever have been created
     # with — the mismatch could only ever produce a confusing rejection later.
     password: str = Field(min_length=10, max_length=200)
+    # Optional: two-factor authentication is the employee's own choice on a
+    # company account. The endpoint requires it only when the account has it
+    # turned on.
+    totp_code: str | None = Field(default=None, max_length=32)
 
 
 class LoginResponse(BaseModel):

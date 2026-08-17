@@ -921,6 +921,13 @@ class AuthService:
         # cannot route them to the change-password screen without knowing.
         "password_changed_at",
         "must_change_password",
+        # Whether this account has a second factor. Published to the person it
+        # describes, for the same reason as `must_change_password`: the
+        # interface cannot route them to enrolment without knowing, and the
+        # sign-in path reads it back off this dict to decide whether to demand
+        # a code. The **secret** is never in this list — it is a
+        # password-equivalent and stays sealed in the row.
+        "totp_enabled",
         "created_at",
         "updated_at",
         # Not columns on `users` — these come from the session row that
@@ -1397,6 +1404,69 @@ async def get_platform_admin(
     scope, belonging to a user who is still a super admin. Checking the flag
     again here means revoking someone's platform rights takes effect on their
     next request rather than when their token happens to expire.
+    """
+    if not credentials or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = auth_service.get_user_from_token(credentials.credentials)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired or token is invalid.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user.get("session_scope") != PLATFORM_SCOPE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sign in to the platform console to perform this action.",
+        )
+
+    if not bool(user.get("is_super_admin")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Platform administrator access required.",
+        )
+
+    # Enrolment in two-factor authentication is mandatory here and refused
+    # server-side, the same way `must_change_password` is. A message the
+    # interface could skip is not a requirement.
+    #
+    # The session is still minted at sign-in so the administrator can reach the
+    # enrolment routes and nothing else — a dependency that refused the token
+    # outright would leave them with no way to satisfy it.
+    if not bool(user.get("totp_enabled")):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "totp_enrolment_required",
+                "message": (
+                    "Set up two-factor authentication before using the console."
+                ),
+            },
+        )
+
+    user["_raw_token"] = credentials.credentials
+    return user
+
+
+async def get_platform_admin_enrolling(
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> dict[str, Any]:
+    """A platform administrator who may still be enrolling their second factor.
+
+    The permissive twin of `get_platform_admin`, and the only dependency the
+    enrolment routes use. Same reasoning as `get_user_changing_password`: a
+    requirement with no reachable way to satisfy it is a locked door, and this
+    one would lock out the account that has nobody above it to help.
+
+    Everything else about it is identical — platform scope, still a super
+    admin — so an ordinary token cannot reach enrolment either.
     """
     if not credentials or credentials.scheme.lower() != "bearer":
         raise HTTPException(

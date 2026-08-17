@@ -30,14 +30,17 @@ from backend.api.schemas.platform import (
     PlatformLoginResponse,
     PlatformLogoutResponse,
     PlatformUserResponse,
+    TotpConfirmRequest,
 )
 from backend.services.auth_service import (
     PLATFORM_SCOPE,
     auth_service,
     client_ip,
     get_platform_admin,
+    get_platform_admin_enrolling,
 )
 from backend.services.plan_service import LIMIT_KEYS, plan_service
+from backend.services.totp_service import TotpError, totp_service
 from backend.services.platform_service import (
     PlatformConflict,
     PlatformError,
@@ -131,6 +134,35 @@ def platform_login(payload: PlatformLoginRequest, request: Request):
             detail=INVALID_CREDENTIALS,
         )
 
+    # The second factor, before the session exists.
+    #
+    # This sign-in is one factor by design: a platform administrator belongs to
+    # no company, so there is no workspace code to type. It is also the account
+    # that suspends companies, rotates workspace codes and reads the platform
+    # audit — one guessed or reused password is the whole platform. So the
+    # second factor is required here, and enrolling is not optional.
+    #
+    # A failed code is recorded as a failed sign-in and counts toward the same
+    # lockout. Not doing so would leave an attacker who already has the password
+    # an unlimited number of guesses at six digits.
+    if bool(user.get("totp_enabled")):
+        if not totp_service.verify(int(user["id"]), payload.totp_code or ""):
+            auth_service.record_login_attempt(
+                email=email,
+                ip_address=ip_address,
+                succeeded=False,
+                failure_reason="platform_invalid_totp",
+            )
+            auth_service.register_failure(email=email, ip_address=ip_address)
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": "totp_required",
+                    "message": "Enter the code from your authenticator app.",
+                },
+            )
+
     auth_service.record_login_attempt(
         email=email, ip_address=ip_address, succeeded=True
     )
@@ -160,7 +192,86 @@ def platform_login(payload: PlatformLoginRequest, request: Request):
         "scope": session_data["scope"],
         "expires_in": session_data["expires_in"],
         "user": user,
+        # An administrator who has not enrolled gets a session and nothing else:
+        # `get_platform_admin` refuses every other route until they do. The flag
+        # is here so the console can send them to enrolment rather than to a
+        # dashboard that will 403 on every request it makes.
+        "totp": totp_service.status(int(user["id"])),
     }
+
+
+# ----------------------------------------------------------------------
+# Two-factor authentication
+#
+# These three routes use `get_platform_admin_enrolling`, the one dependency
+# that does not demand an enrolled second factor. Everything else in this file
+# refuses until enrolment is finished, and a requirement with no reachable way
+# to satisfy it is a locked door — on the account that has nobody above it to
+# open one.
+# ----------------------------------------------------------------------
+
+
+@router.get("/auth/totp")
+def platform_totp_status(
+    current_user: dict[str, Any] = Depends(get_platform_admin_enrolling),
+):
+    return totp_service.status(int(current_user["id"]))
+
+
+@router.post("/auth/totp/begin")
+def platform_totp_begin(
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin_enrolling),
+):
+    """Issue a secret and the QR that carries it.
+
+    The only response on the platform that ever contains the secret. Starting
+    again issues a new one and discards the old, so an abandoned attempt cannot
+    be resumed by somebody who photographed the first QR.
+    """
+    try:
+        result = totp_service.begin_enrolment(int(current_user["id"]))
+    except TotpError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    platform_service.record_audit(
+        action="platform.totp_enrolment_started",
+        actor_user_id=_actor(current_user),
+        target_type="user",
+        target_id=_actor(current_user),
+        ip_address=client_ip(request),
+    )
+
+    return result
+
+
+@router.post("/auth/totp/confirm")
+def platform_totp_confirm(
+    payload: TotpConfirmRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin_enrolling),
+):
+    """Prove the app produces codes from the secret, and turn it on.
+
+    Returns the recovery codes once. They are stored hashed, so this response
+    is the only moment they exist in readable form anywhere.
+    """
+    try:
+        result = totp_service.confirm_enrolment(
+            int(current_user["id"]), payload.code
+        )
+    except TotpError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    platform_service.record_audit(
+        action="platform.totp_enabled",
+        actor_user_id=_actor(current_user),
+        target_type="user",
+        target_id=_actor(current_user),
+        ip_address=client_ip(request),
+    )
+
+    return result
 
 
 @router.get("/auth/me", response_model=PlatformUserResponse)

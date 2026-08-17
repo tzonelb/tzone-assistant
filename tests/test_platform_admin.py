@@ -130,12 +130,47 @@ def _employ(platform, company, user_id: int) -> None:
 
 
 def _platform_token(client, email: str = "root@platform.example.com") -> str:
+    """Sign a platform administrator in, enrolling their second factor first.
+
+    Enrolment is mandatory for this account and every console route refuses
+    until it is done, so a token that skipped it would be a token that can
+    reach nothing — every test using it would fail on a 403 that has nothing to
+    do with what it is testing.
+
+    Enrolling here rather than in each test also keeps the requirement honest:
+    if it were ever removed, `test_two_factor.py` would fail rather than this
+    helper quietly doing nothing.
+    """
+    import pyotp
+
     response = client.post(
         "/api/platform/auth/login",
         json={"email": email, "password": PLATFORM_PASSWORD},
     )
     assert response.status_code == 200, response.text
-    return response.json()["access_token"]
+
+    body = response.json()
+    token = body["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    if not (body.get("totp") or {}).get("enrolment_pending"):
+        return token
+
+    secret = client.post(
+        "/api/platform/auth/totp/begin", headers=headers
+    ).json()["secret"]
+
+    confirmed = client.post(
+        "/api/platform/auth/totp/confirm",
+        headers=headers,
+        json={"code": pyotp.TOTP(secret).now()},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    # The session minted before enrolment is still valid — the dependency reads
+    # `totp_enabled` off the user on every request, not off the token — so the
+    # same token now opens the console.
+    return token
 
 
 def _company_token(client, company, email: str) -> str:
@@ -297,6 +332,13 @@ def test_every_platform_route_requires_a_token_except_login(client):
 
     unguarded = []
 
+    # The enrolment routes use the permissive twin. It requires the same
+    # platform-scoped token belonging to the same super admin; what it does not
+    # require is the second factor those three routes exist to set up, because
+    # a requirement with no reachable way to satisfy it is a locked door on the
+    # account that has nobody above it to open one.
+    accepted = {"get_platform_admin", "get_platform_admin_enrolling"}
+
     for route in platform_routes.router.routes:
         if route.path == "/api/platform/auth/login":
             continue
@@ -307,7 +349,7 @@ def test_every_platform_route_requires_a_token_except_login(client):
             if getattr(dependant, "call", None) is not None
         }
 
-        if "get_platform_admin" not in dependency_names:
+        if not (dependency_names & accepted):
             unguarded.append(route.path)
 
     assert unguarded == []
