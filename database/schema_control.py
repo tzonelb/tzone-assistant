@@ -301,6 +301,54 @@ CONTROL_TABLES: tuple[str, ...] = (
     )
     """,
     """
+    -- One company's departure from its plan's allowance, set from the console.
+    --
+    -- Separate from `plans` on purpose. Editing the plan row to accommodate one
+    -- customer silently raises the ceiling for every company on that plan, and
+    -- nothing records that it happened or why. A row here changes one company,
+    -- carries the reason, and can be removed to put them back on the plan.
+    --
+    -- `value` is NOT NULL: a row that exists means a decision was made. Meaning
+    -- "back to the plan" would be a second way of saying what deleting the row
+    -- already says, and two ways lead to disagreement.
+    CREATE TABLE IF NOT EXISTS company_plan_overrides (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        limit_key TEXT NOT NULL,
+        value INTEGER NOT NULL,
+        note TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        updated_by_user_id INTEGER,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        UNIQUE(company_id, limit_key)
+    )
+    """,
+    """
+    -- Numbers, never content. What a company is charged for and what it is
+    -- measured against — counted per month so a monthly allowance has
+    -- something to compare with, and per channel and department so the owner
+    -- can see where it went.
+    --
+    -- In the control plane rather than the company's own database because
+    -- billing must survive a tenant database that will not open, and because
+    -- the console has to read a thousand companies' totals without holding a
+    -- thousand encryption keys.
+    CREATE TABLE IF NOT EXISTS usage_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        period TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        channel TEXT,
+        department_id INTEGER,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        UNIQUE(company_id, period, metric, channel, department_id)
+    )
+    """,
+    """
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         workspace_id INTEGER,
@@ -378,6 +426,11 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_phone ON channel_accounts(phone_number_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_instagram ON channel_accounts(instagram_business_id)",
     "CREATE INDEX IF NOT EXISTS idx_subscriptions_company ON subscriptions(company_id)",
+    "CREATE INDEX IF NOT EXISTS idx_plan_overrides_company ON company_plan_overrides(company_id)",
+    # The billing read is always "this company, this month", and the console's
+    # is "this month, every company" — so period leads.
+    "CREATE INDEX IF NOT EXISTS idx_usage_company_period ON usage_records(company_id, period, metric)",
+    "CREATE INDEX IF NOT EXISTS idx_usage_period ON usage_records(period, metric)",
     "CREATE INDEX IF NOT EXISTS idx_audit_log_company ON audit_log(company_id, created_at)",
     """
     CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_external_account

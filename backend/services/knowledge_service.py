@@ -32,6 +32,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.services.plan_service import PlanLimitExceeded, plan_service
 from database.manager import database_manager
 
 
@@ -84,6 +85,28 @@ class KnowledgeService:
             )
 
         return status
+
+    @staticmethod
+    def _assert_knowledge_available(conn, company_id: int) -> None:
+        """Refuse an item the plan has no room for.
+
+        Raises `ValueError`, which every caller of `create_item` already turns
+        into a 400 — the message carries the limit and the usage, so an owner
+        reads what to do rather than only that something failed.
+        """
+        row = conn.execute(
+            "SELECT COUNT(*) AS total FROM knowledge_items WHERE company_id = ?",
+            (int(company_id),),
+        ).fetchone()
+
+        try:
+            plan_service.check(
+                company_id,
+                "max_knowledge_items",
+                int(row["total"]) if row else 0,
+            )
+        except PlanLimitExceeded as exc:
+            raise ValueError(str(exc)) from exc
 
     def _require_category(self, conn, *, company_id: int, category_id: int) -> None:
         row = conn.execute(
@@ -210,6 +233,16 @@ class KnowledgeService:
                 self._require_category(
                     conn, company_id=company_id, category_id=int(category_id)
                 )
+
+            # Counted here, inside the company's own database, against a limit
+            # that lives in the control plane. The two databases are opened in
+            # sequence rather than joined — SQLite cannot join across files,
+            # and the encryption keys are different.
+            #
+            # Every row counts, not only active ones. An archived item is
+            # storage the company is still using, and counting only the active
+            # ones would let a base grow without limit by archiving as it goes.
+            self._assert_knowledge_available(conn, company_id)
 
             cursor = conn.execute(
                 """

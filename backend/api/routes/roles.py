@@ -15,6 +15,7 @@ from backend.services.auth_service import (
     get_current_user,
     require_permission,
 )
+from backend.services.plan_service import PlanLimitExceeded, plan_service
 from config.settings import config
 from database.manager import database_manager, utc_now_iso
 
@@ -24,6 +25,37 @@ router = APIRouter(prefix="/api/admin/access", tags=["Roles and Permissions"])
 
 def _company_id(current_user: dict) -> int:
     return auth_service.resolve_company_id(current_user)
+
+
+def _active_member_count(conn, company_id: int) -> int:
+    row = conn.execute(
+        """
+        SELECT COUNT(*) AS total FROM company_users
+        WHERE company_id = ? AND status = 'active'
+        """,
+        (int(company_id),),
+    ).fetchone()
+
+    return int(row["total"]) if row else 0
+
+
+def _assert_seat_available(conn, company_id: int) -> None:
+    """Refuse a seat the plan does not have.
+
+    Counted on active memberships, and checked on **both** paths that can
+    produce one. Creating a user is the obvious one; the other is
+    `PATCH /users/{id}` setting an existing membership back to `active`, which
+    is a seat appearing without an INSERT. Guarding only the create would leave
+    a plan limit that anybody could step around by disabling a member and
+    re-enabling them.
+    """
+    try:
+        plan_service.check(company_id, "max_users", _active_member_count(conn, company_id))
+    except PlanLimitExceeded as exc:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=exc.as_detail(),
+        ) from exc
 
 
 def _require_access_admin(current_user: dict, company_id: int) -> None:
@@ -224,6 +256,11 @@ def create_user(payload: UserCreateRequest, current_user: dict = Depends(get_cur
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        # Before the account is created, not after. `create_user` writes a row
+        # to the shared `users` table; refusing afterwards would leave an
+        # orphaned account belonging to no company, and the same email could
+        # then never be used again.
+        _assert_seat_available(conn, company_id)
     try:
         user_id = auth_service.create_user(
             email=payload.email,
@@ -255,6 +292,22 @@ def update_user_assignment(user_id: int, payload: UserAssignmentRequest, current
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+
+        existing = conn.execute(
+            "SELECT status FROM company_users WHERE company_id = ? AND user_id = ? LIMIT 1",
+            (company_id, user_id),
+        ).fetchone()
+
+        # Only when this actually adds a seat. Re-saving an already-active
+        # member — a role change, a branch change — must not be refused for
+        # occupying the seat it already occupies.
+        if (
+            payload.status == "active"
+            and existing
+            and str(existing["status"]) != "active"
+        ):
+            _assert_seat_available(conn, company_id)
+
         cursor = conn.execute("""
             UPDATE company_users
             SET role_id = ?, branch_id = ?, status = ?

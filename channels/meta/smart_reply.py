@@ -19,6 +19,7 @@ from backend.services.conversation_control_service import conversation_control_s
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.message_service import message_service
 from backend.services.pending_reply_service import pending_reply_service
+from backend.services.plan_service import UNLIMITED, plan_service
 from channels.meta.logger import log_meta_event
 from channels.sender import send_text
 from gateway.message_gateway import message_gateway
@@ -28,6 +29,40 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DELAY_SECONDS = 20
 HUMAN_MODE_POLL_SECONDS = 10
+
+# One batch produces one reply, so the batch is the unit that is counted — not
+# the customer's messages inside it, and not the two model calls the reply
+# happens to make (`ai_knowledge_matcher` and `ai_router`). An owner reading
+# "assistant replies this month" counts what their customers received, and any
+# other unit makes the number on the screen unexplainable.
+AI_REPLY_METRIC = "ai_replies"
+
+
+def _ai_allowance_spent(company_id: int) -> bool:
+    """Whether this company has used its monthly assistant allowance.
+
+    Never raises. A billing lookup that can fail a reply costs a customer their
+    answer over a number, so an unreadable control plane answers "not spent" —
+    the same direction every other guard in this codebase fails.
+    """
+    try:
+        allowance = plan_service.limit(company_id, "max_ai_messages")
+
+        if allowance == UNLIMITED:
+            return False
+
+        used = plan_service.usage_total(
+            company_id=company_id, metric=AI_REPLY_METRIC
+        )
+
+        return used >= allowance
+    except Exception:
+        logger.exception(
+            "Could not check the assistant allowance for company %s; replying.",
+            company_id,
+        )
+
+        return False
 
 
 def _ai_settings(company_id: int) -> dict[str, Any]:
@@ -136,6 +171,36 @@ def _process_batch(batch: dict[str, Any]) -> bool:
         )
         return False
 
+    # The monthly assistant allowance, checked before the model is called
+    # rather than after — an allowance that still pays for the reply it refused
+    # is not an allowance.
+    #
+    # Running out switches the **assistant** off, not the platform. The
+    # customer's messages are already stored and already in the inbox, so the
+    # team answers by hand; nothing is said to the customer, because what this
+    # company pays is not their customer's business. The batch is completed
+    # rather than deferred: retrying it every few seconds for the rest of the
+    # month would spend the sweep on work that cannot succeed.
+    if _ai_allowance_spent(company_id):
+        pending_reply_service.complete(company_id, batch["id"])
+        diagnostics_service.record(
+            event_type="ai_reply_over_plan_limit",
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            severity="warning",
+            status="cancelled",
+            data={
+                "reason": "max_ai_messages",
+                "limit": plan_service.limit(company_id, "max_ai_messages"),
+                "used": plan_service.usage_total(
+                    company_id=company_id, metric=AI_REPLY_METRIC
+                ),
+                "message_count": len(messages),
+            },
+        )
+        return False
+
     # A human holding the conversation must not be talked over. The batch waits
     # rather than being discarded, so nothing the customer sent is lost.
     if not conversation_control_service.is_ai_handling(
@@ -224,6 +289,17 @@ def _process_batch(batch: dict[str, Any]) -> bool:
         )
 
     duration_ms = int((time.perf_counter() - started_at) * 1000)
+
+    # Counted after the send succeeded, so a provider rejection is not billed.
+    # Numbers only — the channel and the department, never a word of what was
+    # said. Recording never raises: a counter that can fail a reply would cost
+    # the customer an answer that has already been delivered.
+    plan_service.record_usage(
+        company_id=company_id,
+        metric=AI_REPLY_METRIC,
+        channel=channel,
+        department_id=(state or {}).get("department_id"),
+    )
 
     message_service.save_message(
         company_id=company_id,

@@ -175,3 +175,72 @@ than clamping. Clamping a stored `9` to `1.0` means nothing ever clears the bar
 and the assistant goes silent; clamping a stored `-3` to `0.0` switches the
 guardrail off. Both turn bad data into the most extreme setting available,
 without a word anywhere.
+
+## D-014 — Allowances are enforced, and the ceilings they sit inside are not theirs
+
+`plans.max_users`, `max_channel_accounts`, `max_knowledge_items` and
+`max_ai_messages` were read in exactly one place — the dashboard, to draw a
+number on a card. Nothing refused a sixth user on a five-user plan. There was no
+`usage_records` table, so `max_ai_messages` had nothing to count against, and
+the four feature flags were read nowhere at all.
+
+Two resolution defects came first, because they made "which plan is this
+company on" answer differently depending on who asked:
+
+* **A blank expiry meant expired.** The dashboard's check returned False when
+  `expires_at` was empty — while the console's own form says "Leave the date
+  empty for a plan that does not expire". Every company deliberately set up not
+  to expire read as unsubscribed.
+* **An expired subscription was still the plan.** The console's query filtered
+  on `status = 'active'` and never looked at `expires_at`, so a subscription
+  that ran out last year went on naming the company's plan.
+
+Two answers to one question is how they came to disagree. `plan_service` is the
+one answer now and both callers use it.
+
+### Zero is unlimited
+
+Every allowance defaults to 0 in the schema. Read as "none allowed", a plan
+created by leaving the fields blank would forbid its customer from adding a
+single user — a plan nobody could use, produced by not typing anything. A plan
+that genuinely wants to withhold something uses the feature flags, which say
+what they mean.
+
+### No subscription does not mean no workspace
+
+A company with no active subscription gets every allowance as unlimited rather
+than zero. Zero would mean a billing lapse silently locks a business out of its
+own inbox. What a lapse costs is a decision for an operator to make explicitly,
+not a side effect of a limit lookup. Features are the exception: one nobody
+paid for was never theirs to keep.
+
+### Every limit is guarded on two paths
+
+A limit checked only where a row is created is one anybody can step around by
+disabling a member and re-enabling them. Seats and channels are therefore
+checked on the create **and** on the status change back to active — and not on
+a save that leaves an already-active row active, which would refuse a rename
+for occupying the slot it already occupies. Knowledge counts every row, not
+only the active ones: an archived item is storage still in use, and counting
+only active ones would let a base grow without limit by archiving as it goes.
+
+### Running out of assistant replies switches off the assistant, not the platform
+
+The monthly allowance is checked before the model is called — an allowance that
+still pays for the reply it refused is not an allowance. Past it, the customer's
+messages are still stored and still in the inbox, and the team answers by hand.
+Nothing is said to the customer: what a company pays is not their customer's
+business.
+
+### These are not the platform's ceilings
+
+Everything here is a commercial number an operator sets and a customer buys, and
+it sits *inside* the hard ceilings that protect the process (body size, events
+per request, queue depth, cache size) which no plan can raise. Keeping the two
+apart is what stops an Enterprise plan from being able to purchase a value that
+stalls the server.
+
+### Every guard fails open
+
+An unreadable control plane allows the write and allows the reply. Refusing
+would take a working company's workspace down over a number nobody changed.

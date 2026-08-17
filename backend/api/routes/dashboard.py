@@ -9,12 +9,12 @@ always read zero — those now count the real records.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.services.auth_service import auth_service, require_permission
+from backend.services.plan_service import plan_service
 from database.manager import DatabaseError, database_manager
 
 
@@ -34,56 +34,30 @@ def _active_subscription(conn, company_id: int) -> dict[str, Any] | None:
 
     The allowances stay, because an employee who is about to be refused for
     exceeding one needs to be able to see it coming.
-    """
-    row = conn.execute(
-        """
-        SELECT
-            subscriptions.id,
-            subscriptions.company_id,
-            subscriptions.plan_id,
-            subscriptions.status,
-            subscriptions.starts_at,
-            subscriptions.expires_at,
-            subscriptions.grace_period_until,
-            plans.name AS plan_name,
-            plans.code AS plan_code,
-            plans.max_users,
-            plans.max_channel_accounts,
-            plans.max_ai_messages,
-            plans.max_knowledge_items
-        FROM subscriptions
-        JOIN plans ON plans.id = subscriptions.plan_id
-        WHERE subscriptions.company_id = ?
-        ORDER BY subscriptions.id DESC
-        LIMIT 1
-        """,
-        (company_id,),
-    ).fetchone()
 
-    return dict(row) if row else None
+    Resolution moved to `plan_service`. It used to be answered here and again
+    in `platform_service`, and the two disagreed: this one treated a blank
+    expiry as expired — while the console's own form says "Leave the date empty
+    for a plan that does not expire" — and the other ignored `expires_at`
+    entirely, so a subscription that ran out last year still named the plan.
+    """
+    subscription = plan_service.subscription(company_id, conn=conn)
+
+    if not subscription:
+        return None
+
+    # The price is not selected by `plan_service` either, but strip anything
+    # commercial defensively: this response is the widest-read one on the
+    # platform and a column added to `plans` must not reach it by accident.
+    return {
+        key: value
+        for key, value in subscription.items()
+        if key not in ("price_monthly",)
+    }
 
 
 def _subscription_is_active(subscription: dict[str, Any] | None) -> bool:
-    if not subscription:
-        return False
-
-    if subscription.get("status") not in ("active", "trial", "grace_period"):
-        return False
-
-    expires_at = subscription.get("expires_at")
-
-    if not expires_at:
-        return False
-
-    try:
-        expiry = datetime.fromisoformat(str(expires_at))
-    except (TypeError, ValueError):
-        return False
-
-    if expiry.tzinfo is None:
-        expiry = expiry.replace(tzinfo=timezone.utc)
-
-    return expiry >= datetime.now(timezone.utc)
+    return plan_service.is_active(subscription)
 
 
 @router.get("/summary")

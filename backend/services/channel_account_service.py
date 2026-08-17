@@ -19,6 +19,7 @@ from typing import Any
 from backend.security import keyring
 from backend.security.keyring import CorruptedKeyMaterial
 from backend.services.business_department_service import business_department_service
+from backend.services.plan_service import PlanLimitExceeded, plan_service
 from database.manager import database_manager
 
 
@@ -180,6 +181,39 @@ class ChannelAccountService:
 
         return department_id
 
+    @staticmethod
+    def _active_account_count(conn: Any, company_id: int) -> int:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS total FROM channel_accounts
+            WHERE company_id = ? AND status = 'active'
+            """,
+            (int(company_id),),
+        ).fetchone()
+
+        return int(row["total"]) if row else 0
+
+    def _assert_channel_available(self, conn: Any, company_id: int) -> None:
+        """Refuse a channel the plan does not have room for.
+
+        The bundle limits **how many** accounts, never which kinds: a
+        three-channel plan may be spent on three Instagram accounts, or on one
+        each of three types. So this counts rows and nothing else.
+
+        Counted on active accounts, and applied on both paths that can produce
+        one — creating an account, and switching a disabled one back to active.
+        Guarding only the create would leave a limit anybody could step around
+        by disabling an account and re-enabling it.
+        """
+        try:
+            plan_service.check(
+                company_id,
+                "max_channel_accounts",
+                self._active_account_count(conn, company_id),
+            )
+        except PlanLimitExceeded as exc:
+            raise ChannelAccountError(str(exc)) from exc
+
     def _assert_routing_id_is_free(
         self,
         conn,
@@ -244,6 +278,8 @@ class ChannelAccountService:
                     routing_field=routing_field,
                     routing_value=values[routing_field],
                 )
+
+                self._assert_channel_available(conn, company_id)
 
                 cursor = conn.execute(
                     """
@@ -391,6 +427,16 @@ class ChannelAccountService:
                         routing_value=values[routing_field],
                         exclude_id=account_id,
                     )
+
+                # Only when this puts an account back into service. Re-saving an
+                # account that is already active — renaming it, pointing it at
+                # a different department — must not be refused for occupying
+                # the slot it already occupies.
+                if (
+                    str(values.get("status") or "") == "active"
+                    and str(existing["status"]) != "active"
+                ):
+                    self._assert_channel_available(conn, company_id)
 
                 assignments.append("updated_at = ?")
                 params.extend([utc_now_iso(), account_id, company_id])

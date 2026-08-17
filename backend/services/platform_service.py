@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.security import keyring
+from backend.services.plan_service import plan_service
 from database.manager import DatabaseError, database_manager
 
 
@@ -324,6 +325,19 @@ class PlatformService:
         return owners
 
     def _plan_by_company(self, conn: Any) -> dict[int, dict[str, Any]]:
+        """The current subscription for every company, with whether it entitles.
+
+        The `WHERE status = 'active'` filter used to be the whole test, and it
+        never looked at `expires_at` — so a subscription that ran out last year
+        went on naming the company's plan in the console, and an operator
+        reviewing accounts had no way to see it had lapsed.
+
+        Every company's latest row is returned now, expired or not, with
+        `subscription_active` saying whether it still counts. The console needs
+        the expired row: hiding it would leave an operator looking at a company
+        with no plan at all, which is a different and much less actionable
+        thing than a plan that ended on a date.
+        """
         rows = conn.execute(
             """
             SELECT
@@ -332,12 +346,12 @@ class PlatformService:
                 subscriptions.status AS subscription_status,
                 subscriptions.starts_at,
                 subscriptions.expires_at,
+                subscriptions.grace_period_until,
                 plans.code AS plan_code,
                 plans.name AS plan_name,
                 plans.price_monthly
             FROM subscriptions
             JOIN plans ON plans.id = subscriptions.plan_id
-            WHERE subscriptions.status = 'active'
             ORDER BY subscriptions.id DESC
             """
         ).fetchall()
@@ -345,7 +359,20 @@ class PlatformService:
         plans: dict[int, dict[str, Any]] = {}
 
         for row in rows:
-            plans.setdefault(int(row["company_id"]), dict(row))
+            company_id = int(row["company_id"])
+
+            if company_id in plans:
+                continue
+
+            record = dict(row)
+            record["subscription_active"] = plan_service.is_active(
+                {
+                    "status": record.get("subscription_status"),
+                    "expires_at": record.get("expires_at"),
+                    "grace_period_until": record.get("grace_period_until"),
+                }
+            )
+            plans[company_id] = record
 
         return plans
 
@@ -402,6 +429,10 @@ class PlatformService:
         company["plan_code"] = plan["plan_code"] if plan else None
         company["plan_name"] = plan["plan_name"] if plan else None
         company["plan_expires_at"] = plan["expires_at"] if plan else None
+        # False for a company with no subscription at all, and for one whose
+        # subscription lapsed. The console needs to tell those apart from a
+        # company that is paid up, which the plan name alone never said.
+        company["plan_active"] = bool(plan and plan.get("subscription_active"))
 
         path = database_manager.tenant_path(company_id)
         company["database_registered"] = bool(company.get("database_filename"))
