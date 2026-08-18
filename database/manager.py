@@ -57,6 +57,27 @@ BUSY_TIMEOUT_MS = 15_000
 logger = logging.getLogger(__name__)
 
 
+# How many databases this thread currently has open, and what is waiting for it
+# to let go of all of them. Thread-local because a request handler and a worker
+# sweep have nothing to say to each other.
+_open = threading.local()
+
+
+def _depth() -> int:
+    return getattr(_open, "depth", 0)
+
+
+def _deferred() -> list:
+    queue = getattr(_open, "deferred", None)
+
+    if queue is None:
+        queue = []
+        _open.deferred = queue
+
+    return queue
+
+
+
 class DatabaseError(RuntimeError):
     """Raised when a database cannot be opened or provisioned."""
 
@@ -192,6 +213,70 @@ class DatabaseManager:
         return connection
 
     @contextmanager
+    def _held(self, connection) -> Iterator[Any]:
+        """Yield a connection, and run the deferred work once it is let go.
+
+        The counting is what makes `after_release` possible. See that method
+        for what it is for; the important part here is the order in the
+        `finally` — the connection is closed, *then* the depth drops, *then*
+        the queue runs. A callback that opens a database of its own must not
+        find this thread still holding the write lock it is waiting for.
+        """
+        _open.depth = _depth() + 1
+
+        try:
+            yield connection
+        finally:
+            connection.close()
+            _open.depth = _depth() - 1
+
+            if _depth() == 0:
+                self._run_deferred()
+
+    def _run_deferred(self) -> None:
+        queue = _deferred()
+
+        while queue:
+            callback = queue.pop(0)
+
+            try:
+                callback()
+            except Exception:  # noqa: BLE001
+                # Deferred work is bookkeeping. It has already been decided
+                # that it must not change the outcome of whatever queued it,
+                # and by now that outcome has been returned anyway.
+                logger.exception("Deferred database work failed")
+
+    def after_release(self, callback) -> None:
+        """Run `callback` once this thread holds no database open.
+
+        For writes that are a *side effect* of an operation rather than part of
+        it — an audit row, a security mirror. Called from inside an open
+        transaction, such a write opens a second connection to a file this
+        thread has already locked, and waits for a lock only it can release.
+        SQLite cannot detect that; it simply blocks until `busy_timeout`
+        expires and then fails.
+
+        That is not hypothetical. Refusing a channel connection over a plan
+        limit did exactly this: `create_account` holds `BEGIN IMMEDIATE` on the
+        control database, the refusal is mirrored to the control database, and
+        the mirror waited on its own caller. One refusal took **fifteen
+        seconds** and then lost the security record — with no concurrency at
+        all, one request on an idle server. Under load the stalled transaction
+        blocked every other writer too.
+
+        Deferring rather than sharing the caller's connection is deliberate:
+        sharing would put the record inside the caller's transaction, and the
+        transaction that records a refusal is the one that gets rolled back.
+        The record has to outlive it.
+        """
+        if _depth() == 0:
+            callback()
+            return
+
+        _deferred().append(callback)
+
+    @contextmanager
     def control(self) -> Iterator[Any]:
         """Open the shared control-plane database."""
         self._ensure_control_schema()
@@ -199,10 +284,9 @@ class DatabaseManager:
             self._control_path,
             _derive_control_key(self.master_key()),
         )
-        try:
-            yield connection
-        finally:
-            connection.close()
+
+        with self._held(connection) as conn:
+            yield conn
 
     @contextmanager
     def tenant(self, company_id: int) -> Iterator[Any]:
@@ -216,10 +300,9 @@ class DatabaseManager:
             )
 
         connection = self._open(path, self.company_key(company_id))
-        try:
-            yield connection
-        finally:
-            connection.close()
+
+        with self._held(connection) as conn:
+            yield conn
 
     def tenant_path(self, company_id: int) -> Path:
         return self._tenant_dir / f"company_{int(company_id)}.db"

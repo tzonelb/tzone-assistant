@@ -1006,3 +1006,102 @@ likely to be malformed.
 Every registry this audit created is now empty: no setting is unimplemented, no
 permission is unenforced, no action is unraised, no table is write-only, no
 shipped file is orphaned, and no module is ungated.
+
+## D-035 — An audit write that waited fifteen seconds on its own caller
+
+Found by pressure, not by reading, and it had been in the source the whole
+time: refusing one channel connection over a plan limit took **15.06 seconds**
+and then lost the security record it was refusing about. No concurrency, one
+request, an idle machine.
+
+`create_account` opens the control database with `BEGIN IMMEDIATE` and checks
+the plan limit inside that transaction — correctly, because the check and the
+insert have to be atomic or two requests racing both walk past a limit of one.
+The refusal is mirrored to the control plane as a security event, and the
+mirror opened a **second** connection to the control database and tried to
+write. That connection waited for a lock held by its own caller on its own
+thread. SQLite cannot detect that and does not try; it blocks until
+`busy_timeout` expires and then fails. `_mirror` catches its own failure — by
+design, so that recording a refusal can never change the refusal — so the whole
+thing was silent.
+
+Under load it was worse than slow. The stalled transaction holds the control
+database's write lock for the full fifteen seconds, and the control database is
+where sessions, users and channel accounts live. One company hitting its plan
+limit stalled writes for every company on the platform.
+
+Two things had hidden it. The existing test asserts the refusal *is recorded*
+and passes, because the record it checks is the one in the company's own
+database — a different file, no contention. And a fifteen-second success looks
+exactly like a slow test.
+
+**The mechanism, not the instance.** `DatabaseManager.after_release` runs
+queued work when the thread has closed every database. `activity_service`
+routes both its writes through it. Queued rather than joined to the caller's
+transaction on purpose: sharing the connection would have removed the stall
+too, and would have thrown the record away every time, because the transaction
+that records a refusal is precisely the one that gets rolled back.
+
+A probe on `control()` was used to enumerate the rest of the platform rather
+than reason about it. Of the four places a plan limit is checked, two hold a
+write lock at the moment they check (`create_account` and `update_account`,
+both `BEGIN IMMEDIATE`) and two do not — the checks in `roles.py` and
+`knowledge_service.py` run before any write in their block, so no lock is held
+and no deadlock was possible. That was measured, not assumed.
+
+Limit worth stating: deferred work is lost if the process dies between the
+transaction closing and the queue draining. It was already best-effort — the
+old code caught and swallowed its own failures — so this trades nothing, but it
+is not durable and should not be relied on as if it were.
+
+## D-036 — The settings section from the URL was never checked
+
+`_normalize_section` was already written, already correct, and already wired
+into `set_override` and `clear_override` — the two Super Admin methods. The
+company's own `get_section` and `update_section`, in the same class a few lines
+away, used a bare `.strip().lower()`.
+
+So `PUT /api/settings/anything` stored a row under whatever name was in the
+path. Not a leak and not a traversal — it is a column value, not a file — but
+nothing ever read it back, so the only visible effect was one company's
+settings table and its settings-history log growing by a row and up to a couple
+of hundred kilobytes per request, from a door that needs only `settings.manage`.
+
+This is the third finding in this audit with the same shape: the reasoning was
+done, written down, and applied to the neighbouring thing. `branch_id` sat in
+the same argument list as a `department_id` that *was* checked. `website` was
+removed from two of the five places that offered it. A check that exists and is
+not called reads, in review, exactly like a check that is called.
+
+## D-037 — What the pressure found, and what it did not
+
+Six areas were put under load. Two produced defects, above. The other four were
+clean, and the mutations that prove the tests could have failed are recorded
+here so that "clean" means something.
+
+* **Duplicate replies.** Twelve workers claiming one due batch simultaneously:
+  exactly one claim, and a later sweep finds nothing while the lease holds.
+* **Conversation ownership.** Eight employees taking over at once: exactly one
+  owner, the rest refused rather than crashed.
+* **Plan limits under concurrency.** Ten simultaneous connections against a
+  limit of three: three created, seven refused, none by database error. The
+  test detects both failure modes — weakening the transaction from `IMMEDIATE`
+  to `DEFERRED` keeps the count correct and turns the polite refusal into a
+  500, and an earlier version of the test, which asserted only the count,
+  stayed green through exactly that.
+* **Login lockout.** Twenty guesses released on a barrier: the account locks,
+  every failure is counted exactly once, one under the threshold does not lock,
+  and an unlock survives the burst that caused it. Three separate mutations of
+  the lockout code each fail it.
+
+Two limits stated rather than glossed. The walk-every-page test **cannot**
+detect a missing `ORDER BY` tiebreaker — dropping `, id DESC` leaves it green,
+because SQLite happens to fall back to rowid order for that plan. That is
+incidental and can change with an index or a version, so the tiebreaker is
+asserted separately against the query text. And the concurrency harness itself
+had to be fixed before any of its results meant anything: services bind
+`database_manager` by value at import, so a service first imported during an
+earlier test keeps that test's database for the life of the process, and
+rebinding by identity silently stopped working after the first test in a
+session. A race test quietly reading the wrong database reports "no race" no
+matter what the code does.

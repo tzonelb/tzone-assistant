@@ -242,6 +242,49 @@ class ActivityService:
         if kind not in KINDS:
             kind = "change"
 
+        database_manager.after_release(
+            lambda: self._write(
+                company_id=company_id,
+                action=action,
+                category=category,
+                kind=kind,
+                actor_user_id=actor_user_id,
+                actor_label=actor_label,
+                target_type=target_type,
+                target_id=target_id,
+                summary=summary,
+                before=before,
+                after=after,
+                ip_address=ip_address,
+                severity=severity,
+            )
+        )
+
+    def _write(
+        self,
+        *,
+        company_id: int,
+        action: str,
+        category: str,
+        kind: str,
+        actor_user_id: int | None,
+        actor_label: str | None,
+        target_type: str | None,
+        target_id: Any,
+        summary: str | None,
+        before: Any,
+        after: Any,
+        ip_address: str | None,
+        severity: str,
+    ) -> None:
+        """The body of `record`, run once this thread holds no database open.
+
+        Split out rather than inlined because the caller is very often inside
+        an open transaction on the very database being written to, and a second
+        connection would then wait on its caller until `busy_timeout` expired.
+        `DatabaseManager.after_release` documents the fifteen-second refusal
+        that made this necessary.
+        """
         try:
             with database_manager.tenant(int(company_id)) as conn:
                 conn.execute(
@@ -367,6 +410,29 @@ class ActivityService:
         that, and copying it here would walk around the tenant boundary the rest
         of this platform keeps.
         """
+        database_manager.after_release(
+            lambda: self._mirror_write(
+                company_id=company_id,
+                action=action,
+                actor_user_id=actor_user_id,
+                target_type=target_type,
+                target_id=target_id,
+                ip_address=ip_address,
+                summary=summary,
+            )
+        )
+
+    def _mirror_write(
+        self,
+        *,
+        company_id: int | None,
+        action: str,
+        actor_user_id: int | None,
+        target_type: str | None,
+        target_id: Any,
+        ip_address: str | None,
+        summary: str | None,
+    ) -> None:
         try:
             with database_manager.control() as conn:
                 conn.execute(

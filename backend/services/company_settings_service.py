@@ -122,7 +122,14 @@ class CompanySettingsService:
 
     def get_section(self, company_id: int, section: str) -> dict[str, Any]:
         company_id = int(company_id)
-        normalized = section.strip().lower()
+        # Validated here, not only on the Super Admin override paths. The
+        # section name arrives from the URL — `GET/PUT /api/settings/{section}`
+        # — and `_normalize_section` existed but was wired only into
+        # `set_override` and `clear_override`. The reasoning had been done and
+        # applied to the neighbouring pair of methods, which is the same shape
+        # as the `branch_id` leak: the check sat next to the field that needed
+        # it and was not extended to it.
+        normalized = self._normalize_section(section)
         defaults = self._defaults_for(company_id, normalized)
 
         with database_manager.tenant(company_id) as conn:
@@ -210,7 +217,12 @@ class CompanySettingsService:
         actor_user_id: int | None,
     ) -> dict[str, Any]:
         company_id = int(company_id)
-        normalized = section.strip().lower()
+        # Unvalidated, this stored a row under whatever name was in the URL. No
+        # screen ever read it back, so nothing looked wrong — the visible cost
+        # was one company's settings table and its settings-history log growing
+        # by a row and up to a couple of hundred kilobytes per request, from a
+        # door that only needs `settings.manage`.
+        normalized = self._normalize_section(section)
         current = self.get_section(company_id, normalized)
         locked = set(current["locked_keys"])
         forbidden = sorted(key for key in values if key in locked)

@@ -34,7 +34,12 @@ def get_company_setting_section(
     section: str,
     current_user: dict[str, Any] = Depends(require_permission("settings.view")),
 ):
-    return company_settings_service.get_section(_company_id(current_user), section)
+    try:
+        return company_settings_service.get_section(
+            _company_id(current_user), section
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.put("/{section}")
