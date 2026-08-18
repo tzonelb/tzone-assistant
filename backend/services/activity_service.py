@@ -82,6 +82,20 @@ CATEGORIES = (
 )
 
 
+def _loads(raw: Any) -> Any:
+    """Stored JSON, or None. A row that will not parse must not take the whole
+    history down with it — the point of reading these is to find out what
+    happened, and that is most needed when something is wrong."""
+    if not raw:
+        return None
+
+    try:
+        return json.loads(raw)
+    except (TypeError, ValueError):
+        logger.warning("Unreadable JSON in an audit row")
+        return None
+
+
 class Action:
     """Every action name in one place.
 
@@ -496,6 +510,82 @@ class ActivityService:
             "actions": sorted({str(row["action"]) for row in rows}),
         }
 
+    # ------------------------------------------------------------ the detail
+    #
+    # `activity_log` records that a settings section or a customer changed, and
+    # which keys, never the values — a settings section is an open bag and a
+    # customer field is somebody's phone number, and the log is read by the
+    # whole company.
+    #
+    # The values do exist. `company_setting_audit` and `customer_audit` have
+    # held the before-and-after since each shipped, and no endpoint has ever
+    # read either. Rows accumulated where nobody could open them and nothing
+    # pruned them.
+    #
+    # These two readers are what makes them a record instead of storage. They
+    # sit behind the same permission as the thing they describe, and they are
+    # deliberately narrow: the history of *one* section or *one* customer,
+    # asked for on purpose, rather than a feed of every value the company has
+    # ever held.
+
+    def settings_history(
+        self, *, company_id: int, section: str, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """What a settings section held before and after each change."""
+        with database_manager.tenant(int(company_id)) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, section, actor_user_id, old_value_json,
+                       new_value_json, created_at
+                FROM company_setting_audit
+                WHERE company_id = ? AND section = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (int(company_id), str(section), max(1, min(int(limit), 200))),
+            ).fetchall()
+
+        return [
+            {
+                "id": int(row["id"]),
+                "section": row["section"],
+                "actor_user_id": row["actor_user_id"],
+                "before": _loads(row["old_value_json"]),
+                "after": _loads(row["new_value_json"]),
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
+    def customer_history(
+        self, *, company_id: int, customer_id: int, limit: int = 50
+    ) -> list[dict[str, Any]]:
+        """What changed on one customer's record, and what it was set to."""
+        with database_manager.tenant(int(company_id)) as conn:
+            rows = conn.execute(
+                """
+                SELECT id, customer_id, actor_user_id, action, data_json,
+                       created_at
+                FROM customer_audit
+                WHERE company_id = ? AND customer_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (int(company_id), int(customer_id), max(1, min(int(limit), 200))),
+            ).fetchall()
+
+        return [
+            {
+                "id": int(row["id"]),
+                "customer_id": int(row["customer_id"]),
+                "actor_user_id": row["actor_user_id"],
+                "action": row["action"],
+                "changed": _loads(row["data_json"]),
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ]
+
     # -------------------------------------------------------------- retention
 
     def prune(self, company_id: int) -> dict[str, int]:
@@ -514,6 +604,22 @@ class ActivityService:
                         (kind, cutoff),
                     )
                     removed[kind] = int(cursor.rowcount or 0)
+
+                # The detail behind a change entry, pruned on the same clock as
+                # the entry it belongs to. Keeping it longer would leave values
+                # in the database after the record of who changed them is gone;
+                # keeping it shorter would leave an entry pointing at a detail
+                # that no longer exists.
+                detail_cutoff = (
+                    now - timedelta(days=self.RETENTION_DAYS["change"])
+                ).isoformat()
+
+                for table in ("company_setting_audit", "customer_audit"):
+                    cursor = conn.execute(
+                        f"DELETE FROM {table} WHERE created_at < ?",
+                        (detail_cutoff,),
+                    )
+                    removed[table] = int(cursor.rowcount or 0)
 
                 conn.commit()
         except Exception:

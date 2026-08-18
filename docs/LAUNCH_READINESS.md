@@ -83,9 +83,17 @@ being true on the day somebody checked. Names are the tests that hold it.
       `test_notification_preferences.py`
 - [x] A company can create, rename, retire and delete its own branches, and
       cannot touch another company's. `test_branches.py`
-- [x] No table is read by something and impossible to insert into, and every
-      write-only table is declared with what reads the same information
-      instead. `test_no_table_is_write_only.py`
+- [x] No table is read by something and impossible to insert into, and none is
+      written by something and readable by nothing. Both registries are empty.
+      `test_no_table_is_write_only.py`
+- [x] The old value of a setting and of a customer field can be read back, each
+      behind the permission that guards the thing it describes, and both are
+      pruned with the log entry they belong to. `test_audit_detail.py`
+- [x] Every knob the platform reads is documented, every documented knob is
+      read, and every import is installable.
+      `test_configuration_is_documented.py`
+- [x] No file shipped under `config/`, `features/` or `data/` is loaded by
+      nothing. `test_no_shared_file_is_orphaned.py`
 
 ## Security — manual, before launch
 
@@ -172,7 +180,7 @@ every item on it depends on the real server, the real domain and a real mailbox,
 so none of it can be closed from a development machine — together with manual
 QA, merge and the deployment record.
 
-Two gaps are known and open rather than closed, recorded here so neither is
+One gap is known and open rather than closed, recorded here so it is not
 discovered as a surprise.
 
 **Branches have no screen.** They can now be created, renamed, retired and
@@ -182,14 +190,13 @@ channel — fill in as soon as one exists. What is missing is a form for managin
 them, which is a design change and therefore the product owner's decision
 rather than one to take while closing defects.
 
-**`company_setting_audit` and `customer_audit` are written and never read.**
-Both hold the detailed before-and-after of a change whose occurrence *is*
-readable in the company's activity log — which records field names only,
-because a settings value can hold a workspace code and a customer field holds
-somebody's phone number. The detail is kept for the "what was this value
-before" screen the roadmap calls for. Until that exists, those rows are storage
-nobody can open. `tests/test_no_table_is_write_only.py` holds the list and
-fails if a third one appears.
+That is the only one. The second gap this section used to record —
+`company_setting_audit` and `customer_audit` written and never read — is
+closed. `/api/activity/settings/{section}/history` and
+`/api/activity/customers/{id}/history` read them, each behind the permission
+that guards the thing it describes rather than behind the log's own, because
+the values are the sensitive half; and both tables are now pruned on the same
+clock as the log entry they belong to.
 
 The state is therefore **not yet approved for launch**, and the reason is now a
 short, specific list rather than an open question.

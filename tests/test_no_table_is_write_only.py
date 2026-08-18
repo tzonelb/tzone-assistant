@@ -25,28 +25,18 @@ ROOT = Path(__file__).resolve().parent.parent
 SEARCH_ROOTS = ("backend", "core", "channels", "gateway", "tools", "database")
 
 
-# Written, and no endpoint reads them. Each is the detailed before-and-after
-# behind an event that *is* readable through the company's activity log, which
-# carries the actor, the address and a retention policy. The detail is kept for
-# the "what was this value before" screen the roadmap calls for; until that
-# exists, these rows are storage nobody can open.
+# Empty, and the intended state.
 #
-# Deleting the writes would be the other honest ending. It is not taken because
-# the information is not duplicated anywhere: the activity log deliberately
-# records field *names* for these two, since a settings value can hold a
-# workspace code and a customer field holds somebody's phone number.
-WRITE_ONLY: dict[str, str] = {
-    "company_setting_audit": (
-        "The old and new values of a settings change. The change itself is "
-        "readable as `company_settings.updated` in the activity log, which "
-        "records the key names only — values here can hold credentials."
-    ),
-    "customer_audit": (
-        "The changed fields of a customer edit. The edit itself is readable as "
-        "`customers.updated` in the activity log, which records field names "
-        "only — the values are the customer's own contact details."
-    ),
-}
+# It held `company_setting_audit` and `customer_audit` — the before-and-after of
+# every settings change and customer edit, written since each shipped and read
+# by nothing. Declaring them here was the honest first step and not a fix:
+# rows kept accumulating where nobody could open them and nothing pruned them.
+#
+# They have a reader now (`/api/activity/settings/{section}/history` and
+# `/api/activity/customers/{id}/history`) and a retention policy on the same
+# clock as the log entry they belong to. An entry here should have to be argued
+# for, not used to park a table.
+WRITE_ONLY: dict[str, str] = {}
 
 
 def _tables(schema: str) -> list[str]:

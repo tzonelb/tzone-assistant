@@ -67,3 +67,53 @@ def activity_options(
     a company has never performed is a dropdown nobody can use.
     """
     return activity_service.options(_company(current_user))
+
+
+# ---------------------------------------------------------------- the detail
+#
+# The log above says a settings section or a customer changed, and which keys.
+# It deliberately never carries the values: a settings section is an open bag
+# and a customer field is somebody's phone number, and the log is read by
+# everyone holding `settings.view`.
+#
+# The values were being written all along, to `company_setting_audit` and
+# `customer_audit`, and no endpoint had ever read either. These two are that
+# reader. Each sits behind the permission that already guards the thing it
+# describes rather than behind `settings.view`, because the values are the
+# sensitive half: whoever may see a customer's phone number may see what it was
+# before, and nobody else.
+
+
+@router.get("/settings/{section}/history")
+def settings_history(
+    section: str,
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: dict[str, Any] = Depends(require_permission("settings.manage")),
+):
+    """What one settings section held before and after each change.
+
+    `settings.manage` rather than `settings.view`: reading the old value of a
+    setting is closer to being able to change it than to being able to look at
+    the current one.
+    """
+    return {
+        "section": section,
+        "items": activity_service.settings_history(
+            company_id=_company(current_user), section=section, limit=limit
+        ),
+    }
+
+
+@router.get("/customers/{customer_id}/history")
+def customer_history(
+    customer_id: int,
+    limit: int = Query(default=50, ge=1, le=200),
+    current_user: dict[str, Any] = Depends(require_permission("customers.view")),
+):
+    """What changed on one customer's record, and what it was changed to."""
+    return {
+        "customer_id": customer_id,
+        "items": activity_service.customer_history(
+            company_id=_company(current_user), customer_id=customer_id, limit=limit
+        ),
+    }

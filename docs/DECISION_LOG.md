@@ -972,3 +972,37 @@ after a comment in this repository explaining that `website` used to be offered
 failed the check that `website` is not offered — the fourth time in this audit
 that a source-scanning check matched somebody's prose about a defect instead of
 the defect.
+
+## D-034 — The before-and-after finally has a reader
+
+`company_setting_audit` and `customer_audit` have held the old and new values
+of every settings change and every customer edit since each shipped. No
+endpoint read either. The table sweep found them, and the first answer was to
+declare them in a registry with the reason they were kept.
+
+Declaring a gap is not closing it. Rows kept accumulating where nobody could
+open them, and nothing pruned them — an unbounded store of one company's old
+phone numbers with no reader and no retention is not a record, it is a
+liability that happens to be encrypted.
+
+Two readers, each behind the permission that already guards the thing it
+describes rather than behind `settings.view` like the rest of the log. The
+unified log names *which keys* changed and never the values, because a settings
+section is an open bag and a customer field is somebody's phone number. The
+values are the sensitive half: reading what a setting used to be sits closer to
+being able to change it than to being able to see it, so the settings history
+asks for `settings.manage`; reading what a customer's number used to be belongs
+to whoever may see the number now, so the customer history asks for
+`customers.view`.
+
+Retention on the same clock as the entry the detail belongs to. Longer would
+leave values in the database after the record of who changed them is gone;
+shorter would leave a log entry pointing at a detail that no longer exists.
+
+A row that will not parse degrades to `None` rather than raising. The history
+is most needed when something is wrong, which is exactly when a row is most
+likely to be malformed.
+
+Every registry this audit created is now empty: no setting is unimplemented, no
+permission is unenforced, no action is unraised, no table is write-only, no
+shipped file is orphaned, and no module is ungated.
