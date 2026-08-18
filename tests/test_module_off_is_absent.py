@@ -321,47 +321,48 @@ def test_tasks_on_still_opens_a_ticket(wired, alpha, monkeypatch):
     assert seen["company_id"] == alpha["id"]
 
 
-def test_notifications_off_writes_no_bell_entry(wired, alpha, monkeypatch):
-    import channels.inbound as inbound_module
+def _bell_count(alpha):
+    from database.manager import database_manager
 
-    def explode(*args, **kwargs):
-        raise AssertionError("a notification was written with the module off")
+    with database_manager.tenant(alpha["id"]) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS total FROM notifications WHERE company_id = ?",
+            (alpha["id"],),
+        ).fetchone()
 
-    monkeypatch.setattr(
-        inbound_module.notification_service, "create", explode, raising=True
+    return int(row["total"])
+
+
+def _ring(alpha):
+    from backend.services.notification_service import notification_service
+
+    notification_service.create(
+        company_id=alpha["id"],
+        notification_type="customer_message",
+        title="New message",
+        body="hello",
     )
 
+
+def test_notifications_off_writes_no_bell_entry(wired, alpha):
+    """The gate used to live in a wrapper in `channels.inbound`, so this test
+    called that wrapper. It now lives in `notification_service.create`, which
+    is where every notification goes — including the two raised from elsewhere
+    that the wrapper would never have covered.
+
+    Asserted on the stored rows rather than on a patched function, so it holds
+    whatever route the call takes to get there."""
     _switch(alpha, "notifications", False)
 
-    inbound_module._notify(
-        company_id=alpha["id"],
-        notification_type="customer_message",
-        title="New message",
-        body="hello",
-    )
+    _ring(alpha)
+
+    assert _bell_count(alpha) == 0
 
 
-def test_notifications_on_still_writes_one(wired, alpha, monkeypatch):
-    import channels.inbound as inbound_module
+def test_notifications_on_still_writes_one(wired, alpha):
+    _ring(alpha)
 
-    seen = {}
-
-    def fake(**kwargs):
-        seen.update(kwargs)
-
-    monkeypatch.setattr(
-        inbound_module.notification_service, "create", fake, raising=True
-    )
-
-    inbound_module._notify(
-        company_id=alpha["id"],
-        notification_type="customer_message",
-        title="New message",
-        body="hello",
-    )
-
-    assert seen["company_id"] == alpha["id"]
-    assert seen["title"] == "New message"
+    assert _bell_count(alpha) == 1
 
 
 def test_scheduler_off_publishes_nothing_and_claims_nothing(

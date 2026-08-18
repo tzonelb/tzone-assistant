@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from database.manager import database_manager
+from database.schema_tenant import DEFAULT_SETTINGS
 
 
 logger = logging.getLogger(__name__)
@@ -30,79 +31,41 @@ def utc_now_iso() -> str:
 # `None` is a legitimate thing to pin, so it cannot double as the sentinel.
 _UNSET = object()
 
-DEFAULT_SETTINGS: dict[str, Any] = {
-    # The real values come from this company's control-plane row, resolved in
-    # `_defaults_for`. The keys are listed here so the section exists and so
-    # `get_all` still enumerates it.
-    #
-    # There is deliberately no `workspace_code` key. There used to be, holding
-    # the string "tzone", and it was a label that did nothing. The workspace
-    # code is now the credential that unseals this company's database: it lives
-    # in the control plane, it is never returned to a browser, and it is
-    # rotated from the Super Admin console. A settings field of the same name
-    # that silently ignores what you type is worse than no field at all.
-    "company_profile": {
-        "company_name": "",
-        "timezone": "Asia/Beirut",
-        "default_language": "ar",
-        "country": "",
-        "currency": "USD",
-    },
-    "ai_behavior": {
-        "enabled": True,
-        "mode": "ai_first",
-        "collect_message_delay_seconds": 20,
-        "return_to_ai_timeout_minutes": 5,
-        "reply_access_mode": "take_required",
-        "auto_read_mode": "assigned_owner_only",
-        "auto_release_to_ai": True,
-        "welcome_immediate": True,
-        "reply_only_when_customer_stops_typing": True,
-    },
-    "notifications": {
-        "new_customer_message": True,
-        "ai_replied": False,
-        "employee_replied": False,
-        "in_app_popup": True,
-        "desktop": True,
-        "sound": True,
-    },
-    "reply_flow": {
-        "steps": [
-            "welcome",
-            "language_detection",
-            "intent_detection",
-            "knowledge_lookup",
-            "answer",
-            "escalation",
-        ]
-    },
-    # How this company answers, per channel: whether a welcome is sent and how
-    # often, whether the assistant may reply freely, how confident a knowledge
-    # match must be, how many knowledge items reach the model, whether buttons
-    # are shown. It used to be one shared file for the whole platform, so no
-    # company could change any of it without changing it for everybody.
-    #
-    # Sparse on purpose, and empty by default: a key that is absent inherits
-    # the platform's shipped value in `config/response_policy.json`, and a
-    # channel that is absent inherits this company's default. Seeding the
-    # shipped values in here would freeze a copy of them and make "clear this
-    # override" impossible to tell apart from "set it to the same thing".
-    #
-    # `backend/services/reply_policy_service.py` owns the shape, the validation
-    # and the resolution; writes to this section are validated there, including
-    # writes that arrive straight at `/api/company-settings/reply_policy`.
-    # Unlike `modules` below, this section is the company's to edit.
-    "reply_policy": {
-        "default": {},
-        "channels": {},
-    },
-    # Read-only here. This section used to carry its own five switches that
-    # nothing ever read, so a company could turn Appointments "off" and keep
-    # using it. Module visibility is now one decision, made by the platform
-    # administrator and enforced by `backend/services/module_access`; this
-    # section reports it and refuses writes.
-    "modules": {},
+# One catalogue, owned by the layer that seeds it. This module used to declare
+# its own, and the two had drifted so far apart that the keys seeded into every
+# company's database — `working_hours`, `reply_language` and three `notify_on_*`
+# preferences — were not merely unread but unreachable: `get_section` never
+# returned them and `update_section` dropped any write that named them.
+#
+# Importing it is what stops that recurring. Seeding and serving can no longer
+# disagree without one of them failing to import.
+
+
+# Settings that used to exist and no longer decide anything, by section. Listed
+# so a company that stored one before it was retired stops being shown it, and
+# so retiring one is a line somebody writes rather than a key quietly vanishing
+# from a literal.
+RETIRED_SETTINGS: dict[str, frozenset[str]] = {
+    "ai_behavior": frozenset(
+        {
+            # Duplicated `fallback_to_human` in the reply policy, where the
+            # decision is made per channel and per department and is enforced.
+            "escalate_on_low_confidence",
+            # Duplicated `welcome_enabled` and `welcome_mode` in the reply
+            # policy.
+            "welcome_immediate",
+            # Duplicated `collect_message_delay_seconds` two keys above it,
+            # which is the buffer that waits for a customer to stop typing.
+            "reply_only_when_customer_stops_typing",
+        }
+    ),
+    # Browser preferences that the browser already keeps per user, in
+    # `frontend/src/utils/notificationPreferences.js`. Whether a sound plays is
+    # one person's choice on one machine, not a company-wide setting, and the
+    # server copies were read by nothing.
+    "notifications": frozenset(
+        {"ai_replied", "employee_replied", "in_app_popup", "desktop", "sound"}
+    ),
 }
 
 
@@ -190,7 +153,26 @@ class CompanySettingsService:
             values = defaults
             locked = list(defaults)
         else:
-            values = {**defaults, **stored}
+            # A retired key stays in every company's stored JSON for ever, so
+            # dropping it from `DEFAULT_SETTINGS` would reach new companies
+            # only and the screen would go on offering the old switch to
+            # everybody already running. It is filtered out on the way past.
+            #
+            # By name, not by absence from the defaults. The first version of
+            # this dropped every stored key the defaults did not mention, which
+            # sounded equivalent and was not: `ai_behavior.channels` is sparse
+            # per-channel configuration that deliberately has no default, and
+            # deleting it silently turned off per-channel AI mode for every
+            # company. Retiring a setting is a decision somebody makes; it is
+            # named here rather than inferred.
+            values = {
+                **defaults,
+                **{
+                    key: value
+                    for key, value in stored.items()
+                    if key not in RETIRED_SETTINGS.get(normalized, ())
+                },
+            }
             locked = []
 
         for override in override_rows:

@@ -5,26 +5,28 @@ offered to an owner, each with a sentence explaining what it did to a customer;
 five of them were validated, merged, serialised into the model's payload, and
 consulted by nothing. The owner saw a control, set it, and got no change.
 
-The same trap is still laid in `DEFAULT_SETTINGS`. Six keys are seeded into
+The same trap was laid again in `DEFAULT_SETTINGS`. Eight keys were seeded into
 every company's database at provisioning and read by nothing anywhere — not by
-the backend, not by a screen:
+the backend, not by a screen: the whole `working_hours` section, both remaining
+`ai_behavior` keys, and all three `notifications` keys.
 
-* the whole `working_hours` section — a company sets its opening hours and the
-  assistant answers at three in the morning exactly as it does at noon;
-* `reply_language` — a company chooses a language and the reply is detected
-  from the message regardless;
-* `escalate_on_low_confidence` — a guardrail switch that guards nothing;
-* all three `notifications` keys.
+They are all resolved now, and `NOT_IMPLEMENTED` below is empty. Six were
+built:
 
-None of them is currently *misleading*, because no screen renders them. That is
-the only reason they are not D-013 all over again — and it is a thin reason. The
-next person to build a working-hours screen will find the section already in the
-defaults, wire the form to it, and ship a feature that saves and does nothing.
+* `working_hours` decides whether escalating tells a customer somebody is
+  coming when nobody is until morning;
+* `reply_language` decides the language when the customer has not asked;
+* the three `notifications` keys decide whether each kind of bell is raised —
+  and two of those bells had to be built, because the preference offered to
+  switch off a notification no code had ever raised.
 
-So the rule is written down here rather than left to be rediscovered: a key in
-`DEFAULT_SETTINGS` is either read somewhere, or listed below as not yet
-implemented. Implementing one means deleting its line from this file, which is
-the smallest possible reminder that the work is finished.
+Two were retired instead of implemented, which is the other honest ending:
+`escalate_on_low_confidence` duplicated `fallback_to_human` in the reply
+policy, where the decision already has an owner and is already enforced.
+
+The rule stays written down rather than left to be rediscovered: a key in
+`DEFAULT_SETTINGS` is either read somewhere, or listed below with the reason it
+is inert. An empty list is the state to keep it in.
 """
 
 from __future__ import annotations
@@ -55,37 +57,24 @@ SEARCH_ROOTS = (
 # test pass for a setting that a screen already offers — that is precisely the
 # defect D-013 describes.
 NOT_IMPLEMENTED: dict[str, str] = {
-    "working_hours.enabled": (
-        "No code consults opening hours. The assistant answers at three in the "
-        "morning exactly as it does at noon."
-    ),
-    "working_hours.timezone": "Unused until working hours are enforced.",
-    "working_hours.days": "Unused until working hours are enforced.",
-    "ai_behavior.reply_language": (
-        "The reply language is detected from the customer's message. This "
-        "preference is stored and never consulted."
-    ),
-    "ai_behavior.escalate_on_low_confidence": (
-        "Confidence already decides the reply through "
-        "`minimum_match_confidence` in the reply policy, which is enforced. "
-        "This second switch guards nothing."
-    ),
-    "notifications.notify_on_customer_message": (
-        "Notifications are raised for every inbound message, gated only by the "
-        "notifications module. This preference is not read."
-    ),
-    "notifications.notify_on_handover": "Not read.",
-    "notifications.notify_on_ai_error": "Not read.",
 }
 
 
 def _default_settings() -> dict[str, dict]:
-    source = (ROOT / "database" / "schema_tenant.py").read_text()
-    start = source.index("DEFAULT_SETTINGS")
-    snippet = source[start:]
-    end = snippet.index("\n}\n") + 3
+    """The catalogue the platform actually serves.
 
-    return ast.literal_eval(ast.parse(snippet[:end]).body[0].value)
+    This used to parse the constant out of `database/schema_tenant.py` with
+    `ast`, which was the seeded one — and for a long time the seeded one and the
+    served one were different objects with different keys. Every check in this
+    file was auditing settings no company could reach through the API, and
+    passing.
+
+    Imported rather than parsed now, so it is the same object the service uses
+    or it is an ImportError.
+    """
+    from database.schema_tenant import DEFAULT_SETTINGS
+
+    return DEFAULT_SETTINGS
 
 
 # Keys whose names are ordinary English words. A bare search for `enabled` or
@@ -215,3 +204,44 @@ def test_the_settings_that_do_work_still_do(key):
     """The other half. If these ever stopped being read, the test above would
     go quiet rather than fail, because it only reports keys not on the list."""
     assert _readers(key, "ai_behavior"), f"{key} used to be read and no longer is"
+
+
+def test_the_seeded_catalogue_is_the_served_one():
+    """The defect every other check in this file was blind to.
+
+    `database/schema_tenant.py` seeds a row per section into every company's
+    database at provisioning. `company_settings_service` decides what
+    `get_section` returns and what `update_section` accepts. They were two
+    separate literals, and they had drifted so far apart that six seeded keys
+    had no path to them at all — stored in every company's database, never
+    returned by a read, and silently dropped by a write.
+
+    Nothing reported it. The settings screen worked, the seeder worked, and the
+    keys in between belonged to neither.
+    """
+    from backend.services import company_settings_service as service
+    from database.schema_tenant import DEFAULT_SETTINGS
+
+    assert service.DEFAULT_SETTINGS is DEFAULT_SETTINGS, (
+        "The settings catalogue has been forked again. One of these seeds and "
+        "the other serves, and a key in only one of them is unreachable."
+    )
+
+
+def test_a_setting_a_company_writes_can_be_read_back():
+    """The property the fork broke, asserted end to end rather than by
+    comparing two constants.
+
+    A write naming a key the served catalogue does not define is dropped in
+    silence. That is the correct behaviour for a key nobody defines — and it is
+    exactly what made the fork invisible.
+    """
+    from database.schema_tenant import DEFAULT_SETTINGS
+
+    for section, values in DEFAULT_SETTINGS.items():
+        if section in ("modules", "company_profile", "reply_policy"):
+            # Resolved elsewhere: from the operator's switches, the control
+            # plane, and the reply-policy service. Not a company's to set here.
+            continue
+
+        assert values, f"{section} defines no keys, so nothing can be stored in it"

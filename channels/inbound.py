@@ -21,7 +21,6 @@ from backend.services.conversation_control_service import conversation_control_s
 from backend.services.customer_service import customer_service
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.message_service import message_service
-from backend.services.module_gate import module_gate
 from backend.services.notification_service import notification_service
 from channels.meta.logger import log_meta_event
 from channels.meta.profile import resolve_meta_profile
@@ -29,20 +28,6 @@ from channels.meta.smart_reply import schedule_smart_reply
 
 
 logger = logging.getLogger(__name__)
-
-
-def _notify(*, company_id: int, **fields: Any) -> None:
-    """Raise a bell entry, unless this company switched Notifications off.
-
-    Wrapped rather than guarded at the call site so every future notification
-    goes through the same check by construction. A gate that has to be
-    remembered is a gate that is eventually forgotten, and the way it fails is
-    silent: rows accumulating in a module the team cannot open.
-    """
-    if not module_gate.enabled(company_id, "notifications"):
-        return
-
-    notification_service.create(company_id=company_id, **fields)
 
 
 def process_inbound_event(
@@ -165,11 +150,15 @@ def process_inbound_event(
         data={"text_length": len(text or "")},
     )
 
-    # Notifications off means no bell entry is written. Unlike the other gates
-    # this one changes nothing about the customer's answer: the message is
-    # already stored and the assistant already replies. What stops is the
-    # unread pile a team that switched the module off cannot open to clear.
-    _notify(
+    # `notification_service.create` decides whether this is written at all: the
+    # operator's Notifications module switch first, then the company's own
+    # `notify_on_customer_message`. The gate used to live here, which meant the
+    # next notification added anywhere else would not have had one.
+    #
+    # Unlike the other gates this one changes nothing about the customer's
+    # answer: the message is stored and the assistant replies either way. What
+    # stops is the unread pile nobody asked for.
+    notification_service.create(
         company_id=company_id,
         notification_type="customer_message",
         title=f"New {channel.title()} message",

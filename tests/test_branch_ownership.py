@@ -28,6 +28,10 @@ field next to it.
 
 Fixed on both sides: refused at the write, and the joins scoped by company so a
 row already stored before this change displays nothing either.
+
+The other half of that finding — that nothing on the platform could create a
+branch at all, so both screens showed a permanently empty list — is closed in
+`tests/test_branches.py`.
 """
 
 from __future__ import annotations
@@ -70,8 +74,9 @@ def wired(platform, monkeypatch):
 def beta_branch(platform):
     """A branch belonging to Beta.
 
-    Inserted directly because nothing in the platform can create a branch —
-    see `test_nothing_can_create_a_branch` at the bottom of this file.
+    Inserted directly rather than through the endpoint: this file is about the
+    ownership check, and going through the API to set up the *other* company's
+    row would make each test depend on a second feature to prove the first.
     """
     from database.manager import utc_now_iso
 
@@ -270,46 +275,4 @@ def test_a_foreign_branch_already_stored_shows_nothing(wired, platform, beta_bra
     assert len(listed) == 1
     assert listed[0]["branch_name"] is None, (
         f"Beta's branch name reached Alpha's channel list: {listed[0]['branch_name']}"
-    )
-
-
-# ------------------------------------------------------- nothing can create one
-
-
-def test_nothing_can_create_a_branch():
-    """Recorded rather than fixed, and deliberately so.
-
-    `branches` is read in four places and written in none. Two screens already
-    render it: the Roles & Permissions screen has a branch dropdown for every
-    team member, and the Channels form asks for a branch. Both are permanently
-    empty, because no endpoint, service or CLI command inserts a row.
-
-    That is a real gap and it is written down here rather than closed, because
-    closing it means a screen for creating branches and the design is frozen by
-    instruction. The security half — a branch id that is not yours — is fixed
-    above and does not wait for it.
-
-    When branch management is built, delete this test.
-    """
-    import subprocess
-    from pathlib import Path
-
-    root = Path(__file__).resolve().parent.parent
-
-    result = subprocess.run(
-        [
-            "grep", "-rEl", r"INSERT INTO branches",
-            "--include=*.py",
-            "backend", "core", "channels", "gateway", "tools", "database",
-        ],
-        cwd=root,
-        capture_output=True,
-        text=True,
-    )
-
-    writers = sorted(result.stdout.split())
-
-    assert not writers, (
-        "Something can create a branch now: "
-        f"{writers}. Delete this test — the gap it records is closed."
     )

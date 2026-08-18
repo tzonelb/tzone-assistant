@@ -18,6 +18,7 @@ from backend.services.company_settings_service import company_settings_service
 from backend.services.conversation_control_service import conversation_control_service
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.message_service import message_service
+from backend.services.notification_service import notification_service
 from backend.services.pending_reply_service import pending_reply_service
 from backend.services.plan_service import UNLIMITED, plan_service
 from channels.meta.logger import log_meta_event
@@ -144,7 +145,56 @@ def process_due_replies(company_id: int) -> int:
             )
             pending_reply_service.fail(company_id, batch["id"], str(exc))
 
+            # A customer wrote and got nothing back. Until now the only trace
+            # was a `diagnostic_events` row, which nobody watches and which is
+            # cleared after fourteen days — so the team's first hint that the
+            # assistant is failing was a customer asking why they were ignored.
+            #
+            # `notify_on_ai_error` has been stored in every company's database
+            # since the settings shipped, offering to switch off a notification
+            # that no code raised.
+            _notify_failure(
+                company_id=company_id,
+                channel=batch["channel"],
+                external_user_id=batch["external_user_id"],
+                error=type(exc).__name__,
+            )
+
     return sent
+
+
+
+def _notify_failure(
+    *, company_id: int, channel: str, external_user_id: str, error: str
+) -> None:
+    """Tell the team the assistant failed to answer somebody.
+
+    The class of the exception, never its message: an exception from a provider
+    or a database can carry a token, a customer's text, or a row of somebody's
+    contact details, and this lands in a list the whole company can read.
+
+    Never raises. The reply already failed; failing to say so must not turn one
+    unanswered customer into a worker that stops draining the queue.
+    """
+    try:
+        notification_service.create(
+            company_id=company_id,
+            notification_type="ai_error",
+            title="The assistant could not answer a customer",
+            body=f"The reply failed with {error}. The conversation is waiting.",
+            channel=channel,
+            external_user_id=external_user_id,
+            severity="warning",
+            # One bell per conversation per failure class. A provider outage
+            # affects every conversation at once, and a hundred identical
+            # entries is how a team learns to ignore the bell.
+            dedupe_key=f"ai_error:{channel}:{external_user_id}:{error}",
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Could not raise an assistant-failure notification for company %s",
+            company_id,
+        )
 
 
 def _process_batch(batch: dict[str, Any]) -> bool:

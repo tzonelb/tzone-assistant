@@ -1459,6 +1459,110 @@ def cmd_unlock_user(args: argparse.Namespace) -> int:
     return 0
 
 
+
+def cmd_add_branch(args: argparse.Namespace) -> int:
+    """Create a branch for one company from the server.
+
+    The API is the ordinary way; this exists for the same reason the other
+    commands here do. A company being set up before anybody has a password, or
+    an operator moving a customer's locations across in bulk, has no session to
+    call the API with.
+    """
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+
+    with database_manager.control() as conn:
+        company = conn.execute(
+            "SELECT id, name FROM companies WHERE id = ? LIMIT 1",
+            (int(args.company_id),),
+        ).fetchone()
+
+        if not company:
+            raise OperatorError(f"No company with id {args.company_id}.")
+
+        clash = conn.execute(
+            "SELECT id FROM branches WHERE company_id = ? AND LOWER(name) = ?",
+            (int(args.company_id), args.name.strip().lower()),
+        ).fetchone()
+
+        if clash:
+            raise OperatorError(
+                f"{company['name']} already has a branch named {args.name!r}."
+            )
+
+        now = utc_now_iso()
+        cursor = conn.execute(
+            """
+            INSERT INTO branches (
+                company_id, name, code, address, phone, status,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+            """,
+            (
+                int(args.company_id),
+                args.name.strip(),
+                (args.code or "").strip() or None,
+                (args.address or "").strip() or None,
+                (args.phone or "").strip() or None,
+                now,
+                now,
+            ),
+        )
+        conn.commit()
+
+    banner("BRANCH ADDED")
+    out()
+    out(f"  Company : {company['name']} (id {company['id']})")
+    out(f"  Branch  : {args.name.strip()} (id {cursor.lastrowid})")
+    out()
+    out("  It can now be chosen on the Roles screen and when connecting a")
+    out("  channel.")
+    out()
+
+    return 0
+
+
+def cmd_list_branches(args: argparse.Namespace) -> int:
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    manager = load_manager()
+    database_manager = manager.database_manager
+
+    with database_manager.control() as conn:
+        rows = conn.execute(
+            """
+            SELECT branches.id, branches.name, branches.code, branches.status,
+                   companies.name AS company_name
+            FROM branches
+            JOIN companies ON companies.id = branches.company_id
+            WHERE (? IS NULL OR branches.company_id = ?)
+            ORDER BY companies.name, branches.name
+            """,
+            (args.company_id, args.company_id),
+        ).fetchall()
+
+    banner("BRANCHES")
+    out()
+
+    if not rows:
+        out("  None. Nothing on this platform has a branch yet.")
+        out()
+        return 0
+
+    for row in rows:
+        code = f" [{row['code']}]" if row["code"] else ""
+        out(f"  {row['company_name']}: {row['name']}{code} (id {row['id']}, {row['status']})")
+
+    out()
+
+    return 0
+
+
 def cmd_reset_totp(args: argparse.Namespace) -> int:
     """Clear a second factor from the server, so the account can enrol again.
 
@@ -1705,6 +1809,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to write the timestamped backup folder into.",
     )
     backup.set_defaults(handler=cmd_backup)
+
+    add_branch = subparsers.add_parser(
+        "add-branch",
+        help="Create a branch for one company.",
+    )
+    add_branch.add_argument("--company-id", required=True, type=int)
+    add_branch.add_argument("--name", required=True, help="What the branch is called.")
+    add_branch.add_argument("--code", help="Short code, optional.")
+    add_branch.add_argument("--address", help="Street address, optional.")
+    add_branch.add_argument("--phone", help="Contact number, optional.")
+    add_branch.set_defaults(handler=cmd_add_branch)
+
+    list_branches = subparsers.add_parser(
+        "list-branches",
+        help="Show the branches on this platform.",
+    )
+    list_branches.add_argument(
+        "--company-id", type=int, default=None, help="Narrow to one company."
+    )
+    list_branches.set_defaults(handler=cmd_list_branches)
 
     unlock_user = subparsers.add_parser(
         "unlock-user",

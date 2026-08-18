@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -27,3 +29,18 @@ class UserAssignmentRequest(BaseModel):
     role_id: int
     branch_id: int | None = None
     status: str = Field(default="active", pattern=r"^(active|disabled)$")
+
+
+class BranchCreateRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    code: str | None = Field(default=None, max_length=40)
+    address: str | None = Field(default=None, max_length=300)
+    phone: str | None = Field(default=None, max_length=40)
+
+
+class BranchUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    code: str | None = Field(default=None, max_length=40)
+    address: str | None = Field(default=None, max_length=300)
+    phone: str | None = Field(default=None, max_length=40)
+    status: Literal["active", "disabled"] | None = None

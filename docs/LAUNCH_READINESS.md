@@ -69,8 +69,23 @@ being true on the day somebody checked. Names are the tests that hold it.
 - [x] Every setting a company can store is either read by something or
       declared unimplemented, and no screen offers an unimplemented one.
       `test_settings_are_implemented.py`
-- [x] The channels a screen offers are the channels the platform can connect.
-      `test_channel_catalogue.py`
+- [x] The channels a screen offers are the channels the platform can connect,
+      in every place one is named. `test_channel_catalogue.py`
+- [x] The settings catalogue that is seeded is the one that is served, so no
+      key can be stored where nothing can read or write it.
+- [x] A company's opening hours decide what a customer is told when the team
+      is not there, in the company's own timezone, failing open on anything
+      unreadable. `test_working_hours.py`
+- [x] A company's chosen reply language is used, and a customer who asks to
+      switch still wins. `test_reply_language.py`
+- [x] Each kind of bell entry is written only if the company asked for it, and
+      the operator's module switch still overrules.
+      `test_notification_preferences.py`
+- [x] A company can create, rename, retire and delete its own branches, and
+      cannot touch another company's. `test_branches.py`
+- [x] No table is read by something and impossible to insert into, and every
+      write-only table is declared with what reads the same information
+      instead. `test_no_table_is_write_only.py`
 
 ## Security — manual, before launch
 
@@ -151,20 +166,30 @@ deployment:
 
 ## Current conclusion
 
-The security work listed above is complete and covered by the test suite — 833
+The security work listed above is complete and covered by the test suite — over 900
 tests at the time of writing. What remains before launch is the manual list —
 every item on it depends on the real server, the real domain and a real mailbox,
 so none of it can be closed from a development machine — together with manual
 QA, merge and the deployment record.
 
-One gap is known and open rather than closed, and is recorded here so it is not
-discovered as a surprise: **nothing on the platform can create a branch.** The
-Roles screen has a branch selector for every team member and the Channels form
-asks for a branch, and both lists are permanently empty, because no endpoint,
-service or CLI command inserts a row. The security half — a branch id belonging
-to another company — is fixed and tested. The missing half needs a screen for
-managing branches, which is a design change and therefore a decision for the
-owner of this product rather than one to take while closing defects.
+Two gaps are known and open rather than closed, recorded here so neither is
+discovered as a surprise.
+
+**Branches have no screen.** They can now be created, renamed, retired and
+deleted through the API and the CLI, and the two screens that already read the
+list — the branch selector on every team member, the branch field on every
+channel — fill in as soon as one exists. What is missing is a form for managing
+them, which is a design change and therefore the product owner's decision
+rather than one to take while closing defects.
+
+**`company_setting_audit` and `customer_audit` are written and never read.**
+Both hold the detailed before-and-after of a change whose occurrence *is*
+readable in the company's activity log — which records field names only,
+because a settings value can hold a workspace code and a customer field holds
+somebody's phone number. The detail is kept for the "what was this value
+before" screen the roadmap calls for. Until that exists, those rows are storage
+nobody can open. `tests/test_no_table_is_write_only.py` holds the list and
+fails if a third one appears.
 
 The state is therefore **not yet approved for launch**, and the reason is now a
 short, specific list rather than an open question.

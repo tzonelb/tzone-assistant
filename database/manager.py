@@ -41,6 +41,7 @@ from database.schema_control import (
 )
 from database.schema_tenant import (
     DEFAULT_SETTINGS,
+    RESOLVED_SECTIONS,
     TENANT_COLUMNS,
     TENANT_INDEXES,
     TENANT_SCHEMA_VERSION,
@@ -480,6 +481,7 @@ class DatabaseManager:
                 [
                     (company_id, section, json.dumps(values, ensure_ascii=False), now, now)
                     for section, values in DEFAULT_SETTINGS.items()
+                    if section not in RESOLVED_SECTIONS
                 ],
             )
             connection.commit()

@@ -11,7 +11,6 @@ export const DEFAULT_NOTIFICATION_PREFERENCES = {
     whatsapp: true,
     instagram: true,
     telegram: true,
-    website: true,
   },
   types: {
     customerMessage: true,

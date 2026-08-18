@@ -3,6 +3,20 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { readNotificationPreferences, saveNotificationPreferences } from "../../utils/notificationPreferences";
+import { SUPPORTED_CHANNELS } from "../../utils/channels";
+
+// Built from the one channel catalogue rather than written out again. This
+// list used to end in `website: "Website"` — a toggle for a channel the
+// platform has never supported, rendered on every company's Preferences
+// screen, switching a notification that no message could ever produce.
+const CHANNEL_LABELS = Object.fromEntries(
+  SUPPORTED_CHANNELS.map((channel) => [
+    channel,
+    channel === "whatsapp"
+      ? "WhatsApp"
+      : channel.charAt(0).toUpperCase() + channel.slice(1),
+  ]),
+);
 
 const FONT_OPTIONS = [
   { value: "Inter, system-ui, sans-serif", label: "Inter / System" },
@@ -85,7 +99,7 @@ export default function UISettingsPage() {
 
           {active === "appearance" ? <section className="settings-section-card"><h3>Appearance</h3><p>Theme, font and display density.</p><div className="settings-form-grid"><label><strong>Theme</strong><select value={theme} onChange={(e) => setTheme(e.target.value)}><option value="light">Light</option><option value="dark">Dark</option><option value="auto">System</option></select></label><label><strong>Font</strong><select value={fontFamily} onChange={(e) => setFontFamily(e.target.value)}>{FONT_OPTIONS.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label><label><strong>Text size: {fontSize}%</strong><input type="range" min="85" max="125" step="5" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} /></label><label><strong>Density</strong><select value={density} onChange={(e) => setDensity(e.target.value)}><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select></label></div></section> : null}
 
-          {active === "notifications" ? <section className="settings-section-card"><h3>Notifications & sound</h3><p>Choose which notifications appear and how they are delivered.</p><div className="settings-notification-list">{notificationRows.map(([key, title, description]) => <div className="settings-notification-row" key={key}><div><strong>{title}</strong><span>{description}</span></div><Toggle checked={notifications[key]} onChange={(value) => { setNotifications((current) => ({ ...current, [key]: value })); setSaved(false); }} /></div>)}</div><h3>Channels</h3><div className="settings-notification-list">{Object.entries({ messenger: "Messenger", whatsapp: "WhatsApp", instagram: "Instagram", telegram: "Telegram", website: "Website" }).map(([key, label]) => <div className="settings-notification-row" key={key}><div><strong>{label}</strong><span>Receive notifications from this channel.</span></div><Toggle checked={notifications.channels?.[key] !== false} onChange={(value) => { setNotifications((current) => ({ ...current, channels: { ...(current.channels || {}), [key]: value } })); setSaved(false); }} /></div>)}</div><button type="button" className="secondary-action" onClick={requestBrowserPermission}>Enable browser permission</button></section> : null}
+          {active === "notifications" ? <section className="settings-section-card"><h3>Notifications & sound</h3><p>Choose which notifications appear and how they are delivered.</p><div className="settings-notification-list">{notificationRows.map(([key, title, description]) => <div className="settings-notification-row" key={key}><div><strong>{title}</strong><span>{description}</span></div><Toggle checked={notifications[key]} onChange={(value) => { setNotifications((current) => ({ ...current, [key]: value })); setSaved(false); }} /></div>)}</div><h3>Channels</h3><div className="settings-notification-list">{Object.entries(CHANNEL_LABELS).map(([key, label]) => <div className="settings-notification-row" key={key}><div><strong>{label}</strong><span>Receive notifications from this channel.</span></div><Toggle checked={notifications.channels?.[key] !== false} onChange={(value) => { setNotifications((current) => ({ ...current, channels: { ...(current.channels || {}), [key]: value } })); setSaved(false); }} /></div>)}</div><button type="button" className="secondary-action" onClick={requestBrowserPermission}>Enable browser permission</button></section> : null}
 
           {active === "language" ? <section className="settings-section-card"><h3>Language & region</h3><p>The selected timezone controls all conversation, notification and timeline timestamps.</p><div className="settings-form-grid"><label><strong>Language</strong><select value={language} onChange={(e) => setLanguage(e.target.value)}><option value="en">English</option><option value="ar">Arabic</option><option value="tr">Turkish</option></select></label><label><strong>Timezone</strong><select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}><option value="Asia/Beirut">Beirut</option><option value="Asia/Qatar">Qatar</option><option value="UTC">UTC</option></select></label></div></section> : null}
 

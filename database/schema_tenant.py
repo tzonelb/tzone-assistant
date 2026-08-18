@@ -19,6 +19,8 @@ This module is the single source of truth for these tables.
 
 from __future__ import annotations
 
+from typing import Any
+
 
 TENANT_SCHEMA_VERSION = 2
 
@@ -669,14 +671,71 @@ TENANT_INDEXES: tuple[str, ...] = (
 # Seeded into every new company database so the assistant has working defaults
 # from the first message, rather than depending on a settings screen being
 # visited first.
-DEFAULT_SETTINGS: dict[str, dict] = {
+# Sections whose values are not this database's to hold. `company_profile`
+# comes from the company's control-plane row and `modules` from the operator's
+# switches, both resolved per request in `company_settings_service._defaults_for`.
+#
+# They are in the catalogue below for their keys — so the section exists, so
+# `get_all` enumerates it, and so a write naming one of their keys is
+# recognised. They must not be *seeded*, because a stored row wins over a
+# resolved default: seeding `company_profile` writes `company_name: ""` into
+# every new company and the settings screen then opens showing an empty name
+# instead of the company's own.
+RESOLVED_SECTIONS: frozenset[str] = frozenset({"company_profile", "modules"})
+
+
+DEFAULT_SETTINGS: dict[str, Any] = {
+    # The one catalogue. There used to be two: this one, seeded into every
+    # company's database at provisioning, and a different one in
+    # `company_settings_service` that was actually served. They had drifted
+    # completely apart — this file seeded `working_hours`, `reply_language`,
+    # `escalate_on_low_confidence` and three `notify_on_*` keys, and the
+    # service served none of them and merged its own set over the top.
+    #
+    # That is why those keys read as "stored and never used". They were not
+    # merely unread: there was no path to them at all. A company's database
+    # held them, `get_section` never returned them, and `update_section`
+    # dropped any write naming them.
+    #
+    # The service now imports this. Seeding and serving cannot disagree again
+    # without one of them failing to import.
+    #
+    # `company_profile` and `modules` are listed for their keys only — the real
+    # values are resolved per company in `_defaults_for`, from the control
+    # plane and from the operator's module switches.
+    "company_profile": {
+        "company_name": "",
+        "timezone": "Asia/Beirut",
+        "default_language": "ar",
+        "country": "",
+        "currency": "USD",
+    },
     "ai_behavior": {
         "enabled": True,
+        "mode": "ai_first",
         "collect_message_delay_seconds": 20,
         "return_to_ai_timeout_minutes": 5,
+        "reply_access_mode": "take_required",
+        "auto_read_mode": "assigned_owner_only",
+        "auto_release_to_ai": True,
+        # Which language to answer in before the customer has asked for one.
+        # `auto` detects from the message, which is what every company had.
         "reply_language": "auto",
-        "escalate_on_low_confidence": True,
+        # `welcome_immediate` and `reply_only_when_customer_stops_typing` were
+        # here and read by nothing. Both already have an owner elsewhere:
+        # `welcome_enabled` and `welcome_mode` in the reply policy decide the
+        # first, per channel, and are enforced; `collect_message_delay_seconds`
+        # two lines up is the second — it is the buffer that waits for a
+        # customer to stop typing. Two switches for one decision leaves an
+        # owner setting the one they found and unable to tell why nothing
+        # changed.
     },
+    # When this company's team is reachable. Off by default, so a company that
+    # has not set hours behaves exactly as it did before hours existed.
+    #
+    # These change escalation, not the assistant: the bot keeps answering, and
+    # a hand-over outside hours tells the customer when somebody will be there
+    # instead of implying somebody is there now.
     "working_hours": {
         "enabled": False,
         "timezone": "Asia/Beirut",
@@ -690,9 +749,50 @@ DEFAULT_SETTINGS: dict[str, dict] = {
             "sunday": {"open": "09:00", "close": "18:00", "closed": True},
         },
     },
+    # Whether each kind of bell entry is written at all. Enforced in
+    # `notification_service.create`, keyed by notification type, so a call site
+    # added later cannot forget to ask.
+    #
+    # `in_app_popup`, `desktop`, `sound`, `ai_replied` and `employee_replied`
+    # used to be here and were read by nothing on the server. They are browser
+    # preferences, and the browser already keeps its own — per user, in
+    # `frontend/src/utils/notificationPreferences.js`, which is the right place
+    # for them: whether a sound plays is one person's choice on one machine,
+    # not a company-wide setting. The server copies were a second store that
+    # nothing read and nothing wrote.
+    #
+    # What is left is what the server actually decides: whether the row exists.
     "notifications": {
-        "notify_on_customer_message": True,
-        "notify_on_handover": True,
-        "notify_on_ai_error": True,
+        "new_customer_message": True,
+        # Two events that happen, are recorded, and had nobody to tell: a
+        # colleague taking a conversation off the assistant, and the assistant
+        # failing to answer a customer at all.
+        "handover": True,
+        "ai_error": True,
     },
+    "reply_flow": {
+        "steps": [
+            "welcome",
+            "language_detection",
+            "intent_detection",
+            "knowledge_lookup",
+            "answer",
+            "escalation",
+        ]
+    },
+    # How this company answers, per channel. Sparse on purpose and empty by
+    # default: an absent key inherits the platform's shipped value in
+    # `config/response_policy.json`, and an absent channel inherits this
+    # company's default. Seeding the shipped values here would freeze a copy of
+    # them and make "clear this override" impossible to tell from "set it to
+    # the same thing". `backend/services/reply_policy_service.py` owns the
+    # shape, the validation and the resolution.
+    "reply_policy": {
+        "default": {},
+        "channels": {},
+    },
+    # Read-only. Module visibility is the platform administrator's decision,
+    # enforced by `backend/services/module_access`; this section reports it and
+    # refuses writes.
+    "modules": {},
 }

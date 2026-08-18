@@ -29,6 +29,14 @@ ROOT = Path(__file__).resolve().parent.parent
 
 FRONTEND = ROOT / "frontend/src"
 
+# Names that have appeared in this repository's channel lists and are not
+# channels the platform can connect. `website` is the one this file was written
+# for; the rest are here so that reviving any of them in a screen fails loudly
+# rather than shipping another permanently empty tab.
+_RETIRED_OR_UNSUPPORTED = frozenset(
+    {"website", "web", "sms", "email", "viber", "wechat", "line", "tiktok"}
+)
+
 
 def _backend_channels() -> set[str]:
     from backend.services.channel_account_service import SUPPORTED_CHANNELS
@@ -45,6 +53,46 @@ def _frontend_constant() -> set[str]:
     assert body, "utils/channels.js no longer exports SUPPORTED_CHANNELS"
 
     return set(re.findall(r'"([a-z_]+)"', body.group(1)))
+
+
+
+def _code_lines(pattern: str) -> list[str]:
+    """Matching lines in the frontend, excluding comments.
+
+    Written after a comment in this very repository — one explaining that
+    `website` used to be offered — failed the check that `website` is not
+    offered. It is the fourth time in this audit that a source-scanning check
+    has matched somebody's prose about the defect instead of the defect. A
+    check that cannot be explained in a comment is a check people work around.
+    """
+    result = subprocess.run(
+        [
+            "grep", "-rn", "-E", pattern,
+            "--include=*.jsx", "--include=*.js",
+            "src",
+        ],
+        cwd=ROOT / "frontend",
+        capture_output=True,
+        text=True,
+    )
+
+    lines = []
+
+    for line in result.stdout.splitlines():
+        _, _, code = line.partition(":")
+        _, _, code = code.partition(":")
+        stripped = code.strip()
+
+        if stripped.startswith(("//", "*", "/*")):
+            continue
+
+        # The one place the list is allowed to exist.
+        if "utils/channels.js" in line:
+            continue
+
+        lines.append(line)
+
+    return lines
 
 
 def test_the_frontend_constant_matches_the_backend():
@@ -73,38 +121,97 @@ def test_every_channel_the_backend_claims_can_actually_be_routed():
     assert not missing, f"Channel(s) with no routing field: {missing}"
 
 
-def test_no_screen_keeps_its_own_channel_catalogue():
-    """The root cause, not the symptom.
+def _channel_keyed_blocks(source: str) -> list[tuple[int, set[str]]]:
+    """Every object literal in a file that is keyed by channel.
 
-    `website` was not a typo — it was a copy of the channel list that nobody
-    updated when the real one changed. A screen that names all four channels in
-    a row is keeping a copy, so the check looks for the shape rather than for
-    the stale word.
+    A run of `key: value` lines, or a single line holding several of them.
+    A block counts as channel-keyed when it names two or more channels the
+    backend supports — one is a coincidence, two is a list.
     """
-    result = subprocess.run(
-        [
-            "grep", "-rn",
-            r'"messenger".*"whatsapp"',
-            "--include=*.jsx", "--include=*.js",
-            "src",
-        ],
-        cwd=ROOT / "frontend",
-        capture_output=True,
-        text=True,
-    )
+    known = _backend_channels()
+    blocks: list[tuple[int, set[str]]] = []
+    run: list[str] = []
+    run_start = 0
 
-    copies = [
-        line
-        for line in result.stdout.splitlines()
-        # The one place the list is allowed to exist.
-        if "utils/channels.js" not in line
-    ]
+    def flush():
+        if run and len(set(run) & known) >= 2:
+            blocks.append((run_start, set(run)))
 
-    assert not copies, (
-        "A screen keeps its own copy of the channel catalogue:\n  "
-        + "\n  ".join(copies)
-        + "\n\nImport SUPPORTED_CHANNELS from utils/channels.js, or read "
-        "`supported_channels` off the response."
+    for number, line in enumerate(source.splitlines(), start=1):
+        stripped = line.strip()
+
+        if stripped.startswith(("//", "*", "/*")):
+            continue
+
+        keys = re.findall(r"(?:^|[{,\s])([A-Za-z_][A-Za-z0-9_]*)\s*:", line)
+
+        # A single line carrying the whole map.
+        if len(set(keys) & known) >= 2:
+            blocks.append((number, set(keys)))
+            run = []
+            continue
+
+        if keys:
+            if not run:
+                run_start = number
+            run.extend(keys)
+        else:
+            flush()
+            run = []
+
+    flush()
+
+    return blocks
+
+
+def test_no_screen_lists_a_channel_the_backend_does_not_support():
+    """The property that actually matters, after two weaker versions of it.
+
+    The first looked for a quoted list and missed every map written as object
+    keys. The second flagged any map keyed by channel — which condemned the
+    label maps in `ChannelsPage` and `AiTeachingPage`, where mapping a code to
+    a display name is exactly the right thing to do and an unknown code costs
+    nothing worse than an unprettified label.
+
+    The defect was never "a file names the channels". It is a file offering a
+    channel that does not exist, which is what `website` was in five places:
+    a tab on the inbox, an option in the notification filter, a toggle on the
+    Preferences screen, an icon, and a per-user default.
+
+    Limit worth stating: this recognises names on a watch-list, so a brand new
+    invented channel would pass here. What catches that instead is
+    `test_the_frontend_constant_matches_the_backend` for the one real
+    catalogue, and the inbox reading `supported_channels` off the response —
+    the two places that decide what is *offered*. This test's job is the stale
+    copies those two cannot see.
+    """
+    known = _backend_channels()
+    offenders = []
+
+    for path in (FRONTEND).rglob("*.js*"):
+        if path.name == "channels.js" or "/dist/" in str(path):
+            continue
+
+        for line, keys in _channel_keyed_blocks(path.read_text()):
+            # Keys that are not channels at all — `enabled`, `types` — sit in
+            # the same object as the channel ones in some files. Only a key
+            # that reads as a channel and is not one is reported.
+            strays = {
+                key
+                for key in keys - known
+                if key in _RETIRED_OR_UNSUPPORTED
+            }
+
+            if strays:
+                offenders.append(
+                    f"{path.relative_to(ROOT)}:{line} offers {sorted(strays)}"
+                )
+
+    assert not offenders, (
+        "A screen offers a channel the platform cannot connect:\n  "
+        + "\n  ".join(offenders)
+        + "\n\nRemove it, or add it to SUPPORTED_CHANNELS with a routing "
+        "field, a webhook and a sender."
     )
 
 
@@ -122,13 +229,8 @@ def test_the_inbox_response_carries_the_catalogue():
 
 def test_website_is_gone_from_the_frontend():
     """The specific symptom, kept as its own line so a failure names it."""
-    result = subprocess.run(
-        ["grep", "-rn", r'"website"', "--include=*.jsx", "--include=*.js", "src"],
-        cwd=ROOT / "frontend",
-        capture_output=True,
-        text=True,
-    )
+    offered = _code_lines(r'"website"|\bwebsite\s*:')
 
-    assert not result.stdout.strip(), (
-        "`website` is offered as a channel again:\n" + result.stdout
+    assert not offered, (
+        "`website` is offered as a channel again:\n  " + "\n  ".join(offered)
     )

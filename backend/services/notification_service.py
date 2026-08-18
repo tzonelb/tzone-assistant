@@ -37,6 +37,66 @@ class NotificationService:
         result["is_read"] = bool(result.get("is_read"))
         return result
 
+    # Which stored preference decides whether a notification of each type is
+    # raised. Checked here rather than at each call site for the same reason the
+    # module gate is: a gate that has to be remembered is a gate that is
+    # eventually forgotten, and the way this one fails is silent — a company
+    # turns a bell off and the entries keep piling up, or turns one on and
+    # nothing arrives.
+    #
+    # `team_mention` is deliberately absent. A colleague typed somebody's name
+    # to get their attention; that is addressed to a person, not a category of
+    # event, and there is no preference offering to suppress it.
+    PREFERENCE_FOR: dict[str, str] = {
+        "customer_message": "new_customer_message",
+        "handover": "handover",
+        "ai_error": "ai_error",
+    }
+
+    def _wanted(self, company_id: int, notification_type: str) -> bool:
+        """Whether this company asked to be told about this kind of event.
+
+        Two questions, in order. The operator's module switch comes first: a
+        company whose Notifications module is off cannot open the screen these
+        rows appear on, so writing them accumulates a pile nobody can clear.
+        Then the company's own preference for this kind of event.
+
+        Both fail open. A read that will not complete is a reason to raise the
+        notification anyway — the alternative is a company that silently stops
+        being told its assistant is failing because a database was busy.
+        """
+        from backend.services.module_gate import module_gate
+
+        try:
+            if not module_gate.enabled(int(company_id), "notifications"):
+                return False
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the module state of company %s", company_id
+            )
+
+        preference = self.PREFERENCE_FOR.get(notification_type)
+
+        if not preference:
+            return True
+
+        try:
+            from backend.services.company_settings_service import (
+                company_settings_service,
+            )
+
+            values = company_settings_service.get_section(
+                int(company_id), "notifications"
+            )["values"]
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the notification preferences of company %s",
+                company_id,
+            )
+            return True
+
+        return bool(values.get(preference, True))
+
     def create(
         self,
         *,
@@ -54,6 +114,13 @@ class NotificationService:
         dedupe_key: str | None = None,
     ) -> dict[str, Any]:
         company_id = int(company_id)
+
+        # Before anything is written, and before the dedupe read. A company that
+        # switched this kind of notification off should cost nothing at all,
+        # not a row it cannot see or a query it did not ask for.
+        if not self._wanted(company_id, notification_type.strip()):
+            return {}
+
         created_at = utc_now_iso()
         payload = json.dumps(data or {}, ensure_ascii=False)
 

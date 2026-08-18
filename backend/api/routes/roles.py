@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlcipher3 import dbapi2 as sqlcipher
 
 from backend.api.schemas.roles import (
+    BranchCreateRequest,
+    BranchUpdateRequest,
     RoleCreateRequest,
     RoleUpdateRequest,
     UserAssignmentRequest,
@@ -602,3 +604,213 @@ def unlock_user(
     )
 
     return {"success": True, "message": "Account unlocked."}
+
+
+# ---------------------------------------------------------------------------
+# Branches
+#
+# `branches` was read in four places and written in none. Two screens already
+# render the list — the branch selector on every team member, and the branch
+# field when connecting a channel — and both were permanently empty, because
+# no endpoint, service or CLI command could create a row.
+#
+# A company with one location needs none of this, which is why the field is
+# optional everywhere it appears. A company with three shops needs to be able
+# to say which one an employee works at and which one a page belongs to, and
+# until now it could not.
+# ---------------------------------------------------------------------------
+
+
+def _branch_row(conn, company_id: int, branch_id: int):
+    """The branch, or a 404 — matched with the company, never on the id alone.
+
+    Ids are global in the control database, so an id from another company is a
+    real row. Fetching on the id and checking afterwards would still have read
+    it; this cannot.
+    """
+    row = conn.execute(
+        """
+        SELECT id, name, code, address, phone, status
+        FROM branches
+        WHERE id = ? AND company_id = ?
+        LIMIT 1
+        """,
+        (int(branch_id), int(company_id)),
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Branch not found.")
+
+    return row
+
+
+@router.get("/branches")
+def list_branches(current_user: dict = Depends(get_current_user)):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+
+    with database_manager.control() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, code, address, phone, status
+            FROM branches
+            WHERE company_id = ?
+            ORDER BY name
+            """,
+            (company_id,),
+        ).fetchall()
+
+    return {"branches": [dict(row) for row in rows]}
+
+
+@router.post("/branches")
+def create_branch(
+    payload: BranchCreateRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+    now = utc_now_iso()
+
+    with database_manager.control() as conn:
+        # Within this company only. Two companies naming a branch "Main" is
+        # ordinary; the same company naming two branches "Main" is a mistake
+        # nobody could untangle from a dropdown afterwards.
+        clash = conn.execute(
+            "SELECT id FROM branches WHERE company_id = ? AND LOWER(name) = ?",
+            (company_id, payload.name.strip().lower()),
+        ).fetchone()
+
+        if clash:
+            raise HTTPException(
+                status_code=409, detail="A branch with that name already exists."
+            )
+
+        cursor = conn.execute(
+            """
+            INSERT INTO branches (
+                company_id, name, code, address, phone, status,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, 'active', ?, ?)
+            """,
+            (
+                company_id,
+                payload.name.strip(),
+                (payload.code or "").strip() or None,
+                (payload.address or "").strip() or None,
+                (payload.phone or "").strip() or None,
+                now,
+                now,
+            ),
+        )
+        branch_id = int(cursor.lastrowid)
+        conn.commit()
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.BRANCH_CREATED,
+        category="roles",
+        target_type="branch",
+        target_id=branch_id,
+        summary=f"Added the branch {payload.name.strip()}",
+        after={"name": payload.name.strip(), "code": payload.code},
+        ip_address=client_ip(request),
+    )
+
+    return {"success": True, "branch_id": branch_id}
+
+
+@router.patch("/branches/{branch_id}")
+def update_branch(
+    branch_id: int,
+    payload: BranchUpdateRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+    values = payload.model_dump(exclude_unset=True)
+
+    with database_manager.control() as conn:
+        before = dict(_branch_row(conn, company_id, branch_id))
+
+        if not values:
+            return {"success": True, "branch": before}
+
+        assignments = ", ".join(f"{column} = ?" for column in values)
+        conn.execute(
+            f"""
+            UPDATE branches
+            SET {assignments}, updated_at = ?
+            WHERE id = ? AND company_id = ?
+            """,
+            [*values.values(), utc_now_iso(), int(branch_id), company_id],
+        )
+        conn.commit()
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.BRANCH_UPDATED,
+        category="roles",
+        target_type="branch",
+        target_id=branch_id,
+        summary=f"Edited the branch {before['name']}",
+        before={key: before.get(key) for key in values},
+        after=values,
+        ip_address=client_ip(request),
+    )
+
+    return {"success": True}
+
+
+@router.delete("/branches/{branch_id}")
+def delete_branch(
+    branch_id: int,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    """Retire a branch, releasing whoever was pointed at it.
+
+    Both tables that point at a branch declare
+    `FOREIGN KEY(branch_id) REFERENCES branches(id) ON DELETE SET NULL`, and
+    every control connection opens with `PRAGMA foreign_keys = ON`, so the
+    database does the releasing. Repeating it here in SQL would be two
+    mechanisms for one rule, and the redundant one is the one that rots.
+
+    What that leaves worth testing is the pragma itself. With foreign keys off
+    — a connection opened somewhere else, a future refactor of `control()` —
+    this silently stops working and a deleted branch's id lives on in
+    `company_users` and `channel_accounts`, ready to be handed to a different
+    branch later. `tests/test_branches.py` asserts the release for both tables
+    for that reason.
+    """
+    company_id = _company_id(current_user)
+    _require_access_admin(current_user, company_id)
+
+    with database_manager.control() as conn:
+        before = dict(_branch_row(conn, company_id, branch_id))
+
+        conn.execute(
+            "DELETE FROM branches WHERE id = ? AND company_id = ?",
+            (int(branch_id), company_id),
+        )
+        conn.commit()
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.BRANCH_DELETED,
+        category="roles",
+        target_type="branch",
+        target_id=branch_id,
+        summary=f"Removed the branch {before['name']}",
+        before=before,
+        severity="notice",
+        ip_address=client_ip(request),
+    )
+
+    return {"success": True}

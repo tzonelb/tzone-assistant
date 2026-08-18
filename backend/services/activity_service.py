@@ -122,6 +122,9 @@ class Action:
     USER_UPDATED = "roles.user_updated"
     USER_PASSWORD_RESET = "roles.password_reset_forced"
     USER_UNLOCKED = "roles.user_unlocked"
+    BRANCH_CREATED = "roles.branch_created"
+    BRANCH_UPDATED = "roles.branch_updated"
+    BRANCH_DELETED = "roles.branch_deleted"
 
     # --- the assistant
     BOT_PROFILE_UPDATED = "ai_teaching.profile_updated"

@@ -8,6 +8,7 @@ from database.manager import database_manager
 from backend.services.work_index_service import KIND_TAKEOVER, work_index_service
 from backend.services.business_department_service import business_department_service
 from backend.services.company_settings_service import company_settings_service
+from backend.services.notification_service import notification_service
 
 
 # What `conversations.department` holds when the conversation belongs to no
@@ -697,12 +698,62 @@ class ConversationControlService:
         # that next opens this company.
         if not handled_by_ai:
             _note_takeover_deadline(company_id, expires_at)
+            self._notify_takeover(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=external_user_id,
+                conversation_id=int(state["id"]),
+                actor_user_id=actor_user_id,
+            )
 
         return self.get_state(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
         )
+
+    @staticmethod
+    def _notify_takeover(
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        conversation_id: int,
+        actor_user_id: int,
+    ) -> None:
+        """Tell the team a colleague has taken a conversation off the assistant.
+
+        `notify_on_handover` has been stored in every company's database since
+        the settings shipped, and no notification of that kind has ever existed
+        — the preference offered to switch off something nothing raised. The
+        takeover itself was recorded as a conversation event, which is the
+        history of one conversation rather than something anybody is told.
+
+        Raised after the commit, so a takeover that lost its race for the
+        conversation does not announce itself. Never raises: a bell entry must
+        not be able to undo a handover that already happened.
+        """
+        try:
+            notification_service.create(
+                company_id=company_id,
+                notification_type="handover",
+                title="A conversation was taken over",
+                body=None,
+                channel=channel,
+                external_user_id=external_user_id,
+                conversation_id=conversation_id,
+                actor_user_id=actor_user_id,
+                severity="info",
+                # One entry per takeover of this conversation by this person.
+                # Toggling back and forth should not ring the bell twice for
+                # what the team already knows.
+                dedupe_key=f"handover:{conversation_id}:{actor_user_id}",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not raise a handover notification for company %s",
+                company_id,
+            )
 
     def record_opened(
         self,

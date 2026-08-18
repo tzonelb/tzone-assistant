@@ -135,7 +135,9 @@ class Engine:
                     company_id=request.company_id,
                 )
 
-            message_language = self.detect_language(request.message)
+            message_language = self.resolve_language(
+                request.message, request.company_id
+            )
 
             session.set_language(
                 request.user_id,
@@ -339,6 +341,55 @@ class Engine:
             item.lower()
             for item in self.GREETING_MESSAGES
         ]
+
+    def resolve_language(self, message, company_id):
+        """Which language to answer in, before the customer has asked for one.
+
+        `ai_behavior.reply_language` was stored in every company's database and
+        consulted by nothing: a company chose a language, watched it save, and
+        the reply came back in whatever the customer happened to write in.
+
+        `auto`, the default, is detection — the behaviour every company has
+        today. A company that names a language gets that language instead,
+        which is what a business whose staff read only one of them is asking
+        for when it sets this.
+
+        It replaces *detection*, not the customer's own choice. A customer who
+        explicitly asks to switch is handled before this is reached, and still
+        wins: the platform has a feature for that, and silently ignoring it
+        would make that feature lie about what it did.
+
+        Never raises. A settings read that will not complete falls back to
+        detection, which is the behaviour this replaced.
+        """
+        detected = self.detect_language(message)
+
+        if company_id is None:
+            return detected
+
+        try:
+            from backend.services.company_settings_service import (
+                company_settings_service,
+            )
+
+            preference = company_settings_service.get_section(
+                int(company_id), "ai_behavior"
+            )["values"].get("reply_language")
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the reply language of company %s", company_id
+            )
+            return detected
+
+        chosen = str(preference or "auto").strip().lower()
+
+        # An unrecognised value is a typo, not an instruction. Treating it as a
+        # language would answer every customer in a language that does not
+        # exist; treating it as `auto` costs nothing.
+        if chosen not in ("ar", "en"):
+            return detected
+
+        return chosen
 
     def detect_language(self, text):
         if not text:
@@ -852,6 +903,7 @@ class Engine:
                     ),
                     escalate=decision.escalate,
                     reason=decision.reason,
+                    opening=self.opening_status(request.company_id),
                 ),
             )
 
@@ -899,6 +951,7 @@ class Engine:
                 ),
                 escalate=reply_decision.fallback_to_human(channel_policy),
                 reason="model_returned_nothing",
+                opening=self.opening_status(request.company_id),
             )
 
             return self.finalize_ai_response(
@@ -1137,12 +1190,74 @@ class Engine:
             ),
         }
 
+    @staticmethod
+    def opening_status(company_id):
+        """Whether this company is open right now, for the escalation wording.
+
+        Read here rather than inside `build_safe_result` because that method is
+        a pure formatter and this needs the company's database. Never raises:
+        hours that cannot be read leave the reply exactly as it was before this
+        existed.
+        """
+        from core import working_hours
+
+        if company_id is None:
+            return working_hours.OpeningStatus(open=True)
+
+        try:
+            from backend.services.company_settings_service import (
+                company_settings_service,
+            )
+
+            section = company_settings_service.get_section(
+                int(company_id), "working_hours"
+            )["values"]
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the working hours of company %s", company_id
+            )
+            return working_hours.OpeningStatus(open=True)
+
+        return working_hours.status(section)
+
+    @staticmethod
+    def _closed_note(language, opening):
+        """The sentence appended when the team is not there to take it.
+
+        Empty whenever the company is open, has not switched hours on, or has
+        hours that could not be read — so this can only ever add a sentence,
+        never change the one that was already being sent.
+        """
+        if opening is None or getattr(opening, "open", True):
+            return ""
+
+        opens_at = getattr(opening, "opens_at", None)
+
+        if opens_at is None:
+            # Open on no day at all. Naming a time here would invent one.
+            return (
+                " Our team is currently outside working hours and will reply "
+                "as soon as they are back."
+                if language == "en"
+                else " الفريق حالياً خارج أوقات الدوام ورح يرد عليك أول ما يرجع."
+            )
+
+        when = opens_at.strftime("%A %H:%M")
+
+        return (
+            f" Our team is currently outside working hours and will reply from "
+            f"{when}."
+            if language == "en"
+            else f" الفريق حالياً خارج أوقات الدوام ورح يرد عليك من {when}."
+        )
+
     def build_safe_result(
         self,
         language,
         current_department,
         escalate=True,
         reason=None,
+        opening=None,
     ):
         """The reply for a message the company's rules leave no answer for.
 
@@ -1155,7 +1270,18 @@ class Engine:
         The wording does not change between the two. A company that switched
         escalation off did not ask its assistant to start guessing; it asked it
         to stop handing conversations over.
+
+        ``opening`` is this company's working hours, applied only to the
+        escalating branch. The conversation is still handed over — it still
+        needs a person — but a customer told "our team can check it for you" at
+        three in the morning is being told somebody is coming when nobody is
+        until the shop opens. The hand-over is unchanged; the sentence after it
+        says when.
+
+        A company with hours switched off, or hours that could not be read,
+        gets exactly the reply it got before any of this existed.
         """
+        closing_note = self._closed_note(language, opening) if escalate else ""
         if language == "en":
             result = {
                 "department": (
@@ -1173,7 +1299,7 @@ class Engine:
                     "I do not have enough confirmed "
                     "information to answer that accurately. "
                     "Please send more detail, or our team "
-                    "can check it for you."
+                    "can check it for you." + closing_note
                 ),
                 "buttons": (
                     ["Contact support"] if escalate else []
@@ -1202,7 +1328,7 @@ class Engine:
                     "ما عندي معلومات مؤكدة كافية "
                     "حتى جاوبك بدقة. ابعتلنا تفاصيل "
                     "أكتر، أو فينا نحولك للفريق "
-                    "ليتأكدلك."
+                    "ليتأكدلك." + closing_note
                 ),
                 "buttons": (
                     ["التواصل مع الدعم"] if escalate else []

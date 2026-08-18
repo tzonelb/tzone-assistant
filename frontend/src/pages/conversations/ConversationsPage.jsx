@@ -46,7 +46,6 @@ const CHANNEL_ICONS = {
   whatsapp: WhatsApp,
   instagram: Instagram,
   telegram: Telegram,
-  website: LanguageOutlined,
 };
 
 function humanize(value) {

@@ -849,3 +849,126 @@ permissions that are no longer in the catalogue, the same way it already treats
 the catalogue as the authority for a permission's name and description.
 `role_permissions` cascades, so a role still granting a retired permission loses
 the grant. That changes no access: nothing was checking it.
+
+## D-030 — Two settings catalogues, one seeded and one served
+
+The audit of D-013's shape reported eight settings "stored and read by
+nothing". That was true and it was not the real defect. The real one is that
+there were **two** `DEFAULT_SETTINGS`: one in `database/schema_tenant.py`,
+seeded into every company's database at provisioning, and a different one in
+`backend/services/company_settings_service.py`, which is what `get_section`
+returned and what `update_section` accepted.
+
+They had drifted completely apart. The seeded catalogue held `working_hours`,
+`reply_language`, `escalate_on_low_confidence` and three `notify_on_*` keys.
+The served one held none of them, and merged its own set over the top.
+
+So those keys were not merely unread. There was no path to them at all: a
+company's database held them, a read never returned them, and a write naming
+one was silently dropped. Nothing failed, because dropping a key nobody defines
+is the correct behaviour for a key nobody defines — which is exactly what made
+the fork invisible.
+
+The check that was supposed to catch this class parsed the constant out of
+`schema_tenant.py` with `ast`. It was auditing the dead one, and passing.
+
+`schema_tenant.py` now owns the single catalogue and the service imports it, so
+seeding and serving cannot disagree without one of them failing to import.
+`RESOLVED_SECTIONS` names the two sections that must not be seeded at all —
+`company_profile` comes from the control-plane row and `modules` from the
+operator's switches, and a stored row wins over a resolved default, so seeding
+`company_profile` wrote `company_name: ""` into every new company and the
+settings screen opened showing an empty name.
+
+## D-031 — Six settings built, two retired
+
+With one catalogue, the settings that decide nothing could finally be resolved.
+
+Built:
+
+* **`working_hours`** decides escalation, not the assistant. A bot that stops
+  answering outside office hours is worse for the customer than one that keeps
+  going; what is wrong is telling somebody "our team can check it for you" at
+  three in the morning, which promises a person who is not coming until the
+  shop opens. The conversation is still handed over. The sentence after it says
+  when.
+
+  Every failure reads as open — an unknown timezone, a malformed time, a day
+  that is not a mapping. A company whose hours are corrupt gets exactly the
+  behaviour it had before hours existed. The opposite default would let a typo
+  tell that company's customers it was closed while the team sat there.
+
+  The first implementation collapsed "the company marked this day closed" and
+  "this day cannot be read" into one answer, so a typo in one day's opening
+  time closed the company on that day for ever. Found by its own tests.
+
+* **`reply_language`** replaces detection, not the customer's choice. A
+  customer who explicitly asks to switch is handled earlier and still wins;
+  overriding them would make that feature lie about what it did.
+
+* **The three notification preferences.** Two of them had to have their
+  notifications built first: a colleague taking a conversation off the
+  assistant was recorded only as a conversation event, and the assistant
+  failing to answer a customer left a `diagnostic_events` row nobody watches
+  and that clears after fourteen days. The team's first hint that the assistant
+  was failing was a customer asking why they had been ignored.
+
+  The gate lives inside `notification_service.create`, keyed by notification
+  type, rather than at each call site — which is how these came to be offered
+  without existing in the first place.
+
+Retired, because the decision already had an owner elsewhere:
+`escalate_on_low_confidence` (duplicated `fallback_to_human` in the reply
+policy), `welcome_immediate` (duplicated `welcome_enabled`/`welcome_mode`),
+`reply_only_when_customer_stops_typing` (duplicated
+`collect_message_delay_seconds`), and five browser preferences the browser
+already keeps per user. Two switches for one decision leaves an owner setting
+the one they found and unable to tell why nothing changed.
+
+Retirement is named in `RETIRED_SETTINGS`, not inferred from absence. The first
+version dropped every stored key the defaults did not mention, which sounded
+equivalent and was not: `ai_behavior.channels` is sparse per-channel
+configuration that deliberately has no default, and deleting it silently turned
+off per-channel AI mode for every company.
+
+## D-032 — Branches a company can create
+
+The other half of D-025. `branches` was read in four places and could not be
+written, so the branch selector on every team member and the branch field on
+every channel were permanently empty lists.
+
+Endpoints under `users.manage`, and CLI commands for the cases with no session
+— a company being set up before anybody has a password, an operator moving a
+customer's locations across in bulk.
+
+Deleting a branch relies on the foreign keys, which both pointing tables
+declare as `ON DELETE SET NULL`, rather than repeating the rule in SQL. Two
+mechanisms for one rule means the redundant one rots. That leaves the pragma as
+the thing worth testing: with `foreign_keys` off this silently stops working
+and a deleted branch's id lives on, ready to be handed to a different branch
+later.
+
+Getting there took three wrong statements about the schema, each from a `grep`
+whose context window cut off before the `FOREIGN KEY` lines. The tests were
+what caught all three.
+
+## D-033 — `website`, in the five places the first fix missed
+
+D-027 recorded `website` as removed. It was removed from two of five places.
+
+It survived in `UISettingsPage.jsx` as a visible **"Website" toggle** on every
+company's Preferences screen, in the per-user notification defaults, and as an
+icon entry. The check written to prevent exactly this looked for a quoted list
+and never saw an object written as bare keys.
+
+Rewriting the check went through two more wrong versions. The second flagged
+any map keyed by channel, which condemned the label maps in `ChannelsPage` and
+`AiTeachingPage` — mapping a code to a display name is the right thing to do
+there, and an unknown code costs nothing worse than an unprettified label.
+
+The property that actually matters is narrower: a file may name the channels,
+and may not offer one that does not exist. The check also skips comment lines,
+after a comment in this repository explaining that `website` used to be offered
+failed the check that `website` is not offered — the fourth time in this audit
+that a source-scanning check matched somebody's prose about a defect instead of
+the defect.
