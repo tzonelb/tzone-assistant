@@ -1238,3 +1238,56 @@ encrypted databases, and each open costs about 1.0 ms for the control plane and
 1.4 ms for a company file — so roughly fifteen milliseconds of every inbox
 request is connection setup. Not a defect at this size, and worth having
 written down before somebody adds the twelfth.
+
+## D-041 — A session that outlives the access, and a retention nothing ran
+
+Two more rounds of attacking the platform from inside a working account.
+
+**Sessions end when access does.** A token is minted at sign-in and lives for
+hours; whether the holder is still allowed to be here is decided once, at that
+moment. `get_user_from_token` re-checks the platform account (`users.status`)
+and not the membership (`company_users.status`), so the obvious worry was the
+Tuesday-morning case: somebody is let go, their manager switches their
+membership off, and the browser they left open keeps working until the token
+expires.
+
+It does not. All four ways access can be taken away — disabling the membership,
+deleting it, disabling the account, suspending the whole company — close every
+door immediately, including the routes that carry no permission at all, because
+`resolve_company_id` consults `get_user_companies`, which filters on membership
+*and* company status. Verified by mutation on both filters separately, each
+failing exactly the test that names it.
+
+Worth stating because it is not obvious from the token check alone, and the
+next person to read `get_user_from_token` will have the same worry.
+
+**A retention window nothing ran.** `DiagnosticsService.RETENTION_DAYS = 14`
+has been in the source since the service was written, and the only thing that
+applied it was a button in the developer console. For every company nobody
+pressed it for, the number was a comment.
+
+That table fills faster than any other on the platform, and from ordinary use
+rather than any attack: nine `diagnostics_service.record` calls sit on the path
+of one inbound message — seven in `smart_reply`, two in `inbound` — so a
+company handling a thousand messages a month writes tens of thousands of rows a
+month into its own encrypted database, for ever.
+
+The periodic sweep that already opens every company to prune the activity log
+now applies it too, each company guarded separately so one unreadable database
+does not cost the rest their retention. No new policy: fourteen days was
+already decided and written down, and this only makes it true.
+
+**A hazard this audit documented, then walked into.** The first version of the
+test imported `main` *inside* the test body, while the fixture's patch was
+active. Every module `main` pulls in for the first time copies whatever
+`database_manager` currently is, and monkeypatch cannot restore a module that
+did not exist when the patch was recorded — so those modules held a temporary
+directory for the rest of the process. 84 tests in two unrelated files failed,
+none of them near the change.
+
+This is exactly the trap written up under D-037 for the concurrency harness,
+found again three files later by someone who had just written the warning. The
+fixture now imports `main` before the sweep and asserts it was rebound, which
+is the pattern the rest of the suite already uses — and the reason it is worth
+a paragraph is that knowing about a trap is demonstrably not the same as not
+falling into it.

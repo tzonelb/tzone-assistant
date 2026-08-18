@@ -46,6 +46,7 @@ from backend.api.middleware import (
     SessionCookieMiddleware,
 )
 from backend.services.activity_service import activity_service
+from backend.services.diagnostics_service import diagnostics_service
 from backend.services.health_service import health_service
 from backend.security.keyring import KeyringError
 from backend.services.auth_service import auth_service
@@ -316,12 +317,34 @@ def _prune_activity_logs() -> int:
     A company whose database will not open is skipped rather than aborting the
     sweep: one unreadable file must not stop every other company's log from
     being kept to its retention.
+
+    Diagnostics are swept here too. `DiagnosticsService.RETENTION_DAYS` has
+    declared fourteen days since the service was written, and the only thing
+    that applied it was a button in the developer console — so for every
+    company nobody pressed it for, the retention was a comment. That table is
+    the fastest-growing one on the platform: nine `record` calls sit on the
+    path of a single inbound message, seven in `smart_reply` and two in
+    `inbound`, so a company handling a thousand messages a month accumulates
+    tens of thousands of rows a month inside its own encrypted database, for
+    ever, from ordinary use rather than from any attack.
+
+    Enforcing the declared window rather than choosing one: the number was
+    already decided and written down, and this only makes it true.
     """
     total = 0
 
     for company_id in database_manager.list_company_ids():
         removed = activity_service.prune(company_id)
         total += sum(removed.values())
+
+        # Separately guarded: a diagnostics sweep that fails must not cost the
+        # remaining companies their activity-log retention, and vice versa.
+        try:
+            total += diagnostics_service.cleanup(company_id=company_id)
+        except Exception:
+            logger.exception(
+                "Diagnostics pruning failed for company %s", company_id
+            )
 
     return total
 
