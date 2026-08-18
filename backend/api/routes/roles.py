@@ -159,7 +159,7 @@ def overview(current_user: dict = Depends(get_current_user)):
 def create_role(
     payload: RoleCreateRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
@@ -280,7 +280,7 @@ def update_role(
     role_id: int,
     payload: RoleUpdateRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
@@ -332,7 +332,7 @@ def update_role(
 def create_user(
     payload: UserCreateRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
@@ -390,7 +390,7 @@ def update_user_assignment(
     user_id: int,
     payload: UserAssignmentRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     company_id = _company_id(current_user)
     _require_access_admin(current_user, company_id)
@@ -484,7 +484,7 @@ def _assert_member(conn, company_id: int, user_id: int) -> dict:
 def force_password_reset(
     user_id: int,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     """Send this employee a single-use link to set a new password.
 
@@ -572,7 +572,7 @@ def force_password_reset(
 def unlock_user(
     user_id: int,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     """Clear a lockout without touching the password.
 
@@ -645,10 +645,11 @@ def _branch_row(conn, company_id: int, branch_id: int):
 
 
 @router.get("/branches")
-def list_branches(current_user: dict = Depends(get_current_user)):
+def list_branches(
+    current_user: dict = Depends(require_permission("settings.manage")),
+):
     company_id = _company_id(current_user)
-    _require_access_admin(current_user, company_id)
-
+    
     with database_manager.control() as conn:
         rows = conn.execute(
             """
@@ -667,10 +668,9 @@ def list_branches(current_user: dict = Depends(get_current_user)):
 def create_branch(
     payload: BranchCreateRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     company_id = _company_id(current_user)
-    _require_access_admin(current_user, company_id)
     now = utc_now_iso()
 
     with database_manager.control() as conn:
@@ -728,10 +728,9 @@ def update_branch(
     branch_id: int,
     payload: BranchUpdateRequest,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     company_id = _company_id(current_user)
-    _require_access_admin(current_user, company_id)
     values = payload.model_dump(exclude_unset=True)
 
     with database_manager.control() as conn:
@@ -771,7 +770,7 @@ def update_branch(
 def delete_branch(
     branch_id: int,
     request: Request,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_permission("settings.manage")),
 ):
     """Retire a branch, releasing whoever was pointed at it.
 
@@ -789,8 +788,7 @@ def delete_branch(
     for that reason.
     """
     company_id = _company_id(current_user)
-    _require_access_admin(current_user, company_id)
-
+    
     with database_manager.control() as conn:
         before = dict(_branch_row(conn, company_id, branch_id))
 

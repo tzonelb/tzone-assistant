@@ -290,6 +290,27 @@ export async function unlockCompanyUserRequest(userId) {
   });
 }
 
+export async function listBranchesRequest() {
+  return apiRequest("/api/admin/access/branches");
+}
+
+export async function createBranchRequest(payload) {
+  return apiRequest("/api/admin/access/branches", { method: "POST", body: payload });
+}
+
+export async function updateBranchRequest(branchId, payload) {
+  return apiRequest(`/api/admin/access/branches/${branchId}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteBranchRequest(branchId) {
+  return apiRequest(`/api/admin/access/branches/${branchId}`, {
+    method: "DELETE",
+  });
+}
+
 export async function logoutRequest() {
   return apiRequest("/api/auth/logout", {
     method: "POST",

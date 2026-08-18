@@ -24,6 +24,12 @@ import {
   updateReplyPolicyDefaultRequest,
 } from "../../api/aiTeaching";
 import {
+  createBranchRequest,
+  deleteBranchRequest,
+  listBranchesRequest,
+  updateBranchRequest,
+} from "../../api/client";
+import {
   AppButton,
   AppCard,
   ConfirmDialog,
@@ -386,6 +392,17 @@ export default function AiTeachingPage() {
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptError, setPromptError] = useState("");
 
+  // Branches sit next to sections because they are the same kind of thing: a
+  // list the company defines about itself. They differ in what they do —
+  // a section is offered to a customer, a branch is only ever a label for
+  // filtering the inbox and the channel list.
+  const [branches, setBranches] = useState([]);
+  const [branchesError, setBranchesError] = useState("");
+  const [branchesStatus, setBranchesStatus] = useState("");
+  const [branchBusyId, setBranchBusyId] = useState(null);
+  const [newBranch, setNewBranch] = useState(null);
+  const [savingBranch, setSavingBranch] = useState(false);
+
   const [departments, setDepartments] = useState([]);
   const [departmentsLoading, setDepartmentsLoading] = useState(true);
   const [departmentsError, setDepartmentsError] = useState("");
@@ -429,6 +446,87 @@ export default function AiTeachingPage() {
     }
   }, []);
 
+  const loadBranches = useCallback(async () => {
+    setBranchesError("");
+
+    try {
+      const result = await listBranchesRequest();
+      setBranches(Array.isArray(result?.branches) ? result.branches : []);
+    } catch (requestError) {
+      setBranchesError(requestError.message || "Branches could not be loaded.");
+    }
+  }, []);
+
+  const handleCreateBranch = useCallback(async () => {
+    if (!newBranch?.name?.trim()) {
+      setBranchesError("A branch needs a name.");
+      return;
+    }
+
+    setSavingBranch(true);
+    setBranchesError("");
+    setBranchesStatus("");
+
+    try {
+      await createBranchRequest({
+        name: newBranch.name.trim(),
+        code: newBranch.code?.trim() || null,
+        address: newBranch.address?.trim() || null,
+        phone: newBranch.phone?.trim() || null,
+      });
+      setNewBranch(null);
+      setBranchesStatus("Branch added.");
+      await loadBranches();
+    } catch (requestError) {
+      setBranchesError(requestError.message || "The branch could not be saved.");
+    } finally {
+      setSavingBranch(false);
+    }
+  }, [newBranch, loadBranches]);
+
+  const handleRenameBranch = useCallback(
+    async (branch, name) => {
+      const trimmed = String(name || "").trim();
+
+      if (!trimmed || trimmed === branch.name) {
+        return;
+      }
+
+      setBranchBusyId(branch.id);
+      setBranchesError("");
+
+      try {
+        await updateBranchRequest(branch.id, { name: trimmed });
+        setBranchesStatus("Branch renamed.");
+        await loadBranches();
+      } catch (requestError) {
+        setBranchesError(requestError.message || "The branch could not be renamed.");
+        await loadBranches();
+      } finally {
+        setBranchBusyId(null);
+      }
+    },
+    [loadBranches],
+  );
+
+  const handleDeleteBranch = useCallback(
+    async (branch) => {
+      setBranchBusyId(branch.id);
+      setBranchesError("");
+
+      try {
+        await deleteBranchRequest(branch.id);
+        setBranchesStatus("Branch removed.");
+        await loadBranches();
+      } catch (requestError) {
+        setBranchesError(requestError.message || "The branch could not be removed.");
+      } finally {
+        setBranchBusyId(null);
+      }
+    },
+    [loadBranches],
+  );
+
   const loadDepartments = useCallback(async () => {
     setDepartmentsLoading(true);
     setDepartmentsError("");
@@ -471,8 +569,9 @@ export default function AiTeachingPage() {
   useEffect(() => {
     loadProfile();
     loadDepartments();
+    loadBranches();
     loadPolicy();
-  }, [loadProfile, loadDepartments, loadPolicy]);
+  }, [loadProfile, loadDepartments, loadBranches, loadPolicy]);
 
   const overridePolicyField = useCallback(
     (scopeKey, field, overridden, inherited) => {
@@ -1509,6 +1608,190 @@ export default function AiTeachingPage() {
               label is still listed by name but is not offered as a button. Up
               to {MAX_DEPARTMENTS} sections.
             </p>
+          </AppCard>
+
+          {/* Next to sections, because both are lists a company defines about
+              itself. What they do is different and deliberately so: a section
+              is offered to a customer and routes a conversation, a branch is
+              only ever a label — it filters the inbox and the channel list and
+              decides nothing the customer sees. */}
+          <AppCard padding="medium">
+            <header className="ai-teaching-section-head">
+              <div>
+                <span>BRANCHES</span>
+                <h3>Your locations, for filtering</h3>
+              </div>
+
+              <AppButton
+                variant="secondary"
+                size="small"
+                icon={<AddOutlined />}
+                onClick={() => {
+                  setBranchesStatus("");
+                  setBranchesError("");
+                  setNewBranch({ name: "", code: "", address: "", phone: "" });
+                }}
+                disabled={Boolean(newBranch)}
+              >
+                Add branch
+              </AppButton>
+            </header>
+
+            <p className="ai-teaching-note">
+              A shop, an office, a warehouse. Naming one lets you say which
+              location an employee works at and which one a connected channel
+              belongs to, and filter both lists by it. Nothing a customer sees
+              changes. A company with a single location needs none of this.
+            </p>
+
+            {branchesError ? (
+              <p className="ai-teaching-alert is-error">{branchesError}</p>
+            ) : null}
+
+            {branchesStatus ? (
+              <p className="ai-teaching-alert is-ok">{branchesStatus}</p>
+            ) : null}
+
+            <ul className="ai-teaching-departments">
+              {branches.map((row) => (
+                <li key={row.id}>
+                  <div className="ai-teaching-department-fields">
+                    <label htmlFor={`ai-teaching-branch-name-${row.id}`}>
+                      <span>Name</span>
+
+                      <input
+                        id={`ai-teaching-branch-name-${row.id}`}
+                        type="text"
+                        maxLength={120}
+                        defaultValue={row.name}
+                        disabled={branchBusyId === row.id}
+                        onBlur={(event) =>
+                          handleRenameBranch(row, event.target.value)
+                        }
+                      />
+                    </label>
+
+                    <label htmlFor={`ai-teaching-branch-code-${row.id}`}>
+                      <span>Code</span>
+
+                      <input
+                        id={`ai-teaching-branch-code-${row.id}`}
+                        type="text"
+                        value={row.code || ""}
+                        readOnly
+                      />
+                    </label>
+                  </div>
+
+                  <div className="ai-teaching-department-actions">
+                    <AppButton
+                      variant="ghost"
+                      size="small"
+                      icon={<DeleteOutlineOutlined />}
+                      loading={branchBusyId === row.id}
+                      onClick={() => handleDeleteBranch(row)}
+                    >
+                      Remove
+                    </AppButton>
+                  </div>
+                </li>
+              ))}
+
+              {newBranch ? (
+                <li className="is-new">
+                  <div className="ai-teaching-department-fields">
+                    <label htmlFor="ai-teaching-new-branch-name">
+                      <span>Name</span>
+
+                      <input
+                        id="ai-teaching-new-branch-name"
+                        type="text"
+                        maxLength={120}
+                        value={newBranch.name}
+                        placeholder="Downtown"
+                        onChange={(event) =>
+                          setNewBranch((current) => ({
+                            ...current,
+                            name: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label htmlFor="ai-teaching-new-branch-code">
+                      <span>Code</span>
+
+                      <input
+                        id="ai-teaching-new-branch-code"
+                        type="text"
+                        maxLength={40}
+                        value={newBranch.code}
+                        placeholder="DT"
+                        onChange={(event) =>
+                          setNewBranch((current) => ({
+                            ...current,
+                            code: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label htmlFor="ai-teaching-new-branch-address">
+                      <span>Address</span>
+
+                      <input
+                        id="ai-teaching-new-branch-address"
+                        type="text"
+                        maxLength={300}
+                        value={newBranch.address}
+                        onChange={(event) =>
+                          setNewBranch((current) => ({
+                            ...current,
+                            address: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label htmlFor="ai-teaching-new-branch-phone">
+                      <span>Phone</span>
+
+                      <input
+                        id="ai-teaching-new-branch-phone"
+                        type="text"
+                        maxLength={40}
+                        value={newBranch.phone}
+                        onChange={(event) =>
+                          setNewBranch((current) => ({
+                            ...current,
+                            phone: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+
+                  <div className="ai-teaching-department-actions">
+                    <AppButton
+                      variant="primary"
+                      size="small"
+                      loading={savingBranch}
+                      onClick={handleCreateBranch}
+                    >
+                      Save
+                    </AppButton>
+
+                    <AppButton
+                      variant="ghost"
+                      size="small"
+                      onClick={() => setNewBranch(null)}
+                    >
+                      Cancel
+                    </AppButton>
+                  </div>
+                </li>
+              ) : null}
+            </ul>
           </AppCard>
 
           <AppCard padding="medium">

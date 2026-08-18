@@ -333,11 +333,59 @@ def test_a_company_cannot_delete_another_companys_branch(
 
 
 def test_an_ordinary_employee_cannot_manage_branches(client, service, alpha):
-    """Same guard as roles and team members. Who works where is an
-    administrator's decision."""
     agent_token = _token(client, service, alpha, "agent@alpha.example.com", "agent")
 
     assert _create(client, agent_token, "Downtown").status_code == 403
+
+
+def test_branches_are_guarded_by_the_same_permission_as_departments(
+    client, service, owner, alpha, platform
+):
+    """A branch is company structure, like a department — not user
+    administration.
+
+    That matters beyond tidiness: the section for managing branches sits on the
+    same screen as the one for managing departments, which is behind
+    `settings.manage`. Guarding branches with `users.manage` instead would ship
+    a section that appears to whoever can open the screen and refuses them —
+    the exact defect this audit spent its time removing.
+
+    Proved with a role holding `users.manage` and not `settings.manage`, since
+    no seeded role separates them and a test using one that holds neither
+    passes whichever permission the endpoint asks for.
+    """
+    created = client.post(
+        "/api/admin/access/roles",
+        headers=_headers(owner),
+        json={
+            "name": "User Admin",
+            "code": "user_admin",
+            "description": "Manages people and nothing else.",
+            "permission_codes": ["dashboard.view", "users.view", "users.manage"],
+        },
+    )
+    assert created.status_code == 200, created.text
+
+    from backend.services.auth_service import auth_service
+
+    user_id = auth_service.create_user(
+        "useradmin@alpha.example.com", ADMIN_PASSWORD, "User Admin"
+    )
+    auth_service.assign_user_to_company(user_id, alpha["id"], "user_admin")
+
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "workspace_code": alpha["workspace_code"],
+            "company": alpha["name"],
+            "email": "useradmin@alpha.example.com",
+            "password": ADMIN_PASSWORD,
+        },
+    )
+    assert response.status_code == 200, response.text
+    token = response.json()["access_token"]
+
+    assert _create(client, token, "Downtown").status_code == 403
 
 
 # --------------------------------------------------------------------- record
@@ -352,3 +400,108 @@ def test_creating_a_branch_is_recorded(client, owner, alpha):
     items = entries["items"] if isinstance(entries, dict) else entries
 
     assert any(item["action"] == Action.BRANCH_CREATED for item in items)
+
+
+# ------------------------------------------------------------ what it is not
+#
+# The owner's decision, written down: a branch is a reference and a filter.
+# It labels an employee and a channel, it narrows two lists, and it decides
+# nothing a customer ever sees. These tests are what stops it quietly growing
+# a role — the way `department` did, which routes conversations and is offered
+# to customers as a menu.
+
+
+def test_a_branch_decides_nothing_on_the_reply_path():
+    """No module that answers a customer may consult a branch.
+
+    `core/` is the reply path: the engine, the matcher, the policy, the flow.
+    A branch appearing there would mean a customer in one location started
+    getting different answers — which is a routing feature, not a label, and
+    is what `business_departments` is for.
+
+    This failed the first time it ran. `core/request.py` — the object that
+    carries a customer's message through the engine — declared a `branch_id`
+    field, serialised it in `to_dict`, and was never given one by any caller
+    and never read by anything. Always `None`, on the one object where a
+    branch must never matter, waiting for somebody to find it and wire it up.
+    Removed rather than left, because the invitation was the whole problem.
+    """
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+
+    result = subprocess.run(
+        ["grep", "-rn", "branch", "--include=*.py", "core", "gateway"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+
+    hits = [
+        line
+        for line in result.stdout.splitlines()
+        # `branch` is an ordinary English word — a branch of an `if`. Only a
+        # reference to the column or the table counts.
+        if "branch_id" in line or "FROM branches" in line or "branches." in line
+    ]
+
+    assert not hits, (
+        "A branch reached the reply path:\n  "
+        + "\n  ".join(hits)
+        + "\n\nA branch is a label for filtering. Routing a conversation by "
+        "location is what departments do."
+    )
+
+
+def test_a_branch_grants_and_withholds_nothing():
+    """It is not a permission boundary either.
+
+    An employee assigned to a branch sees exactly what their role allows,
+    everywhere. Treating a branch as an access scope would be a second
+    permission system nobody declared — and one no screen explains.
+    """
+    import subprocess
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+
+    result = subprocess.run(
+        ["grep", "-rn", "branch_id", "--include=*.py", "backend/services"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+    )
+
+    deciding = [
+        line
+        for line in result.stdout.splitlines()
+        if any(
+            word in line
+            for word in ("has_permission", "require_permission", "allowed", "denied")
+        )
+    ]
+
+    assert not deciding, (
+        "A branch is being used to decide access:\n  " + "\n  ".join(deciding)
+    )
+
+
+def test_the_screen_offers_names_and_never_asks_for_an_id():
+    """An owner does not know the number of their own shop.
+
+    The Channels form asked for a raw `Branch id`, which is unusable without
+    reading the database — and until the write started checking it, a number
+    that could name another company's branch.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    source = (root / "frontend/src/pages/channels/ChannelsPage.jsx").read_text()
+
+    assert 'id="channel-branch"' in source, "the branch field is gone from Channels"
+
+    field = source[source.index('id="channel-branch"') - 400 :][:800]
+
+    assert "<select" in field, "the branch field is not a list of names"
+    assert 'type="number"' not in field, "the branch field still asks for an id"

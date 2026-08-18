@@ -111,6 +111,9 @@ export default function ChannelsPage() {
   const [supportedChannels, setSupportedChannels] = useState([]);
   const [routingFields, setRoutingFields] = useState({});
   const [departments, setDepartments] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [branchFilter, setBranchFilter] = useState("all");
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -127,6 +130,18 @@ export default function ChannelsPage() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  const visibleItems = useMemo(() => {
+    if (branchFilter === "all") {
+      return items;
+    }
+
+    if (branchFilter === "none") {
+      return items.filter((row) => !row.branch_id);
+    }
+
+    return items.filter((row) => String(row.branch_id) === branchFilter);
+  }, [items, branchFilter]);
+
   const loadAccounts = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -142,6 +157,7 @@ export default function ChannelsPage() {
       );
       setRoutingFields(result?.routing_fields || {});
       setDepartments(Array.isArray(result?.departments) ? result.departments : []);
+      setBranches(Array.isArray(result?.branches) ? result.branches : []);
     } catch (requestError) {
       setError(
         requestError.message || "Connected accounts could not be loaded.",
@@ -443,6 +459,28 @@ export default function ChannelsPage() {
 
       <div className={`channels-layout ${editorOpen ? "has-editor" : ""}`}>
         <AppCard padding="medium" className="channels-list-card">
+          {/* Shown only to a company that has named a location. A filter with
+              one option is a control that decides nothing. */}
+          {branches.length ? (
+            <label htmlFor="channels-branch-filter">
+              <span>Branch</span>
+
+              <select
+                id="channels-branch-filter"
+                value={branchFilter}
+                onChange={(event) => setBranchFilter(event.target.value)}
+              >
+                <option value="all">All branches</option>
+                <option value="none">No branch</option>
+                {branches.map((branch) => (
+                  <option value={String(branch.id)} key={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+
           {error ? (
             <ErrorState
               title="Connected accounts could not load"
@@ -456,7 +494,7 @@ export default function ChannelsPage() {
           ) : (
             <AppTable
               columns={columns}
-              rows={items}
+              rows={visibleItems}
               loading={loading}
               emptyTitle="No account is connected yet"
               emptyDescription="Connect a Facebook Page, Instagram account or WhatsApp number so inbound messages are routed to this company."
@@ -613,19 +651,29 @@ export default function ChannelsPage() {
                 </small>
               </label>
 
+              {/* A list of names, not a number to type. This asked the owner
+                  for a raw `Branch id` — a value nobody running a business
+                  knows, and one that could name another company's branch until
+                  the write started checking. The branch is a label for
+                  filtering, so it is chosen the way the department above it
+                  is. */}
               <label htmlFor="channel-branch">
-                <span>Branch id (optional)</span>
+                <span>Branch (optional)</span>
 
-                <input
+                <select
                   id="channel-branch"
-                  type="number"
-                  min="1"
                   value={form.branch_id}
-                  placeholder="Leave empty for the whole company"
                   onChange={(event) =>
                     updateField("branch_id", event.target.value)
                   }
-                />
+                >
+                  <option value="">The whole company</option>
+                  {branches.map((branch) => (
+                    <option value={String(branch.id)} key={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
               </label>
 
               {selected ? (

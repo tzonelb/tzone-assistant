@@ -37,6 +37,23 @@ export default function RolesPermissionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [branchFilter, setBranchFilter] = useState("all");
+
+  // A label, nothing more. Filtering the team by location changes what this
+  // screen shows and nothing about what anybody may do.
+  const visibleUsers = useMemo(() => {
+    const users = data?.users || [];
+
+    if (branchFilter === "all") {
+      return users;
+    }
+
+    if (branchFilter === "none") {
+      return users.filter((user) => !user.branch_id);
+    }
+
+    return users.filter((user) => String(user.branch_id) === branchFilter);
+  }, [data, branchFilter]);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState(null);
   const [confirming, setConfirming] = useState(null);
@@ -258,6 +275,28 @@ export default function RolesPermissionsPage() {
             <h2>Users</h2>
             <p>Employees and administrators connected to this company.</p>
           </div>
+
+          {/* Only for a company that has named a location. A filter offering
+              one choice is a control that decides nothing. */}
+          {data.branches.length ? (
+            <label htmlFor="users-branch-filter">
+              <span>Branch</span>
+
+              <select
+                id="users-branch-filter"
+                value={branchFilter}
+                onChange={(event) => setBranchFilter(event.target.value)}
+              >
+                <option value="all">All branches</option>
+                <option value="none">No branch</option>
+                {data.branches.map((branch) => (
+                  <option value={String(branch.id)} key={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <div className="users-table-wrap">
@@ -274,7 +313,7 @@ export default function RolesPermissionsPage() {
             </thead>
 
             <tbody>
-              {data?.users?.map((user) => (
+              {visibleUsers.map((user) => (
                 <tr key={user.id}>
                   <td>
                     <strong>{user.full_name || "Unnamed user"}</strong>

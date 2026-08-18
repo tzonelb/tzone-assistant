@@ -27,6 +27,9 @@ from backend.services.channel_account_service import (
 )
 
 
+from database.manager import database_manager
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/channels", tags=["Channels"])
@@ -120,7 +123,37 @@ def list_channels(
                 enabled_only=True,
             )
         ],
+        # The company's locations, for the same reason and with the same
+        # scoping. The screen used to ask an owner to type a raw branch id,
+        # which is a number nobody running a business knows — and one that
+        # named another company's branch until the write started checking it.
+        "branches": _branches(company_id),
     }
+
+
+def _branches(company_id: int) -> list[dict[str, Any]]:
+    """This company's active branches, id and name only.
+
+    Never raises: a branch list that will not load costs the screen a dropdown,
+    not the ability to connect a channel.
+    """
+    try:
+        with database_manager.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, name
+                FROM branches
+                WHERE company_id = ? AND status = 'active'
+                ORDER BY name
+                """,
+                (int(company_id),),
+            ).fetchall()
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not read the branches of company %s", company_id)
+
+        return []
+
+    return [{"id": int(row["id"]), "name": row["name"]} for row in rows]
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
