@@ -31,6 +31,7 @@ import logging
 from datetime import date as date_type, datetime, time as time_type, timedelta, timezone
 from typing import Any
 
+from backend.services.ownership import assert_branch, assert_employees
 from database.manager import database_manager
 
 
@@ -200,15 +201,24 @@ class AppointmentService:
         return starts, ends
 
     @staticmethod
-    def _require_staff(staff_user_id: Any) -> int:
+    def _require_staff(company_id: int, staff_user_id: Any) -> int:
         """Every appointment names the staff member whose time it takes.
 
         The column is nullable, but an appointment with nobody attached has no
         calendar to collide with, which would make it a permanent hole in the
         double-booking guarantee. Booking without staff is refused instead.
+
+        Checked against the company, not merely cast to an integer. Ids are
+        global in the control database, so before this an appointment could be
+        booked against an employee of a different company: their name never
+        surfaced — `user_display_names` is scoped — but the row pointed at a
+        stranger, they held a slot in a calendar they do not work in, and the
+        double-booking guarantee stopped meaning anything for that slot.
         """
         if staff_user_id is None or str(staff_user_id).strip() == "":
             raise ValueError("An appointment must be assigned to a staff member.")
+
+        assert_employees(company_id, [staff_user_id])
 
         return int(staff_user_id)
 
@@ -333,8 +343,10 @@ class AppointmentService:
         the error message; the guarantee does not rest on it.
         """
         company_id = int(company_id)
-        staff_user_id = self._require_staff(staff_user_id)
+        staff_user_id = self._require_staff(company_id, staff_user_id)
         starts, ends = self._validate_window(starts_at, ends_at)
+
+        branch_id = assert_branch(company_id, branch_id)
 
         title = _clean(title) or "Appointment"
         notes = _clean(notes)
@@ -386,7 +398,7 @@ class AppointmentService:
                         int(customer_id) if customer_id else None,
                         int(conversation_id) if conversation_id else None,
                         staff_user_id,
-                        int(branch_id) if branch_id else None,
+                        branch_id,
                         title,
                         notes,
                         starts,
@@ -471,10 +483,16 @@ class AppointmentService:
                         "A cancelled appointment cannot be rescheduled. Book a new one."
                     )
 
-                target_staff = self._require_staff(
-                    staff_user_id
+                # Only a staff id the caller supplies is checked against the
+                # company. Carrying the existing one forward is not a claim
+                # about it, and re-checking would mean an employee leaving
+                # froze every appointment already in their calendar — nobody
+                # could reschedule or cancel them, which is exactly when a
+                # company needs to.
+                target_staff = (
+                    self._require_staff(company_id, staff_user_id)
                     if staff_user_id is not None
-                    else current["staff_user_id"]
+                    else int(current["staff_user_id"])
                 )
 
                 conflict = self._find_conflict(
@@ -866,7 +884,7 @@ class AppointmentService:
         status: str = "active",
     ) -> dict[str, Any]:
         company_id = int(company_id)
-        staff_user_id = self._require_staff(staff_user_id)
+        staff_user_id = self._require_staff(company_id, staff_user_id)
         weekday, start_clock, end_clock, slot_minutes, status = self._validate_rule(
             weekday=weekday,
             start_time=start_time,
@@ -922,8 +940,11 @@ class AppointmentService:
         if current is None:
             raise AppointmentNotFound("Availability rule not found.")
 
-        target_staff = self._require_staff(
-            staff_user_id if staff_user_id is not None else current["staff_user_id"]
+        # Supplied ids are checked; a kept one is not. See `reschedule`.
+        target_staff = (
+            self._require_staff(company_id, staff_user_id)
+            if staff_user_id is not None
+            else int(current["staff_user_id"])
         )
         weekday, start_clock, end_clock, slot_minutes, status = self._validate_rule(
             weekday=current["weekday"] if weekday is None else weekday,
@@ -1046,7 +1067,7 @@ class AppointmentService:
         slots the API then refuses, or hide slots it would happily accept.
         """
         company_id = int(company_id)
-        staff_user_id = self._require_staff(staff_user_id)
+        staff_user_id = self._require_staff(company_id, staff_user_id)
         day = normalize_date(date)
         weekday = day.weekday()
 

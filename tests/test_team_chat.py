@@ -57,6 +57,55 @@ def service(platform, monkeypatch):
     return team_chat_service
 
 
+@pytest.fixture(autouse=True)
+def the_two_colleagues(platform):
+    """Users 1 and 2, as real employees of Alpha.
+
+    Most tests in this file address people by bare id — `user_id=1` posts,
+    `user_id=2` is the colleague who may or may not see it — which was fine
+    while an id was only an integer written into a tenant table. Creating a
+    channel now checks its invitees against the company directory, so an id
+    belonging to nobody is a state the platform will not produce, and a test
+    that starts from one is describing something that cannot happen.
+
+    Seeded for Alpha only: several tests below rely on a Beta id *not* being
+    an Alpha employee.
+    """
+    from database.manager import utc_now_iso
+
+    now = utc_now_iso()
+    alpha_id = platform["companies"]["alpha"]["id"]
+
+    with platform["manager"].control() as conn:
+        role = conn.execute(
+            "SELECT id FROM roles WHERE company_id = ? AND code = 'agent'",
+            (alpha_id,),
+        ).fetchone()
+
+        for user_id, name in ((1, "First Colleague"), (2, "Second Colleague")):
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (
+                    id, email, password_hash, full_name, status,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, 'x', ?, 'active', ?, ?)
+                """,
+                (user_id, f"colleague{user_id}@alpha.test", name, now, now),
+            )
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO company_users (
+                    company_id, user_id, role_id, status, created_at
+                )
+                VALUES (?, ?, ?, 'active', ?)
+                """,
+                (alpha_id, user_id, int(role["id"]), now),
+            )
+
+        conn.commit()
+
+
 @pytest.fixture()
 def staff(platform):
     """Real employees in the control database, so mentions have someone to resolve to."""

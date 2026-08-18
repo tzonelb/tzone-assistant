@@ -1105,3 +1105,136 @@ earlier test keeps that test's database for the life of the process, and
 rebinding by identity silently stopped working after the first test in a
 session. A race test quietly reading the wrong database reports "no race" no
 matter what the code does.
+
+## D-038 — The same missing check, a fourth and fifth time
+
+Every module was audited on its own, and then the platform was attacked from
+the position an attacker really has: a valid account.
+
+**141 routes, all guarded.** Establishing that took three attempts, and the two
+failures are worth recording because both looked like findings. The first
+scanner read only a literal `require_permission("...")` inside the route
+function and reported *all 141* as unguarded — most guards are named dependency
+aliases (`view_context`) defined once per file. The second followed the aliases
+and reported 22, of which 21 were wrong: `team_chat` passes a module constant,
+`require_permission(PERMISSION)`, and `roles.overview` guards inside its body.
+The six that remain carry no permission on purpose — a person's own
+notifications, where there is nothing to be permitted to see.
+
+**Where a cross-tenant read is even possible.** Mutation settled this rather
+than reasoning. Deleting `AND company_id = ?` from a *tenant* table's lookup —
+products, knowledge, tasks, customers — changes nothing, because Alpha's
+connection cannot open Beta's file. The `company_id` column there is defence in
+depth. Deleting it from a *control* table's lookup — channel accounts, branches
+— fails immediately, because an id from another company is a real row on the
+same connection. So the control plane is the whole surface, and it is where
+this platform has already had a leak.
+
+**Three payload fields accepted another company's id**, all found by trying it:
+
+* `appointments.staff_user_id` — an appointment booked against an employee of
+  a different company. The name never surfaced (`user_display_names` is
+  scoped), but the row pointed at a stranger who then held a slot in a calendar
+  they do not work in, and the double-booking guarantee stopped meaning
+  anything for that slot.
+* `appointments.branch_id` — stored raw.
+* `team_chat.create_channel(member_user_ids=…)` — a channel created with an
+  employee of another company in it.
+
+The third is the one that says something. `add_member` has this check, and has
+had it from the start, with a comment reading "the invitee must be an employee
+of this company. Without this check a caller could name any user id in the
+platform." `create_channel` takes the same list of ids and did not.
+
+That is the fourth and fifth time in this audit: `channel_accounts.branch_id`
+beside a checked `department_id`; `company_users.branch_id`; `website` removed
+from two of five places; `_normalize_section` wired into the Super Admin pair
+and not the company pair; now this. Five instances, one cause — **a check that
+lives inside the function that happens to need it is invisible to the next
+function that needs it, and reads in review exactly like a check that is
+called.**
+
+So the answer is not a sixth inline check. `backend/services/ownership.py` is
+the one place that answers "does this company own that id?", every caller gets
+the same refusal, and `tests/test_foreign_ids_in_payloads.py` is the registry
+of every payload field that carries a control-plane id. Deliberately no
+validator for tenant ids: `category_id`, `customer_id` and `conversation_id`
+point into the company's own file, and a check there would imply a risk that
+does not exist.
+
+One behavioural regression was introduced and caught by the existing suite
+before it shipped. Validating the staff id on *reschedule* meant an employee
+leaving froze every appointment already in their calendar — nobody could move
+or cancel them, which is exactly when a company needs to. Only a staff id the
+caller **supplies** is checked now; carrying the existing one forward is not a
+claim about it.
+
+## D-039 — A model call nobody counted
+
+`plan_service.record_usage` had exactly one caller in the repository: the live
+reply path. `POST /api/ai-teaching/dry-run` runs the real assistant — its own
+docstring says "the model call itself is not suppressed, the point is to see
+the real reply" — and recorded nothing.
+
+Two consequences. Every usage screen and every invoice under-reported what a
+company actually spends, because a whole category of model call was missing.
+And anyone holding `settings.manage` could script the endpoint: nothing counted
+it, nothing capped it, no number on any screen moved, and the first evidence
+would be the invoice.
+
+Found by asking who calls the counter, not by reading the endpoint. The
+endpoint looks careful — it is guarded and documented at length, and every line
+of that documentation is about what a preview must *not* touch: no message
+stored, no reply queued, no conversation state changed. What it *spends* was
+not on the list.
+
+Counted now under its own metric. Folding previews into `ai_replies` would make
+every usage screen count a company's own testing as conversations it had.
+
+Capped as a hard platform limit rather than a plan allowance, and the
+distinction is deliberate: a plan limit is the operator's commercial decision
+about one customer, while this is the platform declining to let any single
+account spend without bound — not something a larger plan should be able to
+buy. Two thousand a month, two orders of magnitude above real use, and settable
+to zero for an operator who would rather not have it. It fails **open** on a
+counter it cannot read: some untracked calls during an outage is a smaller harm
+than every company's tuning screen going away because one query failed.
+
+## D-040 — What the attack found, and what it did not
+
+Twenty-three attacks, each performed against the real API rather than reasoned
+about. All refused. Recorded here so that "secure" means something specific:
+
+* **Privilege escalation** — an agent cannot set their own role, rewrite their
+  own role's permissions, create an account, reach settings they hold no
+  permission for, unlock an account, or force a colleague's password reset.
+* **Scope crossing** — a company owner, the most privileged person in their
+  company, is nobody at all in the platform console.
+* **Tokens** — a tampered token, an absent one, `Bearer null`, and a token
+  after sign-out are all refused. Sign-out revokes rather than forgets.
+* **Injection** — five payloads through the customer search box; the table is
+  still there afterwards, which is the assertion.
+* **Secrets** — sixteen screens, walked as JSON keys rather than grepped as
+  text, plus planted sentinel values. Nothing leaks.
+* **Enumeration** — a wrong password and an unknown address answer identically,
+  in status and in body.
+* **Mass assignment** — `company_id` and `id` in a payload change neither.
+
+Also asked, and separate: inside **one** company, can one employee act as
+another? Two colleagues on the same role hold an identical permission set by
+design, so the permission model cannot answer it — the separation is whether
+each endpoint scopes to the caller's own id. Notifications addressed to a
+colleague are not listed, not markable, and not cleared by "mark all read";
+private channels are invisible to non-members; a colleague's message cannot be
+edited. Each verified by mutation, and one of those mutations initially hit the
+wrong line and had to be redone — a mutation that does not land where intended
+proves as little as the test it was meant to check.
+
+**Performance, measured rather than assumed.** Six list screens were loaded at
+five rows and at forty, counting SQL statements from SQLite's own trace. Every
+one is constant: no screen issues a query per row. Reported alongside, because
+it is the number that will matter next: a request opens between five and eleven
+encrypted databases, and each open costs about 1.0 ms for the control plane and
+1.4 ms for a company file — so roughly fifteen milliseconds of every inbox
+request is connection setup. Not a defect at this size, and worth having
+written down before somebody adds the twelfth.

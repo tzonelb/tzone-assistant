@@ -456,6 +456,12 @@ class PlanService:
 
     # ------------------------------------------------------------------ usage
 
+    # Metric names, here rather than at each call site, because the dashboard
+    # and the console both read them back by string and a typo at one end is a
+    # counter that silently reads zero for ever.
+    AI_REPLY_METRIC = "ai_replies"
+    AI_PREVIEW_METRIC = "ai_previews"
+
     def record_usage(
         self,
         *,

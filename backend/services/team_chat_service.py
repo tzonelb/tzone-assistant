@@ -27,6 +27,7 @@ from typing import Any, Iterable
 
 from backend.services.auth_service import auth_service
 from backend.services.notification_service import notification_service
+from backend.services.ownership import assert_employees
 from database.manager import database_manager
 
 
@@ -235,6 +236,12 @@ class TeamChatService:
         now = utc_now_iso()
         clean_topic = (str(topic).strip()[:MAX_TOPIC] if topic else None)
 
+        # Before the transaction opens, not inside it: this reads the control
+        # database, and a read issued from inside an open write transaction is
+        # how the platform once stalled for fifteen seconds (see
+        # `DatabaseManager.after_release`).
+        invitees = set(assert_employees(company_id, member_user_ids or []))
+
         with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
 
@@ -276,7 +283,15 @@ class TeamChatService:
 
                 # The creator is always a member. A private channel with no
                 # members would be unreachable even by the person who made it.
-                members = {user_id, *{int(item) for item in (member_user_ids or [])}}
+                #
+                # The invitees are checked against this company before they are
+                # inserted. `add_member` had this check from the start, with a
+                # comment saying a caller could otherwise name any user id on
+                # the platform; this door takes the same list and did not, so a
+                # channel could be created with an employee of another company
+                # in it. Same list, same check, one definition — see
+                # `services/ownership.py` for why it is not written inline.
+                members = {user_id, *invitees}
 
                 for member_id in sorted(members):
                     conn.execute(

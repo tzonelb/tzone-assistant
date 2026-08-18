@@ -238,6 +238,20 @@ class AppConfig:
 
     # The customer-profile cache had no bound at all, so distinct sender ids
     # grew it until the process ran out of memory.
+    # Previews of the assistant's reply, per company per month. A hard
+    # platform cap, not a purchasable allowance: `POST /api/ai-teaching/dry-run`
+    # runs the real model and the reply is not suppressed, so every call costs
+    # the operator money — and nothing counted it. An employee holding
+    # `settings.manage` could script the endpoint and spend the model budget
+    # without moving a single number anybody looks at.
+    #
+    # Deliberately generous. Somebody genuinely tuning their assistant tries a
+    # few dozen messages in an afternoon; this is two hundred times that, so it
+    # is invisible to real use and stops a script.
+    AI_PREVIEW_MAX_PER_PERIOD: int = int(
+        os.getenv("AI_PREVIEW_MAX_PER_PERIOD", "2000")
+    )
+
     PROFILE_CACHE_MAX_ENTRIES: int = int(
         os.getenv("PROFILE_CACHE_MAX_ENTRIES", "10000")
     )

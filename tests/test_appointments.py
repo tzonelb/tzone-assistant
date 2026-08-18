@@ -56,6 +56,56 @@ ALICE = 101
 BOB = 202
 
 
+@pytest.fixture(autouse=True)
+def staff(platform):
+    """Make Alice and Bob real employees before anything books them.
+
+    They used to be bare integers. That was fine while `staff_user_id` was
+    only cast to an int, and stopped being fine when it started being checked
+    against the company — a booking for a user id that belongs to nobody is a
+    state the platform can no longer reach, so a fixture that produces it is
+    testing something that cannot happen.
+
+    Both companies, because several tests below book the same person in each
+    to prove the two calendars do not collide. A person really can work for
+    two companies on this platform; `company_users` is a join table.
+    """
+    from database.manager import utc_now_iso
+
+    now = utc_now_iso()
+
+    with platform["manager"].control() as conn:
+        for user_id, name in ((ALICE, "Alice"), (BOB, "Bob")):
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO users (
+                    id, email, password_hash, full_name, status,
+                    created_at, updated_at
+                )
+                VALUES (?, ?, 'x', ?, 'active', ?, ?)
+                """,
+                (user_id, f"{name.lower()}@staff.example.com", name, now, now),
+            )
+
+            for company in platform["companies"].values():
+                role = conn.execute(
+                    "SELECT id FROM roles WHERE company_id = ? AND code = 'agent'",
+                    (company["id"],),
+                ).fetchone()
+
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO company_users (
+                        company_id, user_id, role_id, status, created_at
+                    )
+                    VALUES (?, ?, ?, 'active', ?)
+                    """,
+                    (company["id"], user_id, int(role["id"]), now),
+                )
+
+        conn.commit()
+
+
 def at(hour: int, minute: int = 0, *, day: date = DAY) -> str:
     """A UTC instant on the test day, in the format the service stores."""
     return datetime(

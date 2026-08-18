@@ -31,6 +31,7 @@ from uuid import uuid4
 
 from database.manager import database_manager
 from backend.services.channel_account_service import channel_account_service
+from backend.services.plan_service import plan_service
 
 
 logger = logging.getLogger(__name__)
@@ -380,6 +381,44 @@ class BotProfileService:
     # Dry run
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _assert_preview_budget(company_id: int) -> None:
+        """Refuse a preview once this company has had its month's worth.
+
+        A hard platform cap, not a plan allowance — see `preview_reply` for
+        why the two are different things. Fails **open** on a counter that
+        cannot be read: a usage table that is unavailable must not take the
+        tuning screen away from every company on the platform. The cost of
+        being wrong in that direction is some untracked model calls during an
+        outage; the cost of being wrong in the other is everybody's assistant
+        untestable because one query failed.
+        """
+        from config.settings import config
+
+        cap = int(getattr(config, "AI_PREVIEW_MAX_PER_PERIOD", 0) or 0)
+
+        if cap <= 0:
+            return
+
+        try:
+            used = int(
+                plan_service.usage_total(
+                    company_id=company_id, metric=plan_service.AI_PREVIEW_METRIC
+                )
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the preview counter for company %s", company_id
+            )
+            return
+
+        if used >= cap:
+            raise BotProfileError(
+                f"This month's {cap} assistant previews have been used. The "
+                "counter resets at the start of next month; the assistant "
+                "itself keeps answering customers normally."
+            )
+
     def preview_reply(
         self,
         *,
@@ -421,6 +460,24 @@ class BotProfileService:
         reply. With ``AI_ENABLED`` off or no API key, ``ai_router.route``
         returns ``None`` and the engine answers with its safe fallback, which
         is also exactly what a customer would receive in that configuration.
+
+        Because the model call is real, it is **counted and capped**. It was
+        neither: ``plan_service.record_usage`` had exactly one caller in the
+        repository — the live reply path — so a preview spent the operator's
+        model budget and moved no number anybody looks at. Anyone holding
+        ``settings.manage`` could script this endpoint and the only evidence
+        would be the invoice.
+
+        The cap is a hard platform limit rather than a plan allowance, on
+        purpose. A plan limit is the operator's commercial decision about a
+        customer; this is the platform refusing to let one account spend
+        without bound, which is not something a bigger plan should buy. It is
+        also set two orders of magnitude above real use, so somebody genuinely
+        tuning their assistant never meets it.
+
+        The counter is written under its own metric. Folding previews into
+        ``ai_replies`` would make every usage screen and every invoice count
+        tests as customer conversations.
         """
         company_id = int(company_id)
         message = (message or "").strip()
@@ -449,6 +506,8 @@ class BotProfileService:
 
         self._assert_start_state_writes_nothing(session_store, flow_loader)
 
+        self._assert_preview_budget(company_id)
+
         profile = self.resolve_profile(company_id)
 
         # Unique per run and namespaced, so it cannot be the key of any real
@@ -466,6 +525,15 @@ class BotProfileService:
                 )
         finally:
             self._drop_preview_session(session_store, preview_user_id)
+
+        # After the call, not before: a preview that failed cost nothing and
+        # should not be billed. Same reasoning as the live path, which counts
+        # only after the provider accepted the reply.
+        plan_service.record_usage(
+            company_id=company_id,
+            metric=plan_service.AI_PREVIEW_METRIC,
+            channel=channel,
+        )
 
         model_available = bool(
             getattr(config, "AI_ENABLED", False)
