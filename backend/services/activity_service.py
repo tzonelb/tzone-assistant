@@ -140,6 +140,8 @@ class Action:
     POST_APPROVED = "scheduler.post_approved"
     COMMENT_REPLIED = "comments.replied"
 
+    CUSTOMER_UPDATED = "customers.updated"
+
     # --- reads, kept apart from changes
     CONVERSATION_OPENED = "conversations.opened"
     CONVERSATION_EXPORTED = "conversations.exported"

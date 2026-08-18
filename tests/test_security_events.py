@@ -597,3 +597,50 @@ def test_a_write_inside_the_allowance_records_nothing(
     plan_service.check(alpha["id"], "max_users", used=4)
 
     assert _entries(alpha["id"], Action.PLAN_LIMIT_HIT) == []
+
+
+# ------------------------------------------------- reading versus changing
+
+
+def test_editing_a_customer_is_recorded_as_well_as_opening_one():
+    """Found by the audit that produced this file, and made visible by it.
+
+    Opening a customer record was wired to the log before editing one was,
+    which is the wrong way round — the owner could see who looked at a
+    customer's phone number and not who changed it. The change did reach
+    `customer_audit`, and no endpoint has ever read that table.
+    """
+    source = (ROOT / "backend/api/routes/customers.py").read_text()
+
+    assert "Action.CUSTOMER_UPDATED" in source, (
+        "Editing a customer is not recorded in the owner's log; only opening "
+        "one is."
+    )
+
+
+def test_a_customers_contact_details_are_not_copied_into_the_log():
+    """The values are what the customer gave this company. A log entry needs to
+    say a phone number was changed, not what it was changed to — the customer
+    record already holds that, and copying it makes a second store of personal
+    data with its own retention."""
+    import ast
+
+    tree = ast.parse((ROOT / "backend/api/routes/customers.py").read_text())
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+
+        if getattr(node.func, "attr", None) != "record_for":
+            continue
+
+        for keyword in node.keywords:
+            if keyword.arg not in ("before", "after"):
+                continue
+
+            logged = ast.dump(keyword.value)
+
+            assert "values" not in logged or "sorted" in logged, (
+                "A customer's own field values are being copied into the "
+                "activity log"
+            )

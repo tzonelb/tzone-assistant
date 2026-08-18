@@ -71,15 +71,41 @@ def get_customer(customer_id: int, request: Request, context=Depends(view_contex
 def update_customer(
     customer_id: int,
     payload: CustomerUpdateRequest,
+    request: Request,
     context=Depends(manage_context),
 ):
     current_user, company_id = context
+    values = payload.model_dump(exclude_unset=True)
+
     try:
-        return customer_service.update_customer(
+        customer = customer_service.update_customer(
             company_id=company_id,
             customer_id=customer_id,
-            values=payload.model_dump(exclude_unset=True),
+            values=values,
             actor_user_id=current_user.get("id"),
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    # Opening a customer record was recorded before editing one was, which is
+    # the wrong way round: the owner could see who looked at a phone number and
+    # not who changed it. `customer_audit` did hold the change, and no endpoint
+    # has ever read that table.
+    #
+    # Field names only. The values are the customer's own contact details, and
+    # copying them here would put a second copy of every edit into a log with
+    # its own retention, to no end — the customer record is what it currently
+    # says, and this is the record of who made it say that.
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CUSTOMER_UPDATED,
+        category="customers",
+        target_type="customer",
+        target_id=customer_id,
+        summary=f"Edited a customer record: {', '.join(sorted(values)) or 'no fields'}",
+        after={"changed_fields": sorted(values)},
+        ip_address=client_ip(request),
+    )
+
+    return customer
