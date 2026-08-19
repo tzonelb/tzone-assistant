@@ -1377,6 +1377,16 @@ class PlatformService:
 
             conn.commit()
 
+        # A renewal has to be true on the next request, not up to thirty
+        # seconds later. That half minute is exactly when an operator is
+        # watching the screen, having just told a customer they are back on —
+        # and "I renewed it and nothing happened" is the support call this line
+        # prevents. Imported here rather than at module scope because the gate
+        # reads `plan_service`, which reads this module.
+        from backend.services.subscription_gate import subscription_gate
+
+        subscription_gate.invalidate(company_id)
+
         return {
             "company_id": company_id,
             "subscription_id": subscription_id,

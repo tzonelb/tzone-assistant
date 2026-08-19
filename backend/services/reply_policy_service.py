@@ -55,6 +55,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from backend.services.channel_account_service import SUPPORTED_CHANNELS
 from backend.services.company_settings_service import company_settings_service
 
 
@@ -67,13 +68,12 @@ SETTINGS_SECTION = "reply_policy"
 # ``config.settings.SUPPORTED_CHANNELS``. A channel outside this list has no
 # policy to resolve, so naming one is refused rather than stored under a key
 # nothing will ever read.
-POLICY_CHANNELS = (
-    "messenger",
-    "instagram",
-    "whatsapp",
-    "telegram",
-    "website_chat",
-)
+# Derived from the one catalogue, not repeated. Written out, this list carried
+# `website_chat`: a company could set a whole reply policy for a channel that
+# cannot be connected, and the policy would never decide anything. That is a
+# decision that saves and does nothing — the exact class of defect the settings
+# audit closed everywhere else.
+POLICY_CHANNELS = tuple(SUPPORTED_CHANNELS)
 
 WELCOME_MODES = ("always", "once_per_conversation", "never")
 

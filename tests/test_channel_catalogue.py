@@ -34,7 +34,23 @@ FRONTEND = ROOT / "frontend/src"
 # for; the rest are here so that reviving any of them in a screen fails loudly
 # rather than shipping another permanently empty tab.
 _RETIRED_OR_UNSUPPORTED = frozenset(
-    {"website", "web", "sms", "email", "viber", "wechat", "line", "tiktok"}
+    {
+        "website",
+        # Added after this file failed to catch it. `website_chat` sat in five
+        # backend lists and one frontend list while every check here passed,
+        # because the watch-list said `website` and the spelling was different
+        # by one word. A watch-list is only as good as somebody's memory of
+        # what to watch for — which is why the check below it now compares the
+        # real constants instead of recognising names.
+        "website_chat",
+        "web",
+        "sms",
+        "email",
+        "viber",
+        "wechat",
+        "line",
+        "tiktok",
+    }
 )
 
 
@@ -233,4 +249,79 @@ def test_website_is_gone_from_the_frontend():
 
     assert not offered, (
         "`website` is offered as a channel again:\n  " + "\n  ".join(offered)
+    )
+
+
+# --------------------------------------------------- every list, not a watch-list
+
+
+def test_no_python_channel_list_offers_more_than_the_catalogue():
+    """The check that would have caught `website_chat`, and did not exist.
+
+    Everything above compares the *frontend* to the backend, or recognises
+    names on a watch-list. Neither can see a second backend list that has
+    quietly grown an extra entry — and that is exactly what happened:
+    `config.SUPPORTED_CHANNELS` held five channels, the real catalogue held
+    four, and the AI Teaching screen offered personas and reply policies for a
+    channel with no routing field, no webhook and no sender. A company could
+    configure it in detail and nothing would ever read the configuration.
+
+    So this imports the constants themselves rather than reading source or
+    matching names. A new list added anywhere with an invented channel in it
+    fails here on the day it is written, whatever it is called.
+    """
+    from backend.api.schemas.ai_teaching import PreviewChannel
+    from backend.services.bot_profile_service import PREVIEW_CHANNELS
+    from backend.services.reply_policy_service import POLICY_CHANNELS
+    from channels.sender import SUPPORTED_CHANNELS as SENDER_CHANNELS
+    from core.intent_transition import IntentTransitionManager
+
+    import typing
+
+    catalogue = _backend_channels()
+
+    lists = {
+        "bot_profile_service.PREVIEW_CHANNELS": set(PREVIEW_CHANNELS),
+        "reply_policy_service.POLICY_CHANNELS": set(POLICY_CHANNELS),
+        "channels.sender.SUPPORTED_CHANNELS": set(SENDER_CHANNELS),
+        "schemas.ai_teaching.PreviewChannel": set(typing.get_args(PreviewChannel)),
+        "IntentTransitionManager.GENERAL_CHANNELS": set(
+            IntentTransitionManager.GENERAL_CHANNELS
+        ),
+    }
+
+    offenders = {
+        name: sorted(values - catalogue)
+        for name, values in lists.items()
+        if values - catalogue
+    }
+
+    assert not offenders, (
+        "A list offers a channel the platform cannot connect:\n  "
+        + "\n  ".join(f"{name}: {extra}" for name, extra in offenders.items())
+        + f"\n\nThe catalogue is {sorted(catalogue)}. Add the channel to it "
+        "with a routing field, a webhook and a sender, or take it out of the "
+        "list."
+    )
+
+
+def test_there_is_only_one_channel_catalogue():
+    """`config.SUPPORTED_CHANNELS` was a second one, and it was wrong.
+
+    Nothing read it — the readers all import the catalogue from
+    `channel_account_service` — but a comment in `reply_policy_service` cited
+    it as the source its own list mirrored, and the list it described had five
+    entries where the real one had four. A dead constant that documentation
+    points at is worse than a dead constant, because it is believed.
+
+    This is the same shape as the two `DEFAULT_SETTINGS` catalogues: the one
+    that was seeded was not the one that was served, and every check ran
+    against the wrong copy.
+    """
+    from config.settings import config
+
+    assert not hasattr(config, "SUPPORTED_CHANNELS"), (
+        "config has a SUPPORTED_CHANNELS again. There is one catalogue, in "
+        "backend/services/channel_account_service.py, and a second one drifts "
+        "silently because nothing compares them."
     )

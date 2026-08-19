@@ -287,16 +287,6 @@ class AppConfig:
         default_factory=lambda: ["en", "ar"]
     )
 
-    SUPPORTED_CHANNELS: list[str] = field(
-        default_factory=lambda: [
-            "telegram",
-            "whatsapp",
-            "messenger",
-            "instagram",
-            "website_chat",
-        ]
-    )
-
     BUSINESS_DEPARTMENTS: list[str] = field(
         default_factory=lambda: [
             "sales",

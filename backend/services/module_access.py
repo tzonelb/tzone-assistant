@@ -23,6 +23,7 @@ from fastapi import Depends, HTTPException, status
 
 from backend.services.auth_service import auth_service, get_current_user
 from backend.services.module_gate import UnknownModule, module_gate
+from backend.services.subscription_gate import subscription_gate
 from backend.services.platform_service import PLATFORM_MODULES
 
 
@@ -32,7 +33,13 @@ logger = logging.getLogger(__name__)
 # Re-exported: `UnknownModule` was raised from here before the gate existed, and
 # callers that catch it should keep working. There is one class, not two, so a
 # handler cannot miss the half it was not told about.
-__all__ = ["UnknownModule", "module_states", "module_enabled", "require_module"]
+__all__ = [
+    "UnknownModule",
+    "module_states",
+    "module_enabled",
+    "require_module",
+    "require_active_subscription",
+]
 
 
 def module_states(company_id: int) -> dict[str, bool]:
@@ -42,6 +49,40 @@ def module_states(company_id: int) -> dict[str, bool]:
 
 def module_enabled(company_id: int, module_key: str) -> bool:
     return module_gate.enabled(company_id, module_key)
+
+
+def require_active_subscription(
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Refuse a company whose subscription has ended.
+
+    `402 Payment Required`, not `403 Forbidden`. A 403 says "you are not
+    allowed"; this company *is* allowed and has not paid, and the employee
+    reading the message is usually not the person who pays. Same status the
+    plan-limit refusal already uses, for the same reason.
+
+    Applied at `include_router` in `main.py`, beside the module gate and for
+    the same reason that one is there: a router registered later cannot forget
+    a dependency that lives at the registration.
+
+    Not applied to `auth`, and not to `dashboard`. A company locked out of the
+    screen that says why it is locked out — and out of the sign-in that reaches
+    it — cannot do the thing the lock exists to prompt.
+    """
+    company_id = auth_service.resolve_company_id(current_user)
+
+    if subscription_gate.lapsed(company_id):
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=(
+                "This workspace is paused because its subscription has ended. "
+                "Renew it to bring the screens and the assistant back. Nothing "
+                "has been deleted, and messages from customers are still "
+                "arriving and being saved."
+            ),
+        )
+
+    return current_user
 
 
 def require_module(module_key: str) -> Callable:

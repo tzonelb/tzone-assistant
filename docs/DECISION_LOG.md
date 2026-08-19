@@ -1291,3 +1291,116 @@ fixture now imports `main` before the sweep and asserts it was rebound, which
 is the pattern the rest of the suite already uses — and the reason it is worth
 a paragraph is that knowing about a trap is demonstrably not the same as not
 falling into it.
+
+## D-042 — A lapsed subscription stops the company
+
+The owner's decision, taken explicitly after being asked. Until now expiry did
+nothing: `plan_service.is_active` was computed, shown on a screen, and
+consulted by no code path that could refuse anything. A company could stop
+paying and carry on indefinitely, and the operator's only lever was suspension
+— a much heavier act that reads to a customer as an accusation rather than an
+invoice.
+
+**One gate, not seventeen checks.** `subscription_gate` answers one question —
+may this company operate today — and the HTTP layer and the assistant both ask
+it. Written this way because the alternative has failed five times in this
+audit already: a check repeated at each call site is a check that gets missed
+at one of them, and the missed one is a door nobody knows is open. The module
+gate has the same shape for the same reason, and both now sit in the same
+helper in `main.py` so a router registered later cannot pick up one and miss
+the other.
+
+Four parts, each a separate decision:
+
+* **`402 Payment Required`, not `403`.** A 403 tells somebody they are not
+  allowed. This company *is* allowed and has not paid, and the employee reading
+  the message is usually not the person who pays.
+* **The assistant stops answering.** This is what makes it real. Screens nobody
+  can open is an inconvenience; an assistant still replying is the service
+  still being delivered, free, with no reason to renew.
+* **Customers' messages are still stored, and still notify.** A customer owes
+  nobody anything, and a company that renews on Thursday must find Tuesday's
+  messages waiting rather than a hole.
+* **Nothing is said to the customer.** Silence, not "this business has not
+  paid" — which would expose the owner to their own customers, a worse thing to
+  do to them than the pause itself.
+
+**One router stays open**: the dashboard, which carries
+`/api/dashboard/subscription`. Pausing the screen that explains the pause makes
+the pause unactionable, and prompting an action is the whole point. That
+exemption is pinned to exactly `["dashboard"]` by a test reading `main.py`, so
+a second one cannot be added quietly.
+
+The grace period is the operator's and already existed: `is_active` treats
+`grace_period_until` as entitlement, so setting it per company is how an
+operator says "the payment is late and the service continues". Nothing here
+invents a second one. Renewal invalidates the cache immediately rather than
+after thirty seconds, because that half minute is exactly when an operator is
+watching, having just told a customer they are back on.
+
+Fails **open** on an unreadable control plane, like every other gate here: a
+blip in one database must not take every company off the air over a bill none
+of them owe.
+
+## D-043 — `website_chat`: the same defect, one word away from the guard
+
+D-033 removed `website` from the five places that offered it, and wrote
+`tests/test_channel_catalogue.py` so it could not come back. Every check in
+that file passed while **`website_chat` sat in six lists**, including two that
+decide real behaviour.
+
+The guard missed it twice over, and both misses are worth naming:
+
+* its watch-list held `"website"`, and the spelling here was different by one
+  word — a watch-list is only as good as somebody's memory of what to watch for
+* it compared the *frontend* list to `channel_account_service.SUPPORTED_CHANNELS`
+  and never looked at any other backend list
+
+And there was another backend list. `config.SUPPORTED_CHANNELS` held five
+channels where the real catalogue holds four. Nothing read it — every reader
+imports the catalogue — but `reply_policy_service` carried a comment citing it
+as the source its own list mirrored. A dead constant that documentation points
+at is worse than a dead constant, because it is believed.
+
+The consequence was a screen offering something the platform cannot do. A
+company could bind a persona to "Website chat" and write a whole reply policy
+for it: no routing field, no webhook, no sender, so no message would ever
+arrive on it and no policy would ever be read. That is the same class of defect
+D-031 closed for settings — a decision that saves and decides nothing — moved
+into the channel picker.
+
+Fixed by deriving rather than repeating: `PREVIEW_CHANNELS` and
+`POLICY_CHANNELS` are now `tuple(SUPPORTED_CHANNELS)`, the dead config constant
+is gone, and the API's `Literal` is pinned to the catalogue by a test.
+`IntentTransitionManager.GENERAL_CHANNELS` had the opposite problem in the same
+list: `website_chat`, which cannot deliver, was in it, and Telegram, which can,
+was not.
+
+The new check imports the constants and compares them, instead of recognising
+names in source. A list added anywhere with an invented channel in it now fails
+on the day it is written, whatever it is called.
+
+## D-044 — `main.py` split, and every module driven end to end
+
+`main.py` had grown to 582 lines holding three unrelated things: what the
+application *is* (routers, middleware, gates), what it does *at boot* (the
+lifespan), and what it does *forever after* (five background workers). Reading
+any one meant scrolling past the other two, and the workers are the part most
+likely to be edited by somebody with no business near the router registration
+two hundred lines below.
+
+The workers moved to `backend/workers.py`, which imports no FastAPI at all —
+so a worker is now a coroutine you can call in a test without a request.
+`main.py` is 310 lines and lists, in one import, exactly what the process runs
+on a timer. Eleven imports were left unused by the split and are gone.
+
+Separately, and overdue: **`tests/test_every_module_actually_works.py`** drives
+each module through its own API and asserts on the *content* of the answer, not
+the status code. Every other file in this suite asks whether something is
+guarded, scoped, fast or refused — none asked the plainest question an owner
+would ask, which is whether the screen does its job. A module can be perfectly
+guarded and completely broken, and no permission test would notice, because a
+permission test is satisfied by a 403 and a 200 and never looks inside the 200.
+
+All fifteen pass, and one of them is how `website_chat` was found: the AI
+Teaching response was printed in a failure and the channel list was in it.

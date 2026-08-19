@@ -25,6 +25,7 @@ from backend.services.notification_service import notification_service
 from channels.meta.logger import log_meta_event
 from channels.meta.profile import resolve_meta_profile
 from channels.meta.smart_reply import schedule_smart_reply
+from backend.services.subscription_gate import subscription_gate
 
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,29 @@ def process_inbound_event(
             "workflow_state": state.get("workflow_state"),
         },
     )
+
+    # The message is saved and the notification is raised whatever the state of
+    # the bill — a customer owes nobody anything, and a company that renews on
+    # Thursday must find Tuesday's messages waiting rather than a hole. What
+    # stops at a lapsed subscription is the *answer*.
+    #
+    # Nothing is sent to the customer to explain the silence. "This business
+    # has not paid" would expose the owner to their own customers, which is a
+    # worse thing to do to them than the pause itself.
+    if subscription_gate.lapsed(company_id):
+        diagnostics_service.record(
+            event_type="ai_reply_skipped",
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            status="subscription_lapsed",
+        )
+
+        return {
+            "status": "stored",
+            "reason": "subscription_lapsed",
+            "message_id": saved.get("id"),
+        }
 
     ai_settings = company_settings_service.get_section(company_id, "ai_behavior")["values"]
 

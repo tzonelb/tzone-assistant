@@ -32,11 +32,14 @@ MIN_TERM_LENGTH = 3
 
 
 class IntentTransitionManager:
+    # The channels a general enquiry can arrive on. `website_chat` was in this
+    # list and cannot deliver a message at all, so it named a case that never
+    # happens. Telegram, which does, was missing from it.
     GENERAL_CHANNELS = [
         "messenger",
         "whatsapp",
         "instagram",
-        "website_chat",
+        "telegram",
     ]
 
     @staticmethod

@@ -52,9 +52,22 @@ def _a_master_key() -> str:
 
 
 def _gated() -> set[str]:
+    """Every module key passed to a router-gating helper in main.py.
+
+    Two helpers, not one. `_module` carries the operator's module switch *and*
+    the subscription check; `_module_unpaid_too` carries only the switch, and
+    exactly one router uses it — the dashboard, which holds the subscription
+    screen a paused company has to reach in order to un-pause itself.
+
+    Both count as gated here, because the question this file asks is whether
+    the operator's switch reaches the API. Whether the *bill* reaches it is a
+    different question, asked in
+    `tests/test_a_lapsed_subscription_stops_the_company.py`, which pins the
+    exemption list to `["dashboard"]` so a second one cannot be added quietly.
+    """
     source = (ROOT / "main.py").read_text()
 
-    return set(re.findall(r'_module\("([a-z_]+)"\)', source))
+    return set(re.findall(r'_module(?:_unpaid_too)?\("([a-z_]+)"\)', source))
 
 
 def test_the_catalogue_and_the_gates_can_both_be_read():

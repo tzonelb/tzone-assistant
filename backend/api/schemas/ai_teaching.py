@@ -36,12 +36,16 @@ ProfileStatus = Literal["active", "disabled"]
 
 # Kept in step with ``bot_profile_service.PREVIEW_CHANNELS``; spelled out here
 # so FastAPI can document the accepted values.
+# `website_chat` was here and is gone: it has no routing field, no webhook and
+# no sender, so accepting it meant the API documented a preview it could never
+# give. Written out rather than derived because `Literal` needs constants at
+# class-definition time; `tests/test_channel_catalogue.py` compares it to the
+# one catalogue so the two cannot drift.
 PreviewChannel = Literal[
     "messenger",
     "instagram",
     "whatsapp",
     "telegram",
-    "website_chat",
 ]
 
 MAX_TEST_MESSAGE = 2000

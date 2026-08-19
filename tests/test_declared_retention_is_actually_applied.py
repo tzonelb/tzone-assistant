@@ -51,6 +51,7 @@ def wired(platform, monkeypatch):
     #
     # That is not a hypothetical either — it happened on the first run of this
     # file and took 84 tests in two unrelated files down with it.
+    import backend.workers  # noqa: F401
     import main  # noqa: F401
 
     test_manager = platform["manager"]
@@ -65,7 +66,7 @@ def wired(platform, monkeypatch):
     for name in (
         "backend.services.activity_service",
         "backend.services.diagnostics_service",
-        "main",
+        "backend.workers",
     ):
         assert getattr(sys.modules[name], "database_manager", None) is test_manager, (
             f"{name} is not talking to the test database"
@@ -111,9 +112,9 @@ def test_the_periodic_sweep_prunes_diagnostics(wired, platform, monkeypatch):
     Calling `diagnostics_service.cleanup` in a test would prove the cleanup
     works — which was never in doubt. What was missing is anything calling it.
     """
-    import main
+    from backend import workers
 
-    monkeypatch.setattr(main, "database_manager", wired)
+    monkeypatch.setattr(workers, "database_manager", wired)
 
     alpha = platform["companies"]["alpha"]["id"]
 
@@ -122,7 +123,7 @@ def test_the_periodic_sweep_prunes_diagnostics(wired, platform, monkeypatch):
 
     assert _count(wired, alpha) == 45
 
-    main._prune_activity_logs()
+    workers._prune_activity_logs()
 
     assert _count(wired, alpha, "old") == 0, (
         "the periodic sweep does not reach diagnostic_events — the declared "
@@ -134,16 +135,16 @@ def test_the_sweep_keeps_what_is_inside_the_window(wired, platform, monkeypatch)
     """The other half. A sweep that emptied the table would satisfy the test
     above and destroy the only record of why a reply went wrong — which is
     needed most in the days right after it happens."""
-    import main
+    from backend import workers
 
-    monkeypatch.setattr(main, "database_manager", wired)
+    monkeypatch.setattr(workers, "database_manager", wired)
 
     alpha = platform["companies"]["alpha"]["id"]
 
     _seed_events(wired, alpha, days_old=90, count=10, kind="old")
     _seed_events(wired, alpha, days_old=2, count=7, kind="recent")
 
-    main._prune_activity_logs()
+    workers._prune_activity_logs()
 
     assert _count(wired, alpha, "recent") == 7, (
         "the sweep removed events inside the retention window"
@@ -151,9 +152,9 @@ def test_the_sweep_keeps_what_is_inside_the_window(wired, platform, monkeypatch)
 
 
 def test_every_company_is_swept_not_only_the_first(wired, platform, monkeypatch):
-    import main
+    from backend import workers
 
-    monkeypatch.setattr(main, "database_manager", wired)
+    monkeypatch.setattr(workers, "database_manager", wired)
 
     alpha = platform["companies"]["alpha"]["id"]
     beta = platform["companies"]["beta"]["id"]
@@ -161,7 +162,7 @@ def test_every_company_is_swept_not_only_the_first(wired, platform, monkeypatch)
     for company_id in (alpha, beta):
         _seed_events(wired, company_id, days_old=90, count=6, kind="old")
 
-    main._prune_activity_logs()
+    workers._prune_activity_logs()
 
     assert _count(wired, alpha) == 0
     assert _count(wired, beta) == 0, (
@@ -175,10 +176,10 @@ def test_one_companys_failure_does_not_stop_the_others(
 ):
     """A sweep that aborts on the first unreadable database leaves every
     company after it in the list unpruned, for ever, and says so nowhere."""
-    import main
+    from backend import workers
     from backend.services.diagnostics_service import diagnostics_service
 
-    monkeypatch.setattr(main, "database_manager", wired)
+    monkeypatch.setattr(workers, "database_manager", wired)
 
     alpha = platform["companies"]["alpha"]["id"]
     beta = platform["companies"]["beta"]["id"]
@@ -195,8 +196,114 @@ def test_one_companys_failure_does_not_stop_the_others(
 
     monkeypatch.setattr(diagnostics_service, "cleanup", explode_for_alpha)
 
-    main._prune_activity_logs()
+    workers._prune_activity_logs()
 
     assert _count(wired, beta) == 0, (
         "one company's failure stopped the sweep before it reached the rest"
+    )
+
+
+# ------------------------------------------------- one row per customer message
+
+
+def _seed_notifications(manager, company_id, *, days_old, count, read, title):
+    from datetime import datetime, timedelta, timezone
+
+    when = (datetime.now(timezone.utc) - timedelta(days=days_old)).isoformat()
+
+    with manager.tenant(company_id) as conn:
+        conn.executemany(
+            """
+            INSERT INTO notifications (
+                company_id, notification_type, title, body, is_read, created_at
+            )
+            VALUES (?, 'customer_message', ?, 'A customer wrote in.', ?, ?)
+            """,
+            [(company_id, title, 1 if read else 0, when) for _ in range(count)],
+        )
+        conn.commit()
+
+
+def _notifications(manager, company_id, title=None):
+    with manager.tenant(company_id) as conn:
+        if title:
+            row = conn.execute(
+                "SELECT COUNT(*) AS n FROM notifications WHERE title = ?", (title,)
+            ).fetchone()
+        else:
+            row = conn.execute("SELECT COUNT(*) AS n FROM notifications").fetchone()
+
+    return int(row["n"])
+
+
+def test_old_read_notifications_are_dropped(wired, platform, monkeypatch):
+    """Measured, not guessed: one notification row per inbound customer
+    message, and nothing removed any of them.
+
+    Deleting these loses nothing that is not kept elsewhere. A notification
+    points at a message that stays in `messages`; what goes is the marker
+    saying "this was new once", which after three months describes nothing
+    anybody will act on.
+    """
+    from backend import workers
+
+    monkeypatch.setattr(workers, "database_manager", wired)
+
+    alpha = platform["companies"]["alpha"]["id"]
+
+    _seed_notifications(wired, alpha, days_old=200, count=30, read=True, title="ancient")
+    _seed_notifications(wired, alpha, days_old=3, count=4, read=True, title="recent")
+
+    workers._prune_activity_logs()
+
+    assert _notifications(wired, alpha, "ancient") == 0, (
+        "read notifications are kept for ever — one row per customer message, "
+        "growing without end"
+    )
+    assert _notifications(wired, alpha, "recent") == 4, (
+        "notifications inside the window were deleted"
+    )
+
+
+def test_an_unread_notification_is_kept_much_longer(wired, platform, monkeypatch):
+    """Unread is the state that still means something — somebody was away.
+
+    A sweep that treated both the same would clear the pile a returning
+    employee came back for, which is the one thing the bell is for.
+    """
+    from backend import workers
+
+    monkeypatch.setattr(workers, "database_manager", wired)
+
+    alpha = platform["companies"]["alpha"]["id"]
+
+    _seed_notifications(
+        wired, alpha, days_old=200, count=6, read=False, title="waiting"
+    )
+
+    workers._prune_activity_logs()
+
+    assert _notifications(wired, alpha, "waiting") == 6, (
+        "an unread notification from six months ago was deleted — that is the "
+        "pile somebody returning from leave comes back to"
+    )
+
+
+def test_even_unread_notifications_have_a_ceiling(wired, platform, monkeypatch):
+    """Otherwise a company that never opens the bell grows without bound, which
+    is the case this retention was written for."""
+    from backend import workers
+
+    monkeypatch.setattr(workers, "database_manager", wired)
+
+    alpha = platform["companies"]["alpha"]["id"]
+
+    _seed_notifications(
+        wired, alpha, days_old=800, count=9, read=False, title="forgotten"
+    )
+
+    workers._prune_activity_logs()
+
+    assert _notifications(wired, alpha, "forgotten") == 0, (
+        "unread notifications have no ceiling at all"
     )

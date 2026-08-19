@@ -54,7 +54,6 @@ const FALLBACK_CHANNELS = [
   "instagram",
   "whatsapp",
   "telegram",
-  "website_chat",
 ];
 
 const MAX_EXAMPLES = 20;
@@ -113,7 +112,6 @@ const CHANNEL_LABELS = {
   instagram: "Instagram",
   whatsapp: "WhatsApp",
   telegram: "Telegram",
-  website_chat: "Website chat",
 };
 
 const POLICY_CHOICE_LABELS = {

@@ -47,7 +47,11 @@ def scheduling(platform, monkeypatch):
     """
     import database.manager as manager_module
 
-    import main  # noqa: F401
+    # `backend.workers` rather than `main`: the sweeps moved out of the
+    # application module, which now holds only what the app *is*. Imported
+    # before the rebinding sweep below so that its own `database_manager` is
+    # the live singleton the sweep looks for.
+    import backend.workers  # noqa: F401
     import backend.services.pending_reply_service  # noqa: F401
     import backend.services.scheduler_service  # noqa: F401
     import backend.services.work_index_service  # noqa: F401
@@ -63,7 +67,7 @@ def scheduling(platform, monkeypatch):
             monkeypatch.setattr(module, "database_manager", test_manager)
             rebound.append(module.__name__)
 
-    assert "main" in rebound
+    assert "backend.workers" in rebound
     assert "backend.services.work_index_service" in rebound
 
     opened: list[int] = []
@@ -81,11 +85,11 @@ def scheduling(platform, monkeypatch):
     from backend.services.scheduler_service import scheduler_service
     from backend.services.work_index_service import work_index_service
 
-    import main as main_module
+    from backend import workers
 
     def sweep(kind, work) -> None:
-        """Run exactly one tick of the real sweep in `main`."""
-        asyncio.run(main_module._sweep("test sweep", kind, work))
+        """Run exactly one tick of the real sweep."""
+        asyncio.run(workers._sweep("test sweep", kind, work))
 
     def clear() -> None:
         with lock:
@@ -680,9 +684,9 @@ def test_companies_are_swept_concurrently_but_within_the_bound(
         with lock:
             live -= 1
 
-    import main as main_module
+    from backend import workers
 
-    asyncio.run(main_module._run_for_companies("bounded", company_ids, work))
+    asyncio.run(workers._run_for_companies("bounded", company_ids, work))
 
     assert peak > 1, "the sweep is still strictly one company at a time"
     assert peak <= 3, f"the sweep ran {peak} companies at once, over its bound"
@@ -699,8 +703,8 @@ def test_one_companys_failure_does_not_stop_the_others(scheduling, platform):
             raise RuntimeError("this database will not open")
         served.append(company_id)
 
-    import main as main_module
+    from backend import workers
 
-    asyncio.run(main_module._run_for_companies("isolating", company_ids, work))
+    asyncio.run(workers._run_for_companies("isolating", company_ids, work))
 
     assert served == company_ids[1:]

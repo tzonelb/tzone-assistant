@@ -290,6 +290,60 @@ class NotificationService:
             conn.commit()
             return int(cursor.rowcount)
 
+    # How long a notification is worth keeping, in days, by whether it was
+    # read. Both are far longer than anyone would scroll and short enough that
+    # the table stops growing for ever.
+    #
+    # This table costs one row per customer message — measured, not guessed —
+    # and nothing removed one. A company handling a thousand messages a month
+    # accumulated a thousand rows a month, permanently, for a bell that shows
+    # what is new.
+    #
+    # Deleting these loses nothing that is not kept elsewhere. A notification
+    # is derived: it points at a message that stays in `messages` and at a
+    # conversation that stays in `conversations`. What is dropped is the marker
+    # saying "this was new once", which after three months is true of nothing
+    # anybody will act on.
+    #
+    # Unread ones are kept far longer, because unread is the state that still
+    # means something — somebody was away. A ceiling still exists, or a company
+    # that never opens the bell grows without bound, which is the case this was
+    # written for.
+    RETENTION_DAYS = {"read": 90, "unread": 365}
+
+    def prune(self, company_id: int) -> int:
+        """Drop notifications past their retention. Returns rows removed.
+
+        Never raises. Housekeeping that can fail a request is worse than
+        housekeeping that is late, and this runs from a sweep whose other
+        companies must not be affected by this one.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        removed = 0
+
+        try:
+            with database_manager.tenant(int(company_id)) as conn:
+                for state, days in self.RETENTION_DAYS.items():
+                    cutoff = (
+                        datetime.now(timezone.utc) - timedelta(days=int(days))
+                    ).isoformat()
+
+                    cursor = conn.execute(
+                        "DELETE FROM notifications"
+                        " WHERE created_at < ? AND is_read = ?",
+                        (cutoff, 1 if state == "read" else 0),
+                    )
+                    removed += int(cursor.rowcount or 0)
+
+                conn.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not prune notifications for company %s", company_id
+            )
+
+        return removed
+
     def mark_read(self, *, notification_id: int, company_id: int, user_id: int, group_ids: list[int] | None = None) -> bool:
         ids = group_ids or [notification_id]
         return self.set_read_state(notification_ids=ids, company_id=company_id, user_id=user_id, is_read=True) > 0

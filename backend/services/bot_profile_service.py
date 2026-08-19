@@ -30,7 +30,10 @@ from typing import Any
 from uuid import uuid4
 
 from database.manager import database_manager
-from backend.services.channel_account_service import channel_account_service
+from backend.services.channel_account_service import (
+    SUPPORTED_CHANNELS,
+    channel_account_service,
+)
 from backend.services.plan_service import plan_service
 
 
@@ -83,13 +86,10 @@ ALLOWED_STATUS = ("active", "disabled")
 
 # Channels the dry run may impersonate. Anything else would be answered by a
 # policy this platform does not have, so the preview would be a lie.
-PREVIEW_CHANNELS = (
-    "messenger",
-    "instagram",
-    "whatsapp",
-    "telegram",
-    "website_chat",
-)
+# Imported from the one catalogue rather than repeated. This list used to be
+# written out here with `website_chat` on the end — a channel with no routing
+# field, no webhook and no sender, so a preview of it was a preview of nothing.
+PREVIEW_CHANNELS = tuple(SUPPORTED_CHANNELS)
 
 DRY_RUN_USER_PREFIX = "ai-teaching-dry-run"
 
