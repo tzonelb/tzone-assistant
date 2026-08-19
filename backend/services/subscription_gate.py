@@ -103,7 +103,7 @@ class SubscriptionGate:
 
     def _read(self, company_id: int) -> bool:
         try:
-            return bool(plan_service.is_active(plan_service.subscription(company_id)))
+            subscription = plan_service.subscription(company_id)
         except Exception:  # noqa: BLE001
             logger.exception(
                 "Could not read the subscription for company %s; allowing it to "
@@ -112,6 +112,24 @@ class SubscriptionGate:
             )
 
             return True
+
+        # **No subscription is not a lapsed subscription.** `is_active(None)`
+        # is False, and taking that as "pause them" would have bricked every
+        # newly created company: `create_company` takes `plan_code` as an
+        # optional argument and the CLI has no `--plan` flag at all, so a
+        # company provisioned today has no subscription row until an operator
+        # assigns one. Reading `is_active` directly here meant a company was
+        # dark from the moment it was created — every screen 402, the assistant
+        # silent — with nothing in the console explaining why.
+        #
+        # The decision was that a subscription which *ends* stops the company.
+        # Something that never began has not ended. An operator who wants a
+        # company stopped before it is billed has suspension, which is
+        # immediate and says so.
+        if not subscription:
+            return True
+
+        return bool(plan_service.is_active(subscription))
 
     # ----------------------------------------------------------- invalidation
 

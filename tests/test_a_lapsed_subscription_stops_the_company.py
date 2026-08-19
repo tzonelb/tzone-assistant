@@ -253,6 +253,39 @@ def test_a_subscription_with_no_expiry_date_never_lapses(
     )
 
 
+def test_a_brand_new_company_is_not_paused(app_client, owner, platform, alpha):
+    """The edge that would have bricked provisioning.
+
+    `is_active(None)` is False, so reading it directly would have paused every
+    company that has no subscription row — and `create_company` takes
+    `plan_code` as an optional argument while the CLI has no `--plan` flag at
+    all. A company created today therefore has no subscription until an
+    operator assigns one, and it would have been dark from the moment it
+    existed: every screen 402, the assistant silent, nothing in the console
+    saying why.
+
+    A subscription that *ends* stops the company. Something that never began
+    has not ended. An operator who wants a company stopped before it is billed
+    has suspension, which is immediate and says so.
+    """
+    with platform["manager"].control() as conn:
+        rows = conn.execute(
+            "SELECT COUNT(*) AS n FROM subscriptions WHERE company_id = ?",
+            (alpha["id"],),
+        ).fetchone()["n"]
+
+    assert int(rows) == 0, (
+        "this test is meaningless unless the company really has no "
+        "subscription"
+    )
+
+    results = _try_screens(app_client, owner)
+
+    assert all(code in (200, 201) for code in results.values()), (
+        f"a company with no subscription yet was paused: {results}"
+    )
+
+
 # ---------------------------------------------------------------- once lapsed
 
 
@@ -525,4 +558,160 @@ def test_every_module_router_carries_the_gate():
     assert exempt == ["dashboard"], (
         f"the only router a lapsed company may keep is the dashboard, which "
         f"carries the subscription screen. Currently exempt: {exempt}"
+    )
+
+
+# ------------------------------------------------- the work already in flight
+
+
+"""Three doors produce customer-visible output, not one.
+
+The API and the inbound path were the obvious two. The third is the background
+workers, and they are the ones that keep running after everybody has gone home:
+a batch queued in the minutes before the lapse is still sitting due, and a post
+approved last month is still scheduled for next Thursday.
+
+`publish_due_posts` already argued this exact case — for the *module* switch.
+Its comment reads: "a post going out to a company's followers from a module its
+team can no longer open, and cannot cancel from inside the platform, is not a
+switch that was ignored — it is the company posting to its own audience without
+an operator." Every word of that is true of a paused subscription, and the
+check was not extended to it. That is the sixth time in this audit that
+reasoning was done, written down, and applied to the thing next door.
+
+Both workers refuse without *claiming* anything, so the queue is intact and
+goes out the moment the company renews. Refusing by discarding would punish the
+company for the pause twice."""
+
+
+def _lapse(platform, company_id):
+    _subscribe(platform, company_id, expires_in_days=-1)
+
+
+def _renew(platform, company_id):
+    _subscribe(platform, company_id, expires_in_days=30)
+
+
+def test_a_paused_company_does_not_publish_scheduled_posts(
+    platform, alpha, monkeypatch
+):
+    """The consequence that is public: a paused company still posting to its
+    own followers is the platform delivering the service it just stopped
+    charging for, in front of an audience."""
+    import sys
+
+    from database.manager import DatabaseManager
+
+    import database.manager as manager_module
+    import channels.post_publisher as publisher
+
+    test_manager = platform["manager"]
+    monkeypatch.setattr(manager_module, "database_manager", test_manager)
+
+    for module in list(sys.modules.values()):
+        held = getattr(module, "database_manager", None)
+
+        if isinstance(held, DatabaseManager) and held is not test_manager:
+            monkeypatch.setattr(module, "database_manager", test_manager)
+
+    published: list = []
+    monkeypatch.setattr(
+        publisher,
+        "publish_post",
+        # `ok`, not `success` — `publish_due_posts` reads `ok`, and a stub with
+        # the wrong key makes a *failed* publish look like a refused one, so the
+        # gate assertion below would pass whether or not the gate existed.
+        lambda **kwargs: published.append(kwargs) or {"ok": True},
+    )
+
+    from backend.services.scheduler_service import scheduler_service
+
+    post = scheduler_service.create_post(
+        company_id=alpha["id"],
+        channel="messenger",
+        body="Open late on Thursday.",
+        scheduled_for="2020-01-01T10:00:00Z",
+        created_by_user_id=None,
+    )
+    scheduler_service.approve(
+        company_id=alpha["id"], post_id=int(post["id"]), approver_user_id=1
+    )
+
+    _lapse(platform, alpha["id"])
+
+    assert publisher.publish_due_posts(alpha["id"]) == 0, (
+        "a paused company published to its followers"
+    )
+    assert not published
+
+    # And the queue survived: renewing sends it, rather than the pause having
+    # silently thrown the company's campaign away.
+    _renew(platform, alpha["id"])
+
+    assert publisher.publish_due_posts(alpha["id"]) == 1, (
+        "the post was lost rather than held — the pause deleted work the "
+        "company had already approved"
+    )
+    assert published
+
+
+def test_a_paused_company_does_not_deliver_replies_already_queued(
+    platform, alpha, monkeypatch
+):
+    """Messages queued in the minutes before the lapse.
+
+    Delivering them would mean the assistant answering customers after the
+    workspace was paused — quietly undoing the decision for as long as the
+    queue lasts.
+    """
+    import sys
+
+    from database.manager import DatabaseManager
+
+    import database.manager as manager_module
+    import channels.meta.smart_reply as smart_reply
+
+    test_manager = platform["manager"]
+    monkeypatch.setattr(manager_module, "database_manager", test_manager)
+
+    for module in list(sys.modules.values()):
+        held = getattr(module, "database_manager", None)
+
+        if isinstance(held, DatabaseManager) and held is not test_manager:
+            monkeypatch.setattr(module, "database_manager", test_manager)
+
+    answered: list = []
+    monkeypatch.setattr(
+        smart_reply, "_process_batch", lambda batch: answered.append(batch) or True
+    )
+
+    from backend.services.pending_reply_service import pending_reply_service
+
+    pending_reply_service.enqueue(
+        company_id=alpha["id"],
+        channel="messenger",
+        external_user_id="cust-queued",
+        message="Are you open?",
+        delay_seconds=0,
+    )
+
+    with test_manager.tenant(alpha["id"]) as conn:
+        conn.execute(
+            "UPDATE pending_replies SET deliver_after = '2000-01-01T00:00:00Z'"
+        )
+        conn.commit()
+
+    _lapse(platform, alpha["id"])
+
+    assert smart_reply.process_due_replies(alpha["id"]) == 0, (
+        "the assistant answered a customer after the workspace was paused"
+    )
+    assert not answered
+
+    # Nothing was claimed, so renewing answers the customer who was waiting.
+    _renew(platform, alpha["id"])
+
+    assert smart_reply.process_due_replies(alpha["id"]) == 1, (
+        "the queued reply was consumed by the pause and the customer never "
+        "got an answer"
     )

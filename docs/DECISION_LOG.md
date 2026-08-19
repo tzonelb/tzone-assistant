@@ -1404,3 +1404,53 @@ permission test is satisfied by a 403 and a 200 and never looks inside the 200.
 
 All fifteen pass, and one of them is how `website_chat` was found: the AI
 Teaching response was printed in a failure and the channel list was in it.
+
+## D-045 — The gate had three doors, and I had shut two
+
+Attacking my own change from the previous entry, rather than the platform.
+
+`require_active_subscription` closes the API and `channels/inbound` declines to
+queue a reply. Both are the doors somebody *asks* through. The third produces
+customer-visible output with nobody asking: the background workers.
+
+* `publish_due_posts` — a post approved last month still went out next
+  Thursday. This is the consequence that is **public**: a paused company
+  posting to its own followers is the platform delivering the service it just
+  stopped charging for, in front of an audience.
+* `process_due_replies` — batches queued in the minutes before the lapse were
+  still due, so the assistant kept answering customers after the workspace was
+  paused, quietly undoing the decision for as long as the queue lasted.
+
+`publish_due_posts` had already made this exact argument. Its comment reads:
+"a post going out to a company's followers from a module its team can no longer
+open, and cannot cancel from inside the platform, is not a switch that was
+ignored — it is the company posting to its own audience without an operator."
+Every word is true of a paused subscription. The reasoning was written down and
+applied to the gate next door. **Sixth instance**, and the first one where the
+neighbouring gate was mine, added an hour earlier.
+
+Both refuse without *claiming*, so the queue is intact and goes out the moment
+the company renews. Refusing by discarding would punish the company for the
+pause twice.
+
+**And a worse one, entirely of my own making.** `is_active(None)` is False, so
+reading it directly meant a company with *no subscription row* counted as
+lapsed — and `create_company` takes `plan_code` as an optional argument while
+the CLI has no `--plan` flag at all. Every company created today would have
+been dark from the moment it existed: every screen 402, the assistant silent,
+nothing in the console explaining why. Provisioning a company would have
+produced a company that does not work.
+
+A subscription that *ends* stops the company. Something that never began has
+not ended. An operator who wants a company stopped before it is billed has
+suspension, which is immediate and says so. Verified by creating a real company
+through the real CLI and asking the gate about it.
+
+Two things about how this was found are worth keeping. The stub in the first
+version of the publish test returned `{"success": True}` where
+`publish_due_posts` reads `ok` — so a *failed* publish looked like a refused
+one, and the gate assertion passed whether or not the gate existed. It was the
+**positive control** — "and renewing publishes it" — that failed and exposed
+it. And the new-company case surfaced only because the publish test was run
+against a fixture company that had no subscription, which is the state every
+real company starts in and no test had exercised.

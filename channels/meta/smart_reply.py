@@ -21,6 +21,7 @@ from backend.services.message_service import message_service
 from backend.services.notification_service import notification_service
 from backend.services.pending_reply_service import pending_reply_service
 from backend.services.plan_service import UNLIMITED, plan_service
+from backend.services.subscription_gate import subscription_gate
 from channels.meta.logger import log_meta_event
 from channels.sender import send_text
 from gateway.message_gateway import message_gateway
@@ -116,7 +117,20 @@ def schedule_smart_reply(
 
 
 def process_due_replies(company_id: int) -> int:
-    """Answer every batch whose wait has elapsed. Returns how many were sent."""
+    """Answer every batch whose wait has elapsed. Returns how many were sent.
+
+    A lapsed subscription stops here as well as at the door. `channels/inbound`
+    already declines to queue anything for a paused company, but batches queued
+    in the minutes *before* the lapse are still sitting due, and delivering
+    them would mean the assistant answering customers after the workspace was
+    paused — quietly undoing the decision for as long as the queue lasts.
+
+    Nothing is claimed, so the queue survives intact and is answered the moment
+    the company renews.
+    """
+    if subscription_gate.lapsed(company_id):
+        return 0
+
     sent = 0
 
     for batch in pending_reply_service.claim_due(company_id):

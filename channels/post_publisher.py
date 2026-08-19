@@ -13,6 +13,7 @@ import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
 from backend.services.module_gate import module_gate
+from backend.services.subscription_gate import subscription_gate
 from backend.services.scheduler_service import scheduler_service
 from config.settings import config
 
@@ -108,6 +109,19 @@ def publish_due_posts(company_id: int) -> int:
     #
     # Nothing is claimed, so the queue is intact if the module comes back on.
     if not module_gate.enabled(company_id, "scheduler"):
+        return 0
+
+    # And the same for the bill. The paragraph above argues that a post must
+    # not go out from a module the team can no longer open and cannot cancel
+    # from inside the platform — every word of which is true of a company whose
+    # subscription has lapsed, whose screens answer 402 and whose scheduler is
+    # exactly as unreachable. The reasoning was done here and applied to the
+    # gate next door; this extends it rather than repeating it.
+    #
+    # This is the consequence that is *public*. A paused company still posting
+    # to its own followers next Thursday is the platform delivering the service
+    # it has just stopped charging for, in front of an audience.
+    if subscription_gate.lapsed(company_id):
         return 0
 
     published = 0
