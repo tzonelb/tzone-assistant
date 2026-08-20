@@ -21,6 +21,7 @@ from backend.services.message_service import message_service
 from backend.services.notification_service import notification_service
 from backend.services.pending_reply_service import pending_reply_service
 from backend.services.plan_service import UNLIMITED, plan_service
+from backend.services.company_gate import company_gate
 from backend.services.subscription_gate import subscription_gate
 from channels.meta.logger import log_meta_event
 from channels.sender import send_text
@@ -129,6 +130,13 @@ def process_due_replies(company_id: int) -> int:
     the company renews.
     """
     if subscription_gate.lapsed(company_id):
+        return 0
+
+    # Same for a suspension, and for the same reason as the paragraph above:
+    # batches queued in the minutes before it are still sitting due, and
+    # delivering them would answer customers after the company was switched
+    # off. Nothing is claimed, so the queue survives reinstatement intact.
+    if company_gate.suspended(company_id):
         return 0
 
     sent = 0

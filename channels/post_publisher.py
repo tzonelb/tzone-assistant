@@ -13,6 +13,7 @@ import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
 from backend.services.module_gate import module_gate
+from backend.services.company_gate import company_gate
 from backend.services.subscription_gate import subscription_gate
 from backend.services.scheduler_service import scheduler_service
 from config.settings import config
@@ -122,6 +123,11 @@ def publish_due_posts(company_id: int) -> int:
     # to its own followers next Thursday is the platform delivering the service
     # it has just stopped charging for, in front of an audience.
     if subscription_gate.lapsed(company_id):
+        return 0
+
+    # A suspended company posting to its own followers is the same publication
+    # in front of the same audience, decided by an operator rather than a bill.
+    if company_gate.suspended(company_id):
         return 0
 
     published = 0

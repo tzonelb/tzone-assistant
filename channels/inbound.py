@@ -25,6 +25,7 @@ from backend.services.notification_service import notification_service
 from channels.meta.logger import log_meta_event
 from channels.meta.profile import resolve_meta_profile
 from channels.meta.smart_reply import schedule_smart_reply
+from backend.services.company_gate import company_gate
 from backend.services.subscription_gate import subscription_gate
 
 
@@ -201,6 +202,30 @@ def process_inbound_event(
         return {
             "status": "stored",
             "reason": "subscription_lapsed",
+            "message_id": saved.get("id"),
+        }
+
+    # And the same for an operator suspension, which is the heavier act and so
+    # must do at least as much. It reached the screens -- sessions revoked,
+    # sign-in refused -- and stopped at the assistant, because
+    # `resolve_account_for_channel` filters on the channel account's status and
+    # never on the company's. The team was locked out while their assistant
+    # went on answering their customers for them.
+    #
+    # Stored and notified for the same reason as above: reinstatement must find
+    # the messages waiting. Silent for the same reason too.
+    if company_gate.suspended(company_id):
+        diagnostics_service.record(
+            event_type="ai_reply_skipped",
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            status="company_suspended",
+        )
+
+        return {
+            "status": "stored",
+            "reason": "company_suspended",
             "message_id": saved.get("id"),
         }
 

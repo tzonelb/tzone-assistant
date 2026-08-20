@@ -1005,6 +1005,15 @@ class PlatformService:
 
             conn.commit()
 
+        # After the commit, never inside it: a reader that misses the cache
+        # while the transaction is still open would refill it with the value
+        # being replaced, and the suspension would take effect thirty seconds
+        # late for that process. Imported here rather than at module scope for
+        # symmetry with the subscription gate below.
+        from backend.services.company_gate import company_gate
+
+        company_gate.invalidate(company_id)
+
         logger.info(
             "Company %s status %s -> %s by platform admin %s",
             company_id,
