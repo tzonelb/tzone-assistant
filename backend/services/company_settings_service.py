@@ -15,6 +15,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from database.manager import database_manager
 from database.schema_tenant import DEFAULT_SETTINGS
@@ -67,6 +68,92 @@ RETIRED_SETTINGS: dict[str, frozenset[str]] = {
         {"ai_replied", "employee_replied", "in_app_popup", "desktop", "sound"}
     ),
 }
+
+
+def _assert_working_hours_are_usable(values: dict[str, Any]) -> None:
+    """Refuse working hours the engine cannot act on.
+
+    The engine treats an unreadable timezone as **open** — deliberately, so a
+    bad row can never silence a company's assistant. That is right for data
+    already stored, and it is exactly why the *write* has to be strict: a
+    mistyped zone was accepted with a 200, shown back on the screen as saved,
+    and left the assistant answering customers at three in the morning for
+    ever. The only trace was one line in a log nobody reads.
+
+    Refuse at the write, tolerate at the read — the same shape as the branch
+    and section checks.
+    """
+    timezone_name = str(values.get("timezone") or "").strip()
+
+    if timezone_name:
+        try:
+            ZoneInfo(timezone_name)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(
+                f"{timezone_name!r} is not a timezone this server knows. Use an "
+                "IANA name such as Asia/Beirut or Europe/Paris."
+            ) from exc
+
+    days = values.get("days")
+
+    if days is None:
+        return
+
+    if not isinstance(days, dict):
+        raise ValueError("Working hours must name each day.")
+
+    for day, window in days.items():
+        if not isinstance(window, dict):
+            raise ValueError(f"The hours for {day} are not readable.")
+
+        for edge in ("open", "close"):
+            clock = window.get(edge)
+
+            if clock in (None, ""):
+                continue
+
+            try:
+                hour, _, minute = str(clock).partition(":")
+                hour, minute = int(hour), int(minute)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"The {edge} time for {day} must look like 09:00."
+                ) from exc
+
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                raise ValueError(
+                    f"The {edge} time for {day} is not a time of day."
+                )
+
+
+# Settings whose value is a number with a meaningful range, and what that range
+# is. Each of these was accepted at any value and then clamped when it was
+# read, so an owner could save -5, see -5 on the screen, and get the behaviour
+# of 1. A setting that displays one thing and does another is the defect this
+# audit has closed everywhere else; it is the same one when the disagreement is
+# with itself.
+_AI_BEHAVIOUR_RANGES: dict[str, tuple[int, int]] = {
+    "return_to_ai_timeout_minutes": (1, 1440),
+    "collect_message_delay_seconds": (0, 300),
+}
+
+
+def _assert_ai_behaviour_is_in_range(values: dict[str, Any]) -> None:
+    for key, (low, high) in _AI_BEHAVIOUR_RANGES.items():
+        if key not in values or values[key] is None:
+            continue
+
+        try:
+            number = int(values[key])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{key} must be a whole number.") from exc
+
+        if not low <= number <= high:
+            raise ValueError(
+                f"{key} must be between {low} and {high}. It was {number}, "
+                "which the assistant would have silently treated as "
+                f"{min(max(number, low), high)}."
+            )
 
 
 class CompanySettingsService:
@@ -247,6 +334,12 @@ class CompanySettingsService:
                 values,
                 company_id=company_id,
             )
+
+        if normalized == "working_hours":
+            _assert_working_hours_are_usable(merged)
+
+        if normalized == "ai_behavior":
+            _assert_ai_behaviour_is_in_range(merged)
 
         now = utc_now_iso()
 

@@ -1559,3 +1559,48 @@ existed. And the 404 I added used `status.HTTP_404_NOT_FOUND` in a file that
 does not import `status`, so the route answered 500: the precise failure the
 change was making. Each was a test failure rather than a discovery, which is
 the argument for writing the test before believing the fix.
+
+## D-048 — Two settings that saved one value and obeyed another
+
+Found by sending bodies that *pass* the schema and are still wrong — the
+earlier crash sweep only sent junk, which is refused by validation before any
+handler sees it. Twenty-seven such bodies produced no crash; two produced
+something worse than a crash.
+
+**`working_hours.timezone`** took any string. A mistyped zone was accepted with
+a 200 and shown back on the screen as saved. The engine treats an unreadable
+timezone as *open* — deliberately, so a bad row can never silence a company's
+assistant — so the owner who set their hours and fat-fingered the zone had an
+assistant answering customers at three in the morning, for ever, with a single
+log line as the only trace. Measured rather than argued: at 03:00 on a Monday,
+`Asia/Beirut` reports closed and `Mars/Olympus` reports open.
+
+**`ai_behavior.return_to_ai_timeout_minutes`** saved `-5`, displayed `-5`, and
+was clamped to `1` on every read. The screen and the behaviour disagreed, and
+the screen was the one that was wrong.
+
+Both are the defect this audit has closed everywhere else — a decision that
+saves and does not decide — with the twist that here the platform disagrees
+with itself.
+
+**Refuse at the write, tolerate at the read.** The engine keeps failing open on
+an unreadable value, because rows written before this check exist and a server
+missing its timezone database is a real deployment; taking a company's
+assistant away over a months-old typo is the worse error. What changed is that
+the value can no longer arrive through the front door. That split is the same
+one the branch and section checks use, and it is written down because a future
+reader will otherwise find two places disagreeing about strictness and
+"fix" one of them.
+
+The refusal names the range *and* the value the platform would have used
+instead, because "invalid" leaves an owner guessing at exactly the moment they
+are trying to configure something.
+
+Two angles probed clean in the same pass, recorded so the absence is evidence
+rather than silence: **referential integrity** — `PRAGMA foreign_keys` really
+is on for both connection kinds, twelve declared foreign keys, `integrity_check`
+and `foreign_key_check` clean, and an orphan insert refused with
+`IntegrityError` — and **state machines**: a cancelled appointment cannot be
+moved back to scheduled, confirmed or completed; the slot it held is free
+again; a due post is claimed exactly once; a published post cannot be
+re-approved.
