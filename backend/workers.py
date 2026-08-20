@@ -308,7 +308,19 @@ def _prune_activity_logs() -> int:
     """
     total = 0
 
-    for company_id in database_manager.list_company_ids():
+    # `list_all_company_ids`, not `list_company_ids`. The active-only list is
+    # right for the sweeps that *serve* — a suspended company must not have its
+    # replies delivered or its posts published. This sweep does not serve; it is
+    # housekeeping, the same category as the health check, which uses the full
+    # list for the same reason.
+    #
+    # Using the active-only list here turned a declared window into "for ever"
+    # for any company an operator switched off: fourteen days is a promise about
+    # how long data is kept, and suspension is not a reason to stop keeping it.
+    # A suspended company still writes diagnostics on every inbound message —
+    # including the `ai_reply_skipped` row the suspension gate itself records —
+    # so the table went on growing inside a database nobody was pruning.
+    for company_id in database_manager.list_all_company_ids():
         removed = activity_service.prune(company_id)
         total += sum(removed.values())
 

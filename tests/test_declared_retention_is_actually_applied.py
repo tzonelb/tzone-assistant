@@ -307,3 +307,51 @@ def test_even_unread_notifications_have_a_ceiling(wired, platform, monkeypatch):
     assert _notifications(wired, alpha, "forgotten") == 0, (
         "unread notifications have no ceiling at all"
     )
+
+
+def test_a_suspended_company_is_still_pruned(wired, platform, monkeypatch):
+    """Suspension stops the company acting. It does not stop the clock.
+
+    The sweep used to iterate `list_company_ids()`, which is active-only. That
+    list is right for the sweeps that *serve* — a suspended company must not
+    have its replies delivered or its posts published — but this sweep does not
+    serve, it keeps a promise. Fourteen days is a statement about how long data
+    is held, and an operator switching a company off is not a reason to start
+    holding it for ever.
+
+    It compounds: a suspended company still writes diagnostics on every inbound
+    message, including the `ai_reply_skipped` row the suspension gate itself
+    records. So the table went on filling inside a database nothing was
+    pruning.
+    """
+    from backend import workers
+    from database.manager import utc_now_iso
+
+    monkeypatch.setattr(workers, "database_manager", wired)
+
+    alpha = platform["companies"]["alpha"]["id"]
+    beta = platform["companies"]["beta"]["id"]
+
+    _seed_events(wired, alpha, days_old=90, count=6, kind="old")
+    _seed_events(wired, beta, days_old=90, count=6, kind="old")
+
+    with wired.control() as conn:
+        conn.execute(
+            "UPDATE companies SET status = 'suspended', updated_at = ? WHERE id = ?",
+            (utc_now_iso(), beta),
+        )
+        conn.commit()
+
+    workers._prune_activity_logs()
+
+    # The active company is the control: if the sweep did nothing at all, both
+    # counts would be six and the assertion below would pass for the wrong
+    # reason.
+    assert _count(wired, alpha, "old") == 0, (
+        "the sweep did not prune the active company either, so this test says "
+        "nothing about the suspended one"
+    )
+    assert _count(wired, beta, "old") == 0, (
+        "a suspended company kept rows far past the declared retention window "
+        "— suspending a company silently turned fourteen days into for ever"
+    )
