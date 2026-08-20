@@ -1454,3 +1454,57 @@ one, and the gate assertion passed whether or not the gate existed. It was the
 it. And the new-company case surfaced only because the publish test was run
 against a fixture company that had no subscription, which is the state every
 real company starts in and no test had exercised.
+
+## D-046 — Two properties that would have been lost silently
+
+Attacking the authentication and encryption primitives directly, rather than
+the routes above them. Both properties below already held; both are now pinned,
+because both could be removed by somebody tidying up and neither would fail a
+single existing test.
+
+**The sign-in form is not a user directory.** Measured, not assumed: an unknown
+address answers in 188.6 ms and a wrong password in 182.9 ms — a ratio of
+**1.031**, indistinguishable from noise. `_dummy_password_check` is what makes
+that true, and it is four lines that look pointless, sit on a failure path
+where nothing visibly depends on them, and would survive any review by somebody
+removing dead work. Turning it into a no-op drops the ratio to **0.006** — an
+unknown address answers in 1 ms against 206 ms, a 170-fold difference, and the
+form becomes a way to ask which of ten thousand addresses have accounts here.
+For a platform whose customers are businesses, that is a competitor's prospect
+list, extracted with no credentials at all.
+
+A second test guards the subtler version: `_dummy_password_check` still being
+called but weakened. A refused sign-in that returns in under 20 ms has not run
+310,000 PBKDF2 iterations, whatever the ratio says.
+
+The leak that is **deliberately left** is pinned too. Branches after a correct
+password are not equalised — unsealing runs 600,000 KDF iterations against the
+password's 310,000, so a wrong workspace code is about three times slower than
+a wrong password. That tells somebody who already holds valid credentials that
+the company or the code stopped them. Equalising it would mean running the 600k
+unseal on every rejected attempt, handing every anonymous caller a
+CPU-exhaustion lever. The leak is bounded to someone who already has a working
+password; the amplification would be available to everyone. The test asserts
+the slower branch *stays* slower, so if it ever changes, somebody has either
+equalised it or stopped proving the workspace code — both worth a conversation.
+
+**A stolen sealed credential is worthless.** Channel accounts live in the
+shared control database because a webhook must be routed before the company is
+known, so one company's page token sits in the same table as everybody else's.
+Three attacks, all refused: a dump with no key, a company copying another
+company's sealed blob into its own row, and a blob moved between fields on one
+row.
+
+The instructive part is **which test caught which mutation**. Removing the
+company binding from the sealed value left the cross-company attack still
+failing — because the two companies already have different keys, so a key-only
+design looks identical from outside. Only the "same key, wrong company id" test
+saw it. A suite that had tested the obvious attack alone would have reported
+the binding intact while it was gone, and the next place that looks a key up by
+company id would have been one wrong variable away from opening the wrong
+company's credentials. The per-field context needed its own mutation for the
+same reason.
+
+Also measured while here: the workspace code is 12 characters from a
+31-character alphabet with the confusable ones (I, L, O, 0, 1) removed — 59.5
+bits, a keyspace of 7.9 × 10¹⁷. At the login rate limit that is not a target.
