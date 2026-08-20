@@ -119,6 +119,18 @@ TENANT_TABLES: tuple[str, ...] = (
         name TEXT NOT NULL,
         normalized_name TEXT NOT NULL,
         color TEXT,
+        -- Soft delete. `create_tag` reactivates a retired tag on conflict
+        -- rather than failing the unique constraint, and `list_tags` shows
+        -- only active ones.
+        --
+        -- This column and `created_by_user_id` below have both been read and
+        -- written by the tag code since the feature was written, and neither
+        -- was ever in the table. Listing tags raised "no such column: status"
+        -- and creating one raised "no such column: created_by_user_id", so the
+        -- inbox's tag list had never once loaded and no tag had ever been
+        -- created — for any company, since the day it shipped.
+        status TEXT NOT NULL DEFAULT 'active',
+        created_by_user_id INTEGER,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(company_id, normalized_name)
@@ -608,6 +620,13 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "department_id": (
             "INTEGER REFERENCES business_departments(id) ON DELETE SET NULL"
         ),
+    },
+    # Added after the tag feature shipped without it. Existing companies have a
+    # `conversation_tags` table with no `status`, so the column has to arrive
+    # through the upgrade path rather than through CREATE TABLE.
+    "conversation_tags": {
+        "status": "TEXT NOT NULL DEFAULT 'active'",
+        "created_by_user_id": "INTEGER",
     },
     "tickets": {
         "title": "TEXT",

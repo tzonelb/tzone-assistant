@@ -1508,3 +1508,54 @@ same reason.
 Also measured while here: the workspace code is 12 characters from a
 31-character alphabet with the confusable ones (I, L, O, 0, 1) removed — 59.5
 bits, a keyspace of 7.9 × 10¹⁷. At the login rate limit that is not a target.
+
+## D-047 — Four features that had never once worked
+
+Swept every route for 500s instead of reading them, and found that four things
+the product advertises had never functioned — not in an edge case, not under
+load, but on the plain request with no parameters, for every company, since the
+day each shipped.
+
+* **The conversation control panel**, **the export**, and **internal notes**.
+  `conversation_control_service` resolved employee names with
+  `LEFT JOIN users` from inside a **tenant** connection. `users` lives in the
+  control database, in a different encrypted file, and SQLite does not treat an
+  unknown table as an empty one — it raises `no such table: users`. Three
+  queries, three broken features.
+* **Conversation tags.** The table was missing two columns the code has always
+  read and written: `status` (soft delete, and the filter in `list_tags`) and
+  `created_by_user_id`. Listing tags raised `no such column: status` and
+  creating one raised `no such column: created_by_user_id`, so the inbox's tag
+  list had never loaded and no tag had ever been created.
+* **The tasks screen's assignment list.** `task_options` read
+  `employee["email"]` and `employee["role_name"]`, and stopped working the day
+  `company_employees` was narrowed to stop leaking every colleague's contact
+  details to anyone holding the lowest permission on the platform. The keys
+  were simply gone. The hardening was right; nothing checked what it broke.
+
+None of these could have been caught by reading either half. A cross-database
+join is valid SQL against a table that exists — in the other file. A missing
+column is invisible in a query that names it. A removed dictionary key is
+invisible at the call site. The only thing that finds them is running them, and
+nothing ran them: every existing test for these services went through methods
+that stayed inside one database.
+
+**A GET that writes.** While fixing the panel, the 404 case turned up something
+else: `get_state` is `get_or_create`, so opening the control panel for a
+conversation that does not exist **created** it. Any employee holding
+`conversations.view` could add a row to the company's database by putting
+arbitrary text in a URL, as often as they cared to reload — an empty
+conversation from a customer who does not exist, appearing in the inbox. A GET
+that writes is also a GET that a crawler, a link preview or a retried request
+performs with nobody deciding to. `find_state` already existed for exactly this
+reason, written for the reply engine so the assistant preview would not conjure
+conversations; the read path simply never used it.
+
+**Three mistakes of my own, in one fix, all caught by tests.** A blind
+`replace(..., 1)` put the read-only lookup on `is_ai_handling` — which reads
+`state.get(...)` and would have raised on `None` — instead of on the timeline.
+The same patch added a *duplicate* `find_state` beside the one that already
+existed. And the 404 I added used `status.HTTP_404_NOT_FOUND` in a file that
+does not import `status`, so the route answered 500: the precise failure the
+change was making. Each was a test failure rather than a discovery, which is
+the argument for writing the test before believing the fix.

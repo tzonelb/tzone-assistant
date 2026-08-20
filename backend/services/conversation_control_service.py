@@ -1926,24 +1926,60 @@ class ConversationControlService:
             conn.commit()
 
             row = conn.execute(
-                """
-                SELECT
-                    conversation_notes.*,
-                    COALESCE(
-                        users.full_name,
-                        users.email,
-                        'Unknown user'
-                    ) AS author_name
-                FROM conversation_notes
-                LEFT JOIN users
-                    ON users.id =
-                       conversation_notes.author_user_id
-                WHERE conversation_notes.id = ?
-                """,
+                "SELECT * FROM conversation_notes WHERE id = ?",
                 (note_id,),
             ).fetchone()
 
-        return dict(row)
+        # The author's name comes from the control database, in a second
+        # query. It cannot come from a join: `users` is not in this file.
+        # SQLite does not return an empty result for an unknown table, it
+        # raises `no such table: users` — so `LEFT JOIN users` here did not
+        # quietly resolve to nothing, it made adding a note to a conversation
+        # fail outright, every time, for every company.
+        note = dict(row)
+        note["author_name"] = self._author_names(
+            company_id, [note.get("author_user_id")]
+        ).get(note.get("author_user_id"), "Unknown user")
+
+        return note
+
+    @staticmethod
+    def _author_names(company_id: int, user_ids) -> dict[int, str]:
+        """Resolve employee names from the control database, in one query.
+
+        Conversations live in the company's own encrypted file and `users` does
+        not, so a name cannot be joined — it has to be looked up. This is the
+        pattern `auth_service.user_display_names` exists for, and the same one
+        the inbox already uses to label a page of conversations.
+
+        Three queries in this file did it with `LEFT JOIN users` instead. That
+        is not a join that quietly returns nothing: SQLite raises
+        `no such table: users`, so the conversation timeline, the export and
+        adding an internal note all failed outright — for every company, on
+        every call, since they were written. Nothing noticed, because nothing
+        called them in a test.
+
+        Names are resolved company-scoped, so an id belonging to another
+        company resolves to nothing rather than to a stranger's name.
+        """
+        from backend.services.auth_service import auth_service
+
+        wanted = [int(value) for value in user_ids if value]
+
+        if not wanted:
+            return {}
+
+        try:
+            return auth_service.user_display_names(int(company_id), wanted)
+        except Exception:  # noqa: BLE001
+            # A timeline that cannot name an actor is still a timeline worth
+            # showing. Failing here would take the whole conversation panel
+            # away over a control-plane hiccup.
+            logger.exception(
+                "Could not resolve employee names for company %s", company_id
+            )
+
+            return {}
 
     def list_tags(self, company_id: int) -> list[dict[str, Any]]:
         with database_manager.tenant(company_id) as conn:
@@ -2047,29 +2083,31 @@ class ConversationControlService:
         company_id: int,
         channel: str,
         external_user_id: str,
-    ) -> dict[str, Any]:
-        state = self.get_state(
+    ) -> dict[str, Any] | None:
+        # `find_state`, not `get_state`. `get_state` is `get_or_create`, which
+        # is right on the inbound path — a customer's first message has to be
+        # able to start a conversation — and wrong on a read. Opening the
+        # control panel for a conversation that does not exist created one, so
+        # any employee holding `conversations.view` could add a row to the
+        # company's database by putting arbitrary text in a URL, as often as
+        # they cared to reload. A GET that writes is also a GET that a crawler,
+        # a link preview or a retried request performs with nobody deciding to.
+        state = self.find_state(
             company_id=company_id,
             channel=channel,
-            external_user_id=(
-                external_user_id
-            ),
+            external_user_id=external_user_id,
         )
+
+        if state is None:
+            # A conversation that does not exist has no timeline. Returning
+            # `None` rather than raising leaves the HTTP layer to decide the
+            # status, which is where that decision belongs.
+            return None
 
         with database_manager.tenant(company_id) as conn:
             event_rows = conn.execute(
                 """
-                SELECT
-                    conversation_events.*,
-                    COALESCE(
-                        users.full_name,
-                        users.email,
-                        'System'
-                    ) AS actor_name
-                FROM conversation_events
-                LEFT JOIN users
-                    ON users.id =
-                       conversation_events.actor_user_id
+                SELECT * FROM conversation_events
                 WHERE conversation_id = ?
                   AND conversation_events.company_id = ?
                 ORDER BY conversation_events.id DESC
@@ -2083,17 +2121,7 @@ class ConversationControlService:
 
             note_rows = conn.execute(
                 """
-                SELECT
-                    conversation_notes.*,
-                    COALESCE(
-                        users.full_name,
-                        users.email,
-                        'Unknown user'
-                    ) AS author_name
-                FROM conversation_notes
-                LEFT JOIN users
-                    ON users.id =
-                       conversation_notes.author_user_id
+                SELECT * FROM conversation_notes
                 WHERE conversation_id = ?
                   AND conversation_notes.company_id = ?
                 ORDER BY conversation_notes.id DESC
@@ -2133,12 +2161,25 @@ class ConversationControlService:
             "admin_override_assignment",
         }
 
+        # Every name on this page in one control-plane query rather than one
+        # per row — the same reason the inbox resolves a whole page of names at
+        # once, and the reason a join here was never an option.
+        names = self._author_names(
+            company_id,
+            [row["actor_user_id"] for row in event_rows]
+            + [row["author_user_id"] for row in note_rows],
+        )
+
         events: list[dict[str, Any]] = []
         previous_fingerprint: tuple[str, str] | None = None
         previous_created_at: datetime | None = None
 
         for row in event_rows:
             event = self.serialize_event(row)
+            actor_id = event.get("actor_user_id")
+
+            if actor_id:
+                event["actor_name"] = names.get(int(actor_id)) or "System"
             event_type = str(event.get("event_type") or "")
             data = event.get("data", {})
 
@@ -2169,10 +2210,20 @@ class ConversationControlService:
             previous_fingerprint = fingerprint
             previous_created_at = created_at
 
+        notes = []
+
+        for row in note_rows:
+            note = dict(row)
+            author_id = note.get("author_user_id")
+            note["author_name"] = (
+                names.get(int(author_id)) if author_id else None
+            ) or "Unknown user"
+            notes.append(note)
+
         return {
             "conversation": state,
             "events": events,
-            "notes": [dict(row) for row in note_rows],
+            "notes": notes,
         }
 
 

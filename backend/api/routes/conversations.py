@@ -495,6 +495,9 @@ def read_control(
         external_user_id=user_id,
     )
 
+    if result is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
     conversation = result.get("conversation", {})
     assigned_user_id = conversation.get("assigned_user_id")
 
@@ -800,6 +803,9 @@ def export_conversation(
         channel=channel,
         external_user_id=user_id,
     )
+
+    if timeline_result is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
 
     conversation = timeline_result.get("conversation", {})
     assigned_user_id = conversation.get("assigned_user_id")

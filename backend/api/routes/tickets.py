@@ -257,12 +257,21 @@ def task_options(context: tuple[dict[str, Any], int] = Depends(task_view_context
     """
     _, company_id = context
 
+    # An id and a name, which is what a dropdown draws. This used to read
+    # `employee["email"]` and `employee["role_name"]`, and stopped working the
+    # day `company_employees` was narrowed to stop leaking every colleague's
+    # contact details to anyone holding the lowest permission on the platform.
+    # The keys are simply not there any more, so the screen answered 500 —
+    # every time, with no parameters, for every company — and nothing noticed,
+    # because no test called it.
+    #
+    # Restoring them would mean asking for `include_contact_details`, which
+    # would put an address and a role in a response whose only job is to fill
+    # an assignment list. The fix is to stop asking for them.
     employees = [
         {
             "id": int(employee["id"]),
             "display_name": employee["display_name"],
-            "email": employee["email"],
-            "role_name": employee["role_name"],
         }
         for employee in auth_service.company_employees(company_id)
     ]
