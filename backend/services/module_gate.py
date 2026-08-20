@@ -41,10 +41,9 @@ HTTP layer already made this same choice; it is stated here once for both.
 from __future__ import annotations
 
 import logging
-import threading
-import time
 from typing import Any
 
+from backend.services.gate_cache import GateCache
 from backend.services.platform_service import (
     PLATFORM_MODULES,
     PlatformNotFound,
@@ -71,9 +70,13 @@ CACHE_SECONDS = 30.0
 class ModuleGate:
     """Resolved module states for a company, cached and invalidated on write."""
 
+    # The caching lives in `GateCache` rather than here. All three gates had
+    # the same hand-written cache and therefore the same hole: a read that
+    # began before an invalidate published its stale answer afterwards, and
+    # the operator's change was masked for the whole window. See that module
+    # for the generation counter that closes it.
     def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._cache: dict[int, tuple[float, dict[str, bool]]] = {}
+        self._cache = GateCache(CACHE_SECONDS)
 
     # ------------------------------------------------------------------ read
 
@@ -89,20 +92,11 @@ class ModuleGate:
         except (TypeError, ValueError):
             return self._all_on()
 
-        now = time.monotonic()
-
-        with self._lock:
-            cached = self._cache.get(resolved)
-
-            if cached and cached[0] > now:
-                return dict(cached[1])
-
-        states = self._read(resolved)
-
-        with self._lock:
-            self._cache[resolved] = (now + CACHE_SECONDS, dict(states))
-
-        return states
+        # `copy=dict` because this answer is mutable: without it a caller that
+        # edited what it was handed would edit what every later caller is told.
+        return self._cache.read_through(
+            resolved, lambda: self._read(resolved), copy=dict
+        )
 
     def enabled(self, company_id: Any, module_key: str) -> bool:
         """Whether one module is on. Unknown keys are a programming error.
@@ -129,16 +123,15 @@ class ModuleGate:
         operator's change applies to the next message rather than the next
         thirty seconds of them.
         """
-        with self._lock:
-            if company_id is None:
-                self._cache.clear()
+        if company_id is None:
+            self._cache.invalidate()
 
-                return
+            return
 
-            try:
-                self._cache.pop(int(company_id), None)
-            except (TypeError, ValueError):
-                self._cache.clear()
+        try:
+            self._cache.invalidate(int(company_id))
+        except (TypeError, ValueError):
+            self._cache.invalidate()
 
     # ---------------------------------------------------------------- helpers
 

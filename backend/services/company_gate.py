@@ -51,10 +51,9 @@ being wrong the other way costs every customer their assistant mid-sentence.
 from __future__ import annotations
 
 import logging
-import threading
-import time
 from typing import Any
 
+from backend.services.gate_cache import GateCache
 from database.manager import database_manager
 
 
@@ -71,9 +70,13 @@ CACHE_SECONDS = 30.0
 class CompanyGate:
     """Whether an operator has switched this company off."""
 
+    # The caching lives in `GateCache` rather than here. All three gates had
+    # the same hand-written cache and therefore the same hole: a read that
+    # began before an invalidate published its stale answer afterwards, and
+    # the operator's change was masked for the whole window. See that module
+    # for the generation counter that closes it.
     def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._cache: dict[int, tuple[float, bool]] = {}
+        self._cache = GateCache(CACHE_SECONDS)
 
     # ------------------------------------------------------------------ read
 
@@ -88,20 +91,7 @@ class CompanyGate:
         except (TypeError, ValueError):
             return True
 
-        now = time.monotonic()
-
-        with self._lock:
-            cached = self._cache.get(resolved)
-
-            if cached and cached[0] > now:
-                return cached[1]
-
-        active = self._read(resolved)
-
-        with self._lock:
-            self._cache[resolved] = (now + CACHE_SECONDS, active)
-
-        return active
+        return self._cache.read_through(resolved, lambda: self._read(resolved))
 
     def suspended(self, company_id: Any) -> bool:
         """The same question the other way round, because every caller asks it
@@ -140,16 +130,17 @@ class CompanyGate:
         takes effect on the next message rather than up to thirty seconds
         later. That half minute is exactly when the operator is watching.
         """
-        with self._lock:
-            if company_id is None:
-                self._cache.clear()
+        if company_id is None:
+            self._cache.invalidate()
 
-                return
+            return
 
-            try:
-                self._cache.pop(int(company_id), None)
-            except (TypeError, ValueError):
-                self._cache.clear()
+        try:
+            self._cache.invalidate(int(company_id))
+        except (TypeError, ValueError):
+            # An id that is not an id cannot name one entry, so drop them all
+            # rather than silently drop none.
+            self._cache.invalidate()
 
 
 company_gate = CompanyGate()

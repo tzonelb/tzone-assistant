@@ -43,10 +43,9 @@ costs every customer their assistant mid-conversation.
 from __future__ import annotations
 
 import logging
-import threading
-import time
 from typing import Any
 
+from backend.services.gate_cache import GateCache
 from backend.services.plan_service import plan_service
 
 
@@ -64,9 +63,13 @@ CACHE_SECONDS = 30.0
 class SubscriptionGate:
     """Whether a company may operate, cached and invalidated on renewal."""
 
+    # The caching lives in `GateCache` rather than here. All three gates had
+    # the same hand-written cache and therefore the same hole: a read that
+    # began before an invalidate published its stale answer afterwards, and
+    # the operator's change was masked for the whole window. See that module
+    # for the generation counter that closes it.
     def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._cache: dict[int, tuple[float, bool]] = {}
+        self._cache = GateCache(CACHE_SECONDS)
 
     # ------------------------------------------------------------------ read
 
@@ -81,20 +84,7 @@ class SubscriptionGate:
         except (TypeError, ValueError):
             return True
 
-        now = time.monotonic()
-
-        with self._lock:
-            cached = self._cache.get(resolved)
-
-            if cached and cached[0] > now:
-                return cached[1]
-
-        entitled = self._read(resolved)
-
-        with self._lock:
-            self._cache[resolved] = (now + CACHE_SECONDS, entitled)
-
-        return entitled
+        return self._cache.read_through(resolved, lambda: self._read(resolved))
 
     def lapsed(self, company_id: Any) -> bool:
         """The same question the other way round, because every caller asks it
@@ -141,16 +131,15 @@ class SubscriptionGate:
         exactly when an operator is watching, having just told a customer they
         are back on.
         """
-        with self._lock:
-            if company_id is None:
-                self._cache.clear()
+        if company_id is None:
+            self._cache.invalidate()
 
-                return
+            return
 
-            try:
-                self._cache.pop(int(company_id), None)
-            except (TypeError, ValueError):
-                self._cache.clear()
+        try:
+            self._cache.invalidate(int(company_id))
+        except (TypeError, ValueError):
+            self._cache.invalidate()
 
 
 subscription_gate = SubscriptionGate()
