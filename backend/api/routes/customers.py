@@ -26,7 +26,14 @@ def manage_context(current_user=Depends(require_permission("customers.manage")))
 
 @router.get("")
 def list_customers(
-    search: str | None = Query(default=None),
+    # Bounded like the seven other search parameters on the platform. No
+    # exploit was demonstrated for the unbounded version -- SQLite matches
+    # a pattern of twenty thousand wildcards against three thousand rows in
+    # twelve milliseconds -- so this closes an inconsistency rather than a
+    # hole. It is worth closing because the term is interpolated into a
+    # LIKE pattern across seven columns, and the next thing to consume it
+    # may not be as forgiving as LIKE.
+    search: str | None = Query(default=None, max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     context=Depends(view_context),
