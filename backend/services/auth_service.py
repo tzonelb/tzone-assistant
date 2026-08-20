@@ -1291,6 +1291,28 @@ class AuthService:
         Conversations live in the tenant database and cannot join to `users`, so
         the inbox resolves the whole page's names at once instead of issuing one
         query per row.
+
+        **Membership, not employment.** This answers "who was this?", and the
+        answer does not change when somebody leaves. It used to require
+        `users.status = 'active'` and `company_users.status = 'active'`, so the
+        day an employee was disabled every task they had been assigned, every
+        note they had written and every reply they had sent went blank at once —
+        the company losing the authorship of its own history because a person
+        stopped working there. The row still held their id; only the name
+        refused to resolve.
+
+        Withholding it protected nothing. They were an employee of this company
+        and their name is already through its records; the filter did not hide
+        it from anyone, it only made the record unreadable.
+
+        `company_id` is what does the scoping, and it stays: an id belonging to
+        another company's employee still resolves to nothing, which is what
+        `ticket_service` and `appointment_service` rely on when they say this
+        function is scoped. Status is a different question, and the two callers
+        that want *current* employees — the assignment pickers — ask
+        `company_employees`, which does filter on it. Same split as
+        `list_company_ids` against `list_all_company_ids`: serving asks who is
+        active, attribution asks who it was.
         """
         unique_ids = sorted({int(uid) for uid in user_ids if uid is not None})
 
@@ -1307,8 +1329,6 @@ class AuthService:
                 JOIN company_users ON company_users.user_id = users.id
                 WHERE users.id IN ({placeholders})
                   AND company_users.company_id = ?
-                  AND users.status = 'active'
-                  AND company_users.status = 'active'
                 """,
                 (*unique_ids, company_id),
             ).fetchall()
