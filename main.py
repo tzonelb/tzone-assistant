@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager, suppress
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.api.errors import install_error_handlers
 from backend.api.routes import (
     activity,
     ai_teaching,
@@ -191,6 +192,12 @@ app = FastAPI(
     openapi_url="/openapi.json" if config.ENABLE_DOCS else None,
 )
 
+
+# A rejected request must always be answerable. See `backend/api/errors.py`:
+# the default validation handler could not encode its own message when the
+# body held a non-finite number, and turned a decided 422 into a 500 raised
+# past every middleware below.
+install_error_handlers(app)
 
 # Added before CORS so it ends up outermost: every response leaving the
 # application carries the headers, including CORS preflights and error
