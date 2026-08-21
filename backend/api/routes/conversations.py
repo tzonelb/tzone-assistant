@@ -271,6 +271,22 @@ def _export_filename(channel: str, user_id: str, scope: str, extension: str) -> 
     return f"{safe_channel}_{safe_user_id}_{scope}_{timestamp}.{extension}"
 
 
+# Cells beginning with one of these are read as a formula by Excel, LibreOffice
+# and Google Sheets when the exported file is opened. A customer's message body
+# and their channel display name both reach the CSV verbatim, so a customer who
+# writes `=HYPERLINK(...)` or `=cmd|'/C calc'!A0` turns an employee's export into
+# a live exploit on the employee's machine. Prefixing a single quote makes the
+# spreadsheet treat the cell as text; it changes nothing about how the value
+# reads for a human and is the standard neutralisation.
+_CSV_FORMULA_TRIGGERS = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def _csv_cell(value: object) -> object:
+    if isinstance(value, str) and value[:1] in _CSV_FORMULA_TRIGGERS:
+        return "'" + value
+    return value
+
+
 # ----------------------------------------------------------------------
 # Listing
 # ----------------------------------------------------------------------
@@ -1016,7 +1032,7 @@ def export_conversation(
         for row in rows:
             writer.writerow(
                 {
-                    key: (
+                    key: _csv_cell(
                         json.dumps(value, ensure_ascii=False)
                         if isinstance(value, (dict, list, tuple))
                         else value
