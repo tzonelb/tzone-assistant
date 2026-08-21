@@ -18,6 +18,8 @@ company that owns it.
 
 from __future__ import annotations
 
+import asyncio
+
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -53,6 +55,7 @@ from backend.services.reply_policy_service import (
     reply_policy_service,
 )
 from core.response_policy import response_policy
+from config.settings import config
 
 
 router = APIRouter(prefix="/api/ai-teaching", tags=["AI Teaching"])
@@ -610,8 +613,13 @@ def clear_reply_policy_channel(
 # ----------------------------------------------------------------------
 
 
+# How many previews are in flight right now, platform-wide. The event loop is
+# single-threaded, so the check-and-increment below is atomic without a lock.
+_preview_inflight = 0
+
+
 @router.post("/dry-run")
-def dry_run(
+async def dry_run(
     payload: DryRunRequest,
     company_id: int = Depends(manage_context),
 ):
@@ -620,9 +628,26 @@ def dry_run(
     Nothing is delivered to a channel provider, no message or conversation is
     stored, no reply is queued, and no live conversation state is touched — see
     ``bot_profile_service.preview_reply`` for how each of those is guaranteed.
+
+    The preview runs the real model behind a blocking call. It is offloaded to a
+    worker thread and capped at ``AI_PREVIEW_MAX_CONCURRENCY`` in flight: run as
+    a plain ``def`` on Starlette's shared pool with no ceiling, a burst of
+    previews would hold every thread for the model's round trip and freeze login
+    and the inbox for every company. Excess previews are refused, not queued.
     """
+    global _preview_inflight
+
+    if _preview_inflight >= config.AI_PREVIEW_MAX_CONCURRENCY:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many previews are running right now; try again in a moment.",
+        )
+
+    _preview_inflight += 1
+
     try:
-        return bot_profile_service.preview_reply(
+        return await asyncio.to_thread(
+            bot_profile_service.preview_reply,
             company_id=company_id,
             message=payload.message,
             channel=payload.channel,
@@ -630,3 +655,5 @@ def dry_run(
         )
     except BotProfileError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        _preview_inflight -= 1

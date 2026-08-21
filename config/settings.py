@@ -252,6 +252,15 @@ class AppConfig:
         os.getenv("AI_PREVIEW_MAX_PER_PERIOD", "2000")
     )
 
+    # How many assistant previews may run at once, platform-wide. A preview runs
+    # the real model behind a blocking call that holds a worker thread for the
+    # round trip; without a ceiling, a burst of previews both bills the operator
+    # and starves the thread pool every other request shares. Excess previews are
+    # refused with 429, not queued.
+    AI_PREVIEW_MAX_CONCURRENCY: int = int(
+        os.getenv("AI_PREVIEW_MAX_CONCURRENCY", "6")
+    )
+
     PROFILE_CACHE_MAX_ENTRIES: int = int(
         os.getenv("PROFILE_CACHE_MAX_ENTRIES", "10000")
     )
