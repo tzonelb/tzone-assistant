@@ -78,6 +78,21 @@ async def validation_error_handler(
     )
 
 
+async def overflow_error_handler(
+    request: Request, exc: OverflowError
+) -> JSONResponse:
+    """A path id past the database's 64-bit integer range is a 404, not a 500.
+
+    FastAPI accepts any integer for an `int` path parameter -- Python integers
+    are unbounded -- but binding one larger than 2**63-1 to SQLite raises
+    ``OverflowError`` deep in the query, which would otherwise leave as a 500
+    past the security headers (see the module note above). No row can carry an
+    id that large, so the honest answer is the same one an absent id already
+    gets: not found.
+    """
+    return JSONResponse(status_code=404, content={"detail": "Not found."})
+
+
 def install_error_handlers(app: FastAPI) -> None:
     """Register the handlers on an application.
 
@@ -86,3 +101,4 @@ def install_error_handlers(app: FastAPI) -> None:
     `main.py` that nothing verifies.
     """
     app.add_exception_handler(RequestValidationError, validation_error_handler)
+    app.add_exception_handler(OverflowError, overflow_error_handler)
