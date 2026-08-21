@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -1711,10 +1712,28 @@ def require_super_admin(
 
 
 def client_ip(request: Request) -> str | None:
-    """Best-effort client address, trusting the proxy header nginx sets."""
+    """Best-effort client address, trusting the proxy header nginx sets.
+
+    nginx is configured to *replace* X-Forwarded-For with the real peer address
+    (`proxy_set_header X-Forwarded-For $remote_addr`), so behind the intended
+    deployment the first token is genuinely the client. The value is still
+    validated as an IP address before it is trusted: it is written to
+    `login_attempts.ip_address` and the control-plane `audit_log`, and an
+    unvalidated header would let a caller forge the platform's own incident
+    record (or, without the proxy, hand the throttle a value it never saw). A
+    header that is not a plain IP is ignored in favour of the socket peer.
+    """
     forwarded = request.headers.get("x-forwarded-for", "")
 
     if forwarded:
-        return forwarded.split(",")[0].strip()
+        candidate = forwarded.split(",")[0].strip()
+
+        try:
+            ipaddress.ip_address(candidate)
+            return candidate
+        except ValueError:
+            # A forged or malformed header -- fall through to the real peer
+            # rather than store something an attacker chose.
+            pass
 
     return request.client.host if request.client else None
