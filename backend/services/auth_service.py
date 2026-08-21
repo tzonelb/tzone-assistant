@@ -44,7 +44,11 @@ def utc_now_iso() -> str:
 
 
 class AuthService:
-    PASSWORD_ITERATIONS = 310_000
+    # 600k matches the current OWASP guidance for PBKDF2-HMAC-SHA256 (and the
+    # workspace-code KDF in keyring). The iteration count is stored with every
+    # hash, so existing 310k hashes keep verifying against their own count; only
+    # newly set passwords use the higher work factor.
+    PASSWORD_ITERATIONS = 600_000
     PASSWORD_ALGORITHM = "sha256"
     MIN_PASSWORD_LENGTH = 10
 
