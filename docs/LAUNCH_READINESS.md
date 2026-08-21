@@ -95,6 +95,51 @@ being true on the day somebody checked. Names are the tests that hold it.
 - [x] No file shipped under `config/`, `features/` or `data/` is loaded by
       nothing. `test_no_shared_file_is_orphaned.py`
 
+## Security — closed by the adversarial audit
+
+Ten defects an agent-driven penetration pass surfaced, each reproduced before it
+was fixed and held afterward by the named test.
+
+- [x] Inbound routing matches only a channel's guarded identifier, so a company
+      cannot set an Instagram account's free-form `page_id` to a rival's id and
+      intercept its DMs (or silence its Telegram inbox).
+      `test_a_channel_routes_only_on_its_guarded_id.py`
+- [x] A dashboard route checks its permission against the company whose data it
+      returns, not the session's active company, so a multi-company member
+      cannot read a company where their role withholds it.
+      `test_a_dashboard_only_answers_for_a_company_you_may_see.py`
+- [x] A customer's message cannot become a live formula in the conversation CSV
+      export. `test_an_export_cannot_smuggle_a_spreadsheet_formula.py`
+- [x] Request lists that expand into `IN (?, ...)` are length-bounded, so an
+      oversized body is refused, not crashed on.
+      `test_a_request_list_cannot_grow_without_bound.py`
+- [x] A TOTP code is single-use: a validated step cannot be replayed within its
+      window. `test_two_factor.py`
+- [x] Message dedup is scoped to the conversation, so two Telegram customers
+      sharing a per-chat message id are both kept.
+      `test_two_customers_are_not_one_message.py`
+- [x] A delegated user-manager cannot grant a permission they do not hold, nor
+      assign the Owner role; only a caller with no ceiling can.
+      `test_a_delegated_admin_cannot_climb_above_their_role.py`
+- [x] A forged `X-Forwarded-For` that is not a valid IP is not written to the
+      throttle key or the audit log.
+      `test_a_forged_forwarded_header_is_not_believed.py`
+- [x] Concurrent assistant previews are capped, so a preview flood cannot hold
+      every worker thread and freeze the platform.
+      `test_a_preview_flood_cannot_starve_the_platform.py`
+- [x] The password KDF runs at 600k iterations for newly set passwords, matching
+      current OWASP guidance; existing hashes verify against their stored count.
+
+Deferred, lower severity (documented, not yet fixed):
+
+- [ ] `channel_accounts.*_sealed` columns bind their AEAD to (company, field)
+      but not to the row. An attacker with **write access to the control
+      database** could copy one sealed credential onto another of the *same
+      company's* rows; the value still cannot be decrypted or moved across
+      companies. Closing it means adding the row id to the seal's AAD and
+      re-sealing existing values in a migration; held back only to avoid a risky
+      re-seal across every company's credentials without a maintenance window.
+
 ## Security — manual, before launch
 
 These cannot be tested from Python and must be checked against the real
