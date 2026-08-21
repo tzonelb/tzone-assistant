@@ -15,13 +15,16 @@ from pydantic import BaseModel, Field
 MAX_CHANNEL_NAME = 60
 MAX_TOPIC = 300
 MAX_BODY = 8000
+MAX_CHANNEL_MEMBERS = 1000
 
 
 class ChannelCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=MAX_CHANNEL_NAME)
     topic: str | None = Field(default=None, max_length=MAX_TOPIC)
     is_private: bool = False
-    member_user_ids: list[int] = Field(default_factory=list)
+    member_user_ids: list[int] = Field(
+        default_factory=list, max_length=MAX_CHANNEL_MEMBERS
+    )
 
 
 class ChannelMemberRequest(BaseModel):
