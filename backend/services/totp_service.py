@@ -38,6 +38,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import time
 import logging
 import secrets
 from typing import Any
@@ -289,7 +290,8 @@ class TotpService:
             with database_manager.control() as conn:
                 row = conn.execute(
                     """
-                    SELECT totp_secret_sealed, totp_enabled, totp_recovery_hashes
+                    SELECT totp_secret_sealed, totp_enabled, totp_recovery_hashes,
+                           totp_last_step
                     FROM users WHERE id = ? LIMIT 1
                     """,
                     (user_id,),
@@ -300,8 +302,29 @@ class TotpService:
 
                 secret = self._unseal(row["totp_secret_sealed"], user_id)
 
-                if secret and self._matches(secret, code):
-                    return True
+                if secret:
+                    step = self._matched_step(secret, code)
+
+                    if step is not None:
+                        # RFC 6238 single-use: the code is valid for its window,
+                        # but a validated step must never be accepted twice, or
+                        # an observed code could be replayed for the rest of that
+                        # window. Claim the step atomically -- only a step newer
+                        # than the last accepted one wins -- so two simultaneous
+                        # logins with the same code cannot both succeed.
+                        conn.execute("BEGIN IMMEDIATE")
+                        claimed = conn.execute(
+                            """
+                            UPDATE users
+                            SET totp_last_step = ?
+                            WHERE id = ?
+                              AND (totp_last_step IS NULL OR totp_last_step < ?)
+                            """,
+                            (step, user_id, step),
+                        )
+                        conn.commit()
+
+                        return claimed.rowcount == 1
 
                 # Not a TOTP code. It may be a recovery code, which is single
                 # use: consumed inside the same transaction that accepts it, so
@@ -349,6 +372,34 @@ class TotpService:
             )
         except Exception:
             return False
+
+    @staticmethod
+    def _matched_step(secret: str, code: str) -> int | None:
+        """Which time-step a code matches, or None.
+
+        `pyotp`'s own `verify` only returns a bool, but single-use enforcement
+        needs the step itself so it can be recorded and compared. The candidate
+        steps are the same window `verify` would check (now +/- VALID_WINDOW),
+        and the comparison is constant-time.
+        """
+        cleaned = str(code).strip().replace(" ", "")
+
+        if not cleaned:
+            return None
+
+        try:
+            totp = pyotp.TOTP(secret)
+            current_step = int(time.time()) // totp.interval
+
+            for offset in range(VALID_WINDOW, -VALID_WINDOW - 1, -1):
+                step = current_step + offset
+
+                if hmac.compare_digest(totp.at(step * totp.interval), cleaned):
+                    return step
+        except Exception:
+            return None
+
+        return None
 
     @staticmethod
     def _recovery_hashes(stored: Any) -> list[str]:

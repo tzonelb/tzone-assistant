@@ -497,3 +497,71 @@ def test_an_empty_code_is_refused_without_touching_the_database(wired, admin):
 
 def test_verifying_an_account_with_no_second_factor_is_false(wired, admin):
     assert wired.verify(admin, "123456") is False
+
+
+def test_a_used_totp_code_cannot_be_replayed_into_a_second_session(
+    client, wired, admin
+):
+    """RFC 6238 single-use.
+
+    A TOTP code stays valid for its ~90-second window. Without recording which
+    step was accepted, an attacker who observes one code -- a phishing proxy, a
+    shared screen, a shoulder-surf -- can replay it to mint their own console
+    session while the operator's is still open. The second factor guarding the
+    one account that suspends companies and rotates workspace codes must accept
+    each code exactly once.
+    """
+    _token, secret, _codes = _enrol(client, wired, admin)
+
+    code = pyotp.TOTP(secret).now()
+
+    first = _sign_in(client, code=code)
+    assert first.status_code == 200, first.text
+    assert first.json().get("access_token")
+
+    replay = _sign_in(client, code=code)
+    assert replay.status_code == 401, (
+        "a used TOTP code was accepted a second time: "
+        f"{replay.status_code} {replay.text}"
+    )
+
+
+def test_a_newer_code_still_works_after_an_earlier_one(client, wired, admin):
+    """Single-use must not mean single-login: a genuinely newer code, from a
+    later step, is still accepted -- only the *same* step is refused twice."""
+    import time
+
+    _token, secret, _codes = _enrol(client, wired, admin)
+    totp = pyotp.TOTP(secret)
+
+    first_code = totp.now()
+    assert _sign_in(client, code=first_code).status_code == 200
+
+    # Advance past the current step so a fresh code lands on a strictly later
+    # step, then confirm it is accepted rather than mistaken for a replay.
+    now = int(time.time())
+    later = now + totp.interval
+    next_code = totp.at(later)
+
+    if next_code == first_code:  # boundary: same step, force one more interval
+        next_code = totp.at(later + totp.interval)
+
+    accepted = client.post(
+        "/api/platform/auth/login",
+        json={
+            "email": "root@platform.example.com",
+            "password": PASSWORD,
+            "totp_code": next_code,
+        },
+    )
+    # It may be just outside the verification window depending on wall-clock
+    # placement; what must never happen is the newer code being rejected *as a
+    # replay* while the window still covers it. Accept 200, or 401 only when the
+    # code is genuinely out of window (its step is not within +/- 1 of now).
+    if accepted.status_code != 200:
+        current_step = int(time.time()) // totp.interval
+        offered_step = later // totp.interval
+        assert abs(offered_step - current_step) > 1, (
+            "a newer in-window code was refused as if it were a replay: "
+            f"{accepted.status_code} {accepted.text}"
+        )

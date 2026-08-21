@@ -425,6 +425,12 @@ CONTROL_COLUMNS: dict[str, dict[str, str]] = {
         # storing them readable would make them a second copy of the second
         # factor. Same reasoning as `auth_sessions.token_hash`.
         "totp_recovery_hashes": "TEXT",
+        # The last TOTP time-step this account accepted. A code is only valid
+        # for its ~90s window, but RFC 6238 requires a validated code be
+        # single-use: without this, an observed code could be replayed for the
+        # rest of that window. Verification refuses any step not strictly newer
+        # than this one and claims the new step atomically.
+        "totp_last_step": "INTEGER",
     },
 }
 
