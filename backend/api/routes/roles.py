@@ -78,6 +78,115 @@ def _require_access_admin(current_user: dict, company_id: int) -> None:
     )
 
 
+def _caller_permission_ceiling(
+    conn, current_user: dict, company_id: int
+) -> set[str] | None:
+    """The permission codes the caller may confer, or ``None`` for "all".
+
+    ``None`` means no ceiling -- a super admin or a company owner, who hold every
+    permission implicitly. Otherwise it is the caller's own granted codes. The
+    routes that create or assign roles hold requests to this ceiling, which is
+    what stops a delegated user-manager (`users.manage` without the rest) from
+    minting an all-powerful role or handing themselves the Owner role and
+    walking up to full access.
+    """
+    if current_user.get("is_super_admin"):
+        return None
+
+    role = conn.execute(
+        """
+        SELECT roles.code AS code
+        FROM company_users
+        JOIN roles ON roles.id = company_users.role_id
+        WHERE company_users.company_id = ?
+          AND company_users.user_id = ?
+          AND company_users.status = 'active'
+        LIMIT 1
+        """,
+        (int(company_id), int(current_user["id"])),
+    ).fetchone()
+
+    if role and str(role["code"]) == "owner":
+        return None
+
+    rows = conn.execute(
+        """
+        SELECT permissions.code AS code
+        FROM company_users
+        JOIN role_permissions ON role_permissions.role_id = company_users.role_id
+        JOIN permissions ON permissions.id = role_permissions.permission_id
+        WHERE company_users.company_id = ?
+          AND company_users.user_id = ?
+          AND company_users.status = 'active'
+        """,
+        (int(company_id), int(current_user["id"])),
+    ).fetchall()
+
+    return {str(row["code"]) for row in rows}
+
+
+def _role_permission_codes(conn, company_id: int, role_id: int) -> set[str] | None:
+    """The permission codes a role carries, or ``None`` if it is the Owner role.
+
+    Owner is special-cased everywhere: it holds an empty permission tuple in the
+    database and is treated as full access at check time. Returning ``None`` here
+    lets the assignment guard treat it as "everything", so only a caller with no
+    ceiling can hand it out.
+    """
+    role = conn.execute(
+        "SELECT code FROM roles WHERE id = ? AND company_id = ?",
+        (int(role_id), int(company_id)),
+    ).fetchone()
+
+    if role and str(role["code"]) == "owner":
+        return None
+
+    rows = conn.execute(
+        """
+        SELECT permissions.code AS code
+        FROM role_permissions
+        JOIN permissions ON permissions.id = role_permissions.permission_id
+        WHERE role_permissions.role_id = ?
+        """,
+        (int(role_id),),
+    ).fetchall()
+
+    return {str(row["code"]) for row in rows}
+
+
+def _assert_within_ceiling(ceiling: set[str] | None, requested: set[str]) -> None:
+    """Refuse to confer a permission the caller does not itself hold."""
+    if ceiling is None:
+        return
+
+    beyond = sorted(requested - ceiling)
+
+    if beyond:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "You cannot grant a permission you do not hold: "
+                + ", ".join(beyond)
+            ),
+        )
+
+
+def _assert_can_assign_role(
+    ceiling: set[str] | None, target_codes: set[str] | None
+) -> None:
+    """Refuse to assign a role that carries a permission beyond the ceiling."""
+    if ceiling is None:
+        return
+
+    if target_codes is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only an owner can assign the Owner role.",
+        )
+
+    _assert_within_ceiling(ceiling, target_codes)
+
+
 @router.get("/overview")
 def overview(current_user: dict = Depends(get_current_user)):
     company_id = _company_id(current_user)
@@ -205,6 +314,10 @@ def create_role(
             ) from exc
 
         role_id = cursor.lastrowid
+        _assert_within_ceiling(
+            _caller_permission_ceiling(conn, current_user, company_id),
+            set(payload.permission_codes),
+        )
         _set_role_permissions(conn, role_id, payload.permission_codes)
         conn.commit()
 
@@ -300,6 +413,10 @@ def update_role(
             WHERE id = ?
         """, (payload.name, payload.description, role_id))
         if payload.permission_codes is not None:
+            _assert_within_ceiling(
+                _caller_permission_ceiling(conn, current_user, company_id),
+                set(payload.permission_codes),
+            )
             _set_role_permissions(conn, role_id, payload.permission_codes)
         conn.commit()
 
@@ -344,6 +461,10 @@ def create_user(
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        _assert_can_assign_role(
+            _caller_permission_ceiling(conn, current_user, company_id),
+            _role_permission_codes(conn, company_id, payload.role_id),
+        )
         # The same check the role gets. Without it a branch id belonging to
         # another company was stored on this company's membership row and its
         # name came back through the team list.
@@ -438,6 +559,10 @@ def update_user_assignment(
         role = conn.execute("SELECT id FROM roles WHERE id = ? AND company_id = ?", (payload.role_id, company_id)).fetchone()
         if not role:
             raise HTTPException(status_code=400, detail="Selected role is invalid.")
+        _assert_can_assign_role(
+            _caller_permission_ceiling(conn, current_user, company_id),
+            _role_permission_codes(conn, company_id, payload.role_id),
+        )
         # The same check the role gets. Without it a branch id belonging to
         # another company was stored on this company's membership row and its
         # name came back through the team list.
