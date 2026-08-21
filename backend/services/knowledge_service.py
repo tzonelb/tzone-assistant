@@ -229,6 +229,19 @@ class KnowledgeService:
         now = utc_now_iso()
 
         with database_manager.tenant(company_id) as conn:
+            # The count below and the insert underneath it are one decision,
+            # so they are one transaction. Without this each statement was its
+            # own, every concurrent create read the same count, and all of them
+            # passed a limit with room for one: twelve simultaneous creates
+            # against an allowance of five left twelve rows.
+            #
+            # `BEGIN IMMEDIATE` takes the write lock before the count rather
+            # than at the insert, so a second writer waits and then reads a
+            # count that includes the first. `channel_account_service` has
+            # always done this, and its limit holds exactly where this one did
+            # not.
+            conn.execute("BEGIN IMMEDIATE")
+
             if category_id is not None:
                 self._require_category(
                     conn, company_id=company_id, category_id=int(category_id)

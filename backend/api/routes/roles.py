@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from sqlcipher3 import dbapi2 as sqlcipher
@@ -22,6 +24,8 @@ from backend.services.plan_service import PlanLimitExceeded, plan_service
 from config.settings import config
 from database.manager import database_manager, utc_now_iso
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin/access", tags=["Roles and Permissions"])
 
@@ -359,14 +363,48 @@ def create_user(
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    with database_manager.control() as conn:
-        conn.execute("""
-            INSERT INTO company_users (
-                company_id, user_id, role_id, branch_id, status, created_at
+    # The seat was checked above, before the account was created, so an account
+    # is not left belonging to nobody in the ordinary case. But that check and
+    # this insert were two separate transactions with `create_user` between
+    # them, and every concurrent request read the same count: ten simultaneous
+    # invitations against an allowance of five seated all ten, refusing none.
+    #
+    # So the count is taken again here, inside the transaction that does the
+    # seating. `BEGIN IMMEDIATE` takes the write lock before the count, so a
+    # second request waits and then counts the first one's seat.
+    #
+    # It cannot be one transaction end to end, because `create_user` opens a
+    # control connection of its own: holding the write lock across it would be
+    # a thread waiting for a lock only it holds. The account is created first
+    # and removed again if the seat turns out to be gone -- which is the same
+    # outcome the pre-check exists to avoid, reached the only way that is safe.
+    try:
+        with database_manager.control() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            _assert_seat_available(conn, company_id)
+            conn.execute("""
+                INSERT INTO company_users (
+                    company_id, user_id, role_id, branch_id, status, created_at
+                )
+                VALUES (?, ?, ?, ?, 'active', ?)
+            """, (company_id, user_id, payload.role_id, payload.branch_id, utc_now_iso()))
+            conn.commit()
+    except HTTPException:
+        # The last seat went to somebody else between the two checks. Take the
+        # orphaned account back out rather than leaving an account belonging to
+        # no company and an email that could never be used again.
+        try:
+            with database_manager.control() as cleanup:
+                cleanup.execute("DELETE FROM users WHERE id = ?", (user_id,))
+                cleanup.commit()
+        except Exception:  # noqa: BLE001 - never let cleanup mask the refusal
+            logger.exception(
+                "Could not remove the account created for a seat that was taken; "
+                "user id %s belongs to no company",
+                user_id,
             )
-            VALUES (?, ?, ?, ?, 'active', ?)
-        """, (company_id, user_id, payload.role_id, payload.branch_id, utc_now_iso()))
-        conn.commit()
+
+        raise
 
     activity_service.record_for(
         current_user,
