@@ -23,6 +23,40 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 
+def _authorized_company(
+    current_user: dict[str, Any],
+    requested_company_id: int | None,
+    permission_code: str,
+) -> int:
+    """Resolve the requested company and confirm the permission holds *there*.
+
+    `require_permission` runs before the handler and checks the permission
+    against the session's active company. These routes, though, accept a
+    `?company_id=` so a member of more than one company can read any of them,
+    and the data is then read for that requested company. Checked only at the
+    door, a member who holds the permission in their active company could ask
+    for a second company where their role withholds it, and read it anyway. The
+    check that matters is the one against the company whose data actually leaves.
+    """
+    resolved = auth_service.resolve_company_id(
+        current_user=current_user,
+        requested_company_id=requested_company_id,
+    )
+
+    if not auth_service.has_permission(
+        user_id=int(current_user["id"]),
+        company_id=resolved,
+        permission_code=permission_code,
+        is_super_admin=bool(current_user.get("is_super_admin")),
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have access to this company.",
+        )
+
+    return resolved
+
+
 def _active_subscription(conn, company_id: int) -> dict[str, Any] | None:
     """The plan and its allowances — deliberately without the price.
 
@@ -65,9 +99,8 @@ def dashboard_summary(
     company_id: int | None = Query(default=None, ge=1),
     current_user: dict = Depends(require_permission("dashboard.view")),
 ):
-    resolved_company_id = auth_service.resolve_company_id(
-        current_user=current_user,
-        requested_company_id=company_id,
+    resolved_company_id = _authorized_company(
+        current_user, company_id, "dashboard.view"
     )
 
     counts: dict[str, int] = {}
@@ -205,9 +238,8 @@ def get_company(
     company_id: int | None = Query(default=None, ge=1),
     current_user: dict = Depends(require_permission("dashboard.view")),
 ):
-    resolved_company_id = auth_service.resolve_company_id(
-        current_user=current_user,
-        requested_company_id=company_id,
+    resolved_company_id = _authorized_company(
+        current_user, company_id, "dashboard.view"
     )
 
     with database_manager.control() as conn:
@@ -238,9 +270,8 @@ def get_subscription(
     company_id: int | None = Query(default=None, ge=1),
     current_user: dict = Depends(require_permission("subscriptions.view")),
 ):
-    resolved_company_id = auth_service.resolve_company_id(
-        current_user=current_user,
-        requested_company_id=company_id,
+    resolved_company_id = _authorized_company(
+        current_user, company_id, "subscriptions.view"
     )
 
     with database_manager.control() as conn:
@@ -275,9 +306,8 @@ def get_usage(
     """
     from backend.services.plan_service import current_period
 
-    resolved_company_id = auth_service.resolve_company_id(
-        current_user=current_user,
-        requested_company_id=company_id,
+    resolved_company_id = _authorized_company(
+        current_user, company_id, "subscriptions.view"
     )
 
     resolved_period = period or current_period()
@@ -361,9 +391,8 @@ def get_channels(
     company_id: int | None = Query(default=None, ge=1),
     current_user: dict = Depends(require_permission("channels.view")),
 ):
-    resolved_company_id = auth_service.resolve_company_id(
-        current_user=current_user,
-        requested_company_id=company_id,
+    resolved_company_id = _authorized_company(
+        current_user, company_id, "channels.view"
     )
 
     with database_manager.control() as conn:
