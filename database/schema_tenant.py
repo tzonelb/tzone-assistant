@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 2
+TENANT_SCHEMA_VERSION = 3
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -653,7 +653,13 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_conversations_expiry ON conversations(takeover_expires_at) WHERE takeover_expires_at IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_messages_lookup ON messages(channel, external_user_id, created_at)",
-    "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_provider ON messages(provider_message_id) WHERE provider_message_id IS NOT NULL",
+    # Dedup is per conversation, not per company. Telegram message ids are
+    # unique per chat, not per bot, so two customers both open at message_id 1;
+    # a company-wide unique index silently rejected the second as a duplicate.
+    # Drop the old single-column index and key uniqueness on the conversation
+    # too, which still catches a genuine provider retry (same id, same chat).
+    "DROP INDEX IF EXISTS idx_messages_provider",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_provider ON messages(channel, external_user_id, provider_message_id) WHERE provider_message_id IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_events_conversation ON conversation_events(conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_notes_conversation ON conversation_notes(conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_customers_seen ON customers(last_seen_at DESC)",

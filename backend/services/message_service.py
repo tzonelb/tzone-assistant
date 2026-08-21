@@ -101,9 +101,22 @@ class MessageService:
                         resolved_id = int(cursor.lastrowid)
 
                 if provider_message_id:
+                    # Scoped to the conversation, not the whole company. Telegram
+                    # message ids are unique per chat, not per bot, so two
+                    # different customers both open at message_id 1 -- a
+                    # company-wide match would silently discard the second
+                    # customer's message as a duplicate. A genuine retry repeats
+                    # the same id *and* the same conversation, so this still
+                    # catches it.
                     existing = conn.execute(
-                        "SELECT id FROM messages WHERE provider_message_id = ? LIMIT 1",
-                        (str(provider_message_id),),
+                        """
+                        SELECT id FROM messages
+                        WHERE provider_message_id = ?
+                          AND channel = ?
+                          AND external_user_id = ?
+                        LIMIT 1
+                        """,
+                        (str(provider_message_id), channel, external_user_id),
                     ).fetchone()
 
                     if existing:
@@ -171,21 +184,38 @@ class MessageService:
     # Reading one conversation
     # ------------------------------------------------------------------
 
-    def is_duplicate(self, company_id: int, provider_message_id: str | None) -> bool:
+    def is_duplicate(
+        self,
+        company_id: int,
+        provider_message_id: str | None,
+        *,
+        channel: str | None = None,
+        external_user_id: str | None = None,
+    ) -> bool:
         """Whether this provider message has already been stored.
 
         Checked before any state is touched. Meta retries deliveries, and
         counting a retry as new inflates the unread badge for a message the
         employee has already seen.
+
+        Scoped to the conversation when the channel and customer are given:
+        Telegram message ids are unique per chat, not per bot, so a company-wide
+        match would discard a second customer's message as a duplicate. The
+        arguments are optional so an older caller that only knows the id keeps
+        working, but every inbound path passes them.
         """
         if not provider_message_id:
             return False
 
+        query = "SELECT 1 FROM messages WHERE provider_message_id = ?"
+        params: list[Any] = [str(provider_message_id)]
+
+        if channel is not None and external_user_id is not None:
+            query += " AND channel = ? AND external_user_id = ?"
+            params.extend([channel, external_user_id])
+
         with database_manager.tenant(int(company_id)) as conn:
-            row = conn.execute(
-                "SELECT 1 FROM messages WHERE provider_message_id = ? LIMIT 1",
-                (str(provider_message_id),),
-            ).fetchone()
+            row = conn.execute(query + " LIMIT 1", params).fetchone()
 
         return row is not None
 

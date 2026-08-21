@@ -46,7 +46,12 @@ def process_inbound_event(
     # Checked before anything is written. Providers retry deliveries, and doing
     # this after recording the message would still bump the unread counter and
     # re-notify the team for a message they have already seen.
-    if message_service.is_duplicate(company_id, provider_message_id):
+    if message_service.is_duplicate(
+        company_id,
+        provider_message_id,
+        channel=channel,
+        external_user_id=user_id,
+    ):
         log_meta_event(
             "event_duplicate",
             {"channel": channel, "company_id": company_id},
