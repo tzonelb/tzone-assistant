@@ -431,3 +431,163 @@ def test_hours_the_database_will_not_give_up_leave_the_company_open(
     )
 
     assert wired.opening_status(alpha["id"]).open
+
+
+# ---------------------------------------------------------------------------
+# Daylight saving
+# ---------------------------------------------------------------------------
+#
+# Every company sets its own timezone, and the platform's default is
+# Asia/Beirut, which observes DST. So the transition days are the ordinary case
+# for this module, not an exotic one.
+#
+# `status()` converts with `astimezone` and was already right. `_next_opening`
+# built its answer with `day.replace(hour=..., minute=...)`, and `replace` sets
+# the digits on the clock without consulting the zone. On the morning the
+# clocks go forward, an hour of digits does not happen — so a company opening
+# inside that hour was told to expect customers at a time that never arrives,
+# and the assistant told those customers the same.
+
+
+def _open_between(timezone_name, opens, closes):
+    days = (
+        "monday", "tuesday", "wednesday", "thursday", "friday",
+        "saturday", "sunday",
+    )
+
+    return {
+        "enabled": True,
+        "timezone": timezone_name,
+        "days": {
+            day: {"open": opens, "close": closes, "closed": False}
+            for day in days
+        },
+    }
+
+
+# The skipped hour in each zone, and a time inside it.
+SKIPPED = [
+    pytest.param("Europe/London", 2026, 3, 29, "01:30", id="london-01:30"),
+    pytest.param("America/New_York", 2026, 3, 8, "02:30", id="new-york-02:30"),
+    # The platform default. Beirut moves at midnight, so 00:00–01:00 vanishes —
+    # which is exactly where an all-hours shop would put its opening time.
+    pytest.param("Asia/Beirut", 2026, 3, 29, "00:30", id="beirut-00:30"),
+]
+
+
+@pytest.mark.parametrize("zone_name, year, month, day, opens", SKIPPED)
+def test_the_chosen_hour_really_is_skipped(zone_name, year, month, day, opens):
+    """The control for the test below.
+
+    If the hour existed after all, the next test would pass without ever
+    exercising the case it is about.
+    """
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo(zone_name)
+    hour, minute = (int(part) for part in opens.split(":"))
+    wall_clock = datetime(year, month, day, hour, minute, tzinfo=zone)
+
+    round_tripped = wall_clock.astimezone(timezone.utc).astimezone(zone)
+
+    assert round_tripped.time() != wall_clock.time(), (
+        f"{opens} on {year}-{month:02d}-{day:02d} in {zone_name} exists, so "
+        "this parameter no longer tests a daylight-saving gap"
+    )
+
+
+@pytest.mark.parametrize("zone_name, year, month, day, opens", SKIPPED)
+def test_it_never_promises_an_hour_the_clock_skips(
+    zone_name, year, month, day, opens
+):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from core import working_hours
+
+    zone = ZoneInfo(zone_name)
+    hour, minute = (int(part) for part in opens.split(":"))
+
+    # A narrow window inside the gap, so the company is shut when asked and the
+    # next opening has to land there. A wide window would leave it already
+    # open, `opens_at` None, and nothing tested.
+    closes = f"{hour:02d}:{minute + 15:02d}"
+    section = _open_between(zone_name, opens, closes)
+
+    asked_at = datetime(year, month, day, hour, minute, tzinfo=zone) - timedelta(
+        minutes=20
+    )
+
+    verdict = working_hours.status(section, now=asked_at)
+
+    assert not verdict.open
+    assert verdict.opens_at is not None
+
+    # The answer has to survive the round trip: a local time that does not
+    # exist comes back as a different one.
+    round_tripped = verdict.opens_at.astimezone(timezone.utc).astimezone(zone)
+
+    assert round_tripped.time() == verdict.opens_at.time(), (
+        f"the assistant would tell a customer it opens at "
+        f"{verdict.opens_at.time()}, which does not happen that day — the "
+        f"clock goes straight to {round_tripped.time()}"
+    )
+    assert verdict.opens_at > asked_at
+
+
+@pytest.mark.parametrize(
+    "zone_name, year, month, day",
+    [
+        ("Asia/Beirut", 2026, 3, 29),
+        ("Asia/Beirut", 2026, 10, 25),
+        ("Europe/London", 2026, 3, 29),
+        ("America/New_York", 2026, 11, 1),
+    ],
+)
+@pytest.mark.parametrize("hour", [0, 1, 2, 3, 8, 12, 18])
+def test_open_and_closed_are_right_on_a_transition_day(
+    zone_name, year, month, day, hour
+):
+    """The half that was already correct, pinned so it stays that way."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from core import working_hours
+
+    zone = ZoneInfo(zone_name)
+    section = _open_between(zone_name, "09:00", "17:00")
+    moment = datetime(year, month, day, hour, 30, tzinfo=zone)
+
+    verdict = working_hours.status(section, now=moment)
+
+    assert verdict.unreadable is None
+    assert verdict.open is (9 <= hour < 17)
+
+
+@pytest.mark.parametrize(
+    "zone_name, year, month, day",
+    [
+        ("Asia/Beirut", 2026, 3, 29),
+        ("America/New_York", 2026, 11, 1),
+    ],
+)
+@pytest.mark.parametrize("hour, expected_open", [(19, True), (1, True), (3, False)])
+def test_an_overnight_shift_survives_the_transition(
+    zone_name, year, month, day, hour, expected_open
+):
+    """18:00–02:00 across the change: the shift that began yesterday."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from core import working_hours
+
+    zone = ZoneInfo(zone_name)
+    section = _open_between(zone_name, "18:00", "02:00")
+    moment = datetime(year, month, day, hour, 0, tzinfo=zone)
+
+    verdict = working_hours.status(section, now=moment)
+
+    assert verdict.unreadable is None
+    assert verdict.open is expected_open
+

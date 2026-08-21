@@ -217,14 +217,36 @@ def _next_opening(section: dict[str, Any], moment: datetime) -> datetime | None:
         if not hours:
             continue
 
-        candidate = day.replace(
-            hour=hours[0].hour,
-            minute=hours[0].minute,
-            second=0,
-            microsecond=0,
+        candidate = _real_instant(
+            day.replace(
+                hour=hours[0].hour,
+                minute=hours[0].minute,
+                second=0,
+                microsecond=0,
+            )
         )
 
         if candidate > moment:
             return candidate
 
     return None
+
+
+def _real_instant(candidate: datetime) -> datetime:
+    """Move a wall-clock time onto the clock the company's zone actually shows.
+
+    `replace` sets the digits on the clock without consulting the zone, and on
+    the morning the clocks go forward an hour of digits does not happen. A
+    company opening at 00:30 in Asia/Beirut — the platform's default zone,
+    whose skipped hour is 00:00 to 01:00 — would be told to expect customers at
+    a time that never arrives that day, and the assistant would tell those
+    customers the same.
+
+    Round-tripping through UTC resolves it the way the clock does: the instant
+    that *would* have been 00:30 is the one the zone shows as 01:30, which is
+    when the doors really open. For every other day of the year this is exactly
+    the identity, and for the hour that happens twice in autumn it keeps the
+    first of the two, which is the earlier answer and the one a customer is
+    better off being given.
+    """
+    return candidate.astimezone(timezone.utc).astimezone(candidate.tzinfo)
