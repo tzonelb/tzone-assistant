@@ -1,5 +1,4 @@
 import logging
-import traceback
 
 from core.session import session
 from core.response import Response
@@ -277,16 +276,36 @@ class Engine:
                 company_id=request.company_id,
             )
 
-        except Exception as error:
-            traceback.print_exc()
+        except Exception:
+            # `logger.exception` records the class, the message and the
+            # traceback, which is everything an operator needs. It goes to the
+            # log, where only the operator can read it.
             logger.exception("Engine error")
 
+            # What the *customer* gets is an apology, in the same words the two
+            # other error paths in this class already use.
+            #
+            # It used to be the exception itself: "ENGINE ERROR", the class
+            # name, and `str(error)`, sent over Messenger to whoever happened to
+            # be typing. That is a stranger to this platform reading its
+            # internals — and `str(error)` is not always harmless. A
+            # `DatabaseError` from `_open` names the company's database file, an
+            # `IntegrityError` names tables and columns, a `KeyError` names an
+            # internal key. It was also simply a bad reply: somebody asked a
+            # shop a question and got a stack trace.
+            #
+            # `language` is resolved defensively because this handler catches
+            # everything, including failures from before the language was
+            # worked out.
+            spoken = "ar"
+
+            try:
+                spoken = self.detect_language(getattr(request, "message", "")) or "ar"
+            except Exception:  # noqa: BLE001 - never fail while failing
+                pass
+
             return Response(
-                (
-                    f"ENGINE ERROR:\n\n"
-                    f"{type(error).__name__}\n\n"
-                    f"{str(error)}"
-                ),
+                self.ERROR_TEXT.get(spoken, self.ERROR_TEXT["ar"]),
                 [],
             )
 
