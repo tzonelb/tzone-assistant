@@ -54,6 +54,25 @@ class CustomerService:
         now = utc_now_iso()
 
         with database_manager.tenant(company_id) as conn:
+            # The lookup below and the insert underneath it are one decision —
+            # "is this person already known, and if not, record them" — so they
+            # are one transaction.
+            #
+            # Without this each statement was its own, and two messages arriving
+            # at the same instant from the same *new* customer both found
+            # nothing and both inserted. The unique index on
+            # (company_id, channel, external_user_id) caught the second, which
+            # kept the data right, but the `IntegrityError` came straight back
+            # out here — and this runs on the inbound path, where
+            # `_process_events` logs the failure and moves on. The customer's
+            # message was dropped: not stored, not answered, not notified.
+            # Somebody sending "hi" and then their question is the ordinary way
+            # to reach that.
+            #
+            # `BEGIN IMMEDIATE` takes the write lock before the lookup, so the
+            # second arrival waits and then finds the row the first one wrote.
+            conn.execute("BEGIN IMMEDIATE")
+
             identity = conn.execute(
                 """
                 SELECT ci.*, c.internal_name, c.phone, c.email, c.language,
