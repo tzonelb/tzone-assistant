@@ -704,40 +704,58 @@ class DatabaseManager:
         if not normalized_channel:
             return None
 
-        candidates = [
-            ("page_id", page_id),
-            ("phone_number_id", phone_number_id),
-            ("instagram_business_id", instagram_business_id),
-            ("external_account_id", page_id or instagram_business_id or phone_number_id),
-        ]
+        # Route strictly on the channel's own routing identifier -- the one
+        # column kept unique per channel when an account is connected. The other
+        # identifier columns are free-form and tenant-writable, so matching an
+        # inbound event against them was a cross-tenant hole: a company could set
+        # `page_id` on an Instagram account (whose guarded field is
+        # `instagram_business_id`) to another company's page id, and because
+        # `page_id` was probed first, that company's inbound Instagram messages
+        # resolved to the attacker's inbox. The routing value arrives in whatever
+        # parameter the channel uses -- Telegram carries its bot id in `page_id`
+        # -- but it only ever authorises against the guarded column.
+        routing_field_by_channel = {
+            "messenger": "page_id",
+            "instagram": "instagram_business_id",
+            "whatsapp": "phone_number_id",
+            "telegram": "external_account_id",
+        }
+        routing_value_by_channel = {
+            "messenger": page_id,
+            "instagram": instagram_business_id,
+            "whatsapp": phone_number_id,
+            "telegram": page_id,
+        }
+
+        routing_field = routing_field_by_channel.get(normalized_channel)
+        routing_value = routing_value_by_channel.get(normalized_channel)
+
+        if not routing_field or not routing_value:
+            return None
 
         with self.control() as conn:
-            for column, value in candidates:
-                if not value:
-                    continue
+            row = conn.execute(
+                f"""
+                SELECT id, company_id, department_id
+                FROM channel_accounts
+                WHERE {routing_field} = ?
+                  AND channel = ?
+                  AND status = 'active'
+                LIMIT 1
+                """,
+                (str(routing_value), normalized_channel),
+            ).fetchone()
 
-                row = conn.execute(
-                    f"""
-                    SELECT id, company_id, department_id
-                    FROM channel_accounts
-                    WHERE {column} = ?
-                      AND channel = ?
-                      AND status = 'active'
-                    LIMIT 1
-                    """,
-                    (str(value), normalized_channel),
-                ).fetchone()
-
-                if row:
-                    return {
-                        "company_id": int(row["company_id"]),
-                        "account_id": int(row["id"]),
-                        "department_id": (
-                            int(row["department_id"])
-                            if row["department_id"] is not None
-                            else None
-                        ),
-                    }
+            if row:
+                return {
+                    "company_id": int(row["company_id"]),
+                    "account_id": int(row["id"]),
+                    "department_id": (
+                        int(row["department_id"])
+                        if row["department_id"] is not None
+                        else None
+                    ),
+                }
 
         return None
 
