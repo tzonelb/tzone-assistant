@@ -46,6 +46,7 @@ from backend.services.conversation_control_service import (
 from backend.services.business_department_service import business_department_service
 from backend.services.channel_account_service import SUPPORTED_CHANNELS
 from backend.services.message_service import message_service
+from backend.services.stream_access import may_continue
 from database.manager import DatabaseError, database_manager
 
 
@@ -365,6 +366,14 @@ async def live_conversation_events(
         last_signature = ""
 
         while True:
+            # Re-checked every pass, not only when the connection opened.
+            # See `backend/services/stream_access.py`: a dependency runs once,
+            # and this loop outlives it by hours.
+            if not await run_in_threadpool(may_continue, current_user):
+                yield "event: access_ended\ndata: {}\n\n"
+
+                return
+
             try:
                 signature = await run_in_threadpool(
                     message_service.live_signature, company_id

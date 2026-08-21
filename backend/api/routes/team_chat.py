@@ -26,6 +26,7 @@ from backend.api.schemas.team_chat import (
     MessageEditRequest,
 )
 from backend.services.auth_service import auth_service, require_permission
+from backend.services.stream_access import may_continue
 from backend.services.team_chat_service import (
     ChannelNameTaken,
     ChannelNotFound,
@@ -413,6 +414,14 @@ async def live_team_chat_events(
         last_signature = ""
 
         while True:
+            # Re-checked every pass, not only when the connection opened.
+            # See `backend/services/stream_access.py`: a dependency runs once,
+            # and this loop outlives it by hours.
+            if not await run_in_threadpool(may_continue, current_user):
+                yield "event: access_ended\ndata: {}\n\n"
+
+                return
+
             try:
                 signature = await run_in_threadpool(
                     lambda: team_chat_service.live_signature(
