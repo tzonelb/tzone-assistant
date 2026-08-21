@@ -123,3 +123,15 @@ sudo systemctl restart tzone-api
 sudo -u tzone bash -c 'set -a; . /etc/tzone/tzone.env; set +a; cd /opt/tzone && \
   /opt/tzone/venv/bin/python -m tools.manage_platform check'
 ```
+
+### Schema migrations run themselves
+
+Restarting `tzone-api` runs any pending tenant-schema upgrade at startup
+(`upgrade_outdated_tenants` in the app's lifespan), so `git pull` + `restart`
+is all a schema change needs — there is no separate migration command. This
+release's change is one such: the message-deduplication index moves from
+`provider_message_id` alone to `(channel, external_user_id, provider_message_id)`
+so two Telegram customers who share a per-chat message id are both kept. Each
+company database picks it up on the first restart after the pull; the `check`
+above then reports every company at the current schema version.
+
