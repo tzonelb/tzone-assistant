@@ -1,5 +1,39 @@
 # deploy/
 
+## Fast path — one command does everything
+
+Once the code is on the server (see below), run:
+
+```bash
+sudo bash /opt/tzone/deploy/install.sh
+```
+
+`install.sh` performs every step in this file for you -- system packages, the
+service account, the Python environment, the master key, the environment file,
+the first company, the frontend build, systemd, nginx, HTTPS and backups -- and
+verifies the result. It asks only for your domain, an email for the TLS
+certificate, and the first owner account, and it prints the master key and
+workspace code at the end. It is safe to re-run (it never regenerates the master
+key). The manual steps below are the same thing spelled out, for when you want
+to do it by hand or adapt it.
+
+To get the code on the server first:
+
+```bash
+sudo mkdir -p /opt/tzone && sudo chown "$USER" /opt/tzone
+git clone https://github.com/tzonelb/tzone-assistant.git /opt/tzone
+cd /opt/tzone && git checkout claude/platform-comprehensive-audit-ff7985
+```
+
+If the repository is private, git will ask for a username and password: use your
+GitHub username and a Personal Access Token (github.com -> Settings -> Developer
+settings -> Personal access tokens -> Fine-grained tokens -> Generate, with read
+access to this repository) as the password.
+
+---
+
+# deploy/ (manual steps)
+
 Files in this directory, and where each one goes:
 
 | File | Destination |
