@@ -178,7 +178,19 @@ cp "$APP_DIR/deploy/tzone-security-headers.conf" /etc/nginx/snippets/tzone-secur
 cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/tzone
 sed -i "s/app.example.com/$DOMAIN/g" /etc/nginx/sites-available/tzone
 ln -sf /etc/nginx/sites-available/tzone /etc/nginx/sites-enabled/tzone
-rm -f /etc/nginx/sites-enabled/default
+# Coexistence: only remove nginx's stock default site when this box serves
+# nothing else. If other sites are enabled (e.g. a WordPress vhost), leave every
+# one of them alone -- nginx routes by server_name, so T-ZONE answers only for
+# $DOMAIN and the other sites keep their own domains.
+OTHER_SITES="$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -vx tzone | grep -vx default || true)"
+if [ -z "$OTHER_SITES" ] && [ -e /etc/nginx/sites-enabled/default ]; then
+  rm -f /etc/nginx/sites-enabled/default
+else
+  [ -n "$OTHER_SITES" ] && warn "Other nginx sites are enabled and were left untouched: $OTHER_SITES"
+fi
+if systemctl is-active --quiet apache2 2>/dev/null; then
+  warn "Apache is running and will fight nginx for ports 80/443. If your WordPress is on Apache, do not let this script bind those ports -- stop here and tell the assistant so it can set up a coexistence proxy instead."
+fi
 nginx -t && systemctl reload nginx
 if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$TLS_EMAIL" --redirect >/dev/null 2>&1; then
   nginx -t && systemctl reload nginx
