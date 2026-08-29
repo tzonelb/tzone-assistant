@@ -990,9 +990,12 @@
 }
 
 .superadmin-root .sa-totp-qr svg {
-  width: 190px;
-  height: 190px;
+  width: 220px;
+  height: 220px;
   display: block;
+  /* Keep module edges sharp: scaling a QR with anti-aliasing on smears the
+   * squares together and a phone camera can no longer read it. */
+  shape-rendering: crispEdges;
 }
 
 .superadmin-root .sa-totp-secret {
