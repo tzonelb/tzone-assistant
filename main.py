@@ -11,9 +11,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import asynccontextmanager, suppress
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.staticfiles import StaticFiles
 
 from backend.api.errors import install_error_handlers
 from backend.api.routes import (
@@ -302,16 +305,48 @@ app.include_router(meta_webhook.router)
 app.include_router(telegram_webhook.router)
 
 
-@app.get("/")
-def home():
-    """Minimal service banner.
+# The built single-page interface. In the reference nginx deployment the static
+# files are served by nginx and only the API prefixes are proxied to this app.
+# When the app is published straight through a reverse proxy that forwards every
+# path (a control panel like CloudPanel, a container, a tunnel), nginx is not in
+# front to serve the files -- so the app serves them itself. This changes nothing
+# about the interface; it only hands the same built `frontend/dist` to the
+# browser. The API routers are all registered above, so they still answer their
+# own paths; only what they do not claim falls through to the interface.
+_API_PREFIXES = (
+    "api/", "conversations", "webhook", "health", "knowledge", "tickets",
+)
+_DIST = Path(__file__).resolve().parent / "frontend" / "dist"
 
-    Deliberately does not enumerate routes or report configuration: this is the
-    one endpoint reachable without a token, and it used to hand an unauthenticated
-    caller a map of the whole API.
+
+class _SinglePageApp(StaticFiles):
+    """Serve a built SPA: real files as-is, unknown client routes as index.html.
+
+    A 404 for a path the API does not own is a client-side route (``/dashboard``,
+    ``/conversations/...`` opened directly), so the app shell is returned and the
+    browser router takes over. A 404 under an API prefix stays a 404 -- a wrong
+    API path must not be answered with an HTML page.
     """
-    return {
-        "service": config.APP_NAME,
-        "version": config.VERSION,
-        "status": "running",
-    }
+
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404 and not path.startswith(_API_PREFIXES):
+                return await super().get_response("index.html", scope)
+            raise
+
+
+if _DIST.is_dir():
+    # Mounted last, after every API router, so it only ever handles what the API
+    # did not claim.
+    app.mount("/", _SinglePageApp(directory=str(_DIST), html=True), name="spa")
+else:
+    @app.get("/")
+    def home():
+        """Service banner, used only when no built interface is present."""
+        return {
+            "service": config.APP_NAME,
+            "version": config.VERSION,
+            "status": "running",
+        }
