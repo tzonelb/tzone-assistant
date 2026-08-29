@@ -47,6 +47,20 @@ REPO_ROOT="$(cd "$SELF/.." && pwd)"
 [ -f "$REPO_ROOT/requirements.txt" ] || die "Could not find the repository. Run this script from inside the cloned repo (e.g. sudo bash /opt/tzone/deploy/install.sh)."
 ok "Running as root on an apt-based system; repo found at $REPO_ROOT"
 
+# Detect a managed control panel (CloudPanel/Plesk/cPanel). These own nginx and
+# TLS, so we must NOT touch nginx or run certbot -- we install only the app on
+# 127.0.0.1:8000 and let the panel reverse-proxy the domain onto it. This keeps
+# any existing WordPress site completely untouched.
+PANEL=""
+if command -v clpctl >/dev/null 2>&1 || [ -d /home/clp ] || [ -d /etc/cloudpanel ]; then PANEL="CloudPanel"; fi
+if [ -z "$PANEL" ] && [ -d /usr/local/psa ]; then PANEL="Plesk"; fi
+if [ -z "$PANEL" ] && [ -d /usr/local/cpanel ]; then PANEL="cPanel"; fi
+if [ -n "$PANEL" ]; then
+  warn "Detected $PANEL on this server. The installer will set up the app and its"
+  warn "service only, and NOT touch nginx or TLS -- you will point $PANEL at the app"
+  warn "with a reverse-proxy site (instructions printed at the end). WordPress stays untouched."
+fi
+
 # --------------------------------------------------------------------------
 # 1. Questions (everything the script cannot invent)
 # --------------------------------------------------------------------------
@@ -80,7 +94,11 @@ CONFIRM="$(ask 'Type yes to continue' 'yes')"
 step "Installing system packages (this can take a couple of minutes)"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y >/dev/null
-apt-get install -y python3 python3-venv python3-pip nginx certbot python3-certbot-nginx git curl rsync >/dev/null
+if [ -n "$PANEL" ]; then
+  apt-get install -y python3 python3-venv python3-pip git curl rsync >/dev/null
+else
+  apt-get install -y python3 python3-venv python3-pip nginx certbot python3-certbot-nginx git curl rsync >/dev/null
+fi
 ok "System packages installed"
 
 if ! command -v node >/dev/null 2>&1; then
@@ -172,34 +190,41 @@ ok "Service ${SERVICE} is running"
 # --------------------------------------------------------------------------
 # 9. nginx + HTTPS
 # --------------------------------------------------------------------------
-step "Configuring nginx and requesting the HTTPS certificate"
-cp "$APP_DIR/deploy/tzone-proxy.conf" /etc/nginx/snippets/tzone-proxy.conf
-cp "$APP_DIR/deploy/tzone-security-headers.conf" /etc/nginx/snippets/tzone-security-headers.conf
-cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/tzone
-sed -i "s/app.example.com/$DOMAIN/g" /etc/nginx/sites-available/tzone
-ln -sf /etc/nginx/sites-available/tzone /etc/nginx/sites-enabled/tzone
-# Coexistence: only remove nginx's stock default site when this box serves
-# nothing else. If other sites are enabled (e.g. a WordPress vhost), leave every
-# one of them alone -- nginx routes by server_name, so T-ZONE answers only for
-# $DOMAIN and the other sites keep their own domains.
-OTHER_SITES="$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -vx tzone | grep -vx default || true)"
-if [ -z "$OTHER_SITES" ] && [ -e /etc/nginx/sites-enabled/default ]; then
-  rm -f /etc/nginx/sites-enabled/default
-else
-  [ -n "$OTHER_SITES" ] && warn "Other nginx sites are enabled and were left untouched: $OTHER_SITES"
-fi
-if systemctl is-active --quiet apache2 2>/dev/null; then
-  warn "Apache is running and will fight nginx for ports 80/443. If your WordPress is on Apache, do not let this script bind those ports -- stop here and tell the assistant so it can set up a coexistence proxy instead."
-fi
-nginx -t && systemctl reload nginx
-if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$TLS_EMAIL" --redirect >/dev/null 2>&1; then
-  nginx -t && systemctl reload nginx
-  ok "HTTPS certificate installed for $DOMAIN"
+if [ -n "$PANEL" ]; then
+  step "Web server: managed by $PANEL (skipping nginx and certbot)"
+  ok "The app is serving on http://127.0.0.1:8000. $PANEL will publish it on your domain."
   URL="https://$DOMAIN"
+  PANEL_REVERSE_PROXY=1
 else
-  warn "The certificate could not be issued automatically. This almost always means the domain's DNS is not yet pointing at this server, or port 80/443 is blocked."
-  warn "The site is running on http for now. Once DNS is correct, run:  sudo certbot --nginx -d $DOMAIN"
-  URL="http://$DOMAIN"
+  step "Configuring nginx and requesting the HTTPS certificate"
+  cp "$APP_DIR/deploy/tzone-proxy.conf" /etc/nginx/snippets/tzone-proxy.conf
+  cp "$APP_DIR/deploy/tzone-security-headers.conf" /etc/nginx/snippets/tzone-security-headers.conf
+  cp "$APP_DIR/deploy/nginx.conf" /etc/nginx/sites-available/tzone
+  sed -i "s/app.example.com/$DOMAIN/g" /etc/nginx/sites-available/tzone
+  ln -sf /etc/nginx/sites-available/tzone /etc/nginx/sites-enabled/tzone
+  # Coexistence: only remove nginx's stock default site when this box serves
+  # nothing else. If other sites are enabled (e.g. a WordPress vhost), leave every
+  # one of them alone -- nginx routes by server_name, so T-ZONE answers only for
+  # $DOMAIN and the other sites keep their own domains.
+  OTHER_SITES="$(ls /etc/nginx/sites-enabled/ 2>/dev/null | grep -vx tzone | grep -vx default || true)"
+  if [ -z "$OTHER_SITES" ] && [ -e /etc/nginx/sites-enabled/default ]; then
+    rm -f /etc/nginx/sites-enabled/default
+  else
+    [ -n "$OTHER_SITES" ] && warn "Other nginx sites are enabled and were left untouched: $OTHER_SITES"
+  fi
+  if systemctl is-active --quiet apache2 2>/dev/null; then
+    warn "Apache is running and will fight nginx for ports 80/443. If your WordPress is on Apache, do not let this script bind those ports -- stop here and tell the assistant so it can set up a coexistence proxy instead."
+  fi
+  nginx -t && systemctl reload nginx
+  if certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$TLS_EMAIL" --redirect >/dev/null 2>&1; then
+    nginx -t && systemctl reload nginx
+    ok "HTTPS certificate installed for $DOMAIN"
+    URL="https://$DOMAIN"
+  else
+    warn "The certificate could not be issued automatically. This almost always means the domain's DNS is not yet pointing at this server, or port 80/443 is blocked."
+    warn "The site is running on http for now. Once DNS is correct, run:  sudo certbot --nginx -d $DOMAIN"
+    URL="http://$DOMAIN"
+  fi
 fi
 
 # --------------------------------------------------------------------------
@@ -239,7 +264,19 @@ echo "       second copy off the server.${OFF}"
 echo
 echo "  ${BOLD}TZONE_MASTER_KEY${OFF} = ${YELLOW}${MASTER_KEY}${OFF}"
 echo
-echo "  Useful later:"
+echo "  if [ -n "${PANEL_REVERSE_PROXY:-}" ]; then
+    echo
+    echo "${BOLD}${YELLOW}  ONE STEP LEFT -- publish the app through $PANEL:${OFF}"
+    echo "  The app is running privately on http://127.0.0.1:8000. In the $PANEL UI,"
+    echo "  add a site for ${BOLD}$DOMAIN${OFF} of type ${BOLD}Reverse Proxy${OFF} pointing to"
+    echo "  ${BOLD}http://127.0.0.1:8000${OFF}, then turn on Let's Encrypt SSL for it."
+    echo "  In CloudPanel: Sites -> Add Site -> Create a Reverse Proxy -> Domain=$DOMAIN,"
+    echo "  Reverse Proxy URL=http://127.0.0.1:8000 ; then the site's SSL/TLS tab ->"
+    echo "  'New Let's Encrypt Certificate'. WordPress is not affected."
+    echo "  Make sure $DOMAIN's DNS A record points to this server first."
+    echo
+  fi
+  echo "  Useful later:"
 echo "    systemctl status $SERVICE          # is it running"
 echo "    journalctl -u $SERVICE -f          # live logs"
 echo "    sudo bash $APP_DIR/deploy/install.sh   # re-run safely / after updates"
