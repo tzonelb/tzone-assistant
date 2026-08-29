@@ -106,8 +106,11 @@ systemctl restart "$SERVICE"
 # failures and rolled back (a deploy that then flaps every timer tick). Wait
 # generously -- up to ~90s -- and follow the trailing-slash redirect.
 healthy() {
+  # The endpoint is /health/ WITH the trailing slash: redirect_slashes is off,
+  # so /health (no slash) returns 404 and a health check pointed at it fails
+  # forever -- which rolled back every good deploy. Ask for the exact path.
   for _ in $(seq 1 45); do
-    if curl -fsS -L -o /dev/null "http://127.0.0.1:8000/health" 2>/dev/null; then return 0; fi
+    if curl -fsS -o /dev/null "http://127.0.0.1:8000/health/" 2>/dev/null; then return 0; fi
     sleep 2
   done
   return 1
