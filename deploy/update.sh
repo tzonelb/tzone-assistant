@@ -100,10 +100,15 @@ log "restarting $SERVICE"
 systemctl restart "$SERVICE"
 
 # --- health check --------------------------------------------------------
+# The app opens EVERY company's SQLCipher database at startup, and key
+# derivation is deliberately expensive, so a cold restart can take well over a
+# dozen seconds. A short window here caused healthy restarts to be misread as
+# failures and rolled back (a deploy that then flaps every timer tick). Wait
+# generously -- up to ~90s -- and follow the trailing-slash redirect.
 healthy() {
-  for _ in $(seq 1 15); do
-    if curl -fsS -o /dev/null http://127.0.0.1:8000/health 2>/dev/null; then return 0; fi
-    sleep 1
+  for _ in $(seq 1 45); do
+    if curl -fsS -L -o /dev/null "http://127.0.0.1:8000/health" 2>/dev/null; then return 0; fi
+    sleep 2
   done
   return 1
 }
