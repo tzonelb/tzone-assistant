@@ -10,6 +10,7 @@ import "./superadmin.css";
 // Split the same way the customer app splits its routes, so an employee who
 // never opens the console never downloads it.
 const PlatformLoginPage = lazy(() => import("./pages/PlatformLoginPage"));
+const PlatformEnrolTotpPage = lazy(() => import("./pages/PlatformEnrolTotpPage"));
 const CompaniesPage = lazy(() => import("./pages/CompaniesPage"));
 const CompanyDetailPage = lazy(() => import("./pages/CompanyDetailPage"));
 const NewCompanyPage = lazy(() => import("./pages/NewCompanyPage"));
@@ -33,6 +34,7 @@ export default function SuperAdminApp() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="login" element={<PlatformLoginPage />} />
+            <Route path="enroll" element={<PlatformEnrolTotpPage />} />
 
             <Route
               element={

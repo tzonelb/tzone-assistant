@@ -209,11 +209,19 @@ function createQueryString(parameters) {
   return value ? `?${value}` : "";
 }
 
-export async function platformLoginRequest(email, password) {
+export async function platformLoginRequest(email, password, totpCode = "") {
+  const body = { email, password };
+
+  // Only sent once the account has a second factor and the sign-in form has
+  // asked for the code; omitted entirely on the first (password-only) attempt.
+  if (totpCode) {
+    body.totp_code = totpCode;
+  }
+
   return platformRequest("/api/platform/auth/login", {
     method: "POST",
     authenticated: false,
-    body: { email, password },
+    body,
   });
 }
 
@@ -224,6 +232,26 @@ export async function platformMeRequest() {
 export async function platformLogoutRequest() {
   return platformRequest("/api/platform/auth/logout", {
     method: "POST",
+  });
+}
+
+/*
+ * Two-factor enrolment. These three routes are the only ones a super admin who
+ * has not yet enrolled is allowed to reach; every other console call 403s until
+ * `confirm` turns the second factor on.
+ */
+export async function platformTotpStatusRequest() {
+  return platformRequest("/api/platform/auth/totp");
+}
+
+export async function platformTotpBeginRequest() {
+  return platformRequest("/api/platform/auth/totp/begin", { method: "POST" });
+}
+
+export async function platformTotpConfirmRequest(code) {
+  return platformRequest("/api/platform/auth/totp/confirm", {
+    method: "POST",
+    body: { code },
   });
 }
 

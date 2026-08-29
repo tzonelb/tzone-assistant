@@ -7,7 +7,7 @@ import { ConsoleBanner } from "../components/ConsoleUI";
 
 
 export default function PlatformLoginPage() {
-  const { authenticated, loading, login } = usePlatformAuth();
+  const { authenticated, loading, enrolmentPending, login } = usePlatformAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -17,9 +17,17 @@ export default function PlatformLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  // Shown only after the server says this account has a second factor on.
+  const [totpRequired, setTotpRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   if (!loading && authenticated) {
     return <Navigate to={`${CONSOLE_BASE_PATH}/companies`} replace />;
+  }
+
+  // Signed in but still owes a second factor: the enrolment screen, not here.
+  if (!loading && enrolmentPending) {
+    return <Navigate to={`${CONSOLE_BASE_PATH}/enroll`} replace />;
   }
 
   async function handleSubmit(event) {
@@ -29,11 +37,33 @@ export default function PlatformLoginPage() {
     setSubmitting(true);
 
     try {
-      await login(email.trim(), password);
+      const result = await login(email.trim(), password, totpCode.trim());
+
+      if (result?.totp?.enrolment_pending) {
+        navigate(`${CONSOLE_BASE_PATH}/enroll`, { replace: true });
+        return;
+      }
+
       navigate(location.state?.from || `${CONSOLE_BASE_PATH}/companies`, {
         replace: true,
       });
     } catch (loginError) {
+      // The account has a second factor and the code is needed (or was wrong):
+      // reveal the code field and let them try, rather than dead-ending.
+      if (
+        loginError.status === 401 &&
+        loginError.data?.detail?.error === "totp_required"
+      ) {
+        setTotpRequired(true);
+        setError(
+          totpRequired
+            ? "That code did not match. Try the next one."
+            : "",
+        );
+        setSubmitting(false);
+        return;
+      }
+
       setError(loginError.message || "Sign in failed.");
       setSubmitting(false);
     }
@@ -92,6 +122,27 @@ export default function PlatformLoginPage() {
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
+
+          {totpRequired ? (
+            <>
+              <label htmlFor="sa-login-totp">Authenticator code</label>
+
+              <input
+                id="sa-login-totp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="6-digit code"
+                value={totpCode}
+                autoFocus
+                onChange={(event) =>
+                  setTotpCode(event.target.value.replace(/\D/g, ""))
+                }
+                required
+              />
+            </>
+          ) : null}
 
           <p className="sa-login-note">
             There is no workspace code here, and none is missing. A workspace
