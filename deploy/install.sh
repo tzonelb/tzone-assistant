@@ -82,6 +82,18 @@ while :; do
 done
 
 echo
+echo "  ${BOLD}Platform operator (Super Admin)${OFF} -- this is YOUR account for the"
+echo "  control console at /superadmin, where you create and manage companies."
+echo "  It is separate from the company owner above and needs no workspace code."
+SUPER_EMAIL="$(ask 'Super Admin login email' "$OWNER_EMAIL")"
+SUPER_NAME="$(ask 'Super Admin full name' "$OWNER_NAME")"
+while :; do
+  read -rsp "  Super Admin password (at least 10 characters, hidden): " SUPER_PW; echo
+  [ "${#SUPER_PW}" -ge 10 ] && break
+  warn "Too short -- use at least 10 characters."
+done
+
+echo
 echo "${BOLD}About to install for domain:${OFF} $DOMAIN"
 echo "${YELLOW}  Make sure this domain's DNS A record already points to THIS server's IP,${OFF}"
 echo "${YELLOW}  or the HTTPS step will fail. (Current server IP: $(curl -fsS ifconfig.me 2>/dev/null || echo 'unknown'))${OFF}"
@@ -155,6 +167,12 @@ set_env DATA_DIR "$APP_DIR/data"
 set_env LOG_DIR "$APP_DIR/logs"
 set_env APP_PUBLIC_URL "https://$DOMAIN"
 set_env CORS_ORIGINS "https://$DOMAIN"
+# Pin the branch the self-updater deploys. Only pushes to THIS branch reach the
+# server; a push to any other branch is ignored. Detected from the checkout.
+if [ -d "$APP_DIR/.git" ]; then
+  DEPLOY_BRANCH="$(cd "$APP_DIR" && sudo -u tzone git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  [ -n "$DEPLOY_BRANCH" ] && [ "$DEPLOY_BRANCH" != "HEAD" ] && set_env TZONE_DEPLOY_BRANCH "$DEPLOY_BRANCH"
+fi
 chown root:tzone "$ENV_FILE"; chmod 640 "$ENV_FILE"
 ok "Environment file written at $ENV_FILE (APP_ENV=production)"
 
@@ -166,6 +184,18 @@ CREATE_OUT="$(cd "$APP_DIR" && sudo -u tzone bash -c "set -a; . '$ENV_FILE'; set
 echo "$CREATE_OUT" | sed 's/^/    /'
 WORKSPACE_CODE="$(echo "$CREATE_OUT" | grep -oE 'TZ(-[A-Z0-9]{4})+' | head -1 || true)"
 ok "First company created"
+
+# --------------------------------------------------------------------------
+# 6b. Super Admin (platform operator)
+# --------------------------------------------------------------------------
+# Without this account the /superadmin console cannot be entered at all, so the
+# platform can never be operated. It is created idempotently -- re-running with the
+# same email just resets that password, it does not make a second operator.
+step "Creating the Super Admin (platform operator)"
+SUPER_OUT="$(cd "$APP_DIR" && sudo -u tzone bash -c "set -a; . '$ENV_FILE'; set +a; '$APP_DIR/venv/bin/python' -m tools.manage_platform create-super-admin --email \"$SUPER_EMAIL\" --name \"$SUPER_NAME\" --password \"$SUPER_PW\"" 2>&1 || true)"
+echo "$SUPER_OUT" | sed 's/^/    /'
+echo "$SUPER_OUT" | grep -qiE 'super.?admin' || warn "Super Admin creation output looked unexpected -- verify with the console at /superadmin/login after install."
+ok "Super Admin ready (log in at ${DOMAIN}/superadmin/login -- no workspace code; you will set up 2FA on first login)"
 
 # --------------------------------------------------------------------------
 # 7. Frontend build
@@ -237,6 +267,24 @@ cd "$APP_DIR" && sudo -u tzone bash -c "set -a; . '$ENV_FILE'; set +a; '$APP_DIR
 ok "Backups scheduled"
 
 # --------------------------------------------------------------------------
+# 10b. Automatic updates (deploy by pushing to GitHub -- no console visit)
+# --------------------------------------------------------------------------
+# A systemd timer polls the deployed branch every few minutes and, when it moves,
+# runs deploy/update.sh: pull, rebuild only what changed, restart, health-check,
+# and roll back if the new version is unhealthy. After this, shipping a change is
+# just "git push" -- you never open this server again.
+step "Enabling automatic updates (push to deploy)"
+if [ -d "$APP_DIR/.git" ]; then
+  cp "$APP_DIR/deploy/tzone-update.service" /etc/systemd/system/tzone-update.service
+  cp "$APP_DIR/deploy/tzone-update.timer"   /etc/systemd/system/tzone-update.timer
+  systemctl daemon-reload
+  systemctl enable --now tzone-update.timer >/dev/null 2>&1
+  ok "Auto-update timer active (checks ${TZONE_DEPLOY_BRANCH:-the deployed branch} every 3 min). Deploy by pushing to GitHub."
+else
+  warn "No git checkout at $APP_DIR, so auto-update is off. To enable it, install from a clone at $APP_DIR (git clone ... $APP_DIR) and re-run."
+fi
+
+# --------------------------------------------------------------------------
 # 11. Verify
 # --------------------------------------------------------------------------
 step "Final verification"
@@ -256,6 +304,10 @@ else
   echo "  ${BOLD}Workspace code:${OFF}      see the 'First company' output above (shown once)"
 fi
 echo
+echo "  ${BOLD}Platform console:${OFF}    $URL/superadmin/login   (this is where you manage companies)"
+echo "  ${BOLD}Super Admin email:${OFF}   $SUPER_EMAIL   (no workspace code; you set up 2FA on first login)"
+echo "  ${BOLD}Super Admin password:${OFF} (the one you typed)"
+echo
 echo "${RED}${BOLD}  SAVE THESE TWO THINGS SOMEWHERE SAFE AND OFFLINE, NOW:${OFF}"
 echo "${RED}    1) The workspace code above.${OFF}"
 echo "${RED}    2) The master key below. Without it, every company database and every"
@@ -264,20 +316,25 @@ echo "       second copy off the server.${OFF}"
 echo
 echo "  ${BOLD}TZONE_MASTER_KEY${OFF} = ${YELLOW}${MASTER_KEY}${OFF}"
 echo
-echo "  if [ -n "${PANEL_REVERSE_PROXY:-}" ]; then
-    echo
-    echo "${BOLD}${YELLOW}  ONE STEP LEFT -- publish the app through $PANEL:${OFF}"
-    echo "  The app is running privately on http://127.0.0.1:8000. In the $PANEL UI,"
-    echo "  add a site for ${BOLD}$DOMAIN${OFF} of type ${BOLD}Reverse Proxy${OFF} pointing to"
-    echo "  ${BOLD}http://127.0.0.1:8000${OFF}, then turn on Let's Encrypt SSL for it."
-    echo "  In CloudPanel: Sites -> Add Site -> Create a Reverse Proxy -> Domain=$DOMAIN,"
-    echo "  Reverse Proxy URL=http://127.0.0.1:8000 ; then the site's SSL/TLS tab ->"
-    echo "  'New Let's Encrypt Certificate'. WordPress is not affected."
-    echo "  Make sure $DOMAIN's DNS A record points to this server first."
-    echo
-  fi
-  echo "  Useful later:"
-echo "    systemctl status $SERVICE          # is it running"
-echo "    journalctl -u $SERVICE -f          # live logs"
-echo "    sudo bash $APP_DIR/deploy/install.sh   # re-run safely / after updates"
+if [ -n "${PANEL_REVERSE_PROXY:-}" ]; then
+  echo
+  echo "${BOLD}${YELLOW}  ONE STEP LEFT -- publish the app through $PANEL:${OFF}"
+  echo "  The app is running privately on http://127.0.0.1:8000. In the $PANEL UI,"
+  echo "  add a site for ${BOLD}$DOMAIN${OFF} of type ${BOLD}Reverse Proxy${OFF} pointing to"
+  echo "  ${BOLD}http://127.0.0.1:8000${OFF}, then turn on Let's Encrypt SSL for it."
+  echo "  In CloudPanel: Sites -> Add Site -> Create a Reverse Proxy -> Domain=$DOMAIN,"
+  echo "  Reverse Proxy URL=http://127.0.0.1:8000 ; then the site's SSL/TLS tab ->"
+  echo "  'New Let's Encrypt Certificate'. WordPress is not affected."
+  echo "  Make sure $DOMAIN's DNS A record points to this server first."
+  echo
+fi
+echo "  ${BOLD}${GREEN}Updates from here on: just 'git push' to ${TZONE_DEPLOY_BRANCH:-your branch}.${OFF}"
+echo "  The server checks every 3 minutes and deploys itself -- you never open this console again."
+echo
+echo "  Useful later (you should not need these):"
+echo "    systemctl status $SERVICE                  # is the app running"
+echo "    journalctl -u $SERVICE -f                  # live app logs"
+echo "    systemctl list-timers tzone-update.timer   # when the next auto-update check runs"
+echo "    tail -f /var/log/tzone-update.log          # what the auto-updater did"
+echo "    sudo bash $APP_DIR/deploy/update.sh        # deploy right now instead of waiting"
 echo

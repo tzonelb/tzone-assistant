@@ -1,0 +1,15 @@
+# Runs the self-updater once. Triggered by tzone-update.timer, or manually with:
+#   sudo systemctl start tzone-update
+# It is a oneshot: it checks the deployed branch, deploys if it moved, and exits.
+[Unit]
+Description=T-ZONE self-updater (pull deployed branch, rebuild, restart, verify)
+After=network-online.target tzone-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/tzone/deploy/update.sh
+# The updater restarts tzone-api and writes /var/log/tzone-update.log, so it runs
+# as root. All git/npm/pip work inside it drops to the tzone user.
+User=root
+Nice=10

@@ -1,0 +1,16 @@
+# Checks the deployed branch for new commits every 3 minutes and deploys them.
+# This is what makes "just push to GitHub" enough -- you never open the server.
+# Change OnUnitActiveSec if you want it faster or slower.
+[Unit]
+Description=T-ZONE self-updater timer (poll the deployed branch)
+
+[Timer]
+# First check 2 minutes after boot, then every 3 minutes.
+OnBootSec=2min
+OnUnitActiveSec=3min
+# If the machine was off when a check was due, run one as soon as it is back.
+Persistent=true
+Unit=tzone-update.service
+
+[Install]
+WantedBy=timers.target
