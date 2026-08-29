@@ -786,35 +786,10 @@ def test_rotating_the_code_invalidates_the_old_one_and_keeps_the_data(
     finally:
         connection.close()
 
-    # An employee signing in with the old code is refused; the new one works.
-    _make_user("employee@alpha.example.com", EMPLOYEE_PASSWORD)
-    with platform["manager"].control() as conn:
-        employee_id = conn.execute(
-            "SELECT id FROM users WHERE email = 'employee@alpha.example.com'"
-        ).fetchone()["id"]
-    _employ(platform, alpha, employee_id)
-
-    stale = client.post(
-        "/api/auth/login",
-        json={
-            "workspace_code": old_code,
-            "company": alpha["name"],
-            "email": "employee@alpha.example.com",
-            "password": EMPLOYEE_PASSWORD,
-        },
-    )
-    assert stale.status_code == 401
-
-    fresh = client.post(
-        "/api/auth/login",
-        json={
-            "workspace_code": new_code,
-            "company": alpha["name"],
-            "email": "employee@alpha.example.com",
-            "password": EMPLOYEE_PASSWORD,
-        },
-    )
-    assert fresh.status_code == 200
+    # Rotation is proven at the keyring level above: the old code no longer
+    # unseals the company key and the new one does, with the data intact. Sign-in
+    # itself no longer takes a workspace code, so there is no login half to check
+    # here anymore — the code's job is now activation/recovery, not a login field.
 
 
 # ----------------------------------------------------------------------

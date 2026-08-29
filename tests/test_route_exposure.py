@@ -29,6 +29,10 @@ ROUTES_DIR = ROOT / "backend" / "api" / "routes"
 # Reachable with no credentials, deliberately.
 PUBLIC_ROUTES: dict[str, str] = {
     "auth.py:POST:/login": "A sign-in cannot require being signed in.",
+    "auth.py:POST:/password/forgot": (
+        "Asking for a reset link cannot require being signed in; the endpoint "
+        "answers identically whether or not the address exists."
+    ),
     "auth.py:POST:/password/reset/{token}": (
         "The token in the path is the credential. It is single-use, expiring, "
         "and stored only as a hash — the same shape as a session token."
