@@ -1,4 +1,4 @@
-import { apiRequest, getAccessToken, handleUnauthorized } from "./client";
+import { apiRequest, handleUnauthorized } from "./client";
 
 // client.js keeps its base URL private, so the SSE reader below resolves the
 // same value the same way rather than reaching into that module.
@@ -132,18 +132,13 @@ export async function subscribeTeamChatEvents({
   onError,
   signal,
 } = {}) {
-  const token = getAccessToken();
-  const headers = { Accept: "text/event-stream" };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   const query = queryString({ channel_id: channelId });
 
   try {
     const response = await fetch(`${API_BASE_URL}${BASE}/live/events${query}`, {
-      headers,
+      headers: { Accept: "text/event-stream" },
+      // httpOnly session cookie, not a bearer token -- must be sent explicitly.
+      credentials: "include",
       signal,
       cache: "no-store",
     });

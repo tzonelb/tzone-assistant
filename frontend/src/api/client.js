@@ -483,16 +483,14 @@ export async function downloadConversationExport(
     format = "json",
   } = {},
 ) {
-  const token = getAccessToken();
   const response = await fetch(
     getConversationExportUrl(channel, userId, {
       scope,
       format,
     }),
     {
-      headers: token
-        ? { Authorization: `Bearer ${token}` }
-        : {},
+      // Auth is the httpOnly session cookie, not a bearer token.
+      credentials: "include",
     },
   );
 
@@ -534,20 +532,16 @@ export async function subscribeConversationEvents({
   onError,
   signal,
 } = {}) {
-  const token = getAccessToken();
-  const headers = {
-    Accept: "text/event-stream",
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   try {
     const response = await fetch(
       `${API_BASE_URL}/conversations/live/events`,
       {
-        headers,
+        headers: { Accept: "text/event-stream" },
+        // The session is an httpOnly cookie now, not a bearer token, so the
+        // stream must send credentials like every other request. Without this
+        // the server sees no session, answers 401, and the 401 handler below
+        // bounces a freshly signed-in user straight back to the login screen.
+        credentials: "include",
         signal,
         cache: "no-store",
       },
