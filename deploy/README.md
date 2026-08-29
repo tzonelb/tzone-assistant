@@ -93,6 +93,25 @@ sudo -u tzone bash -c 'set -a; . /etc/tzone/tzone.env; set +a; \
 
 Write down the workspace code it prints. It is shown once.
 
+## 4b. Super Admin (platform operator)
+
+The company owner above runs one company. The **Super Admin** operates the
+platform itself — the `/superadmin` console where companies are created,
+suspended, given plans, and have modules toggled. Nothing seeds it, so it must be
+created once, or the console cannot be entered at all:
+
+```bash
+cd /opt/tzone
+sudo -u tzone bash -c 'set -a; . /etc/tzone/tzone.env; set +a; \
+  /opt/tzone/venv/bin/python -m tools.manage_platform create-super-admin \
+    --email you@example.com --name "Your Name" --password "CHANGE_THIS_10_CHARS_MIN"'
+```
+
+Then sign in at `https://YOUR.DOMAIN/superadmin/login` — **no workspace code** —
+and complete the mandatory 2FA (TOTP) enrolment on first login before any console
+action works. Re-running with the same email just resets that password; it does
+not create a second operator. (`install.sh` now does this step for you.)
+
 ## 5. Frontend build
 
 ```bash
@@ -146,7 +165,59 @@ curl -sSN https://YOUR.DOMAIN/conversations/live/events --max-time 5   # must st
 
 `check` must exit 0. Anything else means the deployment is not ready.
 
-## Redeploy
+## Redeploy — push to deploy, no console visit
+
+After the installer runs, a systemd timer (`tzone-update.timer`) checks the
+deployed branch every 3 minutes and, when it moves, runs
+[`update.sh`](update.sh): pull → rebuild only what changed → restart →
+health-check on `/health` → **roll back to the previous commit if the new version
+is unhealthy**. So a normal deploy is just:
+
+```bash
+git push        # from your laptop, to the deployed branch
+```
+
+The server updates itself within a few minutes. You never open the server for a
+code change. To watch or force it:
+
+```bash
+systemctl list-timers tzone-update.timer   # when the next check runs
+tail -f /var/log/tzone-update.log          # what it did / rollbacks
+sudo bash /opt/tzone/deploy/update.sh      # deploy right now instead of waiting
+```
+
+The updater pins `TZONE_DEPLOY_BRANCH` (in `/etc/tzone/tzone.env`) — only pushes
+to that one branch deploy; a push to any other branch is ignored. It runs all
+git/npm/pip work as the `tzone` user, so the "dubious ownership" error never
+appears. systemd unit files are version-controlled too: change one and the
+updater re-installs it on the next run, so even deploy-config changes ship with
+no console.
+
+### If the timer is not installed yet (older install)
+
+```bash
+cd /opt/tzone && sudo -u tzone git pull            # get deploy/update.sh + units
+sudo cp deploy/tzone-update.service /etc/systemd/system/
+sudo cp deploy/tzone-update.timer   /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now tzone-update.timer
+```
+
+### Making the GitHub repo private
+
+Auto-deploy pulls over the network, so a private repo needs credentials on the
+server. Use a **read-only deploy key** (scoped to this one repo, cannot push,
+cannot reach your account) — run once *before* flipping the repo to private:
+
+```bash
+sudo bash /opt/tzone/deploy/setup-deploy-key.sh
+```
+
+It prints one public key to paste at
+`github.com/tzonelb/tzone-assistant/settings/keys` (leave "Allow write access"
+unchecked), switches the remote to SSH, and tells you how to test it. After that,
+`git push` keeps auto-deploying exactly as before.
+
+### Manual redeploy (fallback only)
 
 ```bash
 cd /opt/tzone

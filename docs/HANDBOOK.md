@@ -228,14 +228,32 @@ cd /opt/tzone && git checkout <branch>
 The app serves its own interface, so the reverse proxy needs no extra static
 configuration.
 
-### التحديث بعد أي تعديل / Redeploy after a change
+### التحديث: ادفع فقط / Redeploy: just push (no server console)
+After the installer runs, a systemd timer checks the deployed branch every 3
+minutes and deploys new commits itself — pull, rebuild only what changed, restart,
+health-check on `/health`, and **roll back automatically if the new version is
+unhealthy**. So shipping a change is:
 ```bash
-cd /opt/tzone && git pull && systemctl restart tzone-api
-# a schema change applies itself at startup; run the check to confirm:
-sudo -u tzone bash -c 'set -a; . /etc/tzone/tzone.env; set +a; cd /opt/tzone && \
-  ./venv/bin/python -m tools.manage_platform check'
+git push        # to the deployed branch (TZONE_DEPLOY_BRANCH); nothing else
 ```
-If the interface changed, rebuild it too: `cd frontend && npm ci && npx vite build`.
+The server never needs to be opened for a code change. A schema change applies
+itself at startup, and the interface is rebuilt only when `frontend/` changed.
+Watch or force it:
+```bash
+tail -f /var/log/tzone-update.log          # what the auto-updater did
+sudo bash /opt/tzone/deploy/update.sh      # deploy right now instead of waiting
+```
+Only pushes to the **one pinned branch** deploy; any other branch is ignored. All
+git/npm/pip work runs as the `tzone` user, so the "dubious ownership" error never
+occurs.
+
+**Private repo:** before flipping the GitHub repo to private, run
+`sudo bash /opt/tzone/deploy/setup-deploy-key.sh` once — it sets up a read-only
+deploy key so `git push` keeps auto-deploying.
+
+**Super Admin:** `install.sh` now creates the platform operator account; there is
+no manual step for it on a fresh install (older installs: run `create-super-admin`
+once, below).
 
 Full manual walkthrough: `deploy/README.md` and `docs/DEPLOYMENT.md`.
 
