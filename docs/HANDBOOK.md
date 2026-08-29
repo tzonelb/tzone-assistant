@@ -262,9 +262,30 @@ Full manual walkthrough: `deploy/README.md` and `docs/DEPLOYMENT.md`.
 ## 5. كيف تشتغل عليها / How to operate it (day to day)
 
 ### الدخول / Logging in
-A user needs three things: the **workspace code** (shown once at company creation),
-their **email**, and their **password**. The Super Admin console signs in with
-email + password + a mandatory second factor (TOTP).
+An employee signs in with three things: the **company name**, their **email**, and
+their **password** — at `/login`. If they have turned on two-factor (TOTP) for
+their own account, the form also asks for the 6-digit code. A **Forgot password?**
+link emails a single-use reset link (needs SMTP configured — see below).
+
+The **workspace code** is no longer a login field. It stays the owner's
+**activation secret**: the company's encrypted database is also sealed with it,
+but the server opens the database with its master key for day-to-day work, so the
+code is not typed at every sign-in. Keep it safe as the owner's recovery/activation
+credential. The Super Admin console (`/superadmin/login`) signs in with email +
+password + a **mandatory** TOTP second factor and no workspace code.
+
+**Email for reset links (`Forgot password?` and admin-sent resets):** set these in
+`/etc/tzone/tzone.env`, then `systemctl restart tzone-api`:
+```
+EMAIL_BACKEND=smtp
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_STARTTLS=true
+SMTP_USER=you@yourdomain.com
+SMTP_PASSWORD=your-app-password       # Gmail: an App Password, not your login
+SMTP_FROM=you@yourdomain.com
+```
+Until this is set, the reset screens still work but no mail is sent.
 
 ### مهام المشغّل الشائعة / Common operator tasks (the CLI)
 ```bash
