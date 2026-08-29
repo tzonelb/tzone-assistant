@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
 import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
+import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ModuleRoute from "./routes/ModuleRoute";
 import ProtectedRoute from "./routes/ProtectedRoute";
 
@@ -48,6 +49,7 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         {/* Public by necessity: the person following this link cannot sign in,
             which is the whole reason the link exists. */}
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />

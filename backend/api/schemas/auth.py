@@ -2,9 +2,10 @@ from pydantic import BaseModel, EmailStr, Field
 
 
 class LoginRequest(BaseModel):
-    # The workspace code unseals the company's database key, so it is a
-    # credential and is validated like one.
-    workspace_code: str = Field(min_length=4, max_length=64)
+    # Company + email + password are the sign-in credentials. The workspace code
+    # is no longer part of login (the company key is also wrapped by the server
+    # master key, so the code was only a second factor); an employee who wants a
+    # second factor turns on TOTP instead.
     company: str = Field(min_length=2, max_length=120)
     email: EmailStr
     # 10, matching AuthService.MIN_PASSWORD_LENGTH. It used to be 8 here, so
@@ -43,6 +44,13 @@ class LogoutResponse(BaseModel):
 class PasswordChangeRequest(BaseModel):
     current_password: str = Field(min_length=1, max_length=200)
     new_password: str = Field(min_length=10, max_length=200)
+
+
+class PasswordForgotRequest(BaseModel):
+    """Asking for a reset link. Only an email; the endpoint answers the same way
+    whether or not it matches an account, so nothing here reveals who exists."""
+
+    email: EmailStr
 
 
 class PasswordResetRequest(BaseModel):

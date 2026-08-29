@@ -247,6 +247,23 @@ a {
   font-size: 14px;
 }
 
+.login-form-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: 2px 0;
+}
+
+.login-link {
+  color: #1689e8;
+  font-size: 13.5px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.login-link:hover {
+  text-decoration: underline;
+}
+
 .primary-action {
   min-height: 53px;
   margin-top: 15px;

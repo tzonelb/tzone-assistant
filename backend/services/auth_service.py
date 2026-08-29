@@ -448,13 +448,12 @@ class AuthService:
     def authenticate(
         self,
         *,
-        workspace_code: str,
         company: str,
         email: str,
         password: str,
         ip_address: str | None = None,
     ) -> dict[str, Any] | None:
-        """Verify all four credentials and return the user, or None.
+        """Verify the sign-in credentials and return the user, or None.
 
         The failure reason is deliberately not returned to the caller: the API
         answers every failure identically so nobody can probe which companies,
@@ -524,54 +523,13 @@ class AuthService:
 
             company_id = int(company_row["id"])
 
-        # The decisive check. A wrong code fails to unseal the company key, so
-        # possession of the code is proven rather than claimed.
-        #
-        # On timing: the branches above are equalised — an unknown email and an
-        # inactive account each burn one PBKDF2 round through
-        # `_dummy_password_check`, so the endpoint cannot be used as a user
-        # directory, which is the property that matters. The branches *below* a
-        # successful password check are measurably slower, and this one most of
-        # all: unsealing runs 600k KDF iterations against the password's 310k.
-        # That difference tells an attacker who already holds a correct password
-        # that the company or the code was what stopped them. Equalising it
-        # would mean running the 600k unseal on every rejected attempt, turning
-        # the login endpoint into a CPU-exhaustion lever. The leak is bounded to
-        # someone who already has valid credentials; the amplification would be
-        # available to everyone. Left as it is, on purpose.
-        if not database_manager.verify_workspace_code(company_id, workspace_code):
-            logger.warning(
-                "Login rejected: bad workspace code for company id=%s", company_id
-            )
-
-            # The strongest signal this platform produces, and until now it went
-            # nowhere but a log file on the server.
-            #
-            # Every check above has already passed to get here: the email is a
-            # real employee, the account is active, the company exists and they
-            # belong to it, and — decisively — the password was correct. Someone
-            # is holding a working password for this company's employee and is
-            # being stopped by the workspace code alone. That is either the
-            # employee having forgotten one of their four credentials, or a
-            # compromised password one secret away from an open door.
-            #
-            # The owner is the only person who can tell those apart, and the
-            # only one who can act. `Action.WORKSPACE_CODE_REJECTED` was
-            # declared for exactly this and nothing ever raised it.
-            #
-            # Filed in the company's own log rather than unattributed, unlike a
-            # plain refusal: there is no user-enumeration concern left when the
-            # password has already been verified, and the entry is useless to an
-            # owner who cannot see it.
-            self._record_workspace_code_rejection(
-                company_id=company_id,
-                user_id=int(user_data["id"]),
-                email=normalized_email,
-                ip_address=ip_address,
-            )
-
-            return None
-
+        # Company membership + password are the sign-in credentials. The
+        # workspace code is no longer asked for here: the company's database key
+        # is also wrapped by the server master key (see backend/security/keyring
+        # -- the wrap that lets the bot answer with no human present), so the
+        # code was only ever a second login factor, never the only thing that
+        # opens the data. The owner keeps the code as their activation secret,
+        # and any employee who wants a second factor turns on TOTP below.
         with database_manager.control() as conn:
             conn.execute(
                 "UPDATE users SET last_login_at = ?, updated_at = ? WHERE id = ?",
@@ -850,6 +808,31 @@ class AuthService:
     # ------------------------------------------------------------------
     # Password reset links
     # ------------------------------------------------------------------
+
+    def user_for_password_reset(self, email: str) -> dict[str, Any] | None:
+        """An active account matching this email, for a self-service reset.
+
+        Returns only what the reset email needs (id, address, name), or None
+        when there is no active account. The caller answers identically either
+        way, so this method is the only place that knows the difference.
+        """
+        normalized = self.normalize_email(email)
+
+        with database_manager.control() as conn:
+            row = conn.execute(
+                "SELECT id, email, full_name, status FROM users "
+                "WHERE LOWER(email) = ? LIMIT 1",
+                (normalized,),
+            ).fetchone()
+
+        if not row or dict(row).get("status") != "active":
+            return None
+
+        return {
+            "id": int(row["id"]),
+            "email": row["email"],
+            "full_name": row["full_name"],
+        }
 
     def create_password_reset(
         self,

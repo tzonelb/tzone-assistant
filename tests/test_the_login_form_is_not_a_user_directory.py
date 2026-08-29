@@ -20,16 +20,12 @@ difference this catches is not subtle. Removing the equaliser makes an unknown
 address roughly a hundred times faster, because it skips 310,000 hash
 iterations.
 
-**A leak that is deliberately left, and why.** The branches *after* a correct
-password are not equalised, and cannot be cheaply: unsealing the workspace code
-runs 600,000 KDF iterations against the password's 310,000, so a wrong code is
-about three times slower than a wrong password. That tells somebody who already
-holds valid credentials that the company or the code was what stopped them.
-Equalising it would mean running the 600k unseal on every rejected attempt,
-which hands every anonymous caller a CPU-exhaustion lever. The leak is bounded
-to someone who already has a working password; the amplification would be
-available to everyone. That trade is recorded in `authenticate` and asserted
-below so it stays a decision rather than drifting into an accident.
+The workspace code is no longer part of sign-in (the company database key is
+also wrapped by the server master key, so the code was only ever a second login
+factor, not the sole key). Login is company + email + password, with an optional
+TOTP second factor the employee turns on for themselves, so the only timing
+property left to protect is the one above: a wrong password and an unknown
+address must cost the same.
 """
 
 from __future__ import annotations
@@ -109,11 +105,14 @@ def _median_ms(call, samples=SAMPLES):
 
 
 def _attempt(auth, alpha, *, email, password, code=None):
+    # `code` is accepted and ignored: the workspace code is no longer part of
+    # sign-in (the company key is also wrapped by the master key). Kept in the
+    # signature so existing call sites read unchanged.
+    del code
     return auth.authenticate(
         email=email,
         password=password,
         company=alpha["name"],
-        workspace_code=code if code is not None else alpha["workspace_code"],
     )
 
 
@@ -175,38 +174,4 @@ def test_the_equalising_work_is_real_work(wired, alpha):
         f"a refused sign-in takes {unknown:.1f} ms. Password verification is "
         "310,000 PBKDF2 iterations and cannot be that fast, so either the "
         "iteration count has been lowered or the refusal is skipping the work."
-    )
-
-
-def test_a_wrong_workspace_code_is_slower_and_that_is_accepted(wired, alpha):
-    """The leak that was deliberately left, pinned so it stays deliberate.
-
-    If this ever *stops* being true, somebody has either equalised it — which
-    hands anonymous callers a 600k-iteration CPU lever — or stopped unsealing
-    on the login path, which would mean the workspace code is no longer being
-    proved. Both are worth a failing test and a conversation.
-    """
-    wrong_password = _median_ms(
-        lambda: _attempt(
-            wired, alpha, email="real@alpha.example.com", password="WrongPass123!"
-        )
-    )
-    wrong_code = _median_ms(
-        lambda: _attempt(
-            wired,
-            alpha,
-            email="real@alpha.example.com",
-            password=PASSWORD,
-            code="TZ-XXXX-XXXX-XXXX",
-        ),
-        samples=8,
-    )
-
-    assert wrong_code > wrong_password, (
-        f"a wrong workspace code ({wrong_code:.0f} ms) is no longer slower than "
-        f"a wrong password ({wrong_password:.0f} ms). Either the unseal was "
-        "removed from the login path — so the code is no longer proved — or "
-        "the branches were equalised by running the 600k unseal on every "
-        "rejected attempt, which is a CPU-exhaustion lever for anonymous "
-        "callers."
     )

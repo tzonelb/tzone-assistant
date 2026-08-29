@@ -178,12 +178,11 @@ def test_a_super_admin_may_still_name_their_own_company(auth, people, alpha):
 def test_a_super_admin_reaches_a_second_company_by_signing_into_it(
     auth, people, alpha, beta, platform
 ):
-    """Access is not forbidden — it is gated on the workspace code. Proving the
-    code is what opens the company, for the operator exactly as for an employee."""
+    """Access is gated on membership plus a correct sign-in, for the operator
+    exactly as for an employee."""
     auth.assign_user_to_company(people["admin"], beta["id"], "owner")
 
     user = auth.authenticate(
-        workspace_code=beta["workspace_code"],
         company="beta",
         email="admin@platform.test",
         password="PlatformPass123!",
@@ -198,22 +197,6 @@ def test_a_super_admin_reaches_a_second_company_by_signing_into_it(
     signed_in = auth.get_user_from_token(session["access_token"])
 
     assert auth.resolve_company_id(signed_in) == beta["id"]
-
-
-def test_a_wrong_workspace_code_still_refuses_a_super_admin(auth, people, beta):
-    """Being a platform administrator must not bypass the code check, or the
-    whole boundary is decorative."""
-    auth.assign_user_to_company(people["admin"], beta["id"], "owner")
-
-    assert (
-        auth.authenticate(
-            workspace_code="TZ-WRON-GCOD-EXXX",
-            company="beta",
-            email="admin@platform.test",
-            password="PlatformPass123!",
-        )
-        is None
-    )
 
 
 def test_an_ordinary_employee_still_cannot_reach_another_company(

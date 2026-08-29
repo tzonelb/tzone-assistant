@@ -709,7 +709,6 @@ def test_suspending_a_company_stops_its_employees_signing_in(
 
     assert (
         auth_service.authenticate(
-            workspace_code=alpha["workspace_code"],
             company=alpha["name"],
             email="employee@alpha.example.com",
             password=EMPLOYEE_PASSWORD,

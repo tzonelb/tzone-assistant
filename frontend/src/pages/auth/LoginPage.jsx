@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -20,7 +20,6 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [workspaceCode, setWorkspaceCode] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,6 +28,9 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [errorStatus, setErrorStatus] = useState(null);
   const [retrySeconds, setRetrySeconds] = useState(null);
+  // Shown only after the server says this account has a second factor on.
+  const [totpRequired, setTotpRequired] = useState(false);
+  const [totpCode, setTotpCode] = useState("");
 
   useEffect(() => {
     if (!retrySeconds) {
@@ -62,7 +64,7 @@ export default function LoginPage() {
         company.trim(),
         email.trim(),
         password,
-        workspaceCode.trim().toUpperCase(),
+        totpCode.trim(),
       );
 
       const destination =
@@ -72,6 +74,19 @@ export default function LoginPage() {
         replace: true,
       });
     } catch (loginError) {
+      // The account has a second factor and the code is needed (or was wrong):
+      // reveal the code field and let them try, rather than dead-ending.
+      if (
+        loginError.status === 401 &&
+        loginError.data?.detail?.error === "totp_required"
+      ) {
+        setTotpRequired(true);
+        setError(totpRequired ? "That code did not match. Try the next one." : "");
+        setErrorStatus(null);
+        setSubmitting(false);
+        return;
+      }
+
       setError(
         loginError.message ||
         "Login failed. Please check your information.",
@@ -128,23 +143,6 @@ export default function LoginPage() {
           className="login-form"
           onSubmit={handleSubmit}
         >
-          <label htmlFor="login-workspace-code">
-            Workspace code
-          </label>
-
-          <input
-            id="login-workspace-code"
-            type="text"
-            value={workspaceCode}
-            placeholder="TZ-A1B2-C3D4-E5F6"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(event) =>
-              setWorkspaceCode(event.target.value)
-            }
-            required
-          />
-
           <label htmlFor="login-company">
             Company name
           </label>
@@ -201,6 +199,35 @@ export default function LoginPage() {
               {showPassword ? "Hide" : "Show"}
             </button>
           </div>
+
+          <div className="login-form-row">
+            <Link className="login-link" to="/forgot-password">
+              Forgot password?
+            </Link>
+          </div>
+
+          {totpRequired ? (
+            <>
+              <label htmlFor="login-totp">
+                Authenticator code
+              </label>
+
+              <input
+                id="login-totp"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]*"
+                maxLength={6}
+                placeholder="6-digit code"
+                value={totpCode}
+                autoFocus
+                onChange={(event) =>
+                  setTotpCode(event.target.value.replace(/\D/g, ""))
+                }
+                required
+              />
+            </>
+          ) : null}
 
           {error && errorStatus === 429 ? (
             // Two different refusals arrive as 429 — the account is locked, or

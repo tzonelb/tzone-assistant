@@ -11,8 +11,10 @@ from backend.api.schemas.auth import (
     LogoutResponse,
     PasswordChangeRequest,
     PasswordChangeResponse,
+    PasswordForgotRequest,
     PasswordResetRequest,
 )
+from backend.services import mailer
 from backend.services.activity_service import Action, activity_service
 from backend.services.totp_service import TotpError, totp_service
 from backend.services.auth_service import (
@@ -21,6 +23,7 @@ from backend.services.auth_service import (
     get_current_user,
     get_user_changing_password,
 )
+from config.settings import config
 
 
 logger = logging.getLogger(__name__)
@@ -30,7 +33,7 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 # One message for every failure. Telling the caller which of the four
 # credentials was wrong would let them enumerate companies, codes and emails.
-INVALID_CREDENTIALS = "Workspace code, company, email or password is incorrect."
+INVALID_CREDENTIALS = "Company, email or password is incorrect."
 
 # A locked account IS told it is locked, and that is a deliberate exception to
 # the rule above. The anti-enumeration argument does not apply: reaching this
@@ -128,7 +131,6 @@ def login(payload: LoginRequest, request: Request, response: Response):
         raise _refused(gate, ip_address)
 
     user = auth_service.authenticate(
-        workspace_code=payload.workspace_code,
         company=payload.company,
         email=email,
         password=payload.password,
@@ -349,6 +351,60 @@ def change_password(
         "success": True,
         "message": "Password changed. Sign in again with the new one.",
     }
+
+
+@router.post("/password/forgot", response_model=PasswordChangeResponse)
+def forgot_password(payload: PasswordForgotRequest, request: Request):
+    """Ask for a password reset link by email. Unauthenticated by design.
+
+    The answer is identical whether or not the address matches an account: a
+    difference would turn this into a directory of who has one. The reset link
+    is single-use and short-lived, and any earlier unused link for the account
+    is spent the moment a new one is issued.
+    """
+    ip_address = client_ip(request)
+
+    generic = PasswordChangeResponse(
+        success=True,
+        message="If that email is registered, a reset link is on its way.",
+    )
+
+    user = auth_service.user_for_password_reset(str(payload.email))
+
+    if not user:
+        return generic
+
+    if not mailer.is_configured():
+        # Never told to the caller (it would confirm the account exists and
+        # reveal a server-side gap); recorded so an operator can see why links
+        # are not arriving.
+        logger.warning(
+            "Password reset requested for a real account but email delivery is "
+            "not configured; no link was sent."
+        )
+        return generic
+
+    token = auth_service.create_password_reset(
+        user_id=user["id"], ip_address=ip_address
+    )
+    link = f"{config.APP_PUBLIC_URL.rstrip('/')}/reset-password/{token}"
+    minutes = config.PASSWORD_RESET_TTL_MINUTES
+
+    mailer.send(
+        to=user["email"],
+        subject="Reset your T-ZONE password",
+        body=(
+            f"Hello {user['full_name'] or ''},\n\n"
+            "We received a request to reset your password. Open this link to "
+            "choose a new one:\n\n"
+            f"  {link}\n\n"
+            f"The link works once and expires in {minutes} minutes.\n\n"
+            "If you did not ask for this, ignore this email — your password "
+            "stays the same.\n"
+        ),
+    )
+
+    return generic
 
 
 @router.post("/password/reset/{token}", response_model=PasswordChangeResponse)

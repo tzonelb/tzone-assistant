@@ -581,21 +581,6 @@ def test_a_wrong_password_and_a_missing_account_answer_the_same(app_client, alph
     )
 
 
-def test_a_wrong_workspace_code_does_not_confirm_the_company(app_client, alpha):
-    response = app_client.post(
-        "/api/auth/login",
-        json={
-            "workspace_code": "WRONG-CODE-123",
-            "company": alpha["name"],
-            "email": "owner@alpha.example.com",
-            "password": PASSWORD,
-        },
-    )
-
-    assert response.status_code in (401, 403), response.text
-    assert alpha["workspace_code"] not in response.text
-
-
 # ==================================================== mass assignment
 
 

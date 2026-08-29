@@ -227,17 +227,28 @@ export async function loginRequest(
   company,
   email,
   password,
-  workspaceCode,
+  totpCode = "",
 ) {
+  const body = { company, email, password };
+
+  // Only sent once the account has a second factor and the form has asked for
+  // the code; omitted on the first (password-only) attempt.
+  if (totpCode) {
+    body.totp_code = totpCode;
+  }
+
   return apiRequest("/api/auth/login", {
     method: "POST",
     authenticated: false,
-    body: {
-      company,
-      email,
-      password,
-      workspace_code: workspaceCode,
-    },
+    body,
+  });
+}
+
+export async function forgotPasswordRequest(email) {
+  return apiRequest("/api/auth/password/forgot", {
+    method: "POST",
+    authenticated: false,
+    body: { email },
   });
 }
 
