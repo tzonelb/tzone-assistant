@@ -801,7 +801,16 @@ a {
 @media (max-width: 850px) {
   .login-page {
     grid-template-columns: 1fr;
-    padding: 35px 20px;
+    gap: 22px;
+    padding: 24px 18px;
+    align-items: start;
+  }
+
+  /* Form first on a phone, so the fields are on screen without scrolling past
+     the marketing panel; the pitch still sits below for anyone who scrolls. */
+  .login-card {
+    order: -1;
+    padding: 24px 20px;
   }
 
   .login-presentation {
@@ -809,12 +818,18 @@ a {
     text-align: center;
   }
 
-  .login-logo {
-    display: none;
+  .login-presentation h1 {
+    margin: 4px 0 10px;
+    font-size: clamp(26px, 7vw, 38px);
   }
 
-  .login-card {
-    padding: 28px 22px;
+  .login-presentation p {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .login-logo {
+    display: none;
   }
 
   .sidebar {
