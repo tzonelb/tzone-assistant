@@ -309,7 +309,8 @@ More detail: `docs/ENVIRONMENT_AND_RUNBOOK.md`.
 | `docs/DEVELOPMENT_WORKFLOW.md` | Git, patch, test, release |
 | `docs/TESTING_STRATEGY.md` | How the tests are designed |
 | `docs/ONBOARDING.md` | New developer onboarding |
-| `deploy/README.md` | Deployment, step by step |
+| `deploy/README.md` | Deployment, step by step + push-to-deploy |
+| `docs/FIRST_RUN_CHECKLIST.md` | Prove a live install works for a new user |
 | `docs/DEPLOYMENT.md` | Deployment reference |
 | `docs/ENVIRONMENT_AND_RUNBOOK.md` | Setup, run, backup, troubleshoot |
 | `docs/LAUNCH_READINESS.md` | Production launch checklist (test-backed) |
