@@ -937,6 +937,9 @@ def test_health_reports_a_company_whose_database_cannot_be_opened(
     assert healthy["provisioned_databases"] == 2
     assert healthy["unreadable_databases"] == []
     assert healthy["healthy"] is True
+    # Email delivery status is surfaced so a locked-out reset can be diagnosed
+    # from the console without a shell.
+    assert "email" in healthy and "backend" in healthy["email"]
 
     for suffix in ("", "-wal", "-shm"):
         path = platform["manager"].tenant_path(beta["id"])

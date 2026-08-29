@@ -1924,6 +1924,36 @@ class PlatformService:
 
             total_bytes += int(statistics["database_bytes"])
 
+        # Whether reset-link / notification email can actually be delivered.
+        # Surfaced here so the state is visible in the browser console -- no
+        # server shell needed to find out why a reset link never arrived.
+        from backend.services import mailer
+
+        email_backend = mailer.configured_backend()
+        email_missing = (
+            mailer._missing_smtp_settings() if email_backend == "smtp" else []
+        )
+        email_ok = email_backend == "smtp" and not email_missing
+
+        if email_ok:
+            email_detail = "SMTP is configured — reset links will be sent."
+        elif email_backend == "console":
+            email_detail = (
+                "EMAIL_BACKEND=console: messages go to the server log, not a real "
+                "inbox. Set EMAIL_BACKEND=smtp to send reset links."
+            )
+        elif email_backend == "disabled":
+            email_detail = (
+                "Email is off (EMAIL_BACKEND is not 'smtp'), so reset links are "
+                "not sent."
+            )
+        else:
+            email_detail = (
+                f"SMTP is selected but {', '.join(email_missing)} "
+                f"{'is' if len(email_missing) == 1 else 'are'} empty — reset "
+                "links are not sent. Fill it in and restart the service."
+            )
+
         return {
             "companies": int(totals["companies"] or 0),
             "active_companies": int(totals["active"] or 0),
@@ -1935,6 +1965,12 @@ class PlatformService:
             "platform_admins": admins,
             "failed_logins_total": failed_login_total,
             "recent_failed_logins": [dict(row) for row in failed_logins],
+            "email": {
+                "configured": email_ok,
+                "backend": email_backend,
+                "missing": email_missing,
+                "detail": email_detail,
+            },
             "healthy": not unreadable and admins > 0,
             "checked_at": utc_now_iso(),
         }

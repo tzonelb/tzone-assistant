@@ -103,6 +103,28 @@ export default function HealthPage() {
           </ConsolePanel>
 
           <ConsolePanel
+            title="Email delivery"
+            description="Whether password-reset links can actually be sent."
+            className={health.email?.configured ? "is-ok" : "is-danger"}
+          >
+            <div className="sa-metric-grid">
+              <div className="sa-metric">
+                <span>Status</span>
+                <strong>
+                  {health.email?.configured ? "Configured" : "Not sending"}
+                </strong>
+              </div>
+
+              <div className="sa-metric">
+                <span>Backend</span>
+                <strong>{health.email?.backend || "—"}</strong>
+              </div>
+            </div>
+
+            <p className="sa-subtle">{health.email?.detail}</p>
+          </ConsolePanel>
+
+          <ConsolePanel
             title="Unreadable databases"
             description="A provisioned company whose database cannot be opened."
           >
