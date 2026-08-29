@@ -1,7 +1,12 @@
 
+// Same origin in production: the app and the API are served from one domain
+// behind the reverse proxy, so `${API_BASE_URL}/api/...` must resolve to
+// `/api/...` on this site -- not to the visitor's own machine. Only local `vite`
+// dev (a separate :5173 origin) needs the explicit backend URL. An explicit
+// VITE_API_BASE_URL always wins (?? keeps an intentional empty string).
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.PROD ? "" : "http://127.0.0.1:8000");
 
 /*
  * The session token is no longer kept here.

@@ -8,9 +8,12 @@
  * in this file touches `tzone_access_token`.
  */
 
+// Same origin in production (see api/client.js): the console is served from the
+// same domain as the API, so requests must be site-relative, not to the
+// visitor's own :8000. Local vite dev keeps the explicit backend URL.
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL ??
+  (import.meta.env.PROD ? "" : "http://127.0.0.1:8000");
 
 /*
  * The console session token is no longer kept here either, and for the same
