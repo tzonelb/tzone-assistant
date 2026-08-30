@@ -105,7 +105,13 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
         const companies = Array.isArray(response?.companies) ? response.companies : [];
         const active = companies.find((company) => company.id === activeCompanyId) || companies[0];
         setIsOwner(active?.role_code === "owner");
-        setPermissionCodes(active?.permission_codes || []);
+        // Same correction as routes/RequireAccess.jsx, and it has to be the
+        // same in both or the nav and the route disagree about who may go
+        // where. GET /api/auth/me answers the active company's codes under
+        // `permissions`; `permission_codes` on the company row is a shape the
+        // server has never sent, so reading only it left this list empty and
+        // every permission-gated entry visible to owners alone.
+        setPermissionCodes(response?.permissions || active?.permission_codes || []);
       })
       .catch(() => {});
     return () => { cancelled = true; };

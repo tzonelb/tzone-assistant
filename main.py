@@ -26,6 +26,7 @@ from backend.api.routes import (
     appointments,
     auth,
     broadcasts,
+    calls,
     catalogue,
     channels,
     comments,
@@ -37,6 +38,7 @@ from backend.api.routes import (
     customers,
     dashboard,
     developer_center,
+    dialer,
     health,
     knowledge,
     manual_messages,
@@ -309,6 +311,14 @@ app.include_router(comments.router, dependencies=_module("comments"))
 app.include_router(scheduler.router, dependencies=_module("scheduler"))
 app.include_router(appointments.router, dependencies=_module("appointments"))
 app.include_router(team_chat.router, dependencies=_module("team_chat"))
+app.include_router(calls.router, dependencies=_module("calls"))
+app.include_router(dialer.router, dependencies=_module("dialer"))
+# Ungated on purpose: the telephony provider posting back about a call it is
+# carrying has no session, so the module gate — which resolves a company from
+# one — would reject every callback about a call the company itself placed.
+# Twilio's request signature stands in for the session and is checked on every
+# one of these before their body is read.
+app.include_router(dialer.webhooks_router)
 app.include_router(notifications.router, dependencies=_module("notifications"))
 app.include_router(roles.router, dependencies=_module("roles"))
 app.include_router(tickets.router, dependencies=_module("tasks"))

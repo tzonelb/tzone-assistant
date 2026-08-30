@@ -79,6 +79,13 @@ PLATFORM_MODULES: tuple[str, ...] = (
     "comments",
     "customers",
     "broadcast",
+    # The phone. `calls` is the history of record — every call the company had,
+    # however it happened — and `dialer` is the live line that places them.
+    # Two switches rather than one, because they are two decisions: a company
+    # can keep a call history without buying a phone line, and switching the
+    # line off must not take its past calls off the screen with it.
+    "calls",
+    "dialer",
     "appointments",
     "tasks",
     "catalogue",

@@ -24,7 +24,14 @@ export default function RequireAccess({ permissions, moduleKey, children }) {
           loading: false,
           isSuperAdmin: Boolean(response?.user?.is_super_admin),
           isOwner: active?.role_code === "owner",
-          codes: active?.permission_codes || [],
+          // `permissions` is where GET /api/auth/me actually puts the active
+          // company's codes; `permission_codes` on the company row is the
+          // shape this guard was written against and the server has never
+          // sent. Reading only that one left `codes` empty for everybody, so
+          // the guard passed on `isOwner` alone — and a permission an owner
+          // had deliberately granted to a manager opened nothing. Both are
+          // read so neither side has to move.
+          codes: response?.permissions || active?.permission_codes || [],
         });
       })
       .catch(() => { if (!cancelled) setState((s) => ({ ...s, loading: false })); });

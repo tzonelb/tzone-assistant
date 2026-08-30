@@ -6,6 +6,7 @@ import ResetPasswordPage from "./pages/auth/ResetPasswordPage";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage";
 import ModuleRoute from "./routes/ModuleRoute";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import RequireAccess from "./routes/RequireAccess";
 
 // Loaded eagerly: the login screen is the first thing an unauthenticated
 // visitor needs, and the dashboard and inbox are where employees spend the day.
@@ -30,6 +31,7 @@ const BroadcastPageV2 = lazy(() => import("./pages/broadcast/BroadcastPageV2"));
 const BroadcastDetailPage = lazy(() => import("./pages/broadcast/BroadcastDetailPage"));
 const BroadcastDetailPageV2 = lazy(() => import("./pages/broadcast/BroadcastDetailPageV2"));
 const AppointmentsPage = lazy(() => import("./pages/appointments/AppointmentsPage"));
+const CallsPage = lazy(() => import("./pages/calls/CallsPage"));
 const CataloguePage = lazy(() => import("./pages/catalogue/CataloguePage"));
 const ChannelsPage = lazy(() => import("./pages/channels/ChannelsPage"));
 const CommentsPage = lazy(() => import("./pages/comments/CommentsPage"));
@@ -38,6 +40,7 @@ const CustomersPage = lazy(() => import("./pages/customers/CustomersPage"));
 const CustomersPageV2 = lazy(() => import("./pages/customers/CustomersPageV2"));
 const CustomerDetailPage = lazy(() => import("./pages/customers/CustomerDetailPage"));
 const CustomerDetailPageV2 = lazy(() => import("./pages/customers/CustomerDetailPageV2"));
+const DialerPage = lazy(() => import("./pages/dialer/DialerPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
 const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
@@ -154,6 +157,14 @@ export default function App() {
               dropped into the inbox composer. */}
           <Route path="/saved-replies" element={<ModuleRoute module="conversations"><SavedRepliesPage /></ModuleRoute>} />
           <Route path="/appointments" element={<ModuleRoute module="appointments"><AppointmentsScreen /></ModuleRoute>} />
+          {/* The phone, gated the way main.py gates it: `calls` and `dialer`
+              are two module switches, so a company that switches the live line
+              off keeps the history of the calls it already made. The second
+              guard on the dialer is the permission the API asks for on every
+              write there — making the company's number ring is not something
+              every employee is given. */}
+          <Route path="/calls" element={<ModuleRoute module="calls"><CallsPage /></ModuleRoute>} />
+          <Route path="/dialer" element={<ModuleRoute module="dialer"><RequireAccess permissions={["dialer.use"]}><DialerPage /></RequireAccess></ModuleRoute>} />
           <Route path="/catalogue" element={<ModuleRoute module="catalogue"><CataloguePage /></ModuleRoute>} />
           <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
           <Route path="/ai-teaching" element={<ModuleRoute module="ai_teaching"><AiTeachingPage /></ModuleRoute>} />

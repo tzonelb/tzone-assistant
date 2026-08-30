@@ -285,7 +285,16 @@ export default function DialerPage() {
               <option value="">Transfer to…</option>
               {employees.map((employee) => (
                 <option key={employee.id} value={employee.id}>
-                  {employee.full_name || employee.email || `User ${employee.id}`}
+                  {/* `display_name` is the key this platform's
+                      /api/tasks/options actually sends; the other two are kept
+                      for the shape the screen was written against, so neither
+                      side has to change for the name to appear. Without it
+                      every option read "User 12" and the dropdown was a list of
+                      numbers nobody could transfer a customer to. */}
+                  {employee.display_name
+                    || employee.full_name
+                    || employee.email
+                    || `User ${employee.id}`}
                 </option>
               ))}
             </select>

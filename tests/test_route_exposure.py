@@ -51,6 +51,18 @@ PUBLIC_ROUTES: dict[str, str] = {
         "A liveness probe. It returns a constant and reads nothing, so there "
         "is nothing behind it to protect."
     ),
+    # The telephony provider reporting on a call it is carrying. It holds no
+    # session of ours, so a dependency here would stop every callback about
+    # every call the platform placed. What stands in for the session is
+    # Twilio's X-Twilio-Signature — an HMAC over the URL and every posted
+    # field, keyed by TWILIO_AUTH_TOKEN — checked by `_verified_form` before
+    # any field of the body is read, and answering 403 when it does not match.
+    # With no token configured nothing can be verified, so nothing is: all four
+    # reject everything.
+    "dialer.py:POST:/voice": "A signed Twilio callback. See dialer.py.",
+    "dialer.py:POST:/inbound": "A signed Twilio callback. See dialer.py.",
+    "dialer.py:POST:/status": "A signed Twilio callback. See dialer.py.",
+    "dialer.py:POST:/recording": "A signed Twilio callback. See dialer.py.",
 }
 
 
@@ -89,6 +101,20 @@ IDENTITY_ONLY_ROUTES: dict[str, str] = {
         "Your own second factor, and a current code is required to remove it — "
         "otherwise anybody at an unlocked screen could strip it in one click."
     ),
+    # Two constant lists — the directions and outcomes the "log a call" form is
+    # built from. They describe the software, not the company, and the screen
+    # needs them to draw its dropdowns before it knows whether this employee
+    # may read a single call.
+    "calls.py:GET:/options": "Two constant lists; no company data.",
+    # The Dialer's own state and its recent calls, both resolved from the
+    # session's company and never from a parameter — the same shape as the
+    # notification bell above. `/status` reports whether this deployment has a
+    # phone line at all, which is a property of the server. Making a phone ring
+    # is the part that is guarded: every write on this router takes
+    # `dialer.use`. Both routers are also behind `require_module("dialer")` in
+    # `main.py`, which this per-file scan cannot see.
+    "dialer.py:GET:/status": "Whether this deployment has a phone line.",
+    "dialer.py:GET:/calls": "Your own company's dialer history.",
 }
 
 

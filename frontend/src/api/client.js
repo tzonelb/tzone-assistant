@@ -773,6 +773,73 @@ export async function deleteAppointmentRequest(appointmentId) {
   );
 }
 
+/* ------------------------------------------------------------------ *
+ * Calls — the history of every phone call, and the live line that
+ * places them.
+ *
+ * Two screens over two routers. The calls router is the record:
+ * reading it rides on conversations.view and writing on
+ * conversations.reply, because logging a call is answering a customer
+ * by another route. The dialer router is the line itself, and
+ * everything on it that makes a phone ring takes dialer.use.
+ * ------------------------------------------------------------------ */
+export async function callOptionsRequest() {
+  return apiRequest("/api/calls/options");
+}
+
+export async function listCallLogsRequest({ customerId, direction, status } = {}) {
+  const query = createQueryString({
+    customer_id: customerId,
+    direction,
+    status,
+  });
+
+  return apiRequest(`/api/calls${query}`);
+}
+
+export async function createCallLogRequest(payload) {
+  return apiRequest("/api/calls", { method: "POST", body: payload });
+}
+
+export async function deleteCallLogRequest(callId) {
+  return apiRequest(`/api/calls/${encodeURIComponent(callId)}`, {
+    method: "DELETE",
+  });
+}
+
+/* Whether this deployment has a phone line, and what is missing when it
+ * does not. The Dialer draws its setup notice from the `missing` list. */
+export async function dialerStatusRequest() {
+  return apiRequest("/api/dialer/status");
+}
+
+export async function listDialerCallsRequest({
+  activeOnly = false,
+  limit = 50,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({ active_only: activeOnly, limit, offset });
+
+  return apiRequest(`/api/dialer/calls${query}`);
+}
+
+export async function placeDialerCallRequest(payload) {
+  return apiRequest("/api/dialer/calls", { method: "POST", body: payload });
+}
+
+export async function transferDialerCallRequest(callId, payload) {
+  return apiRequest(
+    `/api/dialer/calls/${encodeURIComponent(callId)}/transfer`,
+    { method: "POST", body: payload },
+  );
+}
+
+export async function hangupDialerCallRequest(callId) {
+  return apiRequest(`/api/dialer/calls/${encodeURIComponent(callId)}/hangup`, {
+    method: "POST",
+  });
+}
+
 /* ---------------------------------------------------------------- *
  * Broadcast -- one message, sent once, to many contacts.
  *
@@ -816,32 +883,6 @@ export async function deleteBroadcastRequest(broadcastId) {
   return apiRequest(`/api/broadcasts/${encodeURIComponent(broadcastId)}`, {
     method: "DELETE",
   });
-}
-
-/* ---------------------------------------------------------------- *
- * Contact segments and lifecycle stages -- what the design's Broadcast
- * compose dialog offers as its "Segment" and "Filter" targeting modes.
- *
- * Neither exists on this platform. The design project's contacts carry a
- * `lifecycle_stage`, a tag list and an `assigned_user_id`, and it has a
- * `customer_segments` table of saved filters behind its own
- * customer-segments and customer-options endpoints. This platform's
- * `customers` table has none of those columns and no segments table, so
- * there is no endpoint to call and nothing to call it about.
- *
- * They answer empty rather than being deleted, because the screens import
- * them: an empty list leaves the two pickers empty and the dialog falls
- * through to number-list targeting, which does work. The API refuses a
- * broadcast that names a segment, stage or tag for the same reason -- see
- * `backend/services/broadcast_service.py`. When the Customers module grows
- * those dimensions, these two become real requests and nothing else changes.
- * ---------------------------------------------------------------- */
-export async function customerOptionsRequest() {
-  return { lifecycle_stages: [] };
-}
-
-export async function listCustomerSegmentsRequest() {
-  return { items: [] };
 }
 
 /* Publish this company's design tokens (Theme Studio). */
