@@ -281,6 +281,25 @@ class AppConfig:
     INSTAGRAM_BUSINESS_ID: str = os.getenv("INSTAGRAM_BUSINESS_ID", "")
 
     # ------------------------------------------------------------------
+    # Telephony (Dialer)
+    # ------------------------------------------------------------------
+    # Credentials for the phone line the Dialer places and answers calls on.
+    # All four are required together: with any of them missing the Dialer runs
+    # on its null provider, every call operation is refused with a clear
+    # message, and the screen shows a setup notice instead of a dial pad.
+    # Nothing else in the platform depends on them.
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+
+    # The public https address of this backend. The provider fetches call
+    # instructions from it and posts status back to it, so a call placed
+    # without it would connect to nothing; it is also the URL the webhook
+    # signature is computed over, which is why the value has to be the address
+    # the provider was actually given rather than whatever a proxy forwarded.
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "")
+
+    # ------------------------------------------------------------------
     # Assistant
     # ------------------------------------------------------------------
     AI_ENABLED: bool = _env_bool("AI_ENABLED", True)

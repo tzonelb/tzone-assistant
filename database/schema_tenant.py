@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 4
+TENANT_SCHEMA_VERSION = 5
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -647,6 +647,68 @@ TENANT_TABLES: tuple[str, ...] = (
         UNIQUE(channel, external_user_id)
     )
     """,
+    """
+    -- The call history of record: one row per phone call the company had with
+    -- a contact, however it happened. A call typed in by hand after a walk-in
+    -- and a call the Dialer placed through Twilio land in the same table, so
+    -- there is one place to read "have we spoken to this customer" from.
+    --
+    -- `customer_id` is nullable on purpose: a number that belongs to nobody in
+    -- the contact list is still a call that happened, and refusing to record
+    -- it would push employees back to a notebook.
+    CREATE TABLE IF NOT EXISTS call_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        customer_id INTEGER,
+        direction TEXT NOT NULL,
+        phone_number TEXT,
+        duration_seconds INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'completed',
+        notes TEXT,
+        called_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    )
+    """,
+    """
+    -- A call the platform itself placed or answered through a telephony
+    -- provider, while it is happening and after it ends.
+    --
+    -- Separate from `call_logs` because the two answer different questions.
+    -- This one carries provider bookkeeping -- the provider's own call id, the
+    -- live status the provider reports, the recording it produced -- and is
+    -- what the Dialer screen watches. When the provider says the call is over,
+    -- `telephony_service` writes the finished call into `call_logs`, which is
+    -- what the Calls screen reads. Keeping the provider's vocabulary out of the
+    -- history table is what lets a second provider be added without rewriting
+    -- what the company has already recorded.
+    --
+    -- `provider_call_id` is unique inside the company file: a status callback
+    -- and a recording callback both arrive naming it, and each must update one
+    -- row rather than several.
+    CREATE TABLE IF NOT EXISTS telephony_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        provider_call_id TEXT,
+        direction TEXT NOT NULL DEFAULT 'outbound',
+        to_number TEXT,
+        from_number TEXT,
+        customer_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'queued',
+        transferred_to_user_id INTEGER,
+        ai_answered INTEGER NOT NULL DEFAULT 0,
+        recording_url TEXT,
+        duration_seconds INTEGER,
+        error_detail TEXT,
+        started_at TEXT,
+        ended_at TEXT,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    )
+    """,
 )
 
 
@@ -738,6 +800,16 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_availability_staff ON availability_rules(staff_user_id, weekday)",
     "CREATE INDEX IF NOT EXISTS idx_team_messages ON team_messages(channel_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_team_members ON team_channel_members(user_id)",
+    # The Calls screen reads newest-first, and a contact's card reads that one
+    # contact's history. Both readings are the same index used two ways.
+    "CREATE INDEX IF NOT EXISTS idx_call_logs_recent ON call_logs(created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_call_logs_customer ON call_logs(customer_id, created_at DESC)",
+    # A provider callback arrives naming only the provider's call id, and it is
+    # the only way back to the row. Unique because two rows answering to the
+    # same provider call would each take half the updates.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_telephony_provider_call"
+    " ON telephony_calls(provider_call_id)",
+    "CREATE INDEX IF NOT EXISTS idx_telephony_status ON telephony_calls(status, id DESC)",
 )
 
 

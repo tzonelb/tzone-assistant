@@ -515,6 +515,12 @@ DEFAULT_PERMISSIONS: tuple[tuple[str, str, str], ...] = (
     ("appointments.view", "View Appointments", "See the appointment calendar."),
     ("appointments.manage", "Manage Appointments", "Book, reschedule and cancel appointments."),
     ("team_chat.use", "Use Team Chat", "Read and post in internal team channels."),
+    # Reading the call history rides on `conversations.view`/`conversations.reply`
+    # — logging a call is answering a customer by another route. This one is
+    # only for the live line, because making the company's number ring a
+    # customer spends money and speaks in the company's name, which is a
+    # narrower thing to hand out than the inbox.
+    ("dialer.use", "Use the Dialer", "Place, transfer and end live phone calls."),
 )
 
 
