@@ -157,6 +157,7 @@ class Action:
     POST_APPROVED = "scheduler.post_approved"
     COMMENT_REPLIED = "comments.replied"
 
+    CUSTOMER_CREATED = "customers.created"
     CUSTOMER_UPDATED = "customers.updated"
 
     # --- reads, kept apart from changes

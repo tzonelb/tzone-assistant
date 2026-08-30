@@ -23,9 +23,9 @@ OUT = Path(__file__).resolve().parent.parent / "frontend" / "src" / "demo" / "fi
 import os, sys, json, tempfile
 from pathlib import Path
 
-# Derived from this file rather than hard-coded, so the script captures the
-# checkout it is run from. A literal path meant a run from a worktree seeded
-# and captured a different tree than the one being changed.
+# Derived, not hard-coded: this has to import the checkout it lives in, or a
+# capture run from a second checkout silently records the other one's shapes
+# into this one's fixtures.json.
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -97,6 +97,8 @@ for module in (auth, platform_ui, dashboard, conversations, manual_messages, con
     app.include_router(module.router)
 app.include_router(tickets.router)
 app.include_router(tickets.tasks_router)
+# Contacts is two routers: the register and its saved segments.
+app.include_router(customers.segments_router)
 
 client = TestClient(app, raise_server_exceptions=False)
 r = client.post("/api/auth/login", json={"company": COMPANY_NAME, "email": EMAIL, "password": PASSWORD})
@@ -186,6 +188,65 @@ for body in BROADCASTS:
     if rr.status_code < 400:
         BROADCAST_IDS.append(rr.json()["id"])
 
+# ---- contacts -----------------------------------------------------------
+# The register was empty in the preview because nothing here had ever created a
+# customer: seeding a conversation stores messages, and it is `channels/inbound`
+# that turns a sender into a contact, one `upsert_from_channel` per message. So
+# make the same call it makes -- five people who wrote in, on the channel they
+# wrote from -- and then one walk-in entered by hand through POST /api/customers,
+# which is the "Add contact" button on the screen.
+from backend.services.customer_service import customer_service
+
+CONTACT_IDS = {}
+for channel, ext, name, _msgs in PEOPLE:
+    contact = customer_service.upsert_from_channel(
+        company_id=COMPANY_ID, channel=channel, external_user_id=ext, display_name=name,
+    )
+    CONTACT_IDS[ext] = int(contact["id"])
+
+walk_in = post("/api/customers", {"display_name": "Rita Ghanem", "phone": "+96170445566",
+                                  "email": "rita.ghanem@example.com"})
+if walk_in.status_code < 400:
+    CONTACT_IDS["walk-in"] = int(walk_in.json()["id"])
+
+def put(path, body):
+    r = client.put(path, json=body, headers=AUTH)
+    if r.status_code >= 400:
+        print("SEED FAIL", path, r.status_code, r.text[:200], file=sys.stderr)
+    return r
+
+# Stage, tags, owner and the client file's own fields, through the same PUT the
+# screen sends when an employee changes a dropdown or types a tag.
+put(f"/api/customers/{CONTACT_IDS['cust-lina']}", {
+    "display_name": "لينا خوري", "phone": "+96171223344", "language": "ar",
+    "country": "Lebanon", "lifecycle_stage": "vip", "tags": ["المنصورية", "توصيل"],
+    "assigned_user_id": USER_ID,
+    "custom_fields": {"العنوان": "المنصورية - شارع المدارس", "الباقة": "شهرية"},
+    "documents": [{"label": "بطاقة الهوية", "url": "https://files.example.com/lina-id.pdf"}],
+    "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
+})
+put(f"/api/customers/{CONTACT_IDS['cust-omar']}", {
+    "display_name": "Omar Saad", "phone": "+96176889900", "email": "omar.saad@example.com",
+    "language": "en", "country": "Lebanon", "lifecycle_stage": "customer",
+    "tags": ["reserved", "small package"], "assigned_user_id": USER_ID,
+})
+put(f"/api/customers/{CONTACT_IDS['cust-nour']}", {
+    "display_name": "نور عون", "lifecycle_stage": "active", "tags": ["عرض الشهر"],
+})
+put(f"/api/customers/{CONTACT_IDS['cust-karim']}", {
+    "display_name": "Karim Fares", "email": "karim.fares@example.com",
+    "lifecycle_stage": "lead", "tags": ["catalogue"],
+})
+put(f"/api/customers/{CONTACT_IDS['cust-maya']}", {
+    "display_name": "مايا رزق", "phone": "+96103557788", "lifecycle_stage": "customer",
+    "tags": ["مواعيد"], "assigned_user_id": USER_ID,
+})
+if "walk-in" in CONTACT_IDS:
+    put(f"/api/customers/{CONTACT_IDS['walk-in']}", {"lifecycle_stage": "lead", "tags": ["walk-in"]})
+
+post("/api/customer-segments", {"name": "VIP clients", "filters": {"lifecycle_stage": "vip"}})
+post("/api/customer-segments", {"name": "Waiting on delivery", "filters": {"tag": "توصيل"}})
+
 # ---- capture every GET the frontend makes -------------------------------
 GETS = [
     "/api/auth/me", "/api/platform-ui/config", "/api/dashboard/summary",
@@ -193,7 +254,8 @@ GETS = [
     "/api/tasks", "/api/tasks/options",
     "/api/appointments", "/api/appointments/options",
     "/api/notifications", "/api/notifications/summary",
-    "/api/customers", "/api/knowledge", "/api/knowledge/options", "/api/knowledge/categories",
+    "/api/customers", "/api/customers/options", "/api/customer-segments",
+    "/api/knowledge", "/api/knowledge/options", "/api/knowledge/categories",
     "/api/saved-replies", "/api/catalogue/products",
     "/api/admin/access/overview", "/api/admin/access/roles",
     "/api/admin/access/users", "/api/admin/access/branches", "/api/channels", "/api/dashboard/channels",
@@ -218,6 +280,15 @@ for channel, ext, *_ in PEOPLE:
     r = client.get(p, params={"mark_read": "false"}, headers=AUTH)
     captured[p] = {"status": r.status_code, "body": r.json() if r.status_code == 200 else None}
     print(f"{r.status_code}  {p}")
+
+# The client file at /customers/:id reads two paths per contact. Capturing both
+# for every seeded contact is what lets the preview open a real profile instead
+# of the empty-but-valid shape the demo falls back to.
+for _ext, _cid in sorted(CONTACT_IDS.items(), key=lambda item: item[1]):
+    for p in (f"/api/customers/{_cid}", f"/api/customers/{_cid}/timeline"):
+        r = client.get(p, headers=AUTH)
+        captured[p] = {"status": r.status_code, "body": r.json() if r.status_code == 200 else None}
+        print(f"{r.status_code}  {p}")
 
 captured["/api/auth/login"] = {"status": 200, "body": LOGIN_BODY}
 json.dump(captured, open(OUT, "w"), ensure_ascii=False, indent=1)
