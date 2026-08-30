@@ -427,6 +427,14 @@
 .tzv2-cd-acc {
   padding: 0;
   overflow: hidden;
+  /* The drawer body is a flex column, where a child's default is to shrink
+     rather than overflow its parent. With `overflow: hidden` here that does
+     not clip to a scrollbar -- it clips *inside the card*, so six cards in a
+     short drawer each lose the bottom of their own subtitle and the stack
+     reads as cards printed on top of one another. The body already scrolls
+     (`overflow-y: auto`); it just never got the chance, because nothing ever
+     grew past it. Keeping natural height is what lets it. */
+  flex: none;
 }
 
 .tzv2-cd-acc-head {

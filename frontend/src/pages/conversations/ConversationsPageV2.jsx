@@ -33,6 +33,12 @@ import "./ConversationsPageV2.css";
 // of it. Change one and change the other.
 const NARROW_SCREEN_PX = 940;
 
+// Matches the media query in ConversationsPageV2.css, where the list stops
+// being a column beside the thread and becomes an overlay on top of it.
+function isNarrowScreen() {
+  return typeof window !== "undefined" && window.innerWidth <= NARROW_SCREEN_PX;
+}
+
 const CHANNELS = ["all", "messenger", "whatsapp", "instagram", "telegram"];
 const FOLDERS = [
   { value: "inbox", label: "Inbox" },
@@ -99,7 +105,17 @@ export default function ConversationsPageV2() {
   const [readStatus, setReadStatus] = useState("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [listOpen, setListOpen] = useState(true);
+  // On a narrow screen the list and the thread occupy the same space, so which
+  // one is showing is a property of *where you are*, not of what you last
+  // tapped: a conversation in the URL means the thread, no conversation means
+  // the list. Deriving it from the route is what makes the browser's back
+  // button, a refresh and a shared link all behave -- an initial `true` left
+  // the list overlaying the thread on every one of those paths, swallowing
+  // every tap meant for the conversation underneath it. On a wide screen both
+  // panes fit, so the list simply stays.
+  const [listOpen, setListOpen] = useState(
+    () => !(isNarrowScreen() && Boolean(routeChannel && routeUserId))
+  );
 
   const loadConversations = useCallback(async ({ silent = false } = {}) => {
     silent ? null : setLoading(true);
@@ -142,20 +158,43 @@ export default function ConversationsPageV2() {
     window.dispatchEvent(new CustomEvent("tzone:conversation-live", { detail: { connected: live.connected } }));
   }, [live.connected]);
 
+  // Re-derive on arrival at a conversation and on leaving one, so the back
+  // button restores the list the same way tapping a row hid it. Keyed on the
+  // route rather than on every render, which leaves the toggle free to
+  // override the derived value for as long as you stay on that screen.
+  useEffect(() => {
+    if (!isNarrowScreen()) {
+      setListOpen(true);
+      return;
+    }
+
+    setListOpen(!(routeChannel && routeUserId));
+  }, [routeChannel, routeUserId]);
+
+  // Rotating a phone, or dragging a desktop window across the breakpoint,
+  // changes which of the two layouts is on screen. Without this, widening past
+  // the breakpoint keeps the list hidden with no column to bring it back into,
+  // and narrowing leaves it covering the thread again.
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const query = window.matchMedia(`(max-width: ${NARROW_SCREEN_PX}px)`);
+
+    function apply(event) {
+      setListOpen(!event.matches || !(routeChannel && routeUserId));
+    }
+
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
+  }, [routeChannel, routeUserId]);
+
   const enabledChannels = useMemo(() => new Set(availableChannels), [availableChannels]);
   const totalCount = Object.values(channelCounts).reduce((sum, value) => sum + Number(value || 0), 0);
   const hasSelectedConversation = Boolean(routeChannel && routeUserId);
 
   function openConversation(row) {
-    // On a phone the list is a full-screen overlay, so leaving it open would
-    // render the thread underneath it -- tapping a conversation appeared to do
-    // nothing. Close it on the way in, the way every chat app does: the list is
-    // the screen until you pick someone, then the conversation is. The toggle
-    // brings it back, and on a wide screen both panes stay side by side.
-    if (typeof window !== "undefined" && window.innerWidth <= NARROW_SCREEN_PX) {
-      setListOpen(false);
-    }
-
     navigate(`/conversations/${encodeURIComponent(row.channel)}/${encodeURIComponent(row.external_user_id)}`);
   }
 

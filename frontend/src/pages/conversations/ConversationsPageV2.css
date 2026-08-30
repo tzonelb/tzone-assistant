@@ -413,3 +413,27 @@
 .tzv2-conv-detail .tzv2-cd-shell {
   height: 100%;
 }
+
+/* — phone: the channel filter needs a line of its own —
+   The filter bar puts the folder select, the channel chips and the New
+   conversation button on one row. The select and the button are both
+   `flex: none`, so the chips are the only thing that can give -- and on a
+   390px screen they gave everything: the scroller measured 5px wide against
+   640px of chips. It was still technically scrollable, which is why nothing
+   overflowed the page and why a sweep for overflow found the row innocent;
+   what it actually looked like was a 5px sliver of the first chip wedged
+   between two controls, and there was no way to reach any channel.
+
+   Wrapping puts the chips on their own full-width line, where the horizontal
+   scroll they were built for finally has somewhere to happen. */
+@media (max-width: 700px) {
+  .tzv2-conv-filterbar-row {
+    flex-wrap: wrap;
+  }
+
+  .tzv2-channel-filter {
+    order: 1;
+    flex: 1 0 100%;
+    padding-bottom: 2px;
+  }
+}

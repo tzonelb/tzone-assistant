@@ -109,3 +109,26 @@
 
 .tzv2-dash-channel-grid { display: flex; flex-direction: column; margin-top: var(--space-3); }
 .tzv2-dash-channel-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; }
+
+/* — phone: the head's action row —
+   Each of these rows was `flex-shrink: 0` with `flex-wrap: nowrap`, which is
+   right on a desktop -- a filter and a primary button should not be squeezed
+   into unreadability. On a 390px screen it means the row is wider than the
+   viewport, refuses both to wrap and to shrink, and the controls at its end
+   simply fall off the right edge. Nothing scrolls sideways to reach them, so
+   the primary button on this screen was unreachable on a phone.
+
+   Letting it wrap costs a line of height and gives every control back. */
+@media (max-width: 700px) {
+  /* This hero never wrapped at all, so its three controls sat on one line
+     beside the heading. */
+  .tzv2-dash-hero {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .tzv2-dash-hero-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}

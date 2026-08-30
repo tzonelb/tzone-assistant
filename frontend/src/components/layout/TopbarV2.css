@@ -201,4 +201,52 @@
   .topbar-v2-user-details {
     display: none;
   }
+
+  /* Everything in this bar was `flex: none` -- the title block because it
+     should not be squeezed on a desktop, the actions because their controls
+     should stay whole. On a phone that combination has no give at all: the
+     row is wider than the screen, nothing shrinks, and the overflow falls off
+     the right-hand edge where the *actions* are. The bell, the avatar and
+     the Logout button were all past x=390 on a 390px screen, so on a phone
+     there was no way to sign out.
+
+     The title is the part that can afford to lose width, so it becomes the
+     one thing that shrinks, and truncates instead of pushing. */
+  .topbar-v2 {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .topbar-v2-left {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .topbar-v2-left > div {
+    min-width: 0;
+  }
+
+  .topbar-v2-eyebrow,
+  .topbar-v2-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .topbar-v2-actions {
+    gap: 6px;
+  }
+
+  /* "Reconnecting" is nine characters of width for a state the coloured dot
+     already carries; the icon buttons beside it are the controls that must
+     survive. */
+  .topbar-v2-live {
+    display: none;
+  }
+
+  /* The icon says it; the word was costing 60px next to controls that were
+     falling off the screen. aria-label on the button keeps it announced. */
+  .logout-button span {
+    display: none;
+  }
 }

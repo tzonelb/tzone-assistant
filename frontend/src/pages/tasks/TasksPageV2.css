@@ -187,3 +187,24 @@
   color: var(--color-accent-700);
   font-size: 13px;
 }
+
+/* — phone: the head's action row —
+   Each of these rows was `flex-shrink: 0` with `flex-wrap: nowrap`, which is
+   right on a desktop -- a filter and a primary button should not be squeezed
+   into unreadability. On a 390px screen it means the row is wider than the
+   viewport, refuses both to wrap and to shrink, and the controls at its end
+   simply fall off the right edge. Nothing scrolls sideways to reach them, so
+   the primary button on this screen was unreachable on a phone.
+
+   Letting it wrap costs a line of height and gives every control back. */
+@media (max-width: 700px) {
+  .tzv2-tasks-head-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .tzv2-tasks-assignee-select {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+}

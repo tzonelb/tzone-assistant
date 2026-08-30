@@ -295,7 +295,7 @@ export default function TopbarV2({ title, sidebarCollapsed, onOpenSidebar, onTog
           </div>
         </div>
 
-        <button type="button" className="logout-button" onClick={logout}>
+        <button type="button" className="logout-button" aria-label="Logout" title="Logout" onClick={logout}>
           <LogoutOutlined fontSize="small" />
           <span>Logout</span>
         </button>

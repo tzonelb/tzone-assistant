@@ -198,7 +198,7 @@ function formatTimer(totalSeconds) {
 }
 
 
-function getCustomerName(metadata, control) {
+function getCustomerName(metadata, control, channel) {
   return (
     control?.official_customer_name ||
     control?.customer_name ||
@@ -207,8 +207,25 @@ function getCustomerName(metadata, control) {
     metadata?.sender_name ||
     metadata?.display_name ||
     metadata?.name ||
-    "Unknown Customer"
+    unnamedCustomer(channel)
   );
+}
+
+// The server has one rule for a customer who has never given a name, in
+// message_service._public_conversation: official name, then alias, then
+// "<Channel> Customer". Every list on the platform shows the result of it. This
+// screen ended in "Unknown Customer" instead, so the same person read as
+// "Instagram Customer" in the inbox and "Unknown Customer" one tap later --
+// two names for one customer, and the one this screen invented is the one that
+// sounds like a fault rather than a fact about the conversation.
+function unnamedCustomer(channel) {
+  const name = String(channel || "").trim();
+
+  if (!name) {
+    return "Customer";
+  }
+
+  return `${name.charAt(0).toUpperCase()}${name.slice(1)} Customer`;
 }
 
 
@@ -554,6 +571,7 @@ export default function ConversationDetailPageV2({
   const officialCustomerName = getCustomerName(
     latestMetadata,
     control,
+    channel,
   );
   const displayCustomerName =
     control?.customer_alias || officialCustomerName;
