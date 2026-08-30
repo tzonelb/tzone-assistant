@@ -1,6 +1,7 @@
 import {
   AdminPanelSettingsOutlined,
   CalendarMonthOutlined,
+  CampaignOutlined,
   ChatOutlined,
   ChecklistOutlined,
   DashboardOutlined,
@@ -41,6 +42,7 @@ const navigationSections = [
       ["/conversations", "Conversations", ChatOutlined, "conversations.view", "conversations"],
       ["/comments", "Comments", ForumOutlined, "comments.view", "comments"],
       ["/customers", "Customers", GroupOutlined, "customers.view", "customers"],
+      ["/broadcast", "Broadcast", CampaignOutlined, "channels.view", "broadcast"],
       ["/appointments", "Appointments", CalendarMonthOutlined, "appointments.view", "appointments"],
     ],
   },

@@ -78,6 +78,7 @@ PLATFORM_MODULES: tuple[str, ...] = (
     "conversations",
     "comments",
     "customers",
+    "broadcast",
     "appointments",
     "tasks",
     "catalogue",

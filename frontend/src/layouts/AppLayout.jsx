@@ -38,6 +38,7 @@ const pageTitles = {
   "/conversations": "Conversations",
   "/comments": "Comments",
   "/customers": "Customers",
+  "/broadcast": "Broadcast",
   "/appointments": "Appointments",
   "/tasks": "Tasks",
   "/catalogue": "Catalogue",
@@ -58,6 +59,7 @@ function resolvePageTitle(
 ) {
   if (pathname.startsWith("/conversations")) return "Conversations";
   if (pathname.startsWith("/company-settings")) return "Company Settings";
+  if (pathname.startsWith("/broadcast")) return "Broadcast";
 
   return (
     pageTitles[pathname]

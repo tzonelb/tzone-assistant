@@ -25,6 +25,7 @@ from backend.api.routes import (
     analytics,
     appointments,
     auth,
+    broadcasts,
     catalogue,
     channels,
     comments,
@@ -295,6 +296,11 @@ app.include_router(activity.router, dependencies=_module("company_settings"))
 app.include_router(customers.router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))
+# Broadcast is a channels feature: it speaks to customers over the same
+# connected accounts, under the same `channels.view` / `channels.manage`
+# permissions. It gets its own module switch because an operator can sell
+# the inbox without selling campaigns.
+app.include_router(broadcasts.router, dependencies=_module("broadcast"))
 app.include_router(catalogue.router, dependencies=_module("catalogue"))
 app.include_router(comments.router, dependencies=_module("comments"))
 app.include_router(scheduler.router, dependencies=_module("scheduler"))
