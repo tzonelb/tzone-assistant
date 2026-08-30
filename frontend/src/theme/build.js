@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global process */
 /**
  * build.js — regenerate tokens.css from tokens.js, and copy both stylesheets
  * into a static directory for server-rendered hosts.

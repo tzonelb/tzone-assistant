@@ -375,6 +375,56 @@ export async function listBroadcastsRequest() {
   return { items: [] };
 }
 
+/* The redesigned Tasks and Appointments screens import these from here, while
+ * this platform keeps them in api/tasks.js and api/appointments.js. Re-declared
+ * against the same endpoints rather than re-exported: those modules import
+ * `apiRequest` from this one, and importing them back would close a cycle. */
+export async function taskOptionsRequest() {
+  return apiRequest("/api/tasks/options");
+}
+
+export async function createTaskRequest(values) {
+  return apiRequest("/api/tasks", { method: "POST", body: values });
+}
+
+export async function updateTaskRequest(taskId, values) {
+  return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: "PATCH",
+    body: values,
+  });
+}
+
+export async function deleteTaskRequest(taskId) {
+  return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function appointmentOptionsRequest() {
+  return apiRequest("/api/appointments/options");
+}
+
+export async function listAppointmentsRequest(options = {}) {
+  return apiRequest(`/api/appointments${createQueryString(options)}`);
+}
+
+export async function createAppointmentRequest(values) {
+  return apiRequest("/api/appointments", { method: "POST", body: values });
+}
+
+export async function updateAppointmentRequest(appointmentId, values) {
+  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "PATCH",
+    body: values,
+  });
+}
+
+export async function deleteAppointmentRequest(appointmentId) {
+  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
+    method: "DELETE",
+  });
+}
+
 /* Publish this company's design tokens (Theme Studio). */
 export async function updatePlatformUiThemeRequest(tokens) {
   return apiRequest("/api/platform-ui/theme", {

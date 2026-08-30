@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
@@ -10,6 +10,11 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 // Loaded eagerly: the login screen is the first thing an unauthenticated
 // visitor needs, and the dashboard and inbox are where employees spend the day.
 import DashboardPage from "./pages/dashboard/DashboardPage";
+import DashboardPageV2 from "./pages/dashboard/DashboardPageV2";
+import TasksPageV2 from "./pages/tasks/TasksPageV2";
+import AppointmentsPageV2 from "./pages/appointments/AppointmentsPageV2";
+import NotificationsPageV2 from "./pages/notifications/NotificationsPageV2";
+import { isUiV2Enabled } from "./config/featureFlags";
 import ConversationsPage from "./pages/conversations/ConversationsPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
 
@@ -44,6 +49,39 @@ function RouteFallback() {
   );
 }
 
+// Renders the redesigned screen when the UI v2 flag is on and the previous one
+// otherwise — the same switch AppLayout uses for the shell, so a user who turns
+// the new interface off gets the old shell AND the old screens, not a mix.
+function v2Route(V1Component, V2Component) {
+  return function V2Route(props) {
+    const [uiV2, setUiV2] = useState(isUiV2Enabled);
+
+    useEffect(() => {
+      function handleFlagChange() {
+        setUiV2(isUiV2Enabled());
+      }
+
+      window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
+      window.addEventListener("storage", handleFlagChange);
+
+      return () => {
+        window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
+        window.removeEventListener("storage", handleFlagChange);
+      };
+    }, []);
+
+    const Component = uiV2 ? V2Component : V1Component;
+
+    return <Component {...props} />;
+  };
+}
+
+const DashboardScreen = v2Route(DashboardPage, DashboardPageV2);
+const TasksScreen = v2Route(TasksPage, TasksPageV2);
+const AppointmentsScreen = v2Route(AppointmentsPage, AppointmentsPageV2);
+const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
+
+
 export default function App() {
   return (
     <Suspense fallback={<RouteFallback />}>
@@ -56,14 +94,14 @@ export default function App() {
         <Route path="/superadmin/*" element={<SuperAdminApp />} />
         <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailPage standalone /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-          <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardPage /></ModuleRoute>} />
-          <Route path="/notifications" element={<ModuleRoute module="notifications"><NotificationsPage /></ModuleRoute>} />
+          <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardScreen /></ModuleRoute>} />
+          <Route path="/notifications" element={<ModuleRoute module="notifications"><NotificationsScreen /></ModuleRoute>} />
           <Route path="/conversations" element={<ModuleRoute module="conversations"><ConversationsPage /></ModuleRoute>} />
           <Route path="/conversations/:channel/:userId" element={<ModuleRoute module="conversations"><ConversationsPage /></ModuleRoute>} />
           <Route path="/comments" element={<ModuleRoute module="comments"><CommentsPage /></ModuleRoute>} />
           <Route path="/customers" element={<ModuleRoute module="customers"><CustomersPage /></ModuleRoute>} />
-          <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksPage /></ModuleRoute>} />
-          <Route path="/appointments" element={<ModuleRoute module="appointments"><AppointmentsPage /></ModuleRoute>} />
+          <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksScreen /></ModuleRoute>} />
+          <Route path="/appointments" element={<ModuleRoute module="appointments"><AppointmentsScreen /></ModuleRoute>} />
           <Route path="/catalogue" element={<ModuleRoute module="catalogue"><CataloguePage /></ModuleRoute>} />
           <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
           <Route path="/ai-teaching" element={<ModuleRoute module="ai_teaching"><AiTeachingPage /></ModuleRoute>} />

@@ -16,7 +16,7 @@ import { scheduledPostOptionsRequest, getCurrentUserRequest } from "../../api/cl
 import HomePage from "./HomePage";
 import PublishPage from "./PublishPage";
 import InboxPage from "./InboxPage";
-import { channelIcon } from "./channelIcon";
+import { ChannelIcon } from "./channelIcon";
 import "../conversations/ConversationInbox.css";
 import "./CommunityHubPage.css";
 
@@ -39,12 +39,11 @@ function InsightsPlaceholder() {
 
 function ChannelGroup({ account }) {
   const [expanded, setExpanded] = useState(true);
-  const Icon = channelIcon(account.channel);
 
   return (
     <div className="community-channel-group">
       <button type="button" className="community-channel-group-head" onClick={() => setExpanded((value) => !value)}>
-        <Icon fontSize="small" />
+        <ChannelIcon channel={account.channel} fontSize="small" />
         <span>{account.name}</span>
         {expanded ? <ExpandLessOutlined fontSize="small" /> : <ExpandMoreOutlined fontSize="small" />}
       </button>

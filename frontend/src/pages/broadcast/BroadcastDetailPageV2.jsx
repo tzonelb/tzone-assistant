@@ -67,8 +67,8 @@ export default function BroadcastDetailPageV2() {
   const [segments, setSegments] = useState([]);
 
   const [sendOpen, setSendOpen] = useState(false);
-  const [sendCount, setSendCount] = useState(null);
-  const [sendCountLoading, setSendCountLoading] = useState(false);
+  const [, setSendCount] = useState(null);
+  const [, setSendCountLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
 
@@ -93,6 +93,7 @@ export default function BroadcastDetailPageV2() {
       .catch(() => {});
   }, []);
 
+  // eslint-disable-next-line no-unused-vars -- wired when the send dialog lands
   async function openSendConfirm() {
     setSendError("");
     setSendOpen(true);

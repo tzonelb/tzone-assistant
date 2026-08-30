@@ -50,7 +50,7 @@ function formatHeaderDate() {
   return `${weekday}, ${date}`;
 }
 
-function NewAppointmentDialog({ open, statuses, employees, saving, error, onCancel, onSave }) {
+function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave }) {
   const [title, setTitle] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("30");
@@ -401,7 +401,6 @@ export default function AppointmentsPageV2() {
 
       <NewAppointmentDialog
         open={dialogOpen}
-        statuses={statuses}
         employees={employees}
         saving={saving}
         error={saveError}

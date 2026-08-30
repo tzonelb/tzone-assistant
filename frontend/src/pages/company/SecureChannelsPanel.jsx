@@ -229,7 +229,10 @@ export default function SecureChannelsPanel() {
       } catch (e) {
         const msg = String(e?.message || "");
         if (e?.status === 503 || e?.status === 502 || /bridge is not running|temporarily/i.test(msg)) {
-          throw new Error("WhatsApp QR pairing is temporarily unavailable. Please try again shortly, or use one of the other WhatsApp options below.");
+          throw new Error(
+            "WhatsApp QR pairing is temporarily unavailable. Please try again shortly, or use one of the other WhatsApp options below.",
+            { cause: e },
+          );
         }
         throw e;
       }
