@@ -100,6 +100,13 @@ def _called() -> dict[str, str]:
     found: dict[str, str] = {}
 
     for path in FRONTEND.rglob("*.js"):
+        # The demo module stands in for the server rather than calling it: it
+        # matches on "/api/" to decide what to intercept, so its mentions are
+        # the opposite of a screen requesting a route. Scanning it would report
+        # the interceptor's own guard as a screen calling a path.
+        if "src/demo/" in path.as_posix():
+            continue
+
         source = path.read_text()
         where = str(path.relative_to(ROOT))
         prefixes = dict(BASE_CONSTANT.findall(source))
