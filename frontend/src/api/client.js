@@ -380,7 +380,31 @@ export async function listBroadcastsRequest() {
  * Reading rides on conversations.view; writing takes settings.manage.
  * ---------------------------------------------------------------- */
 export async function listSavedRepliesRequest({ department = "" } = {}) {
-  return apiRequest(`/api/saved-replies${createQueryString({ department })}`);
+  const result = await apiRequest(
+    `/api/saved-replies${createQueryString({ department })}`,
+  );
+
+  // The design's screens read `replies`; this API answers `items`. Without
+  // this the Saved Replies page and the composer picker silently show an
+  // empty library while the request itself succeeds.
+  return { ...result, replies: result?.items || [] };
+}
+
+// The design read `{ departments: [names] }` from its own /api/departments
+// route. This platform's one department vocabulary is
+// `business_departments.code` (see backend/api/routes/conversations.py), and
+// the inbox options endpoint serves it under the same conversations.view gate
+// the saved-replies read rides on. "Unassigned" is the inbox's
+// no-section-yet sentinel, not a section a reply can be written for.
+export async function listDepartmentsRequest() {
+  const result = await apiRequest("/conversations/options");
+
+  return {
+    ...result,
+    departments: (result?.departments || []).filter(
+      (code) => code && code !== "Unassigned",
+    ),
+  };
 }
 
 export async function createSavedReplyRequest(title, body, department = "") {

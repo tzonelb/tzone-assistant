@@ -18,6 +18,7 @@ import NotificationsPageV2 from "./pages/notifications/NotificationsPageV2";
 import { isUiV2Enabled } from "./config/featureFlags";
 import ConversationsPage from "./pages/conversations/ConversationsPage";
 import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
+import ConversationDetailPageV2 from "./pages/conversations/ConversationDetailPageV2";
 
 // Everything else is split per route. Bundling all seventeen screens into one
 // file pushed the initial download past 950 KB, which an employee on a phone
@@ -33,6 +34,7 @@ const CustomersPage = lazy(() => import("./pages/customers/CustomersPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
+const SavedRepliesPage = lazy(() => import("./pages/saved-replies/SavedRepliesPage"));
 const SchedulerPage = lazy(() => import("./pages/scheduler/SchedulerPage"));
 const TasksPage = lazy(() => import("./pages/tasks/TasksPage"));
 const TeamChatPage = lazy(() => import("./pages/team-chat/TeamChatPage"));
@@ -82,6 +84,10 @@ const ConversationsScreen = v2Route(ConversationsPage, ConversationsPageV2);
 const TasksScreen = v2Route(TasksPage, TasksPageV2);
 const AppointmentsScreen = v2Route(AppointmentsPage, AppointmentsPageV2);
 const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
+// The standalone full-page chat ("Open chat in new tab"). v2Route forwards
+// props, so `standalone` reaches whichever component the flag selects —
+// both versions accept it and drop their embedded chrome accordingly.
+const ConversationDetailScreen = v2Route(ConversationDetailPage, ConversationDetailPageV2);
 
 
 export default function App() {
@@ -94,7 +100,7 @@ export default function App() {
             which is the whole reason the link exists. */}
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/superadmin/*" element={<SuperAdminApp />} />
-        <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailPage standalone /></ModuleRoute></ProtectedRoute>} />
+        <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailScreen standalone /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardScreen /></ModuleRoute>} />
           <Route path="/notifications" element={<ModuleRoute module="notifications"><NotificationsScreen /></ModuleRoute>} />
@@ -103,6 +109,10 @@ export default function App() {
           <Route path="/comments" element={<ModuleRoute module="comments"><CommentsPage /></ModuleRoute>} />
           <Route path="/customers" element={<ModuleRoute module="customers"><CustomersPage /></ModuleRoute>} />
           <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksScreen /></ModuleRoute>} />
+          {/* Gated on `conversations`, matching main.py: the API registers
+              saved_replies under that module because the library exists to be
+              dropped into the inbox composer. */}
+          <Route path="/saved-replies" element={<ModuleRoute module="conversations"><SavedRepliesPage /></ModuleRoute>} />
           <Route path="/appointments" element={<ModuleRoute module="appointments"><AppointmentsScreen /></ModuleRoute>} />
           <Route path="/catalogue" element={<ModuleRoute module="catalogue"><CataloguePage /></ModuleRoute>} />
           <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
