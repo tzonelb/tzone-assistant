@@ -9,6 +9,12 @@ import {
   updateUiThemeDraftRequest,
 } from "../../api/client";
 import { generateAccentRamp } from "../../contexts/ThemeContext";
+// `modules` reaches this screen in two shapes — the `{ visible, label, order }`
+// object a theme stores, and the flat `{ key: boolean }` map the workspace
+// configuration endpoint answers with. Reading `entry.visible` directly saw
+// `true.visible` -> `undefined` on the flat one, so every module read as
+// visible whatever the operator had decided. Both shapes go through these.
+import { isModuleVisible, moduleLabel } from "../../config/platformDefaults";
 import "./ThemeStudioPage.css";
 
 // Real feature per CLAUDE_CODE_THEME_SPEC.md §5 — platform scope only
@@ -306,16 +312,16 @@ export default function ThemeStudioPage() {
 
           {activeSection === "Modules & menu" ? (
             <div className="theme-studio-modules">
-              {Object.entries(effectiveModules || {}).sort((a, b) => (a[1].order ?? 0) - (b[1].order ?? 0)).map(([key, entry]) => (
+              {Object.entries(effectiveModules || {}).sort((a, b) => (a[1]?.order ?? 0) - (b[1]?.order ?? 0)).map(([key]) => (
                 <div className="theme-studio-module-row" key={key}>
-                  <span>{entry.label || key.replaceAll("_", " ")}</span>
+                  <span>{moduleLabel(effectiveModules, key) || key.replaceAll("_", " ")}</span>
                   <label className="radio">
                     <input
                       type="checkbox"
-                      checked={entry.visible !== false}
+                      checked={isModuleVisible(effectiveModules, key)}
                       onChange={(e) => {
                         const nextVisible = e.target.checked;
-                        setEffectiveModules((current) => ({ ...current, [key]: { ...current[key], visible: nextVisible } }));
+                        setEffectiveModules((current) => ({ ...current, [key]: { ...(typeof current[key] === "object" ? current[key] : null), visible: nextVisible } }));
                         if (debounceRef.current) window.clearTimeout(debounceRef.current);
                         debounceRef.current = window.setTimeout(async () => {
                           setSaving(true);

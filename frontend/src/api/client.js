@@ -341,6 +341,54 @@ export async function getWorkspaceConfigRequest() {
   return apiRequest("/api/platform-ui/config");
 }
 
+/* ------------------------------------------------------------------ *
+ * The company's activity log, in the shape the screen reads it.
+ *
+ * Two calls rather than one, because this platform splits them: `/api/activity`
+ * answers the entries, `/api/activity/options` answers what the filters can
+ * offer — built from what the log actually contains, so a dropdown never lists
+ * an action nobody has performed. The screen wants both in one object, so they
+ * are joined here instead of in the component.
+ *
+ * The field names are this API's own (`summary`, `actor_label`) mapped onto the
+ * ones the screen reads (`description`, `actor_name`). One translation in one
+ * place: the alternative was the screen reading fields that do not exist and
+ * rendering a column of blanks.
+ * ------------------------------------------------------------------ */
+export async function listActivityLogRequest({
+  actorUserId,
+  action,
+  limit = 100,
+} = {}) {
+  const query = createQueryString({
+    actor_user_id: actorUserId,
+    action,
+    limit,
+  });
+
+  const [log, options] = await Promise.all([
+    apiRequest(`/api/activity${query}`),
+    /* The filters must survive a log that cannot be summarised — an empty
+     * dropdown is a smaller failure than a screen that shows nothing. */
+    apiRequest("/api/activity/options").catch(() => ({})),
+  ]);
+
+  const items = Array.isArray(log?.items) ? log.items : [];
+
+  return {
+    items: items.map((entry) => ({
+      ...entry,
+      description: entry.summary || "",
+      actor_name: entry.actor_label || "System",
+    })),
+    total: log?.total ?? items.length,
+    actions: Array.isArray(options?.actions) ? options.actions : [],
+    employees: (Array.isArray(options?.actors) ? options.actors : []).map(
+      (actor) => ({ id: actor.id, display_name: actor.label }),
+    ),
+  };
+}
+
 /* The same configuration under the name the design system's ThemeContext
  * imports. One endpoint, two callers: the shell reads modules and branding,
  * the theme reads `tokens` and `brand` from the same response. */
@@ -735,6 +783,240 @@ export async function updatePlatformUiThemeRequest(tokens) {
     method: "PUT",
     body: tokens,
   });
+}
+
+/* ------------------------------------------------------------------ *
+ * Theme Studio's draft lifecycle.
+ *
+ * The call above publishes in one step. These five are the step in between:
+ * a draft nobody else sees, saved as each control moves, then published as
+ * the scope's next numbered version — or an archived version reopened.
+ * `scopeType` is "platform" (every workspace), "plan" or "company"; the
+ * server decides who may write which.
+ * ------------------------------------------------------------------ */
+
+export async function listUiThemesRequest(scopeType, scopeId) {
+  const query = createQueryString({
+    scope_type: scopeType,
+    scope_id: scopeId,
+  });
+
+  return apiRequest(`/api/platform-ui/themes${query}`);
+}
+
+export async function createUiThemeDraftRequest({
+  scopeType,
+  scopeId = null,
+  tokens = {},
+  modules = {},
+} = {}) {
+  return apiRequest("/api/platform-ui/themes", {
+    method: "POST",
+    body: {
+      scope_type: scopeType,
+      scope_id: scopeId,
+      tokens,
+      modules,
+    },
+  });
+}
+
+export async function updateUiThemeDraftRequest(themeId, { tokens, modules } = {}) {
+  /* Only what this call actually changes is sent. An omitted half stays
+   * omitted rather than becoming `{}`, because the server reads "absent" as
+   * "leave this alone" — the studio saves one control at a time and must not
+   * rewrite the module list every time somebody drags the radius slider. */
+  const body = {};
+
+  if (tokens !== undefined) body.tokens = tokens;
+  if (modules !== undefined) body.modules = modules;
+
+  return apiRequest(
+    `/api/platform-ui/themes/${encodeURIComponent(themeId)}`,
+    { method: "PATCH", body },
+  );
+}
+
+export async function publishUiThemeRequest(themeId, reason) {
+  return apiRequest(
+    `/api/platform-ui/themes/${encodeURIComponent(themeId)}/publish`,
+    { method: "POST", body: { reason } },
+  );
+}
+
+export async function restoreUiThemeRequest(themeId) {
+  return apiRequest(
+    `/api/platform-ui/themes/${encodeURIComponent(themeId)}/restore`,
+    { method: "POST", body: {} },
+  );
+}
+
+/* ================================================================== *
+ * The Platform Admin screen's calls.
+ *
+ * READ THIS BEFORE ADDING ONE.
+ *
+ * The console these functions talk to is the operator's one, and on this
+ * platform it is a *separate credential*: every route there depends on
+ * `get_platform_admin`, which requires a token minted in the platform scope,
+ * belonging to a super admin, with a second factor enrolled. A company session
+ * is refused by design — that separation is what stops an operator's console
+ * from also being a way into a customer's workspace. Both sessions share one
+ * cookie slot, so a browser holds one or the other and never both.
+ *
+ * The consequence is worth stating plainly: the Platform Admin screen renders
+ * inside the *customer* shell, so from there these calls answer 403 "Sign in
+ * to the platform console to perform this action." The console that works is
+ * the one at `/superadmin`, which has its own sign-in and its own HTTP layer
+ * (`superadmin/platformClient.js`).
+ *
+ * These functions therefore do the one useful thing left: they name the real
+ * endpoint, in the real shape, so nothing here is a path that does not exist.
+ * Where this platform has no equivalent at all, the function says so instead of
+ * inventing one.
+ * ================================================================== */
+
+/* Our console keys a plan by its `code`; the screen was written against one
+ * that keys it by `id`. Both are on every plan row the list returns, so the
+ * mapping is remembered as the list goes past rather than guessed at later. */
+const platformPlanCodesById = new Map();
+
+function planCodeFor(planId) {
+  const code = platformPlanCodesById.get(String(planId));
+
+  if (!code) {
+    throw new Error(
+      "That plan is not loaded. Open the Plans tab first — this console " +
+      "identifies a plan by its code, not by a row id.",
+    );
+  }
+
+  return code;
+}
+
+function notOnThisPlatform(what) {
+  return new Error(
+    `${what} is not part of this platform's console. The operator's console ` +
+    "is at /superadmin.",
+  );
+}
+
+export async function listPlatformCompaniesRequest() {
+  const result = await apiRequest("/api/platform/companies");
+  return { companies: result?.items || [] };
+}
+
+export async function createPlatformCompanyRequest() {
+  /* Not a missing endpoint — a different contract. Provisioning a company here
+   * seals a database with its own key and hands back a workspace code exactly
+   * once, so `POST /api/platform/companies` requires the owner's name, address
+   * and first password and a workspace name. This form collects none of them,
+   * and inventing a password for somebody's owner account is not a default
+   * anything may pick. The console at /superadmin has the form that asks. */
+  throw notOnThisPlatform("Creating a company from this screen");
+}
+
+export async function setPlatformCompanyStatusRequest(companyId, status) {
+  return apiRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/status`,
+    { method: "POST", body: { status } },
+  );
+}
+
+export async function listPlatformPlansRequest() {
+  const result = await apiRequest("/api/platform/plans");
+  const plans = result?.items || [];
+
+  plans.forEach((plan) => {
+    if (plan?.id !== undefined && plan?.code) {
+      platformPlanCodesById.set(String(plan.id), plan.code);
+    }
+  });
+
+  return { plans };
+}
+
+export async function createPlatformPlanRequest(form = {}) {
+  const { code, name, ...values } = form;
+
+  return apiRequest("/api/platform/plans", {
+    method: "POST",
+    body: { code, name, values },
+  });
+}
+
+export async function updatePlatformPlanRequest(planId, payload = {}) {
+  /* `code` identifies the plan and is never editable — every subscription
+   * points at it, so renaming one would move every company on that plan onto a
+   * plan that no longer exists. `id` is not a value either. */
+  const values = { ...payload };
+  delete values.code;
+  delete values.id;
+
+  return apiRequest(
+    `/api/platform/plans/${encodeURIComponent(planCodeFor(planId))}`,
+    { method: "PATCH", body: { values } },
+  );
+}
+
+export async function changePlatformCompanyPlanRequest(companyId, planId) {
+  return apiRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/plan`,
+    { method: "POST", body: { plan_code: planCodeFor(planId) } },
+  );
+}
+
+export async function updatePlatformCompanyModulesRequest(companyId, modules) {
+  return apiRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/config`,
+    { method: "PUT", body: { modules } },
+  );
+}
+
+export async function listPlatformAuditLogsRequest({
+  companyId,
+  action,
+  limit = 100,
+  offset = 0,
+} = {}) {
+  const query = createQueryString({
+    company_id: companyId,
+    action,
+    limit,
+    offset,
+  });
+
+  return apiRequest(`/api/platform/audit${query}`);
+}
+
+/* The four below have no counterpart on this platform. Self-service plan
+ * requests, a revenue roll-up and a platform-wide usage total were never built
+ * here — allowances are per company (`/companies/{id}/usage`) and a plan is
+ * assigned by the operator directly. They answer empty rather than calling a
+ * path that would 404, so the screen loads and simply shows nothing there,
+ * which is the truth. */
+
+export async function listSubscriptionRequestsRequest() {
+  return { requests: [] };
+}
+
+export async function reviewSubscriptionRequestRequest() {
+  /* A read that finds nothing is honest; a write that silently does nothing is
+   * not. There are no requests to review, so reaching this is a bug worth
+   * hearing about. */
+  throw notOnThisPlatform("Reviewing subscription requests");
+}
+
+export async function getPlatformUsageRequest() {
+  return {};
+}
+
+export async function getPlatformRevenueRequest() {
+  return {};
+}
+
+export async function getCompanySubscriptionHistoryRequest() {
+  return { history: [] };
 }
 
 export async function getDashboardSummaryRequest() {

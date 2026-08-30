@@ -570,10 +570,34 @@ class ActivityService:
                 (int(company_id),),
             ).fetchall()
 
+            # The people the "who did this" filter can offer, taken from the log
+            # itself for the same reason the actions are: a list of every
+            # colleague would offer thirty names that select nothing, and the
+            # log's own rows are the only names this endpoint is entitled to
+            # read. `actor_label` is the name as it stood when the entry was
+            # written, so a departed colleague keeps theirs.
+            actors = conn.execute(
+                """
+                SELECT actor_user_id AS id, MAX(actor_label) AS label
+                FROM activity_log
+                WHERE company_id = ? AND actor_user_id IS NOT NULL
+                GROUP BY actor_user_id
+                ORDER BY label
+                """,
+                (int(company_id),),
+            ).fetchall()
+
         return {
             "kinds": list(KINDS),
             "categories": sorted({str(row["category"]) for row in rows}),
             "actions": sorted({str(row["action"]) for row in rows}),
+            "actors": [
+                {
+                    "id": int(row["id"]),
+                    "label": row["label"] or f"User {int(row['id'])}",
+                }
+                for row in actors
+            ],
         }
 
     # ------------------------------------------------------------ the detail
