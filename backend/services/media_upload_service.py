@@ -130,4 +130,45 @@ class MediaUploadService:
         return path
 
 
+    def remove(self, *, company_id: int, stored_name: str) -> bool:
+        """Delete one stored file. True if it was there.
+
+        Goes through `path_for`, so the name is validated against the shape
+        this service writes before anything is unlinked -- a delete must never
+        accept a path from a caller.
+        """
+        try:
+            path = self.path_for(company_id=company_id, stored_name=stored_name)
+        except MediaUploadError:
+            return False
+
+        path.unlink(missing_ok=True)
+
+        return True
+
+    def remove_company(self, company_id: int) -> None:
+        """Delete every file a company uploaded.
+
+        Called when the company itself is removed. Without it a deleted
+        company's customer attachments stayed on disk and stayed fetchable,
+        because the read route is deliberately unauthenticated and the file is
+        the only thing that decides whether the URL answers.
+        """
+        directory = self._company_dir(company_id)
+
+        if not directory.is_dir():
+            return
+
+        for child in directory.iterdir():
+            if child.is_file():
+                child.unlink(missing_ok=True)
+
+        # Only if it came out empty: a directory with something unexpected in
+        # it is left for a person to look at rather than removed silently.
+        try:
+            directory.rmdir()
+        except OSError:
+            pass
+
+
 media_upload_service = MediaUploadService()

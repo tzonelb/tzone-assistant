@@ -9,12 +9,12 @@
     "phone": null,
     "status": "active",
     "is_super_admin": false,
-    "last_login_at": "2026-08-30T11:50:08.032538+00:00",
+    "last_login_at": "2026-08-30T12:21:04.321246+00:00",
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T11:50:06.964661+00:00",
-    "updated_at": "2026-08-30T11:50:08.032563+00:00",
+    "created_at": "2026-08-30T12:21:03.326845+00:00",
+    "updated_at": "2026-08-30T12:21:04.321270+00:00",
     "active_company_id": 1,
     "session_scope": "company"
    },
@@ -135,7 +135,7 @@
     "timezone": "Asia/Beirut",
     "default_language": "ar",
     "status": "active",
-    "created_at": "2026-08-30T11:50:05.602439+00:00"
+    "created_at": "2026-08-30T12:21:02.098932+00:00"
    },
    "subscription": null,
    "subscription_active": false,
@@ -209,8 +209,11 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T11:50:08.122820+00:00",
-     "created_at": "2026-08-30T11:50:08.116094+00:00"
+     "last_message_at": "2026-08-30T12:21:04.417847+00:00",
+     "created_at": "2026-08-30T12:21:04.411375+00:00",
+     "official_customer_name": null,
+     "customer_alias": "مايا رزق",
+     "customer_name": "مايا رزق"
     },
     {
      "id": 4,
@@ -221,8 +224,11 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T11:50:08.110183+00:00",
-     "created_at": "2026-08-30T11:50:08.103464+00:00"
+     "last_message_at": "2026-08-30T12:21:04.406162+00:00",
+     "created_at": "2026-08-30T12:21:04.399958+00:00",
+     "official_customer_name": null,
+     "customer_alias": "Karim Fares",
+     "customer_name": "Karim Fares"
     },
     {
      "id": 3,
@@ -233,8 +239,11 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T11:50:08.097569+00:00",
-     "created_at": "2026-08-30T11:50:08.090637+00:00"
+     "last_message_at": "2026-08-30T12:21:04.394316+00:00",
+     "created_at": "2026-08-30T12:21:04.387168+00:00",
+     "official_customer_name": null,
+     "customer_alias": "نور عون",
+     "customer_name": "نور عون"
     },
     {
      "id": 2,
@@ -245,8 +254,11 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T11:50:08.084821+00:00",
-     "created_at": "2026-08-30T11:50:08.073268+00:00"
+     "last_message_at": "2026-08-30T12:21:04.380548+00:00",
+     "created_at": "2026-08-30T12:21:04.368140+00:00",
+     "official_customer_name": null,
+     "customer_alias": "Omar Saad",
+     "customer_name": "Omar Saad"
     },
     {
      "id": 1,
@@ -257,8 +269,11 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T11:50:08.066976+00:00",
-     "created_at": "2026-08-30T11:50:08.056928+00:00"
+     "last_message_at": "2026-08-30T12:21:04.360656+00:00",
+     "created_at": "2026-08-30T12:21:04.346484+00:00",
+     "official_customer_name": null,
+     "customer_alias": "لينا خوري",
+     "customer_name": "لينا خوري"
     }
    ]
   }
@@ -294,7 +309,7 @@
      "takeover_expires_at": null,
      "last_message": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T11:50:08.122820+00:00",
+     "updated_at": "2026-08-30T12:21:04.417847+00:00",
      "message_count": 2,
      "branch_id": null,
      "channel_account_id": null,
@@ -328,7 +343,7 @@
      "takeover_expires_at": null,
      "last_message": "We do — sending it over now.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T11:50:08.110183+00:00",
+     "updated_at": "2026-08-30T12:21:04.406162+00:00",
      "message_count": 2,
      "branch_id": null,
      "channel_account_id": null,
@@ -362,7 +377,7 @@
      "takeover_expires_at": null,
      "last_message": "أهلاً نور! العرض شغال لآخر الشهر.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T11:50:08.097569+00:00",
+     "updated_at": "2026-08-30T12:21:04.394316+00:00",
      "message_count": 2,
      "branch_id": null,
      "channel_account_id": null,
@@ -396,7 +411,7 @@
      "takeover_expires_at": null,
      "last_message": "Yes please, reserve it under my name.",
      "last_direction": "in",
-     "updated_at": "2026-08-30T11:50:08.084821+00:00",
+     "updated_at": "2026-08-30T12:21:04.380548+00:00",
      "message_count": 3,
      "branch_id": null,
      "channel_account_id": null,
@@ -430,7 +445,7 @@
      "takeover_expires_at": null,
      "last_message": "تمام، وكم سعر الباقة الشهرية؟",
      "last_direction": "in",
-     "updated_at": "2026-08-30T11:50:08.066976+00:00",
+     "updated_at": "2026-08-30T12:21:04.360656+00:00",
      "message_count": 3,
      "branch_id": null,
      "channel_account_id": null,
@@ -554,7 +569,7 @@
      "task_type": "task",
      "due_date": null,
      "created_by_user_id": 1,
-     "closed_at": "2026-08-30T11:50:08.816741+00:00",
+     "closed_at": "2026-08-30T12:21:05.080734+00:00",
      "platform": null,
      "user_id": null,
      "language": null,
@@ -567,8 +582,8 @@
      "assigned_user_id": null,
      "status": "resolved",
      "priority": "normal",
-     "created_at": "2026-08-30T11:50:08.816741+00:00",
-     "updated_at": "2026-08-30T11:50:08.816741+00:00",
+     "created_at": "2026-08-30T12:21:05.080734+00:00",
+     "updated_at": "2026-08-30T12:21:05.080734+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -594,8 +609,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "low",
-     "created_at": "2026-08-30T11:50:08.794071+00:00",
-     "updated_at": "2026-08-30T11:50:08.794071+00:00",
+     "created_at": "2026-08-30T12:21:05.054365+00:00",
+     "updated_at": "2026-08-30T12:21:05.054365+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -621,8 +636,8 @@
      "assigned_user_id": null,
      "status": "in_progress",
      "priority": "normal",
-     "created_at": "2026-08-30T11:50:08.769354+00:00",
-     "updated_at": "2026-08-30T11:50:08.769354+00:00",
+     "created_at": "2026-08-30T12:21:05.028880+00:00",
+     "updated_at": "2026-08-30T12:21:05.028880+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -648,8 +663,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "high",
-     "created_at": "2026-08-30T11:50:08.746146+00:00",
-     "updated_at": "2026-08-30T11:50:08.746146+00:00",
+     "created_at": "2026-08-30T12:21:05.000060+00:00",
+     "updated_at": "2026-08-30T12:21:05.000060+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -707,8 +722,8 @@
      "status": "confirmed",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T11:50:08.845895+00:00",
-     "updated_at": "2026-08-30T11:50:08.845895+00:00",
+     "created_at": "2026-08-30T12:21:05.113384+00:00",
+     "updated_at": "2026-08-30T12:21:05.113384+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -728,8 +743,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T11:50:08.869979+00:00",
-     "updated_at": "2026-08-30T11:50:08.869979+00:00",
+     "created_at": "2026-08-30T12:21:05.143160+00:00",
+     "updated_at": "2026-08-30T12:21:05.143160+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -749,8 +764,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T11:50:08.898179+00:00",
-     "updated_at": "2026-08-30T11:50:08.898179+00:00",
+     "created_at": "2026-08-30T12:21:05.170360+00:00",
+     "updated_at": "2026-08-30T12:21:05.170360+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -851,8 +866,8 @@
      "department": null,
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T11:50:08.949174+00:00",
-     "updated_at": "2026-08-30T11:50:08.949174+00:00",
+     "created_at": "2026-08-30T12:21:05.225332+00:00",
+     "updated_at": "2026-08-30T12:21:05.225332+00:00",
      "category_name": null
     },
     {
@@ -866,8 +881,8 @@
      "department": "Sales",
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T11:50:08.925611+00:00",
-     "updated_at": "2026-08-30T11:50:08.925611+00:00",
+     "created_at": "2026-08-30T12:21:05.197826+00:00",
+     "updated_at": "2026-08-30T12:21:05.197826+00:00",
      "category_name": null
     }
    ],
@@ -905,8 +920,8 @@
      "body": "Delivery is $2 inside Beirut and $3 outside, arriving within 24 hours.",
      "department": "Sales",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T11:50:08.991416+00:00",
-     "updated_at": "2026-08-30T11:50:08.991416+00:00"
+     "created_at": "2026-08-30T12:21:05.276672+00:00",
+     "updated_at": "2026-08-30T12:21:05.276672+00:00"
     },
     {
      "id": 1,
@@ -915,8 +930,8 @@
      "body": "أهلاً وسهلاً فيك! كيف فينا نساعدك اليوم؟",
      "department": "",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T11:50:08.971751+00:00",
-     "updated_at": "2026-08-30T11:50:08.971751+00:00"
+     "created_at": "2026-08-30T12:21:05.253912+00:00",
+     "updated_at": "2026-08-30T12:21:05.253912+00:00"
     }
    ],
    "can_manage": true
@@ -1193,7 +1208,7 @@
      "email": "demo@tz-lb.com",
      "phone": null,
      "user_status": "active",
-     "last_login_at": "2026-08-30T11:50:08.032538+00:00",
+     "last_login_at": "2026-08-30T12:21:04.321246+00:00",
      "password_changed_at": null,
      "must_change_password": 0,
      "locked_until": null,
@@ -1246,8 +1261,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.386624+00:00",
-     "updated_at": "2026-08-30T11:50:08.386624+00:00",
+     "created_at": "2026-08-30T12:21:04.667096+00:00",
+     "updated_at": "2026-08-30T12:21:04.667096+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1269,8 +1284,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.420350+00:00",
-     "updated_at": "2026-08-30T11:50:08.420350+00:00",
+     "created_at": "2026-08-30T12:21:04.696888+00:00",
+     "updated_at": "2026-08-30T12:21:04.696888+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1292,8 +1307,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.448689+00:00",
-     "updated_at": "2026-08-30T11:50:08.448689+00:00",
+     "created_at": "2026-08-30T12:21:04.725940+00:00",
+     "updated_at": "2026-08-30T12:21:04.725940+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1315,8 +1330,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.476309+00:00",
-     "updated_at": "2026-08-30T11:50:08.476309+00:00",
+     "created_at": "2026-08-30T12:21:04.752532+00:00",
+     "updated_at": "2026-08-30T12:21:04.752532+00:00",
      "branch_name": null,
      "has_access_token": true,
      "has_verify_token": false,
@@ -1374,8 +1389,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.386624+00:00",
-     "updated_at": "2026-08-30T11:50:08.386624+00:00",
+     "created_at": "2026-08-30T12:21:04.667096+00:00",
+     "updated_at": "2026-08-30T12:21:04.667096+00:00",
      "branch_name": null
     },
     {
@@ -1393,8 +1408,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.420350+00:00",
-     "updated_at": "2026-08-30T11:50:08.420350+00:00",
+     "created_at": "2026-08-30T12:21:04.696888+00:00",
+     "updated_at": "2026-08-30T12:21:04.696888+00:00",
      "branch_name": null
     },
     {
@@ -1412,8 +1427,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.448689+00:00",
-     "updated_at": "2026-08-30T11:50:08.448689+00:00",
+     "created_at": "2026-08-30T12:21:04.725940+00:00",
+     "updated_at": "2026-08-30T12:21:04.725940+00:00",
      "branch_name": null
     },
     {
@@ -1431,8 +1446,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T11:50:08.476309+00:00",
-     "updated_at": "2026-08-30T11:50:08.476309+00:00",
+     "created_at": "2026-08-30T12:21:04.752532+00:00",
+     "updated_at": "2026-08-30T12:21:04.752532+00:00",
      "branch_name": null
     }
    ],
@@ -1449,7 +1464,7 @@
     {
      "id": 1,
      "conversation_id": 1,
-     "time": "2026-08-30T11:50:08.059640+00:00",
+     "time": "2026-08-30T12:21:04.350663+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -1463,7 +1478,7 @@
     {
      "id": 2,
      "conversation_id": 1,
-     "time": "2026-08-30T11:50:08.063435+00:00",
+     "time": "2026-08-30T12:21:04.355901+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "out",
@@ -1477,7 +1492,7 @@
     {
      "id": 3,
      "conversation_id": 1,
-     "time": "2026-08-30T11:50:08.066976+00:00",
+     "time": "2026-08-30T12:21:04.360656+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -1501,7 +1516,7 @@
     {
      "id": 4,
      "conversation_id": 2,
-     "time": "2026-08-30T11:50:08.076530+00:00",
+     "time": "2026-08-30T12:21:04.370890+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -1515,7 +1530,7 @@
     {
      "id": 5,
      "conversation_id": 2,
-     "time": "2026-08-30T11:50:08.080857+00:00",
+     "time": "2026-08-30T12:21:04.375270+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "out",
@@ -1529,7 +1544,7 @@
     {
      "id": 6,
      "conversation_id": 2,
-     "time": "2026-08-30T11:50:08.084821+00:00",
+     "time": "2026-08-30T12:21:04.380548+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -1553,7 +1568,7 @@
     {
      "id": 7,
      "conversation_id": 3,
-     "time": "2026-08-30T11:50:08.093417+00:00",
+     "time": "2026-08-30T12:21:04.390135+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "in",
@@ -1567,7 +1582,7 @@
     {
      "id": 8,
      "conversation_id": 3,
-     "time": "2026-08-30T11:50:08.097569+00:00",
+     "time": "2026-08-30T12:21:04.394316+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "out",
@@ -1591,7 +1606,7 @@
     {
      "id": 9,
      "conversation_id": 4,
-     "time": "2026-08-30T11:50:08.106219+00:00",
+     "time": "2026-08-30T12:21:04.402440+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "in",
@@ -1605,7 +1620,7 @@
     {
      "id": 10,
      "conversation_id": 4,
-     "time": "2026-08-30T11:50:08.110183+00:00",
+     "time": "2026-08-30T12:21:04.406162+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "out",
@@ -1629,7 +1644,7 @@
     {
      "id": 11,
      "conversation_id": 5,
-     "time": "2026-08-30T11:50:08.118801+00:00",
+     "time": "2026-08-30T12:21:04.413881+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "in",
@@ -1643,7 +1658,7 @@
     {
      "id": 12,
      "conversation_id": 5,
-     "time": "2026-08-30T11:50:08.122820+00:00",
+     "time": "2026-08-30T12:21:04.417847+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "out",
@@ -1660,7 +1675,7 @@
  "/api/auth/login": {
   "status": 200,
   "body": {
-   "access_token": "EWgJcahk0PO0enTaNccwd23k_iUtjL9b6BGefUziQn_o5KGSf3u1cbrHjsp2J4CC",
+   "access_token": "6OFK_OHk8SX8JBznQ_MeTkeGlF7tpZ1WsQ3wgXn2zAGKKfuNM6Za5elCXUdB5TdH",
    "token_type": "bearer",
    "expires_in": 43200,
    "user": {
@@ -1674,8 +1689,8 @@
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T11:50:06.964661+00:00",
-    "updated_at": "2026-08-30T11:50:06.964661+00:00",
+    "created_at": "2026-08-30T12:21:03.326845+00:00",
+    "updated_at": "2026-08-30T12:21:03.326845+00:00",
     "active_company_id": 1,
     "active_company_name": "T-ZONE Demo",
     "active_company_slug": "tzone-demo"
@@ -1709,7 +1724,7 @@
     "users.manage",
     "users.view"
    ],
-   "csrf_token": "9BSWWKpRWra8O-JsHaPOb4MMfJ_Bg4oXM4S_x8j09Pg"
+   "csrf_token": "tGyazaaf4KUUraXG0-dkwSxCLvCm1wrS25tkJB8VV34"
   }
  }
 }

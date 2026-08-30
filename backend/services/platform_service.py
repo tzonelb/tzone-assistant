@@ -31,6 +31,7 @@ reads and writes.
 from __future__ import annotations
 
 import json
+import math
 import logging
 import re
 from datetime import datetime, timezone
@@ -38,6 +39,7 @@ from pathlib import Path
 from typing import Any
 
 from backend.security import keyring
+from backend.services.media_upload_service import media_upload_service
 from backend.services.plan_service import plan_service
 from database.manager import DatabaseError, database_manager
 
@@ -162,6 +164,46 @@ THEME_TOKEN_GROUPS: dict[str, tuple[str, ...]] = {
 COMPANY_STATUSES: tuple[str, ...] = ("active", "suspended")
 
 MAX_BRANDING_VALUE = 200
+
+
+def _scalar_token(group: str, key: str, value: Any) -> Any:
+    """Check one theme token against the kind of value its default is.
+
+    The default is the specification: `shape.radius` is a number, `color.mode`
+    is a string, `shape.cardFill` is a boolean. A token that arrives as some
+    other kind is refused rather than stored, because nothing downstream knows
+    how to render it and the stored value outlives the request that sent it.
+    """
+    default = DEFAULT_THEME_TOKENS.get(group, {}).get(key)
+
+    # bool first: in Python `isinstance(True, int)` is True, so a boolean would
+    # otherwise pass as a number and a number as a boolean.
+    if isinstance(default, bool):
+        if not isinstance(value, bool):
+            raise PlatformError(f"{group}.{key} must be true or false.")
+
+        return value
+
+    if isinstance(default, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise PlatformError(f"{group}.{key} must be a number.")
+
+        if not math.isfinite(value):
+            raise PlatformError(f"{group}.{key} must be a finite number.")
+
+        return value
+
+    if not isinstance(value, str):
+        raise PlatformError(f"{group}.{key} must be text.")
+
+    text = value.strip()
+
+    if len(text) > MAX_BRANDING_VALUE:
+        raise PlatformError(
+            f"{group}.{key} cannot be longer than {MAX_BRANDING_VALUE} characters."
+        )
+
+    return text
 
 
 class PlatformService:
@@ -775,6 +817,16 @@ class PlatformService:
 
             for suffix in ("", "-wal", "-shm"):
                 Path(str(path) + suffix).unlink(missing_ok=True)
+
+            # Attachments live outside the encrypted database, in a directory of
+            # their own, and the route that serves them is deliberately
+            # unauthenticated -- the unguessable filename is the credential. So
+            # a file left here after its company is gone stays fetchable by
+            # anyone still holding its link, with no company, no session and no
+            # record left to revoke it through. Removing the database without
+            # removing these would keep exactly the data a deletion is meant to
+            # destroy.
+            media_upload_service.remove_company(company_id)
 
             # Provisioning caches the key it just generated. Dropping it stops a
             # dead company id keeping a key alive in this process.
@@ -1585,9 +1637,20 @@ class PlatformService:
                             f"{group}.{key} must be a hex colour such as #1689e8."
                         )
 
-                    value = text
+                    values[key] = text
+                    continue
 
-                values[key] = value
+                # Every token in DEFAULT_THEME_TOKENS is a scalar, so a token
+                # arriving as a list or a mapping is not a value this platform
+                # has ever had a meaning for. Storing one anyway had two costs:
+                # a deeply nested payload committed and then broke the response
+                # serialiser, so `GET /api/platform-ui/config` -- the call the
+                # app makes to learn its modules and branding -- answered 500
+                # for that company from then on, unrecoverably from inside the
+                # app; and an unbounded string sat in the SHARED control
+                # database, re-read and re-parsed by the module gate on every
+                # request. Checking the shape here closes both.
+                values[key] = _scalar_token(group, key, value)
 
             if values:
                 cleaned[group] = values

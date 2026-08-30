@@ -79,6 +79,14 @@ async def upload_voice_note(file: UploadFile, context=Depends(reply_context)):
     stored = await _store(file, company_id)
 
     if stored["media_type"] != "audio":
+        # The bytes are already written by this point, and the caller is about
+        # to be told the upload was refused. Anything left behind would be
+        # unreferenced, unreachable through the product, and still served by
+        # the public read route -- so it goes before the refusal does.
+        media_upload_service.remove(
+            company_id=company_id, stored_name=stored["stored_name"]
+        )
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="A voice note has to be an audio recording.",
