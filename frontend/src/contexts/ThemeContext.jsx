@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { getPlatformUiConfigRequest } from "../api/client";
-import { platformDefaults } from "../config/platformDefaults";
+import { platformDefaults, isModuleVisible } from "../config/platformDefaults";
 
 const ThemeContext = createContext(null);
 
@@ -204,5 +204,5 @@ export function usePlatformTheme() {
 // an unknown/newer module never vanishes because a stale theme predates it).
 export function useModuleVisible(moduleKey) {
   const { modules } = usePlatformTheme();
-  return modules?.[moduleKey]?.visible !== false;
+  return isModuleVisible(modules, moduleKey);
 }

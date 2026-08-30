@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isModuleVisible } from "../config/platformDefaults";
 import { getCurrentUserRequest } from "../api/client";
 import { usePlatformTheme } from "../contexts/ThemeContext";
 
@@ -37,7 +38,7 @@ export default function RequireAccess({ permissions, moduleKey, children }) {
   const permitted = !permissions
     || state.isSuperAdmin || state.isOwner
     || permissions.some((code) => state.codes.includes(code));
-  const moduleVisible = !moduleKey || modules?.[moduleKey]?.visible !== false;
+  const moduleVisible = !moduleKey || isModuleVisible(modules, moduleKey);
 
   if (!permitted || !moduleVisible) {
     return (

@@ -43,3 +43,40 @@ export const platformDefaults = {
   },
   brand: { name: "T-ZONE", logoUrl: "/tzone-logo.png" },
 };
+
+/* Reading a module entry, whichever shape it arrived in.
+ *
+ * This file describes a module as `{ visible, label, order }`, but the live
+ * endpoint answers `modules` as a flat `{ key: boolean }` map
+ * (backend/services/platform_service.py builds it that way). Code that read
+ * `modules[key].visible` therefore evaluated `true.visible` -> `undefined`,
+ * and `undefined !== false` is true -- so the operator's module gate hid
+ * nothing and a custom label never applied. Both shapes are real, so both are
+ * read here instead of in three places that could drift apart again.
+ *
+ * Unknown keys stay visible on purpose: a module added in a later release must
+ * not disappear for a company whose stored config predates it.
+ */
+export function isModuleVisible(modules, moduleKey) {
+  const entry = modules?.[moduleKey];
+
+  if (entry === undefined || entry === null) {
+    return true;
+  }
+
+  if (typeof entry === "boolean") {
+    return entry;
+  }
+
+  return entry.visible !== false;
+}
+
+export function moduleLabel(modules, moduleKey) {
+  const entry = modules?.[moduleKey];
+
+  if (!entry || typeof entry === "boolean") {
+    return null;
+  }
+
+  return entry.label ?? null;
+}

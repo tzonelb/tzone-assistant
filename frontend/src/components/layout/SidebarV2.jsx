@@ -27,6 +27,10 @@ import { useNotifications } from "../../contexts/NotificationContext";
 import { usePlatformTheme } from "../../contexts/ThemeContext";
 import tzoneLogo from "../../assets/tzone-logo.png";
 import "./SidebarV2.css";
+import {
+  isModuleVisible as moduleVisible,
+  moduleLabel,
+} from "../../config/platformDefaults";
 
 // Groups match CLAUDE_CODE_UI_IMPLEMENTATION.md §2 exactly. moduleKey ties
 // each item to the Theme Studio modules_json visibility/order/label map
@@ -113,7 +117,7 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
   }
 
   function isModuleVisible(moduleKey) {
-    return modules?.[moduleKey]?.visible !== false;
+    return moduleVisible(modules, moduleKey);
   }
 
   const groups = NAV_GROUPS
@@ -150,7 +154,7 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
             <div className="sidebar-v2-group" key={group.label}>
               {expanded ? <div className="sidebar-v2-kicker sidebar-v2-group-label">{group.label}</div> : null}
               {group.items.map(([moduleKey, path, defaultLabel, Icon]) => {
-                const label = modules?.[moduleKey]?.label || defaultLabel;
+                const label = moduleLabel(modules, moduleKey) || defaultLabel;
                 return (
                   <NavLink
                     key={path}
