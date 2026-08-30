@@ -97,9 +97,11 @@ def _refusal(exc: Exception) -> HTTPException:
             status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
         )
 
-    return HTTPException(
-        status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
-    )
+    # The literal rather than the constant, for the reason `api/errors.py`
+    # gives: this Starlette renamed `HTTP_422_UNPROCESSABLE_ENTITY` to
+    # `..._CONTENT` and deprecated the old name, so either spelling ties this
+    # file to one version's vocabulary for a number RFC 4918 fixed.
+    return HTTPException(status_code=422, detail=str(exc))
 
 
 # ----------------------------------------------------------------------
