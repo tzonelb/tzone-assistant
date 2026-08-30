@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 4
+TENANT_SCHEMA_VERSION = 5
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -405,6 +405,27 @@ TENANT_TABLES: tuple[str, ...] = (
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(company_id, code)
+    )
+    """,
+    # The manager's private training chat with the assistant. It is not a
+    # customer conversation and must never be mixed into `messages`: nothing
+    # here was said to or by a customer, and an export or a retention sweep
+    # that treated it as one would be wrong in both directions.
+    #
+    # `instruction_saved` records that this turn changed the assistant's
+    # standing instructions, so the transcript still explains why the bot's
+    # behaviour changed after the fact — the instruction itself lives in the
+    # profile's `system_prompt`, which is what the prompt builder reads.
+    """
+    CREATE TABLE IF NOT EXISTS ai_teaching_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        text TEXT NOT NULL,
+        instruction_saved INTEGER NOT NULL DEFAULT 0,
+        instruction_text TEXT,
+        actor_user_id INTEGER,
+        created_at TEXT NOT NULL
     )
     """,
     # --- Post comments --------------------------------------------------

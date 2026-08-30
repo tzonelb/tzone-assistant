@@ -33,11 +33,13 @@ const CompanySettingsPage = lazy(() => import("./pages/company/CompanySettingsPa
 const CustomersPage = lazy(() => import("./pages/customers/CustomersPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
+const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
 const SavedRepliesPage = lazy(() => import("./pages/saved-replies/SavedRepliesPage"));
 const SchedulerPage = lazy(() => import("./pages/scheduler/SchedulerPage"));
 const TasksPage = lazy(() => import("./pages/tasks/TasksPage"));
 const TeamChatPage = lazy(() => import("./pages/team-chat/TeamChatPage"));
+const TrainAndTestPage = lazy(() => import("./pages/ai-teaching/TrainAndTestPage"));
 const UISettingsPage = lazy(() => import("./pages/dashboard/UISettingsPage"));
 
 // The operator's console. A separate credential, a separate shell and a
@@ -117,7 +119,18 @@ export default function App() {
           <Route path="/catalogue" element={<ModuleRoute module="catalogue"><CataloguePage /></ModuleRoute>} />
           <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
           <Route path="/ai-teaching" element={<ModuleRoute module="ai_teaching"><AiTeachingPage /></ModuleRoute>} />
+          {/* The sidebar's "Test & Train AI" entry. Gated on `ai_teaching`,
+              matching main.py: both halves of the screen — the teaching chat
+              and the dry run — are routes on that module's router. */}
+          <Route path="/test-ai" element={<ModuleRoute module="ai_teaching"><TrainAndTestPage /></ModuleRoute>} />
           <Route path="/scheduler" element={<ModuleRoute module="scheduler"><SchedulerPage /></ModuleRoute>} />
+          {/* The sidebar's "Publish" entry: the same publishing calendar as
+              /scheduler, in the redesigned Buffer-style shell. Gated on
+              `scheduler` because that is the module its posts come from; the
+              connected-page list it also reads rides on `channels.view`, which
+              is the permission the sidebar already checks before showing the
+              link. */}
+          <Route path="/publish" element={<ModuleRoute module="scheduler"><PublishStandalonePage /></ModuleRoute>} />
           <Route path="/analytics" element={<ModuleRoute module="analytics"><AnalyticsPage /></ModuleRoute>} />
           <Route path="/team-chat" element={<ModuleRoute module="team_chat"><TeamChatPage /></ModuleRoute>} />
           <Route path="/channels" element={<ModuleRoute module="channels"><ChannelsPage /></ModuleRoute>} />

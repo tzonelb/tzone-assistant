@@ -1173,3 +1173,288 @@ export async function updateCompanySettingSectionRequest(section, values) {
     body: { values },
   });
 }
+
+
+/* ------------------------------------------------------------------ *
+ * Names the redesigned "Test & Train AI" screen imports.
+ *
+ * Adapters, like the task/appointment block above. The design branch this
+ * screen came from served it from `/api/ai-teaching-chat`, whose `/test` and
+ * `/chat-with-bot` both ran one shared reply pipeline. On this platform that
+ * pipeline is `/api/ai-teaching/dry-run` — the real assistant, run against a
+ * throwaway session, delivering nothing and storing nothing (see
+ * `bot_profile_service.preview_reply`). So both of the design's endpoints map
+ * onto the one this platform already has, rather than a second copy of the
+ * assistant being stood up beside it.
+ * ------------------------------------------------------------------ */
+
+export async function listAiTeachingChatRequest() {
+  const result = await apiRequest("/api/ai-teaching/teaching-chat");
+
+  // This API answers `items` like every other list route here; the screen
+  // reads `messages`.
+  return { ...result, messages: result?.items || [] };
+}
+
+/* The screen appends both halves of the turn straight into its message list and
+ * renders each one's `id`. A response missing either — an intermediary that
+ * rewrote the body, a stub that acknowledges every write — would put `undefined`
+ * in that list and take the whole screen down on the next render. Refused here
+ * so the page shows its own inline error instead of a blank panel. */
+export async function sendAiTeachingChatRequest(text) {
+  const result = await apiRequest("/api/ai-teaching/teaching-chat", {
+    method: "POST",
+    body: { text },
+  });
+
+  if (!result?.manager_message || !result?.assistant_message) {
+    throw new Error("The assistant did not answer — nothing was saved.");
+  }
+
+  return result;
+}
+
+/* The design sent a `department` alongside the message so its pipeline could
+ * scope knowledge to one section. This platform's preview does not take one:
+ * the assistant decides the department itself from the message, which is what a
+ * real customer message does too. Dropped explicitly rather than silently, and
+ * `language` is what this API accepts in that slot instead.
+ *
+ * The reply is the real one. `department_detected` and `knowledge_used` are
+ * NOT: `preview_reply` returns the assistant's answer, its buttons and whether
+ * the model path was used, and nothing below it reports which knowledge entry
+ * was matched. They are left absent rather than filled with a guess — the
+ * screen then shows "unknown", which is true, instead of a section this API
+ * never named. */
+function toDryRunPayload({ message, channel, department } = {}) {
+  void department;
+
+  return { message, channel: channel || "messenger" };
+}
+
+export async function testAiReplyRequest(values) {
+  return apiRequest("/api/ai-teaching/dry-run", {
+    method: "POST",
+    body: toDryRunPayload(values),
+  });
+}
+
+/* The design's plain employee-facing chat. Same pipeline, same endpoint — the
+ * difference is only the permission, and on this platform that difference is
+ * not the client's to make: the preview runs the real model and spends the
+ * company's budget, so it stays behind `settings.manage` like every other way
+ * of reaching it. An employee without it gets this API's own 403 message. */
+export async function chatWithBotRequest(values) {
+  const result = await apiRequest("/api/ai-teaching/dry-run", {
+    method: "POST",
+    body: toDryRunPayload(values),
+  });
+
+  return { reply: result?.reply || "" };
+}
+
+/* ------------------------------------------------------------------ *
+ * Names the redesigned "Publish" screen imports.
+ *
+ * The design branch served these from `/api/scheduled-posts`, where one row
+ * carried many channel accounts and published itself on demand. This platform's
+ * publishing calendar is `/api/scheduler`: one row per post per page, moving
+ * draft -> approved -> published, with a background publisher
+ * (`channels/post_publisher.py`) that sends approved posts when they come due.
+ *
+ * The two vocabularies line up as follows, and every one of these translations
+ * is applied here rather than in the screen:
+ *
+ *   design "scheduled" == this platform's "approved"  (ready, not yet sent)
+ *   design "sent"      == this platform's "published"
+ *   design's one post over N accounts == N posts, one per account
+ *   design's per-account text override == that post's own body
+ *   design's DELETE    == this platform's cancel (the row is kept, the audit
+ *                        trail with it; it leaves every tab the screen shows)
+ * ------------------------------------------------------------------ */
+
+// The channels a post can be published to. Messaging channels (WhatsApp,
+// Telegram) are not postable and the API refuses them, so they are filtered out
+// before the screen can offer one.
+const POSTABLE_CHANNELS = ["messenger", "instagram"];
+
+const PUBLISH_STATUS_TO_API = {
+  draft: "draft",
+  scheduled: "approved",
+  sent: "published",
+  failed: "failed",
+};
+
+const API_STATUS_TO_PUBLISH = {
+  draft: "draft",
+  approved: "scheduled",
+  published: "sent",
+  failed: "failed",
+};
+
+const VIDEO_EXTENSIONS = ["mp4", "mov", "m4v", "webm", "avi", "mkv"];
+
+/* The screen renders a <video> for "video" and an <img> for anything else.
+ * This platform stores a media URL and no media type, so the type is read off
+ * the URL rather than invented: a .mp4 in an <img> is a broken image on a card
+ * that otherwise worked. */
+function mediaTypeOf(url) {
+  if (!url) return null;
+
+  const extension = String(url).split("?")[0].split(".").pop().toLowerCase();
+
+  return VIDEO_EXTENSIONS.includes(extension) ? "video" : "image";
+}
+
+async function postableChannelAccounts() {
+  const result = await apiRequest("/api/channels");
+
+  return (result?.items || []).filter((account) =>
+    POSTABLE_CHANNELS.includes(account.channel),
+  );
+}
+
+export async function scheduledPostOptionsRequest() {
+  const accounts = await postableChannelAccounts();
+
+  return {
+    statuses: Object.keys(PUBLISH_STATUS_TO_API),
+    channel_accounts: accounts.map((account) => ({
+      id: account.id,
+      channel: account.channel,
+      name: account.name,
+      status: account.status,
+    })),
+    // The design offered Post / Reel / Story per network. This platform's
+    // publisher posts to the page feed and has no other form, so the list is
+    // empty rather than naming types nothing would honour.
+    post_types: [],
+  };
+}
+
+/* One row here is one post on one page. `channel_account_ids` is always an
+ * array because the screen maps over it unconditionally — a post whose page was
+ * never chosen gets an empty one, not `undefined`. */
+function toPublishPostRow(row = {}) {
+  const accountId = row.channel_account_id;
+
+  return {
+    ...row,
+    text: row.body ?? null,
+    media_urls: row.media_url ? [row.media_url] : [],
+    media_type: mediaTypeOf(row.media_url),
+    channel_account_ids: accountId ? [accountId] : [],
+    scheduled_at: row.scheduled_for ?? null,
+    status: API_STATUS_TO_PUBLISH[row.status] ?? row.status,
+    // The screen prints `results[*].error` under a failed post. This platform
+    // records one attempt per row, so there is exactly one entry, keyed by the
+    // page it was for.
+    results: row.last_error
+      ? { [String(accountId ?? row.id)]: { ok: false, error: row.last_error } }
+      : {},
+  };
+}
+
+export async function listScheduledPostsRequest({ status } = {}) {
+  const result = await apiRequest(
+    `/api/scheduler${createQueryString({
+      status: status ? PUBLISH_STATUS_TO_API[status] || status : undefined,
+    })}`,
+  );
+
+  return { ...result, items: (result?.items || []).map(toPublishPostRow) };
+}
+
+async function approveScheduledPost(postId) {
+  try {
+    await apiRequest(`/api/scheduler/${encodeURIComponent(postId)}/approve`, {
+      method: "POST",
+    });
+  } catch (error) {
+    // 409 is "already approved", which is the state the caller wanted.
+    if (error.status !== 409) throw error;
+  }
+}
+
+/* The design's dialog saves one post across every page the user ticked. This
+ * API holds one post per page, so this creates that many — the per-page text
+ * the dialog collected becomes each post's own body, which is exactly what the
+ * override meant.
+ *
+ * Two of the design's fields have no home here and are dropped rather than
+ * sent: the per-page post type (feed/reel/story — the publisher only posts to
+ * the feed) and the media type (read back off the URL instead). A draft is
+ * given a time because this API has no unscheduled draft; the screen never
+ * shows a draft's time, and approving it is what makes the time mean
+ * anything. */
+export async function createScheduledPostRequest(values = {}) {
+  const accountIds = values.channel_account_ids || [];
+  const accounts = await postableChannelAccounts();
+  const scheduledFor = values.scheduled_at || new Date().toISOString();
+  const overrides = values.content_overrides || {};
+  const created = [];
+
+  for (const accountId of accountIds) {
+    const account = accounts.find((item) => item.id === accountId);
+
+    if (!account) {
+      const error = new Error(
+        "That page is no longer connected to this company.",
+      );
+      error.status = 404;
+      throw error;
+    }
+
+    const body = String(
+      overrides[accountId] ?? overrides[String(accountId)] ?? values.text ?? "",
+    ).trim();
+
+    const result = await apiRequest("/api/scheduler", {
+      method: "POST",
+      body: {
+        channel: account.channel,
+        channel_account_id: accountId,
+        body,
+        scheduled_for: scheduledFor,
+        media_url: values.media_urls?.[0] || null,
+      },
+    });
+
+    // "draft" is where a post starts here, so only the design's "scheduled"
+    // needs the extra step — and it is this platform's approval, not a
+    // shortcut past it: the caller already holds `scheduler.manage`, which is
+    // what approving requires.
+    if (values.status !== "draft") {
+      await approveScheduledPost(result?.post?.id);
+    }
+
+    created.push(result?.post);
+  }
+
+  return { items: created };
+}
+
+/* "Post now" on a queue-based publisher is "due now, and approved" — the
+ * sweep in `backend/workers.py` picks it up on its next pass. There is no
+ * endpoint that publishes inline, and pretending otherwise would report a post
+ * as sent before anything had been sent. */
+export async function publishScheduledPostNowRequest(postId) {
+  await apiRequest(`/api/scheduler/${encodeURIComponent(postId)}`, {
+    method: "PATCH",
+    body: { scheduled_for: new Date().toISOString() },
+  });
+
+  await approveScheduledPost(postId);
+
+  return { status: "queued" };
+}
+
+/* The design deleted the row. This platform cancels it: a post that went out,
+ * or was about to, is part of what the company did, and the calendar keeps its
+ * record. A cancelled post is in none of the four tabs the screen shows, so it
+ * disappears from the screen either way. */
+export async function deleteScheduledPostRequest(postId) {
+  return apiRequest(`/api/scheduler/${encodeURIComponent(postId)}/cancel`, {
+    method: "POST",
+  });
+}

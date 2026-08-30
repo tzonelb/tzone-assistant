@@ -33,8 +33,13 @@ from backend.api.schemas.ai_teaching import (
     BusinessDepartmentUpdate,
     DryRunRequest,
     ReplyPolicyUpdate,
+    TeachingMessageCreate,
 )
 from backend.services.activity_service import Action, activity_service
+from backend.services.ai_teaching_chat_service import (
+    AITeachingChatError,
+    ai_teaching_chat_service,
+)
 from backend.services.auth_service import (
     auth_service,
     client_ip,
@@ -657,3 +662,47 @@ async def dry_run(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     finally:
         _preview_inflight -= 1
+
+
+# ----------------------------------------------------------------------
+# Train — the manager's teaching chat
+# ----------------------------------------------------------------------
+#
+# The other half of the same screen as the dry run above. A manager talks to
+# the assistant, and an instruction they gave is appended to the assistant's
+# standing instructions — the default profile's `system_prompt`, which is the
+# one string every customer reply is built from.
+#
+# Gated like the rest of this file rather than like the design it came from:
+# reading the transcript is `settings.view`, adding to it is `settings.manage`,
+# because a message here both changes how the assistant answers customers and
+# spends a model call. The design's route was open to any signed-in employee,
+# which on this platform would be a way for anyone to edit the company's
+# assistant and spend its model budget.
+
+
+@router.get("/teaching-chat")
+def list_teaching_chat(company_id: int = Depends(view_context)):
+    return {"items": ai_teaching_chat_service.list_messages(company_id=company_id)}
+
+
+@router.post("/teaching-chat", status_code=status.HTTP_201_CREATED)
+async def send_teaching_chat(
+    payload: TeachingMessageCreate,
+    actor: dict[str, Any] = Depends(manage_actor),
+):
+    """Say one thing to the assistant and get its answer back.
+
+    Offloaded to a worker thread for the reason the dry run is: the model call
+    blocks, and a handful of them on Starlette's shared pool would hold up
+    login and the inbox for every company on the platform.
+    """
+    try:
+        return await asyncio.to_thread(
+            ai_teaching_chat_service.send_message,
+            company_id=actor["company_id"],
+            actor_user_id=actor["actor_user_id"],
+            text=payload.text,
+        )
+    except AITeachingChatError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
