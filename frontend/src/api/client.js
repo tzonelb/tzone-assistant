@@ -353,9 +353,9 @@ export async function getPlatformUiConfigRequest() {
  *
  * TopbarV2's global search asks for four lists under the names the design
  * project used. Three of them are this platform's existing endpoints under a
- * different name, so they delegate rather than duplicate. Broadcast is a module
- * this branch does not carry yet: it answers empty so the search still works
- * and simply finds nothing there, which is what the caller already handles.
+ * different name, so they delegate rather than duplicate. The fourth,
+ * Broadcast, is a real module here now and lives with the other broadcast
+ * calls further down.
  * ------------------------------------------------------------------ */
 export async function listCustomersRequest(options = {}) {
   return getCustomersRequest(options);
@@ -369,10 +369,6 @@ export async function listProductsRequest({ search = "", limit = 24 } = {}) {
 
 export async function listTasksRequest({ search = "", limit = 20 } = {}) {
   return apiRequest(`/api/tasks${createQueryString({ search, limit })}`);
-}
-
-export async function listBroadcastsRequest() {
-  return { items: [] };
 }
 
 /* ---------------------------------------------------------------- *
@@ -727,6 +723,77 @@ export async function deleteAppointmentRequest(appointmentId) {
     `/api/appointments/${encodeURIComponent(appointmentId)}/cancel`,
     { method: "POST", body: { reason: null } },
   );
+}
+
+/* ---------------------------------------------------------------- *
+ * Broadcast -- one message, sent once, to many contacts.
+ *
+ * The paths and the shapes are the API's own (backend/api/routes/
+ * broadcasts.py), and they are already the shapes the two Broadcast screens
+ * read -- `{ items }` for the list, the campaign row itself for a create,
+ * `{ recipient_count }` for the live recount, and `{ broadcast, totals,
+ * recipients, channel_tracking_supported }` for the report -- so unlike
+ * tasks and appointments there is nothing to adapt between the two names.
+ * ---------------------------------------------------------------- */
+export async function listBroadcastsRequest() {
+  return apiRequest("/api/broadcasts");
+}
+
+export async function createBroadcastRequest(payload) {
+  return apiRequest("/api/broadcasts", { method: "POST", body: payload });
+}
+
+export async function getBroadcastReportRequest(broadcastId) {
+  return apiRequest(
+    `/api/broadcasts/${encodeURIComponent(broadcastId)}/report`,
+  );
+}
+
+/* The stored `recipient_count` is a snapshot from when the draft was created.
+ * This recomputes it the way the send will resolve it, so the confirm dialog
+ * cannot promise a number the send does not deliver to. */
+export async function previewBroadcastRecipientCountRequest(broadcastId) {
+  return apiRequest(
+    `/api/broadcasts/${encodeURIComponent(broadcastId)}/recipient-count`,
+  );
+}
+
+export async function sendBroadcastRequest(broadcastId) {
+  return apiRequest(`/api/broadcasts/${encodeURIComponent(broadcastId)}/send`, {
+    method: "POST",
+  });
+}
+
+export async function deleteBroadcastRequest(broadcastId) {
+  return apiRequest(`/api/broadcasts/${encodeURIComponent(broadcastId)}`, {
+    method: "DELETE",
+  });
+}
+
+/* ---------------------------------------------------------------- *
+ * Contact segments and lifecycle stages -- what the design's Broadcast
+ * compose dialog offers as its "Segment" and "Filter" targeting modes.
+ *
+ * Neither exists on this platform. The design project's contacts carry a
+ * `lifecycle_stage`, a tag list and an `assigned_user_id`, and it has a
+ * `customer_segments` table of saved filters behind its own
+ * customer-segments and customer-options endpoints. This platform's
+ * `customers` table has none of those columns and no segments table, so
+ * there is no endpoint to call and nothing to call it about.
+ *
+ * They answer empty rather than being deleted, because the screens import
+ * them: an empty list leaves the two pickers empty and the dialog falls
+ * through to number-list targeting, which does work. The API refuses a
+ * broadcast that names a segment, stage or tag for the same reason -- see
+ * `backend/services/broadcast_service.py`. When the Customers module grows
+ * those dimensions, these two become real requests and nothing else changes.
+ * ---------------------------------------------------------------- */
+export async function customerOptionsRequest() {
+  return { lifecycle_stages: [] };
+}
+
+export async function listCustomerSegmentsRequest() {
+  return { items: [] };
 }
 
 /* Publish this company's design tokens (Theme Studio). */

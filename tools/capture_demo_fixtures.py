@@ -23,7 +23,10 @@ OUT = Path(__file__).resolve().parent.parent / "frontend" / "src" / "demo" / "fi
 import os, sys, json, tempfile
 from pathlib import Path
 
-ROOT = Path("/home/user/tzone-assistant")
+# Derived from this file rather than hard-coded, so the script captures the
+# checkout it is run from. A literal path meant a run from a worktree seeded
+# and captured a different tree than the one being changed.
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from backend.security import keyring
@@ -84,13 +87,13 @@ from backend.api.routes import (auth, platform_ui, dashboard, conversations, man
                                 conversation_tags, saved_replies, customers, knowledge, catalogue,
                                 comments, scheduler, appointments, team_chat, notifications,
                                 roles, tickets, analytics, ai_teaching, channels, company_settings,
-                                activity)
+                                activity, broadcasts)
 
 app = FastAPI()
 for module in (auth, platform_ui, dashboard, conversations, manual_messages, conversation_tags,
                saved_replies, customers, knowledge, catalogue, comments, scheduler, appointments,
                team_chat, notifications, roles, analytics, ai_teaching, channels,
-               company_settings, activity):
+               company_settings, activity, broadcasts):
     app.include_router(module.router)
 app.include_router(tickets.router)
 app.include_router(tickets.tasks_router)
@@ -169,6 +172,20 @@ post("/api/knowledge", {"title":"ساعات العمل","content_ar":"من ال�
 post("/api/saved-replies", {"title":"ترحيب","body":"أهلاً وسهلاً فيك! كيف فينا نساعدك اليوم؟","department":""})
 post("/api/saved-replies", {"title":"Delivery fees","body":"Delivery is $2 inside Beirut and $3 outside, arriving within 24 hours.","department":"Sales"})
 
+# Two campaigns, both left as drafts. Sending one would call the real channels,
+# and a preview must never message anybody -- so the recorded report is the
+# not-sent-yet shape the detail screen draws for a draft.
+BROADCASTS = [
+    {"name":"عرض الصيف — قائمة أرقام","message_text":"عرض الصيف بلّش! خصم ٢٥٪ لآخر الشهر.","channel":"whatsapp",
+     "numbers":["+961 71 555 010","+961 71 555 011","+961 3 555 012"]},
+    {"name":"Telegram catalogue announcement","message_text":"Our English catalogue is out — reply CATALOGUE for a copy.","channel":"telegram"},
+]
+BROADCAST_IDS = []
+for body in BROADCASTS:
+    rr = post("/api/broadcasts", body)
+    if rr.status_code < 400:
+        BROADCAST_IDS.append(rr.json()["id"])
+
 # ---- capture every GET the frontend makes -------------------------------
 GETS = [
     "/api/auth/me", "/api/platform-ui/config", "/api/dashboard/summary",
@@ -180,7 +197,15 @@ GETS = [
     "/api/saved-replies", "/api/catalogue/products",
     "/api/admin/access/overview", "/api/admin/access/roles",
     "/api/admin/access/users", "/api/admin/access/branches", "/api/channels", "/api/dashboard/channels",
+    "/api/broadcasts",
 ]
+
+# The Broadcast detail screen reads one campaign's report, and the send dialog
+# recounts its recipients. Both are per-id, so they are added once the seeded
+# ids are known rather than written out above.
+for broadcast_id in BROADCAST_IDS:
+    GETS.append(f"/api/broadcasts/{broadcast_id}/report")
+    GETS.append(f"/api/broadcasts/{broadcast_id}/recipient-count")
 captured = {}
 for path in GETS:
     r = client.get(path, headers=AUTH)

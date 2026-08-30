@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 4
+TENANT_SCHEMA_VERSION = 5
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -647,6 +647,72 @@ TENANT_TABLES: tuple[str, ...] = (
         UNIQUE(channel, external_user_id)
     )
     """,
+    """
+    -- A one-to-many campaign: one message, sent once, to every contact the
+    -- targeting resolves to. Ported from the design branch's `broadcasts`
+    -- table (backend/services/broadcast_service.py::ensure_schema there),
+    -- minus the foreign keys it declared onto `companies`, `users` and
+    -- `customer_segments` -- the first two live in the control-plane database
+    -- and SQLite cannot enforce a key across files, and this platform has no
+    -- customer segments (see `segment_id` below).
+    --
+    -- `recipient_count` is a snapshot taken when the draft is created. The
+    -- send always re-resolves recipients, so the two can disagree while a
+    -- draft sits; `/recipient-count` recomputes it for display.
+    --
+    -- `send_lock_acquired_at` is the mutual-exclusion claim that stops two
+    -- overlapping sends of the same broadcast. It is cleared when the send
+    -- finishes, and a lock older than ten minutes is assumed abandoned by a
+    -- crashed request.
+    CREATE TABLE IF NOT EXISTS broadcasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        message_text TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        -- The three targeting columns the design branch's API carries. This
+        -- platform's contacts have no segment, no lifecycle stage and no
+        -- tags, so a broadcast that names one is refused rather than
+        -- silently widened to everybody -- see `broadcast_service`. The
+        -- columns stay so the stored row keeps saying what was asked for if
+        -- those dimensions ever arrive.
+        segment_id INTEGER,
+        lifecycle_stage TEXT,
+        tag TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        recipient_count INTEGER NOT NULL DEFAULT 0,
+        sent_count INTEGER NOT NULL DEFAULT 0,
+        failed_count INTEGER NOT NULL DEFAULT 0,
+        -- A pasted number list, stored as the normalized numbers it resolved
+        -- to. Present exactly when this broadcast targets numbers rather
+        -- than contacts.
+        raw_numbers_json TEXT,
+        media_url TEXT,
+        media_type TEXT,
+        send_lock_acquired_at TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        sent_at TEXT
+    )
+    """,
+    """
+    -- One row per contact a broadcast was actually sent to, written as each
+    -- send returns so an interrupted run can be resumed without sending the
+    -- same person the same campaign twice.
+    CREATE TABLE IF NOT EXISTS broadcast_recipients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        broadcast_id INTEGER NOT NULL,
+        customer_id INTEGER,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        provider_message_id TEXT,
+        send_status TEXT NOT NULL DEFAULT 'pending',
+        error TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE
+    )
+    """,
 )
 
 
@@ -738,6 +804,10 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_availability_staff ON availability_rules(staff_user_id, weekday)",
     "CREATE INDEX IF NOT EXISTS idx_team_messages ON team_messages(channel_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_team_members ON team_channel_members(user_id)",
+    # The campaign list is read newest-first, and a report reads one campaign's
+    # recipients in insertion order.
+    "CREATE INDEX IF NOT EXISTS idx_broadcasts_recent ON broadcasts(created_at DESC, id DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_broadcast_recipients ON broadcast_recipients(broadcast_id, id)",
 )
 
 

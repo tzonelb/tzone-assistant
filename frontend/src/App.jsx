@@ -25,6 +25,10 @@ import ConversationDetailPageV2 from "./pages/conversations/ConversationDetailPa
 // pays for on every first load even though they open two or three screens.
 const AiTeachingPage = lazy(() => import("./pages/ai-teaching/AiTeachingPage"));
 const AnalyticsPage = lazy(() => import("./pages/analytics/AnalyticsPage"));
+const BroadcastPage = lazy(() => import("./pages/broadcast/BroadcastPage"));
+const BroadcastPageV2 = lazy(() => import("./pages/broadcast/BroadcastPageV2"));
+const BroadcastDetailPage = lazy(() => import("./pages/broadcast/BroadcastDetailPage"));
+const BroadcastDetailPageV2 = lazy(() => import("./pages/broadcast/BroadcastDetailPageV2"));
 const AppointmentsPage = lazy(() => import("./pages/appointments/AppointmentsPage"));
 const CataloguePage = lazy(() => import("./pages/catalogue/CataloguePage"));
 const ChannelsPage = lazy(() => import("./pages/channels/ChannelsPage"));
@@ -84,6 +88,8 @@ const ConversationsScreen = v2Route(ConversationsPage, ConversationsPageV2);
 const TasksScreen = v2Route(TasksPage, TasksPageV2);
 const AppointmentsScreen = v2Route(AppointmentsPage, AppointmentsPageV2);
 const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
+const BroadcastScreen = v2Route(BroadcastPage, BroadcastPageV2);
+const BroadcastDetailScreen = v2Route(BroadcastDetailPage, BroadcastDetailPageV2);
 // The standalone full-page chat ("Open chat in new tab"). v2Route forwards
 // props, so `standalone` reaches whichever component the flag selects —
 // both versions accept it and drop their embedded chrome accordingly.
@@ -108,6 +114,11 @@ export default function App() {
           <Route path="/conversations/:channel/:userId" element={<ModuleRoute module="conversations"><ConversationsScreen /></ModuleRoute>} />
           <Route path="/comments" element={<ModuleRoute module="comments"><CommentsPage /></ModuleRoute>} />
           <Route path="/customers" element={<ModuleRoute module="customers"><CustomersPage /></ModuleRoute>} />
+          {/* Gated on `broadcast`, matching main.py. The permission behind
+              the API is `channels.view` / `channels.manage`: a campaign
+              speaks over the company's connected channels. */}
+          <Route path="/broadcast" element={<ModuleRoute module="broadcast"><BroadcastScreen /></ModuleRoute>} />
+          <Route path="/broadcast/:broadcastId" element={<ModuleRoute module="broadcast"><BroadcastDetailScreen /></ModuleRoute>} />
           <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksScreen /></ModuleRoute>} />
           {/* Gated on `conversations`, matching main.py: the API registers
               saved_replies under that module because the library exists to be
