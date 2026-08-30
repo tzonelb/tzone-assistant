@@ -516,6 +516,54 @@ def test_a_customers_contact_details_are_not_copied_into_the_log():
 
     tree = ast.parse((ROOT / "backend/api/routes/customers.py").read_text())
 
+    # What the payload of an edit is called in this file. Naming them is the
+    # whole check: the values a customer gave are what must not be copied, and
+    # they only ever reach a log entry through one of these.
+    PAYLOAD_NAMES = {"values", "payload"}
+
+    def references_the_payload(expression):
+        """Does this expression carry the submitted values themselves?
+
+        Reading their *keys* is fine and is the point -- "phone was changed"
+        is exactly what an entry should say. `sorted(values)` and
+        `values.keys()` both yield field names, so both are allowed; anything
+        else that touches the payload is carrying the data with it.
+
+        The earlier version of this check searched the AST dump for the string
+        "values", which matched the `values=[...]` field every ast.Dict node
+        prints -- so a legitimate entry like {"updated": 5} failed it while a
+        genuine leak dressed up with the word "sorted" anywhere would pass.
+        """
+        for node in ast.walk(expression):
+            if isinstance(node, ast.Call):
+                # sorted(values) / sorted(values.keys()) -> field names only.
+                if getattr(node.func, "id", None) == "sorted":
+                    continue
+
+                # values.keys() -> field names only.
+                if getattr(node.func, "attr", None) == "keys":
+                    continue
+
+            if isinstance(node, ast.Name) and node.id in PAYLOAD_NAMES:
+                # Reached without passing through one of the allowances above.
+                parents = [
+                    other
+                    for other in ast.walk(expression)
+                    if isinstance(other, ast.Call)
+                    and (
+                        getattr(other.func, "id", None) == "sorted"
+                        or getattr(other.func, "attr", None) == "keys"
+                    )
+                    and node in set(ast.walk(other))
+                ]
+
+                if not parents:
+                    return True
+
+        return False
+
+    checked = 0
+
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -527,9 +575,12 @@ def test_a_customers_contact_details_are_not_copied_into_the_log():
             if keyword.arg not in ("before", "after"):
                 continue
 
-            logged = ast.dump(keyword.value)
+            checked += 1
 
-            assert "values" not in logged or "sorted" in logged, (
+            assert not references_the_payload(keyword.value), (
                 "A customer's own field values are being copied into the "
                 "activity log"
             )
+
+    # A check that silently stops finding call sites stops protecting anything.
+    assert checked, "No before/after payload was inspected."
