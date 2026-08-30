@@ -11,6 +11,7 @@ import ProtectedRoute from "./routes/ProtectedRoute";
 // visitor needs, and the dashboard and inbox are where employees spend the day.
 import DashboardPage from "./pages/dashboard/DashboardPage";
 import DashboardPageV2 from "./pages/dashboard/DashboardPageV2";
+import ConversationsPageV2 from "./pages/conversations/ConversationsPageV2";
 import TasksPageV2 from "./pages/tasks/TasksPageV2";
 import AppointmentsPageV2 from "./pages/appointments/AppointmentsPageV2";
 import NotificationsPageV2 from "./pages/notifications/NotificationsPageV2";
@@ -77,6 +78,7 @@ function v2Route(V1Component, V2Component) {
 }
 
 const DashboardScreen = v2Route(DashboardPage, DashboardPageV2);
+const ConversationsScreen = v2Route(ConversationsPage, ConversationsPageV2);
 const TasksScreen = v2Route(TasksPage, TasksPageV2);
 const AppointmentsScreen = v2Route(AppointmentsPage, AppointmentsPageV2);
 const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
@@ -96,8 +98,8 @@ export default function App() {
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardScreen /></ModuleRoute>} />
           <Route path="/notifications" element={<ModuleRoute module="notifications"><NotificationsScreen /></ModuleRoute>} />
-          <Route path="/conversations" element={<ModuleRoute module="conversations"><ConversationsPage /></ModuleRoute>} />
-          <Route path="/conversations/:channel/:userId" element={<ModuleRoute module="conversations"><ConversationsPage /></ModuleRoute>} />
+          <Route path="/conversations" element={<ModuleRoute module="conversations"><ConversationsScreen /></ModuleRoute>} />
+          <Route path="/conversations/:channel/:userId" element={<ModuleRoute module="conversations"><ConversationsScreen /></ModuleRoute>} />
           <Route path="/comments" element={<ModuleRoute module="comments"><CommentsPage /></ModuleRoute>} />
           <Route path="/customers" element={<ModuleRoute module="customers"><CustomersPage /></ModuleRoute>} />
           <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksScreen /></ModuleRoute>} />

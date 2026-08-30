@@ -631,6 +631,9 @@ export default function AppLayout() {
         onClose={() =>
           setSidebarOpen(false)
         }
+        // SidebarV2 renders its own collapse control and calls this. Without
+        // it the button is drawn and does nothing.
+        onToggleCollapsed={toggleSidebarCollapsed}
       /> : null}
 
       <div className={uiV2 ? "app-main-v2" : "app-main"}>

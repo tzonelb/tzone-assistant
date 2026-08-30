@@ -493,22 +493,96 @@ export async function uploadVoiceNoteRequest(file) {
   return uploadFileRequest("/api/media/upload-voice-note", file);
 }
 
+/* Send a file already uploaded above. The server checks the URL names a file
+ * this workspace stored, so this cannot be pointed at an arbitrary address. */
+export async function sendConversationMediaReplyRequest(
+  channel,
+  userId,
+  { mediaUrl, mediaType, caption, filename },
+) {
+  return apiRequest(`${conversationPath(channel, userId)}/reply-media`, {
+    method: "POST",
+    body: {
+      media_url: mediaUrl,
+      media_type: mediaType,
+      caption: caption || undefined,
+      filename: filename || undefined,
+    },
+  });
+}
+
 /* The redesigned Tasks and Appointments screens import these from here, while
  * this platform keeps them in api/tasks.js and api/appointments.js. Re-declared
  * against the same endpoints rather than re-exported: those modules import
  * `apiRequest` from this one, and importing them back would close a cycle. */
+/* The redesigned screens were written against a different backend, so these are
+ * adapters, not thin wrappers. Each one translates the design's vocabulary into
+ * this platform's API. The translation lives here on purpose: the design files
+ * themselves are kept byte-identical to the branch they came from, so they can
+ * be re-synced without re-applying edits.
+ *
+ * Everything below was verified against the actual schemas in
+ * backend/api/schemas/{tasks,appointments}.py and the routes in
+ * backend/api/routes/. Getting one of these wrong is invisible: the request is
+ * accepted, unknown keys are dropped, and the user watches a form report
+ * success while saving nothing.
+ */
+
 export async function taskOptionsRequest() {
   return apiRequest("/api/tasks/options");
 }
 
+// The design's task form is worded differently from this platform's model:
+// its "description" is `problem` here, its `due_at` is `due_date`, and it
+// carries a customer while a task here links to a conversation. Names that
+// have no home are dropped explicitly rather than silently by Pydantic.
+function toTaskPayload(values = {}) {
+  const {
+    description,
+    due_at: dueAt,
+    customer_id: customerId,
+    status,
+    ...rest
+  } = values;
+
+  const payload = { ...rest };
+
+  if (description !== undefined) payload.problem = description;
+  if (dueAt !== undefined) payload.due_date = dueAt;
+  // "done" is the design's word for finished; this platform's vocabulary is
+  // open / in_progress / resolved / closed, and anything else is a 422.
+  if (status !== undefined) payload.status = status === "done" ? "resolved" : status;
+  // customerId is deliberately unused: a task here has no customer column, and
+  // sending it would be dropped without telling anyone.
+  void customerId;
+
+  return payload;
+}
+
 export async function createTaskRequest(values) {
-  return apiRequest("/api/tasks", { method: "POST", body: values });
+  return apiRequest("/api/tasks", {
+    method: "POST",
+    body: toTaskPayload(values),
+  });
 }
 
 export async function updateTaskRequest(taskId, values) {
+  const payload = toTaskPayload(values);
+
+  // A status change has its own route here, and it is the only one that also
+  // records who moved the task.
+  if (Object.keys(payload).length === 1 && payload.status !== undefined) {
+    return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}/status`, {
+      method: "PATCH",
+      body: { status: payload.status },
+    });
+  }
+
+  // PUT, not PATCH: /api/tasks/{id} serves PUT only, so a PATCH here was a 405
+  // on every edit.
   return apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, {
-    method: "PATCH",
-    body: values,
+    method: "PUT",
+    body: payload,
   });
 }
 
@@ -519,28 +593,72 @@ export async function deleteTaskRequest(taskId) {
 }
 
 export async function appointmentOptionsRequest() {
-  return apiRequest("/api/appointments/options");
+  const result = await apiRequest("/api/appointments/options");
+
+  // The design's dialog reads `employees`; this API answers `staff`. Without
+  // this the staff dropdown is silently always empty, and an appointment
+  // cannot be created at all because staff is required.
+  return { ...result, employees: result?.staff ?? result?.employees ?? [] };
 }
 
-export async function listAppointmentsRequest(options = {}) {
-  return apiRequest(`/api/appointments${createQueryString(options)}`);
+export async function listAppointmentsRequest({
+  employeeUserId,
+  ...rest
+} = {}) {
+  return apiRequest(
+    `/api/appointments${createQueryString({
+      ...rest,
+      // The list route filters on staff_user_id.
+      staff_user_id: employeeUserId,
+    })}`,
+  );
 }
 
-export async function createAppointmentRequest(values) {
-  return apiRequest("/api/appointments", { method: "POST", body: values });
-}
+export async function createAppointmentRequest(values = {}) {
+  const {
+    scheduled_at: scheduledAt,
+    duration_minutes: durationMinutes,
+    employee_user_id: employeeUserId,
+    ...rest
+  } = values;
 
-export async function updateAppointmentRequest(appointmentId, values) {
-  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
-    method: "PATCH",
-    body: values,
+  // This API takes an explicit end, not a duration, and names the person
+  // staff_user_id. Sending the design's shape unchanged was a 422 every time,
+  // so the dialog could never create anything.
+  const starts = scheduledAt ? new Date(scheduledAt) : null;
+  const minutes = Number(durationMinutes) > 0 ? Number(durationMinutes) : 30;
+  const ends =
+    starts && !Number.isNaN(starts.valueOf())
+      ? new Date(starts.getTime() + minutes * 60000)
+      : null;
+
+  return apiRequest("/api/appointments", {
+    method: "POST",
+    body: {
+      ...rest,
+      staff_user_id: employeeUserId,
+      starts_at: starts ? starts.toISOString() : scheduledAt,
+      ends_at: ends ? ends.toISOString() : undefined,
+    },
   });
+}
+
+export async function updateAppointmentRequest(appointmentId, values = {}) {
+  // The only in-place change the design's row offers is the status, and this
+  // API keeps that on its own route.
+  return apiRequest(
+    `/api/appointments/${encodeURIComponent(appointmentId)}/status`,
+    { method: "PATCH", body: { status: values.status } },
+  );
 }
 
 export async function deleteAppointmentRequest(appointmentId) {
-  return apiRequest(`/api/appointments/${encodeURIComponent(appointmentId)}`, {
-    method: "DELETE",
-  });
+  // An appointment is cancelled, not deleted: the record is what the customer
+  // was told, and the history is worth keeping.
+  return apiRequest(
+    `/api/appointments/${encodeURIComponent(appointmentId)}/cancel`,
+    { method: "POST", body: { reason: null } },
+  );
 }
 
 /* Publish this company's design tokens (Theme Studio). */

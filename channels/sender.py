@@ -11,9 +11,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from channels.meta.sender import send_meta_buttons, send_meta_text
-from channels.telegram.sender import send_telegram_text
-from channels.whatsapp.sender import send_whatsapp_text
+from channels.meta.sender import send_meta_buttons, send_meta_media, send_meta_text
+from channels.telegram.sender import send_telegram_media, send_telegram_text
+from channels.whatsapp.sender import send_whatsapp_media, send_whatsapp_text
 
 
 logger = logging.getLogger(__name__)
@@ -99,6 +99,75 @@ def send_text(
 
     raise UnsupportedChannel(
         f"Channel '{channel}' cannot send messages. "
+        f"Supported: {', '.join(sorted(SUPPORTED_CHANNELS))}."
+    )
+
+
+def send_media(
+    *,
+    channel: str,
+    recipient_id: str,
+    company_id: int,
+    media_url: str,
+    media_type: str,
+    caption: str | None = None,
+    filename: str | None = None,
+) -> dict[str, Any]:
+    """Send one attachment and return the same normalised result as `send_text`.
+
+    Every provider fetches the URL itself rather than accepting bytes, so
+    `media_url` has to be publicly reachable -- which is why the route that
+    serves a stored file carries no session guard.
+
+    Where the caption goes differs by provider and is left to each sender:
+    Messenger has no text field on an attachment and sends it as a second
+    message, WhatsApp carries it inside the media object for the kinds that can
+    show one, and Telegram takes it as a parameter.
+    """
+    normalized = normalize_channel(channel)
+
+    if normalized in META_CHANNELS:
+        return send_meta_media(
+            recipient_id=recipient_id,
+            media_url=media_url,
+            media_type=media_type,
+            company_id=company_id,
+            channel=normalized,
+            caption=caption,
+        )
+
+    if normalized in WHATSAPP_CHANNELS:
+        result = send_whatsapp_media(
+            to=recipient_id,
+            media_url=media_url,
+            media_type=media_type,
+            company_id=company_id,
+            caption=caption,
+            filename=filename,
+        )
+        # Same normalisation as send_text: WhatsApp's helper reports `sent`.
+        return {
+            "ok": bool(result.get("sent")),
+            "channel": normalized,
+            "recipient_id": recipient_id,
+            **result,
+        }
+
+    if normalized in TELEGRAM_CHANNELS:
+        return {
+            "channel": normalized,
+            "recipient_id": recipient_id,
+            **send_telegram_media(
+                recipient_id=recipient_id,
+                media_url=media_url,
+                media_type=media_type,
+                company_id=company_id,
+                caption=caption,
+            ),
+        }
+
+    raise UnsupportedChannel(
+        f"Channel '{channel}' cannot send attachments. "
         f"Supported: {', '.join(sorted(SUPPORTED_CHANNELS))}."
     )
 
