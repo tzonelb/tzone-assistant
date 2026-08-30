@@ -257,6 +257,20 @@ function writePath(pathname, method, payload) {
   return { status: "ok", success: true };
 }
 
+function readBody(body) {
+  if (!body) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    // FormData — an upload. There is no JSON to read here, and the
+    // acknowledgement is all the screen needs back.
+    return null;
+  }
+}
+
 /* ------------------------------------------------------------ the wiring */
 
 export function installDemoMode() {
@@ -289,15 +303,7 @@ export function installDemoMode() {
       return json(body ?? { status: "ok", items: [], total: 0 });
     }
 
-    let payload = null;
-
-    try {
-      payload = init.body ? JSON.parse(init.body) : null;
-    } catch {
-      payload = null; // FormData (an upload) — the acknowledgement is enough.
-    }
-
-    return json(writePath(url.pathname, method, payload));
+    return json(writePath(url.pathname, method, readBody(init.body)));
   };
 
   // The inbox and team chat open a live stream. There is nothing to stream, and
