@@ -1217,8 +1217,10 @@ export async function sendAiTeachingChatRequest(text) {
 /* The design sent a `department` alongside the message so its pipeline could
  * scope knowledge to one section. This platform's preview does not take one:
  * the assistant decides the department itself from the message, which is what a
- * real customer message does too. Dropped explicitly rather than silently, and
- * `language` is what this API accepts in that slot instead.
+ * real customer message does too. Dropped explicitly rather than silently. The
+ * field this API does take alongside the message is `language`, and the screen
+ * offers no control for it, so it is left unset and the assistant answers in
+ * the language the message was written in.
  *
  * The reply is the real one. `department_detected` and `knowledge_used` are
  * NOT: `preview_reply` returns the assistant's answer, its buttons and whether
