@@ -22,28 +22,36 @@ import pytest
 def service(platform, monkeypatch):
     """Point the teaching chat at the test platform's databases.
 
-    The same sweep `test_ai_teaching.py` uses, and for the same reason: a
-    module that did `from database.manager import database_manager` holds its
-    own reference, and one left unrebound runs the test against the real
-    process-wide singleton.
+    A module that did `from database.manager import database_manager` holds its
+    own reference, so rebinding the singleton alone leaves the test running
+    against the real one and proving nothing.
+
+    The sweep matches on *type* rather than on identity with the singleton, the
+    way `test_every_module_actually_works.py` does. Identity is not safe here:
+    an earlier test file that imports a route module inside its own test —
+    after its own sweep has run — leaves every module on that import chain
+    holding that test's manager for the rest of the session, and a sweep
+    looking for the singleton would then rebind nothing and silently pass.
     """
     import sys
 
     import database.manager as manager_module
+    from database.manager import DatabaseManager
 
     import backend.api.routes.ai_teaching  # noqa: F401
     import backend.services.ai_teaching_chat_service  # noqa: F401
     import backend.services.bot_profile_service  # noqa: F401
     import core.prompt_builder  # noqa: F401
 
-    original = manager_module.database_manager
     test_manager = platform["manager"]
 
     monkeypatch.setattr(manager_module, "database_manager", test_manager)
 
     rebound = []
     for module in list(sys.modules.values()):
-        if getattr(module, "database_manager", None) is original:
+        held = getattr(module, "database_manager", None)
+
+        if isinstance(held, DatabaseManager) and held is not test_manager:
             monkeypatch.setattr(module, "database_manager", test_manager)
             rebound.append(module.__name__)
 
