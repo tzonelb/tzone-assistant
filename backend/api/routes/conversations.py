@@ -477,6 +477,10 @@ def read_conversation(
     user_id: str,
     request: Request,
     limit: int = Query(default=50, ge=1, le=500),
+    # An open screen re-reads this route every few seconds to stay current. That
+    # refresh is not somebody opening the conversation, and treating it as one
+    # made "mark as unread" impossible: the next poll marked it read again.
+    mark_read: bool = Query(default=True),
     current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -491,12 +495,13 @@ def read_conversation(
     if not messages:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    conversation_control_service.record_opened(
-        company_id=company_id,
-        channel=channel,
-        external_user_id=user_id,
-        actor_user_id=int(current_user["id"]),
-    )
+    if mark_read:
+        conversation_control_service.record_opened(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            actor_user_id=int(current_user["id"]),
+        )
 
     # Reading is recorded, not only writing. A customer's conversation holds
     # what they told this company in confidence, and who read it is a fact the

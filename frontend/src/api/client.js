@@ -709,8 +709,12 @@ export async function getConversationMessagesRequest(
   channel,
   userId,
   limit = 200,
+  // The screen's background refresh passes false. Without it every poll counts
+  // as opening the conversation, which marks it read again a few seconds after
+  // somebody deliberately marked it unread.
+  markRead = true,
 ) {
-  const query = createQueryString({ limit });
+  const query = createQueryString({ limit, mark_read: markRead ? "" : "false" });
   return apiRequest(
     `${conversationPath(channel, userId)}${query}`,
   );

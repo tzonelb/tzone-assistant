@@ -231,7 +231,9 @@ def send_manual_conversation_media_reply(
             "employee_name": employee_name,
             "media_url": payload.media_url,
             "media_type": payload.media_type,
-            "filename": payload.filename,
+            # The bubble reads `media_filename`; under any other key a
+            # document renders as an anonymous "Download file".
+            "media_filename": payload.filename,
         },
     )
 
