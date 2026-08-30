@@ -348,6 +348,38 @@ CONTROL_TABLES: tuple[str, ...] = (
         UNIQUE(company_id, period, metric, channel, department_id)
     )
     """,
+    # Theme Studio's versioned design tokens.
+    #
+    # A row is one *patch*, not a snapshot: it holds only the tokens its author
+    # actually changed, so the layers below can be merged key by key at read
+    # time. Storing a full snapshot instead meant every new draft silently
+    # reset each token it did not touch back to the bundled default rather than
+    # inheriting the layer beneath it.
+    #
+    # Scoped rather than per-company, because that is the decision this table
+    # records: `platform` reaches every workspace, `plan` reaches the companies
+    # on one plan, `company` is one workspace's own override. `scope_id` is the
+    # plan code or the company id, and NULL for the platform layer.
+    #
+    # Control plane and not a tenant database, for two reasons: the platform
+    # layer belongs to no company and could not be stored in one, and the read
+    # path resolves a workspace's appearance before its encrypted database is
+    # ever opened. Nothing customer-owned goes in here — a design token is a
+    # colour, a font name and a number of pixels.
+    """
+    CREATE TABLE IF NOT EXISTS ui_themes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT,
+        version INTEGER NOT NULL DEFAULT 0,
+        tokens_json TEXT NOT NULL,
+        modules_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        published_at TEXT
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -466,6 +498,13 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_usage_company_period ON usage_records(company_id, period, metric)",
     "CREATE INDEX IF NOT EXISTS idx_usage_period ON usage_records(period, metric)",
     "CREATE INDEX IF NOT EXISTS idx_audit_log_company ON audit_log(company_id, created_at)",
+    # The read path asks one question -- "the published theme for this scope" --
+    # on every workspace configuration request, so the index carries the whole
+    # of it rather than the scope alone.
+    """
+    CREATE INDEX IF NOT EXISTS idx_ui_themes_scope
+    ON ui_themes(scope_type, scope_id, status, version)
+    """,
     """
     CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_external_account
     ON channel_accounts(channel, external_account_id)

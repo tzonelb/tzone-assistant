@@ -4,7 +4,7 @@ import { useAuth } from "../contexts/AuthContext";
 import ForcePasswordChangePage from "../pages/auth/ForcePasswordChangePage";
 
 
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, requireSuperAdmin = false }) {
   const { authenticated, loading, user } = useAuth();
   const location = useLocation();
 
@@ -34,6 +34,13 @@ export default function ProtectedRoute({ children }) {
   // rendered here would be a page of failed requests.
   if (user?.must_change_password) {
     return <ForcePasswordChangePage />;
+  }
+
+  // Every action on these routes is already refused server-side for anybody
+  // else. Landing them on a fully drawn, clickable operator console first and
+  // failing one request at a time is the confusing version of the same answer.
+  if (requireSuperAdmin && !user?.is_super_admin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

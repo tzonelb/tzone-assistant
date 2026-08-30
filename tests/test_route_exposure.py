@@ -104,6 +104,12 @@ GUARDS = (
     "get_platform_admin_enrolling",
     "get_user_changing_password",
     "_require_access_admin",
+    # Theme Studio's scope check. A `platform` theme reaches every workspace, so
+    # writing one requires a super admin; the only scope anybody else may write
+    # is their own company's, and only its owner may. It is called in the body
+    # rather than depended on, because which scope is being written is only
+    # known after the theme row is read.
+    "_check_scope_permission",
     "has_permission",
     # The Developer Center gates on the flag itself rather than on a named
     # permission: its contents are platform diagnostics, not a company feature

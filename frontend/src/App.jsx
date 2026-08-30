@@ -35,6 +35,9 @@ const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
 const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
+const ActivityLogPage = lazy(() => import("./pages/admin/ActivityLogPage"));
+const PlatformAdminPage = lazy(() => import("./pages/admin/PlatformAdminPage"));
+const ThemeStudioPage = lazy(() => import("./pages/admin/ThemeStudioPage"));
 const SavedRepliesPage = lazy(() => import("./pages/saved-replies/SavedRepliesPage"));
 const SchedulerPage = lazy(() => import("./pages/scheduler/SchedulerPage"));
 const TasksPage = lazy(() => import("./pages/tasks/TasksPage"));
@@ -108,6 +111,15 @@ export default function App() {
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/superadmin/*" element={<SuperAdminApp />} />
         <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailScreen standalone /></ModuleRoute></ProtectedRoute>} />
+        {/* The two screens SidebarV2 has always linked to and nothing routed,
+            so both fell through to the catch-all and bounced to the dashboard.
+            Outside AppLayout deliberately, matching where the design branch
+            mounts them: each draws its own header and its own way back, and
+            inside the shell they would carry two of each. `company_settings`
+            is the gate — the design branch has none, and this is the module a
+            company's own administration already sits behind. */}
+        <Route path="/platform-admin" element={<ProtectedRoute requireSuperAdmin><ModuleRoute module="company_settings"><PlatformAdminPage /></ModuleRoute></ProtectedRoute>} />
+        <Route path="/platform-admin/theme-studio" element={<ProtectedRoute requireSuperAdmin><ModuleRoute module="company_settings"><ThemeStudioPage /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardScreen /></ModuleRoute>} />
           <Route path="/notifications" element={<ModuleRoute module="notifications"><NotificationsScreen /></ModuleRoute>} />
@@ -142,6 +154,12 @@ export default function App() {
           <Route path="/settings" element={<ModuleRoute module="preferences"><UISettingsPage /></ModuleRoute>} />
           <Route path="/company-settings/*" element={<ModuleRoute module="company_settings"><CompanySettingsPage /></ModuleRoute>} />
           <Route path="/roles" element={<ModuleRoute module="roles"><RolesPermissionsPage /></ModuleRoute>} />
+          {/* Inside the shell rather than on its own: the screen is written as
+              a panel with no header and no way back, because the design branch
+              renders it as one section of a Company Settings page that has a
+              section list. This one does not, and giving it one would be
+              redrawing that page rather than wiring this one. */}
+          <Route path="/activity-log" element={<ModuleRoute module="company_settings"><ActivityLogPage /></ModuleRoute>} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
