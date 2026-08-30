@@ -9,12 +9,12 @@
     "phone": null,
     "status": "active",
     "is_super_admin": false,
-    "last_login_at": "2026-08-30T21:36:35.521603+00:00",
+    "last_login_at": "2026-08-30T23:16:50.988354+00:00",
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T21:36:34.384019+00:00",
-    "updated_at": "2026-08-30T21:36:35.521626+00:00",
+    "created_at": "2026-08-30T23:16:49.987779+00:00",
+    "updated_at": "2026-08-30T23:16:50.988374+00:00",
     "active_company_id": 1,
     "session_scope": "company"
    },
@@ -123,7 +123,7 @@
    "version": 0,
    "brand": {
     "name": "T-ZONE",
-    "logoUrl": "/tzone-logo.png"
+    "logoUrl": null
    },
    "updated_at": null
   }
@@ -140,10 +140,28 @@
     "timezone": "Asia/Beirut",
     "default_language": "ar",
     "status": "active",
-    "created_at": "2026-08-30T21:36:33.109434+00:00"
+    "created_at": "2026-08-30T23:16:48.823246+00:00"
    },
-   "subscription": null,
-   "subscription_active": false,
+   "subscription": {
+    "id": 1,
+    "company_id": 1,
+    "plan_id": 2,
+    "status": "active",
+    "starts_at": "2026-08-30T23:16:53.367047+00:00",
+    "expires_at": "2026-12-31T00:00:00+00:00",
+    "grace_period_until": null,
+    "plan_name": "Business",
+    "plan_code": "business",
+    "max_users": 10,
+    "max_channel_accounts": 5,
+    "max_ai_messages": 5000,
+    "max_knowledge_items": 1000,
+    "voice_ai_enabled": 1,
+    "image_ai_enabled": 1,
+    "accounting_connector_enabled": 1,
+    "product_connector_enabled": 1
+   },
+   "subscription_active": true,
    "counts": {
     "users": 1,
     "channel_accounts": 4,
@@ -154,6 +172,7 @@
     "messages": 127,
     "customers": 10,
     "knowledge_items": 2,
+    "products": 7,
     "tickets": 4,
     "open_tickets": 2,
     "pending_replies": 0
@@ -214,8 +233,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T21:36:36.213015+00:00",
-     "created_at": "2026-08-30T21:36:35.676938+00:00",
+     "last_message_at": "2026-08-30T23:16:51.607992+00:00",
+     "created_at": "2026-08-30T23:16:51.121732+00:00",
      "official_customer_name": "Maya Rizk",
      "customer_alias": "مايا رزق",
      "customer_name": "Maya Rizk"
@@ -229,8 +248,8 @@
      "topic": null,
      "status": "human_handling",
      "needs_human": 1,
-     "last_message_at": "2026-08-30T21:36:36.195674+00:00",
-     "created_at": "2026-08-30T21:36:35.654212+00:00",
+     "last_message_at": "2026-08-30T23:16:51.591434+00:00",
+     "created_at": "2026-08-30T23:16:51.101868+00:00",
      "official_customer_name": "Karim Fares",
      "customer_alias": "Karim Fares",
      "customer_name": "Karim Fares"
@@ -244,8 +263,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T21:36:36.186733+00:00",
-     "created_at": "2026-08-30T21:36:35.629405+00:00",
+     "last_message_at": "2026-08-30T23:16:51.583151+00:00",
+     "created_at": "2026-08-30T23:16:51.082724+00:00",
      "official_customer_name": "Nour Aoun",
      "customer_alias": "نور عون",
      "customer_name": "Nour Aoun"
@@ -259,8 +278,8 @@
      "topic": null,
      "status": "human_handling",
      "needs_human": 1,
-     "last_message_at": "2026-08-30T21:36:36.162594+00:00",
-     "created_at": "2026-08-30T21:36:35.589577+00:00",
+     "last_message_at": "2026-08-30T23:16:51.558437+00:00",
+     "created_at": "2026-08-30T23:16:51.047705+00:00",
      "official_customer_name": "Omar Saad",
      "customer_alias": "Omar Saad",
      "customer_name": "Omar Saad"
@@ -274,8 +293,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T21:36:36.146283+00:00",
-     "created_at": "2026-08-30T21:36:35.548355+00:00",
+     "last_message_at": "2026-08-30T23:16:51.541730+00:00",
+     "created_at": "2026-08-30T23:16:51.011574+00:00",
      "official_customer_name": "Lina Khoury",
      "customer_alias": "لينا خوري",
      "customer_name": "Lina Khoury"
@@ -289,8 +308,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T21:36:36.136332+00:00",
-     "created_at": "2026-08-30T21:36:35.700055+00:00",
+     "last_message_at": "2026-08-30T23:16:51.533235+00:00",
+     "created_at": "2026-08-30T23:16:51.140691+00:00",
      "official_customer_name": "Rami Daher",
      "customer_alias": null,
      "customer_name": "Rami Daher"
@@ -329,7 +348,7 @@
      "takeover_expires_at": null,
      "last_message": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T21:36:36.213015+00:00",
+     "updated_at": "2026-08-30T23:16:51.607992+00:00",
      "message_count": 22,
      "branch_id": null,
      "channel_account_id": null,
@@ -360,10 +379,10 @@
      "ai_status": "human",
      "assigned_user_id": 1,
      "unread_count": 0,
-     "takeover_expires_at": "2026-08-30T21:41:37.096385+00:00",
+     "takeover_expires_at": "2026-08-30T23:21:52.418185+00:00",
      "last_message": "We do — sending it over now, sorry for the wait.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T21:36:36.195674+00:00",
+     "updated_at": "2026-08-30T23:16:51.591434+00:00",
      "message_count": 12,
      "branch_id": null,
      "channel_account_id": null,
@@ -397,7 +416,7 @@
      "takeover_expires_at": null,
      "last_message": "تكرم عينك، وقت ما بتجهز خبرنا.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T21:36:36.186733+00:00",
+     "updated_at": "2026-08-30T23:16:51.583151+00:00",
      "message_count": 32,
      "branch_id": null,
      "channel_account_id": null,
@@ -428,10 +447,10 @@
      "ai_status": "human",
      "assigned_user_id": 1,
      "unread_count": 0,
-     "takeover_expires_at": "2026-08-30T21:41:37.132624+00:00",
+     "takeover_expires_at": "2026-08-30T23:21:52.452465+00:00",
      "last_message": "Yes — $3 outside Beirut, arriving within 24 hours.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T21:36:36.162594+00:00",
+     "updated_at": "2026-08-30T23:16:51.558437+00:00",
      "message_count": 24,
      "branch_id": null,
      "channel_account_id": null,
@@ -465,7 +484,7 @@
      "takeover_expires_at": null,
      "last_message": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T21:36:36.146283+00:00",
+     "updated_at": "2026-08-30T23:16:51.541730+00:00",
      "message_count": 12,
      "branch_id": null,
      "channel_account_id": null,
@@ -499,7 +518,7 @@
      "takeover_expires_at": null,
      "last_message": "بعتلكن مبارح وما وصلني جواب، بدي اعرف اذا الطلب جهز",
      "last_direction": "in",
-     "updated_at": "2026-08-30T21:36:36.136332+00:00",
+     "updated_at": "2026-08-30T23:16:51.533235+00:00",
      "message_count": 25,
      "branch_id": null,
      "channel_account_id": null,
@@ -623,7 +642,7 @@
      "task_type": "task",
      "due_date": null,
      "created_by_user_id": 1,
-     "closed_at": "2026-08-30T21:36:37.282545+00:00",
+     "closed_at": "2026-08-30T23:16:52.600550+00:00",
      "platform": null,
      "user_id": null,
      "language": null,
@@ -636,8 +655,8 @@
      "assigned_user_id": null,
      "status": "resolved",
      "priority": "normal",
-     "created_at": "2026-08-30T21:36:37.282545+00:00",
-     "updated_at": "2026-08-30T21:36:37.282545+00:00",
+     "created_at": "2026-08-30T23:16:52.600550+00:00",
+     "updated_at": "2026-08-30T23:16:52.600550+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -663,8 +682,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "low",
-     "created_at": "2026-08-30T21:36:37.256219+00:00",
-     "updated_at": "2026-08-30T21:36:37.256219+00:00",
+     "created_at": "2026-08-30T23:16:52.576743+00:00",
+     "updated_at": "2026-08-30T23:16:52.576743+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -690,8 +709,8 @@
      "assigned_user_id": null,
      "status": "in_progress",
      "priority": "normal",
-     "created_at": "2026-08-30T21:36:37.229258+00:00",
-     "updated_at": "2026-08-30T21:36:37.229258+00:00",
+     "created_at": "2026-08-30T23:16:52.552565+00:00",
+     "updated_at": "2026-08-30T23:16:52.552565+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -717,8 +736,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "high",
-     "created_at": "2026-08-30T21:36:37.202252+00:00",
-     "updated_at": "2026-08-30T21:36:37.202252+00:00",
+     "created_at": "2026-08-30T23:16:52.527807+00:00",
+     "updated_at": "2026-08-30T23:16:52.527807+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -776,8 +795,8 @@
      "status": "confirmed",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T21:36:37.310309+00:00",
-     "updated_at": "2026-08-30T21:36:37.310309+00:00",
+     "created_at": "2026-08-30T23:16:52.628188+00:00",
+     "updated_at": "2026-08-30T23:16:52.628188+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -797,8 +816,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T21:36:37.335913+00:00",
-     "updated_at": "2026-08-30T21:36:37.335913+00:00",
+     "created_at": "2026-08-30T23:16:52.654078+00:00",
+     "updated_at": "2026-08-30T23:16:52.654078+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -818,8 +837,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T21:36:37.362200+00:00",
-     "updated_at": "2026-08-30T21:36:37.362200+00:00",
+     "created_at": "2026-08-30T23:16:52.680150+00:00",
+     "updated_at": "2026-08-30T23:16:52.680150+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -956,7 +975,7 @@
     "grouped_count": 1,
     "is_read": false,
     "read_at": null,
-    "created_at": "2026-08-30T21:36:37.143588+00:00"
+    "created_at": "2026-08-30T23:16:52.463266+00:00"
    },
    {
     "id": 1,
@@ -974,7 +993,7 @@
     "grouped_count": 1,
     "is_read": false,
     "read_at": null,
-    "created_at": "2026-08-30T21:36:37.109757+00:00"
+    "created_at": "2026-08-30T23:16:52.430971+00:00"
    }
   ]
  },
@@ -1004,10 +1023,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.815819+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.815819+00:00",
-     "created_at": "2026-08-30T21:36:37.815819+00:00",
-     "updated_at": "2026-08-30T21:36:37.965546+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.159287+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.159287+00:00",
+     "created_at": "2026-08-30T23:16:53.159287+00:00",
+     "updated_at": "2026-08-30T23:16:53.309644+00:00",
      "identity_count": 0,
      "conversation_count": 0,
      "tags": [
@@ -1032,10 +1051,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.798277+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.798277+00:00",
-     "created_at": "2026-08-30T21:36:37.798277+00:00",
-     "updated_at": "2026-08-30T21:36:37.798277+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.137316+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.137316+00:00",
+     "created_at": "2026-08-30T23:16:53.137316+00:00",
+     "updated_at": "2026-08-30T23:16:53.137316+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [],
@@ -1060,10 +1079,10 @@
      "notes": null,
      "lifecycle_stage": "customer",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T21:36:37.792093+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.792093+00:00",
-     "created_at": "2026-08-30T21:36:37.792093+00:00",
-     "updated_at": "2026-08-30T21:36:37.940308+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.129118+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.129118+00:00",
+     "created_at": "2026-08-30T23:16:53.129118+00:00",
+     "updated_at": "2026-08-30T23:16:53.284948+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1090,10 +1109,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.785821+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.785821+00:00",
-     "created_at": "2026-08-30T21:36:37.785821+00:00",
-     "updated_at": "2026-08-30T21:36:37.915761+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.120436+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.120436+00:00",
+     "created_at": "2026-08-30T23:16:53.120436+00:00",
+     "updated_at": "2026-08-30T23:16:53.260508+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1120,10 +1139,10 @@
      "notes": null,
      "lifecycle_stage": "active",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.779643+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.779643+00:00",
-     "created_at": "2026-08-30T21:36:37.779643+00:00",
-     "updated_at": "2026-08-30T21:36:37.892779+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.111422+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.111422+00:00",
+     "created_at": "2026-08-30T23:16:53.111422+00:00",
+     "updated_at": "2026-08-30T23:16:53.237300+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1150,10 +1169,10 @@
      "notes": null,
      "lifecycle_stage": "customer",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T21:36:37.772940+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.772940+00:00",
-     "created_at": "2026-08-30T21:36:37.772940+00:00",
-     "updated_at": "2026-08-30T21:36:37.867444+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.102435+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.102435+00:00",
+     "created_at": "2026-08-30T23:16:53.102435+00:00",
+     "updated_at": "2026-08-30T23:16:53.212512+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1181,10 +1200,10 @@
      "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
      "lifecycle_stage": "vip",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T21:36:37.766357+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.766357+00:00",
-     "created_at": "2026-08-30T21:36:37.766357+00:00",
-     "updated_at": "2026-08-30T21:36:37.842432+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.093093+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.093093+00:00",
+     "created_at": "2026-08-30T23:16:53.093093+00:00",
+     "updated_at": "2026-08-30T23:16:53.186089+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1220,10 +1239,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.729470+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.729470+00:00",
-     "created_at": "2026-08-30T21:36:37.729470+00:00",
-     "updated_at": "2026-08-30T21:36:37.729470+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.048661+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.048661+00:00",
+     "created_at": "2026-08-30T23:16:53.048661+00:00",
+     "updated_at": "2026-08-30T23:16:53.048661+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1248,10 +1267,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.723023+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.723023+00:00",
-     "created_at": "2026-08-30T21:36:37.723023+00:00",
-     "updated_at": "2026-08-30T21:36:37.723023+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.042160+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.042160+00:00",
+     "created_at": "2026-08-30T23:16:53.042160+00:00",
+     "updated_at": "2026-08-30T23:16:53.042160+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1276,10 +1295,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T21:36:37.716589+00:00",
-     "last_seen_at": "2026-08-30T21:36:37.716589+00:00",
-     "created_at": "2026-08-30T21:36:37.716589+00:00",
-     "updated_at": "2026-08-30T21:36:37.716589+00:00",
+     "first_seen_at": "2026-08-30T23:16:53.035534+00:00",
+     "last_seen_at": "2026-08-30T23:16:53.035534+00:00",
+     "created_at": "2026-08-30T23:16:53.035534+00:00",
+     "updated_at": "2026-08-30T23:16:53.035534+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1322,8 +1341,8 @@
      "company_id": 1,
      "name": "VIP clients",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T21:36:37.992941+00:00",
-     "updated_at": "2026-08-30T21:36:37.992941+00:00",
+     "created_at": "2026-08-30T23:16:53.338232+00:00",
+     "updated_at": "2026-08-30T23:16:53.338232+00:00",
      "filters": {
       "lifecycle_stage": "vip"
      }
@@ -1333,8 +1352,8 @@
      "company_id": 1,
      "name": "Waiting on delivery",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T21:36:38.011224+00:00",
-     "updated_at": "2026-08-30T21:36:38.011224+00:00",
+     "created_at": "2026-08-30T23:16:53.358214+00:00",
+     "updated_at": "2026-08-30T23:16:53.358214+00:00",
      "filters": {
       "tag": "توصيل"
      }
@@ -1357,8 +1376,8 @@
      "department": null,
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.417421+00:00",
-     "updated_at": "2026-08-30T21:36:37.417421+00:00",
+     "created_at": "2026-08-30T23:16:52.729951+00:00",
+     "updated_at": "2026-08-30T23:16:52.729951+00:00",
      "category_name": null
     },
     {
@@ -1372,8 +1391,8 @@
      "department": "Sales",
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.389979+00:00",
-     "updated_at": "2026-08-30T21:36:37.389979+00:00",
+     "created_at": "2026-08-30T23:16:52.705963+00:00",
+     "updated_at": "2026-08-30T23:16:52.705963+00:00",
      "category_name": null
     }
    ],
@@ -1411,8 +1430,8 @@
      "body": "Delivery is $2 inside Beirut and $3 outside, arriving within 24 hours.",
      "department": "Sales",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T21:36:37.695406+00:00",
-     "updated_at": "2026-08-30T21:36:37.695406+00:00"
+     "created_at": "2026-08-30T23:16:53.014805+00:00",
+     "updated_at": "2026-08-30T23:16:53.014805+00:00"
     },
     {
      "id": 1,
@@ -1421,8 +1440,8 @@
      "body": "أهلاً وسهلاً فيك! كيف فينا نساعدك اليوم؟",
      "department": "",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T21:36:37.676707+00:00",
-     "updated_at": "2026-08-30T21:36:37.676707+00:00"
+     "created_at": "2026-08-30T23:16:52.995656+00:00",
+     "updated_at": "2026-08-30T23:16:52.995656+00:00"
     }
    ],
    "can_manage": true
@@ -1449,8 +1468,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "archived",
-     "created_at": "2026-08-30T21:36:37.653728+00:00",
-     "updated_at": "2026-08-30T21:36:37.653728+00:00",
+     "created_at": "2026-08-30T23:16:52.973060+00:00",
+     "updated_at": "2026-08-30T23:16:52.973060+00:00",
      "category_name": null,
      "attributes": {}
     },
@@ -1471,8 +1490,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "draft",
-     "created_at": "2026-08-30T21:36:37.631553+00:00",
-     "updated_at": "2026-08-30T21:36:37.631553+00:00",
+     "created_at": "2026-08-30T23:16:52.950343+00:00",
+     "updated_at": "2026-08-30T23:16:52.950343+00:00",
      "category_name": "عروض",
      "attributes": {}
     },
@@ -1493,8 +1512,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.608466+00:00",
-     "updated_at": "2026-08-30T21:36:37.608466+00:00",
+     "created_at": "2026-08-30T23:16:52.925703+00:00",
+     "updated_at": "2026-08-30T23:16:52.925703+00:00",
      "category_name": "عروض",
      "attributes": {}
     },
@@ -1515,8 +1534,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.586144+00:00",
-     "updated_at": "2026-08-30T21:36:37.586144+00:00",
+     "created_at": "2026-08-30T23:16:52.902407+00:00",
+     "updated_at": "2026-08-30T23:16:52.902407+00:00",
      "category_name": "Accessories",
      "attributes": {}
     },
@@ -1537,8 +1556,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.563672+00:00",
-     "updated_at": "2026-08-30T21:36:37.563672+00:00",
+     "created_at": "2026-08-30T23:16:52.879121+00:00",
+     "updated_at": "2026-08-30T23:16:52.879121+00:00",
      "category_name": "Accessories",
      "attributes": {}
     },
@@ -1559,8 +1578,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.541859+00:00",
-     "updated_at": "2026-08-30T21:36:37.541859+00:00",
+     "created_at": "2026-08-30T23:16:52.856578+00:00",
+     "updated_at": "2026-08-30T23:16:52.856578+00:00",
      "category_name": "باقات الاشتراك",
      "attributes": {}
     },
@@ -1581,8 +1600,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.518760+00:00",
-     "updated_at": "2026-08-30T21:36:37.518760+00:00",
+     "created_at": "2026-08-30T23:16:52.834269+00:00",
+     "updated_at": "2026-08-30T23:16:52.834269+00:00",
      "category_name": "باقات الاشتراك",
      "attributes": {}
     },
@@ -1603,8 +1622,8 @@
      "image_url": null,
      "attributes_json": "{}",
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.497356+00:00",
-     "updated_at": "2026-08-30T21:36:37.497356+00:00",
+     "created_at": "2026-08-30T23:16:52.812336+00:00",
+     "updated_at": "2026-08-30T23:16:52.812336+00:00",
      "category_name": "باقات الاشتراك",
      "attributes": {}
     }
@@ -1623,8 +1642,8 @@
      "parent_id": null,
      "sort_order": 0,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.442334+00:00",
-     "updated_at": "2026-08-30T21:36:37.442334+00:00",
+     "created_at": "2026-08-30T23:16:52.755071+00:00",
+     "updated_at": "2026-08-30T23:16:52.755071+00:00",
      "product_count": 3
     },
     {
@@ -1634,8 +1653,8 @@
      "parent_id": null,
      "sort_order": 1,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.459646+00:00",
-     "updated_at": "2026-08-30T21:36:37.459646+00:00",
+     "created_at": "2026-08-30T23:16:52.773834+00:00",
+     "updated_at": "2026-08-30T23:16:52.773834+00:00",
      "product_count": 2
     },
     {
@@ -1645,8 +1664,8 @@
      "parent_id": null,
      "sort_order": 2,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.477546+00:00",
-     "updated_at": "2026-08-30T21:36:37.477546+00:00",
+     "created_at": "2026-08-30T23:16:52.793491+00:00",
+     "updated_at": "2026-08-30T23:16:52.793491+00:00",
      "product_count": 2
     }
    ],
@@ -1672,8 +1691,8 @@
      "parent_id": null,
      "sort_order": 0,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.442334+00:00",
-     "updated_at": "2026-08-30T21:36:37.442334+00:00",
+     "created_at": "2026-08-30T23:16:52.755071+00:00",
+     "updated_at": "2026-08-30T23:16:52.755071+00:00",
      "product_count": 3
     },
     {
@@ -1683,8 +1702,8 @@
      "parent_id": null,
      "sort_order": 1,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.459646+00:00",
-     "updated_at": "2026-08-30T21:36:37.459646+00:00",
+     "created_at": "2026-08-30T23:16:52.773834+00:00",
+     "updated_at": "2026-08-30T23:16:52.773834+00:00",
      "product_count": 2
     },
     {
@@ -1694,8 +1713,8 @@
      "parent_id": null,
      "sort_order": 2,
      "status": "active",
-     "created_at": "2026-08-30T21:36:37.477546+00:00",
-     "updated_at": "2026-08-30T21:36:37.477546+00:00",
+     "created_at": "2026-08-30T23:16:52.793491+00:00",
+     "updated_at": "2026-08-30T23:16:52.793491+00:00",
      "product_count": 2
     }
    ]
@@ -1706,8 +1725,8 @@
   "body": {
    "overview": {
     "range_days": 30,
-    "from": "2026-07-31T21:36:38.377377+00:00",
-    "to": "2026-08-30T21:36:38.377377+00:00",
+    "from": "2026-07-31T23:16:53.835836+00:00",
+    "to": "2026-08-30T23:16:53.835836+00:00",
     "messages": {
      "total": 127,
      "inbound": 64,
@@ -1886,15 +1905,15 @@
     },
     {
      "day": "2026-08-28",
-     "total": 8,
+     "total": 7,
      "inbound": 4,
-     "outbound": 4
+     "outbound": 3
     },
     {
      "day": "2026-08-29",
-     "total": 5,
+     "total": 6,
      "inbound": 3,
-     "outbound": 2
+     "outbound": 3
     },
     {
      "day": "2026-08-30",
@@ -2117,14 +2136,14 @@
      },
      {
       "messenger": 0,
-      "telegram": 2,
+      "telegram": 1,
       "instagram": 6,
       "whatsapp": 0,
       "day": "2026-08-28"
      },
      {
       "messenger": 0,
-      "telegram": 0,
+      "telegram": 1,
       "instagram": 0,
       "whatsapp": 5,
       "day": "2026-08-29"
@@ -2199,7 +2218,7 @@
     },
     {
      "hour": "01",
-     "messages": 1
+     "messages": 0
     },
     {
      "hour": "02",
@@ -2207,7 +2226,7 @@
     },
     {
      "hour": "03",
-     "messages": 0
+     "messages": 1
     },
     {
      "hour": "04",
@@ -2255,7 +2274,7 @@
     },
     {
      "hour": "15",
-     "messages": 4
+     "messages": 3
     },
     {
      "hour": "16",
@@ -2263,7 +2282,7 @@
     },
     {
      "hour": "17",
-     "messages": 2
+     "messages": 3
     },
     {
      "hour": "18",
@@ -2279,7 +2298,7 @@
     },
     {
      "hour": "21",
-     "messages": 9
+     "messages": 3
     },
     {
      "hour": "22",
@@ -2287,7 +2306,7 @@
     },
     {
      "hour": "23",
-     "messages": 0
+     "messages": 6
     }
    ],
    "assistant": {
@@ -2322,7 +2341,7 @@
      "average_response_seconds": 1517.1,
      "slowest_response_seconds": 7320.0,
      "first_reply_at": "2026-08-04T20:50:00+00:00",
-     "last_reply_at": "2026-08-28T23:38:35.672196+00:00",
+     "last_reply_at": "2026-08-29T01:18:51.118190+00:00",
      "name": "Rana Haddad"
     }
    ],
@@ -2687,7 +2706,7 @@
      "email": "rana@cedarhome.example",
      "phone": null,
      "user_status": "active",
-     "last_login_at": "2026-08-30T21:36:35.521603+00:00",
+     "last_login_at": "2026-08-30T23:16:50.988354+00:00",
      "password_changed_at": null,
      "must_change_password": 0,
      "locked_until": null,
@@ -2740,8 +2759,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.728889+00:00",
-     "updated_at": "2026-08-30T21:36:36.728889+00:00",
+     "created_at": "2026-08-30T23:16:52.120920+00:00",
+     "updated_at": "2026-08-30T23:16:52.120920+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -2763,8 +2782,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.760749+00:00",
-     "updated_at": "2026-08-30T21:36:36.760749+00:00",
+     "created_at": "2026-08-30T23:16:52.148303+00:00",
+     "updated_at": "2026-08-30T23:16:52.148303+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -2786,8 +2805,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.791308+00:00",
-     "updated_at": "2026-08-30T21:36:36.791308+00:00",
+     "created_at": "2026-08-30T23:16:52.173002+00:00",
+     "updated_at": "2026-08-30T23:16:52.173002+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -2809,8 +2828,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.822935+00:00",
-     "updated_at": "2026-08-30T21:36:36.822935+00:00",
+     "created_at": "2026-08-30T23:16:52.200009+00:00",
+     "updated_at": "2026-08-30T23:16:52.200009+00:00",
      "branch_name": null,
      "has_access_token": true,
      "has_verify_token": false,
@@ -2868,8 +2887,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.728889+00:00",
-     "updated_at": "2026-08-30T21:36:36.728889+00:00",
+     "created_at": "2026-08-30T23:16:52.120920+00:00",
+     "updated_at": "2026-08-30T23:16:52.120920+00:00",
      "branch_name": null
     },
     {
@@ -2887,8 +2906,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.760749+00:00",
-     "updated_at": "2026-08-30T21:36:36.760749+00:00",
+     "created_at": "2026-08-30T23:16:52.148303+00:00",
+     "updated_at": "2026-08-30T23:16:52.148303+00:00",
      "branch_name": null
     },
     {
@@ -2906,8 +2925,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.791308+00:00",
-     "updated_at": "2026-08-30T21:36:36.791308+00:00",
+     "created_at": "2026-08-30T23:16:52.173002+00:00",
+     "updated_at": "2026-08-30T23:16:52.173002+00:00",
      "branch_name": null
     },
     {
@@ -2925,8 +2944,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T21:36:36.822935+00:00",
-     "updated_at": "2026-08-30T21:36:36.822935+00:00",
+     "created_at": "2026-08-30T23:16:52.200009+00:00",
+     "updated_at": "2026-08-30T23:16:52.200009+00:00",
      "branch_name": null
     }
    ],
@@ -2955,7 +2974,7 @@
      "media_type": null,
      "send_lock_acquired_at": null,
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T21:36:37.757122+00:00",
+     "created_at": "2026-08-30T23:16:53.083320+00:00",
      "sent_at": null
     },
     {
@@ -2976,10 +2995,263 @@
      "media_type": null,
      "send_lock_acquired_at": null,
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T21:36:37.735946+00:00",
+     "created_at": "2026-08-30T23:16:53.056971+00:00",
      "sent_at": null
     }
    ]
+  }
+ },
+ "/api/company-settings/company_profile": {
+  "status": 200,
+  "body": {
+   "section": "company_profile",
+   "values": {
+    "company_name": "Cedar Home Appliances",
+    "timezone": "Asia/Beirut",
+    "default_language": "ar",
+    "country": "Lebanon",
+    "currency": "USD",
+    "workspace_code": "CEDAR-2026",
+    "logo_url": ""
+   },
+   "locked_keys": []
+  }
+ },
+ "/api/company-settings/working_hours": {
+  "status": 200,
+  "body": {
+   "section": "working_hours",
+   "values": {
+    "enabled": true,
+    "timezone": "Asia/Beirut",
+    "days": {
+     "sunday": {
+      "open": "09:00",
+      "close": "18:00",
+      "closed": true
+     },
+     "monday": {
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+     },
+     "tuesday": {
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+     },
+     "wednesday": {
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+     },
+     "thursday": {
+      "open": "09:00",
+      "close": "18:00",
+      "closed": false
+     },
+     "friday": {
+      "open": "09:00",
+      "close": "14:00",
+      "closed": false
+     },
+     "saturday": {
+      "open": "09:00",
+      "close": "18:00",
+      "closed": true
+     }
+    }
+   },
+   "locked_keys": []
+  }
+ },
+ "/api/company-settings/ai_behavior": {
+  "status": 200,
+  "body": {
+   "section": "ai_behavior",
+   "values": {
+    "enabled": true,
+    "mode": "ai_first",
+    "collect_message_delay_seconds": 20,
+    "return_to_ai_timeout_minutes": 5,
+    "reply_access_mode": "take_required",
+    "auto_release_to_ai": true,
+    "reply_language": "auto",
+    "greeting_message": "أهلاً فيك! كيف فينا نساعدك اليوم؟",
+    "voice_reply_enabled": false
+   },
+   "locked_keys": []
+  }
+ },
+ "/api/billing/subscription": {
+  "status": 200,
+  "body": {
+   "has_subscription": true,
+   "subscription_active": true,
+   "plan_id": 2,
+   "plan_code": "business",
+   "plan_name": "Business",
+   "subscription_status": "active",
+   "expires_at": "2026-12-31T00:00:00+00:00",
+   "price_monthly": 49.0,
+   "users": {
+    "used": 1,
+    "max": 10
+   },
+   "channels": {
+    "used": 4,
+    "max": 5
+   },
+   "max_ai_messages": 5000,
+   "features": {
+    "voice_ai_enabled": true,
+    "image_ai_enabled": true,
+    "accounting_connector_enabled": true,
+    "product_connector_enabled": true
+   }
+  }
+ },
+ "/api/billing/modules": {
+  "status": 200,
+  "body": {
+   "modules": {
+    "dashboard": true,
+    "notifications": true,
+    "conversations": true,
+    "comments": true,
+    "customers": true,
+    "broadcast": true,
+    "calls": true,
+    "dialer": true,
+    "appointments": true,
+    "tasks": true,
+    "catalogue": true,
+    "scheduler": true,
+    "team_chat": true,
+    "knowledge": true,
+    "ai_teaching": true,
+    "analytics": true,
+    "channels": true,
+    "roles": true,
+    "company_settings": true,
+    "preferences": true
+   }
+  }
+ },
+ "/api/billing/plans": {
+  "status": 200,
+  "body": {
+   "plans": [
+    {
+     "id": 3,
+     "code": "enterprise",
+     "name": "Enterprise",
+     "price_monthly": 0.0,
+     "max_users": 100,
+     "max_channel_accounts": 50,
+     "max_ai_messages": 100000,
+     "max_knowledge_items": 100000,
+     "voice_ai_enabled": true,
+     "image_ai_enabled": true,
+     "accounting_connector_enabled": true,
+     "product_connector_enabled": true
+    },
+    {
+     "id": 1,
+     "code": "starter",
+     "name": "Starter",
+     "price_monthly": 19.0,
+     "max_users": 2,
+     "max_channel_accounts": 1,
+     "max_ai_messages": 1000,
+     "max_knowledge_items": 100,
+     "voice_ai_enabled": false,
+     "image_ai_enabled": false,
+     "accounting_connector_enabled": false,
+     "product_connector_enabled": false
+    },
+    {
+     "id": 2,
+     "code": "business",
+     "name": "Business",
+     "price_monthly": 49.0,
+     "max_users": 10,
+     "max_channel_accounts": 5,
+     "max_ai_messages": 5000,
+     "max_knowledge_items": 1000,
+     "voice_ai_enabled": true,
+     "image_ai_enabled": true,
+     "accounting_connector_enabled": true,
+     "product_connector_enabled": true
+    }
+   ]
+  }
+ },
+ "/api/billing/requests": {
+  "status": 200,
+  "body": {
+   "requests": [
+    {
+     "id": 1,
+     "plan_id": 2,
+     "note": "Whish transfer #4471",
+     "status": "pending",
+     "created_at": "2026-08-30T23:16:53.458633+00:00",
+     "plan_name": "Business",
+     "plan_code": "business"
+    }
+   ]
+  }
+ },
+ "/api/support-tickets": {
+  "status": 200,
+  "body": {
+   "tickets": [
+    {
+     "id": 2,
+     "subject": "Add a second workspace for the Tripoli branch",
+     "description": "We are opening a second branch and want its own workspace under the same plan.",
+     "priority": "normal",
+     "status": "open",
+     "created_at": "2026-08-30T23:16:53.483661+00:00",
+     "updated_at": "2026-08-30T23:16:53.483661+00:00"
+    },
+    {
+     "id": 1,
+     "subject": "Instagram replies are delayed",
+     "description": "Replies to Instagram DMs take about ten minutes to leave the platform. Messenger and WhatsApp are immediate on the same account.",
+     "priority": "high",
+     "status": "open",
+     "created_at": "2026-08-30T23:16:53.471087+00:00",
+     "updated_at": "2026-08-30T23:16:53.471087+00:00"
+    }
+   ],
+   "priorities": [
+    "low",
+    "normal",
+    "high",
+    "urgent"
+   ]
+  }
+ },
+ "/api/notification-preferences": {
+  "status": 200,
+  "body": {
+   "notify_new_message": "all",
+   "notify_ai_escalation": true,
+   "notify_mentions": true,
+   "notify_tasks": true
+  }
+ },
+ "/api/auth/totp": {
+  "status": 200,
+  "body": {
+   "enabled": false,
+   "required": false,
+   "enrolment_pending": false,
+   "confirmed_at": null,
+   "recovery_codes_remaining": 0,
+   "started": false
   }
  },
  "/api/broadcasts/1/report": {
@@ -3003,7 +3275,7 @@
     "media_type": null,
     "send_lock_acquired_at": null,
     "created_by_user_id": 1,
-    "created_at": "2026-08-30T21:36:37.735946+00:00",
+    "created_at": "2026-08-30T23:16:53.056971+00:00",
     "sent_at": null
    },
    "totals": {
@@ -3045,7 +3317,7 @@
     "media_type": null,
     "send_lock_acquired_at": null,
     "created_by_user_id": 1,
-    "created_at": "2026-08-30T21:36:37.757122+00:00",
+    "created_at": "2026-08-30T23:16:53.083320+00:00",
     "sent_at": null
    },
    "totals": {
@@ -3069,37 +3341,37 @@
  "/api/analytics/export?report=employees": {
   "status": 200,
   "body": null,
-  "text": "employee,user_id,conversations_handled,replies_sent,takeovers,replies_to_a_waiting_customer,average_response_seconds,slowest_response_seconds,first_reply_at,last_reply_at\r\nRana Haddad,1,5,12,2,7,1517.1,7320.0,2026-08-04T20:50:00+00:00,2026-08-28T23:38:35.672196+00:00\r\n",
+  "text": "employee,user_id,conversations_handled,replies_sent,takeovers,replies_to_a_waiting_customer,average_response_seconds,slowest_response_seconds,first_reply_at,last_reply_at\r\nRana Haddad,1,5,12,2,7,1517.1,7320.0,2026-08-04T20:50:00+00:00,2026-08-29T01:18:51.118190+00:00\r\n",
   "content_type": "text/csv; charset=utf-8",
-  "content_disposition": "attachment; filename=\"analytics_employees_30d_20260830_213638.csv\""
+  "content_disposition": "attachment; filename=\"analytics_employees_30d_20260830_231654.csv\""
  },
  "/api/analytics/export?report=departments": {
   "status": 200,
   "body": null,
   "text": "department,code,conversations,messages,from_customers,answered_by_assistant,answered_by_employees,automation_rate,waiting_for_a_human_now\r\nSupport,support,2,44,22,16,6,0.7273,1\r\nSales,sales,2,36,18,16,2,0.8889,1\r\nUnassigned,Unassigned,1,25,13,8,4,0.6667,0\r\nDelivery,delivery,1,22,11,11,0,1.0,0\r\n",
   "content_type": "text/csv; charset=utf-8",
-  "content_disposition": "attachment; filename=\"analytics_departments_30d_20260830_213638.csv\""
+  "content_disposition": "attachment; filename=\"analytics_departments_30d_20260830_231654.csv\""
  },
  "/api/analytics/export?report=channels": {
   "status": 200,
   "body": null,
-  "text": "day,channel,messages\r\n2026-08-02,messenger,4\r\n2026-08-02,telegram,0\r\n2026-08-02,instagram,0\r\n2026-08-02,whatsapp,0\r\n2026-08-03,messenger,0\r\n2026-08-03,telegram,2\r\n2026-08-03,instagram,0\r\n2026-08-03,whatsapp,0\r\n2026-08-04,messenger,0\r\n2026-08-04,telegram,0\r\n2026-08-04,instagram,6\r\n2026-08-04,whatsapp,0\r\n2026-08-05,messenger,0\r\n2026-08-05,telegram,0\r\n2026-08-05,instagram,0\r\n2026-08-05,whatsapp,4\r\n2026-08-06,messenger,2\r\n2026-08-06,telegram,0\r\n2026-08-06,instagram,0\r\n2026-08-06,whatsapp,0\r\n2026-08-07,messenger,0\r\n2026-08-07,telegram,0\r\n2026-08-07,instagram,0\r\n2026-08-07,whatsapp,6\r\n2026-08-08,messenger,4\r\n2026-08-08,telegram,0\r\n2026-08-08,instagram,0\r\n2026-08-08,whatsapp,0\r\n2026-08-09,messenger,0\r\n2026-08-09,telegram,2\r\n2026-08-09,instagram,0\r\n2026-08-09,whatsapp,0\r\n2026-08-10,messenger,0\r\n2026-08-10,telegram,0\r\n2026-08-10,instagram,6\r\n2026-08-10,whatsapp,0\r\n2026-08-11,messenger,0\r\n2026-08-11,telegram,0\r\n2026-08-11,instagram,0\r\n2026-08-11,whatsapp,4\r\n2026-08-12,messenger,2\r\n2026-08-12,telegram,0\r\n2026-08-12,instagram,0\r\n2026-08-12,whatsapp,0\r\n2026-08-13,messenger,0\r\n2026-08-13,telegram,0\r\n2026-08-13,instagram,0\r\n2026-08-13,whatsapp,6\r\n2026-08-14,messenger,4\r\n2026-08-14,telegram,0\r\n2026-08-14,instagram,0\r\n2026-08-14,whatsapp,0\r\n2026-08-15,messenger,0\r\n2026-08-15,telegram,2\r\n2026-08-15,instagram,0\r\n2026-08-15,whatsapp,0\r\n2026-08-16,messenger,0\r\n2026-08-16,telegram,0\r\n2026-08-16,instagram,6\r\n2026-08-16,whatsapp,0\r\n2026-08-17,messenger,0\r\n2026-08-17,telegram,0\r\n2026-08-17,instagram,0\r\n2026-08-17,whatsapp,4\r\n2026-08-18,messenger,2\r\n2026-08-18,telegram,0\r\n2026-08-18,instagram,0\r\n2026-08-18,whatsapp,0\r\n2026-08-19,messenger,0\r\n2026-08-19,telegram,0\r\n2026-08-19,instagram,0\r\n2026-08-19,whatsapp,6\r\n2026-08-20,messenger,4\r\n2026-08-20,telegram,0\r\n2026-08-20,instagram,0\r\n2026-08-20,whatsapp,0\r\n2026-08-21,messenger,4\r\n2026-08-21,telegram,2\r\n2026-08-21,instagram,0\r\n2026-08-21,whatsapp,0\r\n2026-08-22,messenger,0\r\n2026-08-22,telegram,0\r\n2026-08-22,instagram,6\r\n2026-08-22,whatsapp,0\r\n2026-08-23,messenger,0\r\n2026-08-23,telegram,0\r\n2026-08-23,instagram,0\r\n2026-08-23,whatsapp,4\r\n2026-08-24,messenger,2\r\n2026-08-24,telegram,0\r\n2026-08-24,instagram,0\r\n2026-08-24,whatsapp,4\r\n2026-08-25,messenger,0\r\n2026-08-25,telegram,0\r\n2026-08-25,instagram,0\r\n2026-08-25,whatsapp,6\r\n2026-08-26,messenger,4\r\n2026-08-26,telegram,0\r\n2026-08-26,instagram,2\r\n2026-08-26,whatsapp,0\r\n2026-08-27,messenger,0\r\n2026-08-27,telegram,2\r\n2026-08-27,instagram,0\r\n2026-08-27,whatsapp,0\r\n2026-08-28,messenger,0\r\n2026-08-28,telegram,2\r\n2026-08-28,instagram,6\r\n2026-08-28,whatsapp,0\r\n2026-08-29,messenger,0\r\n2026-08-29,telegram,0\r\n2026-08-29,instagram,0\r\n2026-08-29,whatsapp,5\r\n2026-08-30,messenger,2\r\n2026-08-30,telegram,0\r\n2026-08-30,instagram,0\r\n2026-08-30,whatsapp,0\r\n",
+  "text": "day,channel,messages\r\n2026-08-02,messenger,4\r\n2026-08-02,telegram,0\r\n2026-08-02,instagram,0\r\n2026-08-02,whatsapp,0\r\n2026-08-03,messenger,0\r\n2026-08-03,telegram,2\r\n2026-08-03,instagram,0\r\n2026-08-03,whatsapp,0\r\n2026-08-04,messenger,0\r\n2026-08-04,telegram,0\r\n2026-08-04,instagram,6\r\n2026-08-04,whatsapp,0\r\n2026-08-05,messenger,0\r\n2026-08-05,telegram,0\r\n2026-08-05,instagram,0\r\n2026-08-05,whatsapp,4\r\n2026-08-06,messenger,2\r\n2026-08-06,telegram,0\r\n2026-08-06,instagram,0\r\n2026-08-06,whatsapp,0\r\n2026-08-07,messenger,0\r\n2026-08-07,telegram,0\r\n2026-08-07,instagram,0\r\n2026-08-07,whatsapp,6\r\n2026-08-08,messenger,4\r\n2026-08-08,telegram,0\r\n2026-08-08,instagram,0\r\n2026-08-08,whatsapp,0\r\n2026-08-09,messenger,0\r\n2026-08-09,telegram,2\r\n2026-08-09,instagram,0\r\n2026-08-09,whatsapp,0\r\n2026-08-10,messenger,0\r\n2026-08-10,telegram,0\r\n2026-08-10,instagram,6\r\n2026-08-10,whatsapp,0\r\n2026-08-11,messenger,0\r\n2026-08-11,telegram,0\r\n2026-08-11,instagram,0\r\n2026-08-11,whatsapp,4\r\n2026-08-12,messenger,2\r\n2026-08-12,telegram,0\r\n2026-08-12,instagram,0\r\n2026-08-12,whatsapp,0\r\n2026-08-13,messenger,0\r\n2026-08-13,telegram,0\r\n2026-08-13,instagram,0\r\n2026-08-13,whatsapp,6\r\n2026-08-14,messenger,4\r\n2026-08-14,telegram,0\r\n2026-08-14,instagram,0\r\n2026-08-14,whatsapp,0\r\n2026-08-15,messenger,0\r\n2026-08-15,telegram,2\r\n2026-08-15,instagram,0\r\n2026-08-15,whatsapp,0\r\n2026-08-16,messenger,0\r\n2026-08-16,telegram,0\r\n2026-08-16,instagram,6\r\n2026-08-16,whatsapp,0\r\n2026-08-17,messenger,0\r\n2026-08-17,telegram,0\r\n2026-08-17,instagram,0\r\n2026-08-17,whatsapp,4\r\n2026-08-18,messenger,2\r\n2026-08-18,telegram,0\r\n2026-08-18,instagram,0\r\n2026-08-18,whatsapp,0\r\n2026-08-19,messenger,0\r\n2026-08-19,telegram,0\r\n2026-08-19,instagram,0\r\n2026-08-19,whatsapp,6\r\n2026-08-20,messenger,4\r\n2026-08-20,telegram,0\r\n2026-08-20,instagram,0\r\n2026-08-20,whatsapp,0\r\n2026-08-21,messenger,4\r\n2026-08-21,telegram,2\r\n2026-08-21,instagram,0\r\n2026-08-21,whatsapp,0\r\n2026-08-22,messenger,0\r\n2026-08-22,telegram,0\r\n2026-08-22,instagram,6\r\n2026-08-22,whatsapp,0\r\n2026-08-23,messenger,0\r\n2026-08-23,telegram,0\r\n2026-08-23,instagram,0\r\n2026-08-23,whatsapp,4\r\n2026-08-24,messenger,2\r\n2026-08-24,telegram,0\r\n2026-08-24,instagram,0\r\n2026-08-24,whatsapp,4\r\n2026-08-25,messenger,0\r\n2026-08-25,telegram,0\r\n2026-08-25,instagram,0\r\n2026-08-25,whatsapp,6\r\n2026-08-26,messenger,4\r\n2026-08-26,telegram,0\r\n2026-08-26,instagram,2\r\n2026-08-26,whatsapp,0\r\n2026-08-27,messenger,0\r\n2026-08-27,telegram,2\r\n2026-08-27,instagram,0\r\n2026-08-27,whatsapp,0\r\n2026-08-28,messenger,0\r\n2026-08-28,telegram,1\r\n2026-08-28,instagram,6\r\n2026-08-28,whatsapp,0\r\n2026-08-29,messenger,0\r\n2026-08-29,telegram,1\r\n2026-08-29,instagram,0\r\n2026-08-29,whatsapp,5\r\n2026-08-30,messenger,2\r\n2026-08-30,telegram,0\r\n2026-08-30,instagram,0\r\n2026-08-30,whatsapp,0\r\n",
   "content_type": "text/csv; charset=utf-8",
-  "content_disposition": "attachment; filename=\"analytics_channels_30d_20260830_213638.csv\""
+  "content_disposition": "attachment; filename=\"analytics_channels_30d_20260830_231654.csv\""
  },
  "/api/analytics/export?report=volume": {
   "status": 200,
   "body": null,
-  "text": "day,inbound,outbound,total\r\n2026-08-02,2,2,4\r\n2026-08-03,1,1,2\r\n2026-08-04,3,3,6\r\n2026-08-05,2,2,4\r\n2026-08-06,1,1,2\r\n2026-08-07,3,3,6\r\n2026-08-08,2,2,4\r\n2026-08-09,1,1,2\r\n2026-08-10,3,3,6\r\n2026-08-11,2,2,4\r\n2026-08-12,1,1,2\r\n2026-08-13,3,3,6\r\n2026-08-14,2,2,4\r\n2026-08-15,1,1,2\r\n2026-08-16,3,3,6\r\n2026-08-17,2,2,4\r\n2026-08-18,1,1,2\r\n2026-08-19,3,3,6\r\n2026-08-20,2,2,4\r\n2026-08-21,3,3,6\r\n2026-08-22,3,3,6\r\n2026-08-23,2,2,4\r\n2026-08-24,3,3,6\r\n2026-08-25,3,3,6\r\n2026-08-26,3,3,6\r\n2026-08-27,1,1,2\r\n2026-08-28,4,4,8\r\n2026-08-29,3,2,5\r\n2026-08-30,1,1,2\r\n",
+  "text": "day,inbound,outbound,total\r\n2026-08-02,2,2,4\r\n2026-08-03,1,1,2\r\n2026-08-04,3,3,6\r\n2026-08-05,2,2,4\r\n2026-08-06,1,1,2\r\n2026-08-07,3,3,6\r\n2026-08-08,2,2,4\r\n2026-08-09,1,1,2\r\n2026-08-10,3,3,6\r\n2026-08-11,2,2,4\r\n2026-08-12,1,1,2\r\n2026-08-13,3,3,6\r\n2026-08-14,2,2,4\r\n2026-08-15,1,1,2\r\n2026-08-16,3,3,6\r\n2026-08-17,2,2,4\r\n2026-08-18,1,1,2\r\n2026-08-19,3,3,6\r\n2026-08-20,2,2,4\r\n2026-08-21,3,3,6\r\n2026-08-22,3,3,6\r\n2026-08-23,2,2,4\r\n2026-08-24,3,3,6\r\n2026-08-25,3,3,6\r\n2026-08-26,3,3,6\r\n2026-08-27,1,1,2\r\n2026-08-28,4,3,7\r\n2026-08-29,3,3,6\r\n2026-08-30,1,1,2\r\n",
   "content_type": "text/csv; charset=utf-8",
-  "content_disposition": "attachment; filename=\"analytics_volume_30d_20260830_213638.csv\""
+  "content_disposition": "attachment; filename=\"analytics_volume_30d_20260830_231654.csv\""
  },
  "/api/analytics/export?report=response": {
   "status": 200,
   "body": null,
   "text": "record_type,label,conversations,waited_seconds,channel,conversation_id,asked_at\r\nbucket,under 1 min,0,,,,\r\nbucket,1-5 min,3,,,,\r\nbucket,5-15 min,3,,,,\r\nbucket,15-60 min,0,,,,\r\nbucket,1-4 hours,0,,,,\r\nbucket,over 4 hours,0,,,,\r\npercentile,p50,,240.0,,,\r\npercentile,p75,,360.0,,,\r\npercentile,p90,,360.0,,,\r\npercentile,p95,,360.0,,,\r\nslowest_answered,نور عون,,360.0,instagram,3,2026-08-04T20:25:00+00:00\r\nslowest_answered,Rami Daher,,360.0,whatsapp,6,2026-08-07T18:13:00+00:00\r\nslowest_answered,Omar Saad,,300.0,whatsapp,2,2026-08-05T14:19:00+00:00\r\nslowest_answered,لينا خوري,,240.0,messenger,1,2026-08-06T11:25:00+00:00\r\nslowest_answered,Karim Fares,,240.0,telegram,4,2026-08-03T16:01:00+00:00\r\nslowest_answered,مايا رزق,,240.0,messenger,5,2026-08-02T20:19:00+00:00\r\n",
   "content_type": "text/csv; charset=utf-8",
-  "content_disposition": "attachment; filename=\"analytics_response_30d_20260830_213638.csv\""
+  "content_disposition": "attachment; filename=\"analytics_response_30d_20260830_231654.csv\""
  },
  "/conversations/messenger/cust-lina": {
   "status": 200,
@@ -3195,7 +3467,7 @@
     {
      "id": 1,
      "conversation_id": 1,
-     "time": "2026-08-21T21:36:35.559264+00:00",
+     "time": "2026-08-21T23:16:51.020269+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -3209,7 +3481,7 @@
     {
      "id": 2,
      "conversation_id": 1,
-     "time": "2026-08-21T21:37:35.568528+00:00",
+     "time": "2026-08-21T23:17:51.028034+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "out",
@@ -3223,7 +3495,7 @@
     {
      "id": 3,
      "conversation_id": 1,
-     "time": "2026-08-21T21:40:35.577024+00:00",
+     "time": "2026-08-21T23:20:51.035548+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -3237,7 +3509,7 @@
     {
      "id": 4,
      "conversation_id": 1,
-     "time": "2026-08-21T21:58:35.585646+00:00",
+     "time": "2026-08-21T23:38:51.043061+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "out",
@@ -3513,7 +3785,7 @@
     {
      "id": 5,
      "conversation_id": 2,
-     "time": "2026-08-24T21:36:35.598942+00:00",
+     "time": "2026-08-24T23:16:51.056713+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -3527,7 +3799,7 @@
     {
      "id": 6,
      "conversation_id": 2,
-     "time": "2026-08-24T21:37:35.607483+00:00",
+     "time": "2026-08-24T23:17:51.064344+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "out",
@@ -3541,7 +3813,7 @@
     {
      "id": 7,
      "conversation_id": 2,
-     "time": "2026-08-24T21:41:35.615970+00:00",
+     "time": "2026-08-24T23:21:51.072006+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -3555,7 +3827,7 @@
     {
      "id": 8,
      "conversation_id": 2,
-     "time": "2026-08-24T21:47:35.625093+00:00",
+     "time": "2026-08-24T23:27:51.079087+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "out",
@@ -3971,7 +4243,7 @@
     {
      "id": 9,
      "conversation_id": 3,
-     "time": "2026-08-26T21:36:35.640516+00:00",
+     "time": "2026-08-26T23:16:51.090879+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "in",
@@ -3985,7 +4257,7 @@
     {
      "id": 10,
      "conversation_id": 3,
-     "time": "2026-08-26T21:37:35.650334+00:00",
+     "time": "2026-08-26T23:17:51.098344+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "out",
@@ -4233,7 +4505,7 @@
     {
      "id": 11,
      "conversation_id": 4,
-     "time": "2026-08-28T21:36:35.663597+00:00",
+     "time": "2026-08-28T23:16:51.110487+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "in",
@@ -4247,7 +4519,7 @@
     {
      "id": 12,
      "conversation_id": 4,
-     "time": "2026-08-28T23:38:35.672196+00:00",
+     "time": "2026-08-29T01:18:51.118190+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "out",
@@ -4551,7 +4823,7 @@
     {
      "id": 13,
      "conversation_id": 5,
-     "time": "2026-08-30T01:36:35.687982+00:00",
+     "time": "2026-08-30T03:16:51.129895+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "in",
@@ -4565,7 +4837,7 @@
     {
      "id": 14,
      "conversation_id": 5,
-     "time": "2026-08-30T01:37:35.696084+00:00",
+     "time": "2026-08-30T03:17:51.137114+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "out",
@@ -4925,7 +5197,7 @@
     {
      "id": 15,
      "conversation_id": 6,
-     "time": "2026-08-29T15:36:35.709127+00:00",
+     "time": "2026-08-29T17:16:51.148695+00:00",
      "channel": "whatsapp",
      "user_id": "cust-rami",
      "direction": "in",
@@ -4955,10 +5227,10 @@
    "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
    "lifecycle_stage": "vip",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T21:36:37.766357+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.766357+00:00",
-   "created_at": "2026-08-30T21:36:37.766357+00:00",
-   "updated_at": "2026-08-30T21:36:37.842432+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.093093+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.093093+00:00",
+   "created_at": "2026-08-30T23:16:53.093093+00:00",
+   "updated_at": "2026-08-30T23:16:53.186089+00:00",
    "identities": [
     {
      "channel": "messenger",
@@ -4966,8 +5238,8 @@
      "username": null,
      "display_name": "Lina Khoury",
      "profile_picture": null,
-     "created_at": "2026-08-30T21:36:37.766357+00:00",
-     "updated_at": "2026-08-30T21:36:37.766357+00:00"
+     "created_at": "2026-08-30T23:16:53.093093+00:00",
+     "updated_at": "2026-08-30T23:16:53.093093+00:00"
     }
    ],
    "channels": [
@@ -5010,7 +5282,7 @@
       "documents_json": "[{\"label\": \"بطاقة الهوية\", \"url\": \"https://files.example.com/lina-id.pdf\"}]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T21:36:37.842432+00:00"
+     "created_at": "2026-08-30T23:16:53.186089+00:00"
     },
     {
      "type": "conversation_started",
@@ -5020,7 +5292,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T21:36:35.548355+00:00"
+     "created_at": "2026-08-30T23:16:51.011574+00:00"
     }
    ]
   }
@@ -5041,10 +5313,10 @@
    "notes": null,
    "lifecycle_stage": "customer",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T21:36:37.772940+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.772940+00:00",
-   "created_at": "2026-08-30T21:36:37.772940+00:00",
-   "updated_at": "2026-08-30T21:36:37.867444+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.102435+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.102435+00:00",
+   "created_at": "2026-08-30T23:16:53.102435+00:00",
+   "updated_at": "2026-08-30T23:16:53.212512+00:00",
    "identities": [
     {
      "channel": "whatsapp",
@@ -5052,8 +5324,8 @@
      "username": null,
      "display_name": "Omar Saad",
      "profile_picture": null,
-     "created_at": "2026-08-30T21:36:37.772940+00:00",
-     "updated_at": "2026-08-30T21:36:37.772940+00:00"
+     "created_at": "2026-08-30T23:16:53.102435+00:00",
+     "updated_at": "2026-08-30T23:16:53.102435+00:00"
     }
    ],
    "channels": [
@@ -5086,7 +5358,7 @@
       "tags_json": "[\"reserved\", \"small package\"]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T21:36:37.867444+00:00"
+     "created_at": "2026-08-30T23:16:53.212512+00:00"
     },
     {
      "type": "conversation_started",
@@ -5096,7 +5368,7 @@
      "topic": null,
      "status": "human_handling",
      "handled_by_name": "Rana Haddad",
-     "created_at": "2026-08-30T21:36:35.589577+00:00"
+     "created_at": "2026-08-30T23:16:51.047705+00:00"
     }
    ]
   }
@@ -5117,10 +5389,10 @@
    "notes": null,
    "lifecycle_stage": "active",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T21:36:37.779643+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.779643+00:00",
-   "created_at": "2026-08-30T21:36:37.779643+00:00",
-   "updated_at": "2026-08-30T21:36:37.892779+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.111422+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.111422+00:00",
+   "created_at": "2026-08-30T23:16:53.111422+00:00",
+   "updated_at": "2026-08-30T23:16:53.237300+00:00",
    "identities": [
     {
      "channel": "instagram",
@@ -5128,8 +5400,8 @@
      "username": null,
      "display_name": "Nour Aoun",
      "profile_picture": null,
-     "created_at": "2026-08-30T21:36:37.779643+00:00",
-     "updated_at": "2026-08-30T21:36:37.779643+00:00"
+     "created_at": "2026-08-30T23:16:53.111422+00:00",
+     "updated_at": "2026-08-30T23:16:53.111422+00:00"
     }
    ],
    "channels": [
@@ -5156,7 +5428,7 @@
       "lifecycle_stage": "active",
       "tags_json": "[\"عرض الشهر\"]"
      },
-     "created_at": "2026-08-30T21:36:37.892779+00:00"
+     "created_at": "2026-08-30T23:16:53.237300+00:00"
     },
     {
      "type": "conversation_started",
@@ -5166,7 +5438,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T21:36:35.629405+00:00"
+     "created_at": "2026-08-30T23:16:51.082724+00:00"
     }
    ]
   }
@@ -5187,10 +5459,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T21:36:37.785821+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.785821+00:00",
-   "created_at": "2026-08-30T21:36:37.785821+00:00",
-   "updated_at": "2026-08-30T21:36:37.915761+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.120436+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.120436+00:00",
+   "created_at": "2026-08-30T23:16:53.120436+00:00",
+   "updated_at": "2026-08-30T23:16:53.260508+00:00",
    "identities": [
     {
      "channel": "telegram",
@@ -5198,8 +5470,8 @@
      "username": null,
      "display_name": "Karim Fares",
      "profile_picture": null,
-     "created_at": "2026-08-30T21:36:37.785821+00:00",
-     "updated_at": "2026-08-30T21:36:37.785821+00:00"
+     "created_at": "2026-08-30T23:16:53.120436+00:00",
+     "updated_at": "2026-08-30T23:16:53.120436+00:00"
     }
    ],
    "channels": [
@@ -5227,7 +5499,7 @@
       "lifecycle_stage": "lead",
       "tags_json": "[\"catalogue\"]"
      },
-     "created_at": "2026-08-30T21:36:37.915761+00:00"
+     "created_at": "2026-08-30T23:16:53.260508+00:00"
     },
     {
      "type": "conversation_started",
@@ -5237,7 +5509,7 @@
      "topic": null,
      "status": "human_handling",
      "handled_by_name": "Rana Haddad",
-     "created_at": "2026-08-30T21:36:35.654212+00:00"
+     "created_at": "2026-08-30T23:16:51.101868+00:00"
     }
    ]
   }
@@ -5258,10 +5530,10 @@
    "notes": null,
    "lifecycle_stage": "customer",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T21:36:37.792093+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.792093+00:00",
-   "created_at": "2026-08-30T21:36:37.792093+00:00",
-   "updated_at": "2026-08-30T21:36:37.940308+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.129118+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.129118+00:00",
+   "created_at": "2026-08-30T23:16:53.129118+00:00",
+   "updated_at": "2026-08-30T23:16:53.284948+00:00",
    "identities": [
     {
      "channel": "messenger",
@@ -5269,8 +5541,8 @@
      "username": null,
      "display_name": "Maya Rizk",
      "profile_picture": null,
-     "created_at": "2026-08-30T21:36:37.792093+00:00",
-     "updated_at": "2026-08-30T21:36:37.792093+00:00"
+     "created_at": "2026-08-30T23:16:53.129118+00:00",
+     "updated_at": "2026-08-30T23:16:53.129118+00:00"
     }
    ],
    "channels": [
@@ -5299,7 +5571,7 @@
       "tags_json": "[\"مواعيد\"]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T21:36:37.940308+00:00"
+     "created_at": "2026-08-30T23:16:53.284948+00:00"
     },
     {
      "type": "conversation_started",
@@ -5309,7 +5581,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T21:36:35.676938+00:00"
+     "created_at": "2026-08-30T23:16:51.121732+00:00"
     }
    ]
   }
@@ -5330,10 +5602,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T21:36:37.798277+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.798277+00:00",
-   "created_at": "2026-08-30T21:36:37.798277+00:00",
-   "updated_at": "2026-08-30T21:36:37.798277+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.137316+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.137316+00:00",
+   "created_at": "2026-08-30T23:16:53.137316+00:00",
+   "updated_at": "2026-08-30T23:16:53.137316+00:00",
    "identities": [
     {
      "channel": "whatsapp",
@@ -5341,8 +5613,8 @@
      "username": null,
      "display_name": "Rami Daher",
      "profile_picture": null,
-     "created_at": "2026-08-30T21:36:37.798277+00:00",
-     "updated_at": "2026-08-30T21:36:37.798277+00:00"
+     "created_at": "2026-08-30T23:16:53.137316+00:00",
+     "updated_at": "2026-08-30T23:16:53.137316+00:00"
     }
    ],
    "channels": [
@@ -5367,7 +5639,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T21:36:35.700055+00:00"
+     "created_at": "2026-08-30T23:16:51.140691+00:00"
     }
    ]
   }
@@ -5388,10 +5660,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T21:36:37.815819+00:00",
-   "last_seen_at": "2026-08-30T21:36:37.815819+00:00",
-   "created_at": "2026-08-30T21:36:37.815819+00:00",
-   "updated_at": "2026-08-30T21:36:37.965546+00:00",
+   "first_seen_at": "2026-08-30T23:16:53.159287+00:00",
+   "last_seen_at": "2026-08-30T23:16:53.159287+00:00",
+   "created_at": "2026-08-30T23:16:53.159287+00:00",
+   "updated_at": "2026-08-30T23:16:53.309644+00:00",
    "identities": [],
    "channels": [],
    "conversation_count": 0,
@@ -5414,7 +5686,7 @@
       "lifecycle_stage": "lead",
       "tags_json": "[\"walk-in\"]"
      },
-     "created_at": "2026-08-30T21:36:37.965546+00:00"
+     "created_at": "2026-08-30T23:16:53.309644+00:00"
     },
     {
      "type": "profile_updated",
@@ -5424,7 +5696,7 @@
       "phone": "+96170445566",
       "email": "rita.ghanem@example.com"
      },
-     "created_at": "2026-08-30T21:36:37.815819+00:00"
+     "created_at": "2026-08-30T23:16:53.159287+00:00"
     }
    ]
   }
@@ -5432,7 +5704,7 @@
  "/api/auth/login": {
   "status": 200,
   "body": {
-   "access_token": "c3_8oQ0B1O1na6y7jJgwp0tG6OnIMstljnx48LWl35XDrTq2if8dReEwucqG8nil",
+   "access_token": "RPtGE79I0Mkim07tP6m1MJQ_JghGKGo6r-_f0u3XvQ4_72uXCWgJWAeY9BbIo13L",
    "token_type": "bearer",
    "expires_in": 43200,
    "user": {
@@ -5446,8 +5718,8 @@
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T21:36:34.384019+00:00",
-    "updated_at": "2026-08-30T21:36:34.384019+00:00",
+    "created_at": "2026-08-30T23:16:49.987779+00:00",
+    "updated_at": "2026-08-30T23:16:49.987779+00:00",
     "active_company_id": 1,
     "active_company_name": "Cedar Home Appliances",
     "active_company_slug": "cedar-home"
@@ -5482,7 +5754,7 @@
     "users.manage",
     "users.view"
    ],
-   "csrf_token": "2NfgyXHwg6PUPCXWcQ3TWO5rLNeZ2FlzmZ2YRnNwi-E"
+   "csrf_token": "sfw6cz2uHXXfUZ1wk4T7D1v3Cd-bDwdQgbZkpQ2gSrk"
   }
  }
 }

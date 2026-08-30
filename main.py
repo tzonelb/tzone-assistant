@@ -25,6 +25,7 @@ from backend.api.routes import (
     analytics,
     appointments,
     auth,
+    billing,
     broadcasts,
     calls,
     catalogue,
@@ -42,11 +43,13 @@ from backend.api.routes import (
     health,
     knowledge,
     manual_messages,
+    notification_preferences,
     notifications,
     platform,
     platform_ui,
     roles,
     scheduler,
+    support_tickets,
     team_chat,
     tickets,
 )
@@ -320,9 +323,36 @@ app.include_router(dialer.router, dependencies=_module("dialer"))
 # one of these before their body is read.
 app.include_router(dialer.webhooks_router)
 app.include_router(notifications.router, dependencies=_module("notifications"))
+# `preferences`, not `notifications` — this is the one router the personal
+# Settings screen owns, and until it existed `preferences` was a module switch
+# the operator could turn off with no effect on the API at all. It was exempt
+# on the grounds that its screen made no request, which
+# `tests/test_every_module_is_gated.py` checked rather than took on trust; the
+# moment that screen started saving anything, the exemption stopped being true.
+#
+# Gating it on `notifications` instead would have left `preferences` still
+# switching nothing. The bell's own rows stay behind `notifications`, and a
+# company with notifications switched off writes none in the first place —
+# `notification_service._wanted` refuses before anything is stored — so a
+# preference read here with the bell off is answered and decides nothing.
+app.include_router(
+    notification_preferences.router, dependencies=_module("preferences")
+)
 app.include_router(roles.router, dependencies=_module("roles"))
 app.include_router(tickets.router, dependencies=_module("tasks"))
 app.include_router(tickets.tasks_router, dependencies=_module("tasks"))
+# Both ride with `company_settings`: they are two sections of that one screen,
+# and they are reached from nowhere else.
+#
+# The full gate, not `_module_unpaid_too`, even though Billing is where a plan
+# is renewed. Exempting it would buy nothing — the page it is a section of is
+# already behind `_module("company_settings")`, so a lapsed company cannot open
+# the screen to reach the exempt section anyway. The door that stays open for a
+# lapsed company is `/api/dashboard/subscription`, which is the one the
+# dashboard's own exemption exists for. Making a second, half-reachable one
+# would read as a renewal path and not be one.
+app.include_router(billing.router, dependencies=_module("company_settings"))
+app.include_router(support_tickets.router, dependencies=_module("company_settings"))
 
 app.include_router(developer_center.router)
 

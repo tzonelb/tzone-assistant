@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 5
+TENANT_SCHEMA_VERSION = 6
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -813,6 +813,34 @@ TENANT_TABLES: tuple[str, ...] = (
         FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
     )
     """,
+    # Which kinds of notification one employee wants delivered to them.
+    #
+    # Deliberately *not* the same thing as the `notifications` settings section,
+    # which is the company deciding whether a row is written at all. This is one
+    # person deciding whether the row that was written is delivered to them —
+    # the company gate runs first, this one second, and neither can substitute
+    # for the other: an owner silencing task reminders for themselves must not
+    # silence them for the whole team, which is exactly what putting this in the
+    # company section would have done.
+    #
+    # `user_id` points at a control-plane user and carries no foreign key, for
+    # the reason given at the top of this file. One row per user per company:
+    # somebody who belongs to two companies tunes each separately, because the
+    # volume and the job are different in each.
+    """
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        notify_new_message TEXT NOT NULL DEFAULT 'all',
+        notify_ai_escalation INTEGER NOT NULL DEFAULT 1,
+        notify_mentions INTEGER NOT NULL DEFAULT 1,
+        notify_tasks INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(company_id, user_id)
+    )
+    """,
 )
 
 
@@ -1021,7 +1049,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "collect_message_delay_seconds": 20,
         "return_to_ai_timeout_minutes": 5,
         "reply_access_mode": "take_required",
-        "auto_read_mode": "assigned_owner_only",
         "auto_release_to_ai": True,
         # Which language to answer in before the customer has asked for one.
         # `auto` detects from the message, which is what every company had.

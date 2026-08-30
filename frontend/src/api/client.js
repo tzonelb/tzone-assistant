@@ -334,7 +334,32 @@ export async function logoutRequest() {
 }
 
 export async function getCurrentUserRequest() {
-  return apiRequest("/api/auth/me");
+  const result = await apiRequest("/api/auth/me");
+
+  /* The redesigned screens ask a company row what the signed-in person may do
+   * there — `company.permission_codes` — while this API answers one flat
+   * `permissions` list for the company the session is currently on. Attached
+   * per company here rather than read differently on each screen.
+   *
+   * Only the active company gets the list, because only the active company's
+   * codes were resolved: filling the others in from the same list would claim
+   * a permission in a company the server never checked, and the screens that
+   * read it use it to decide what to *offer*. An empty list on an inactive
+   * company is the honest answer — the server re-checks on every call anyway.
+   */
+  const activeCompanyId = result?.user?.active_company_id;
+  const permissions = Array.isArray(result?.permissions) ? result.permissions : [];
+
+  return {
+    ...result,
+    companies: (Array.isArray(result?.companies) ? result.companies : []).map(
+      (company) => ({
+        ...company,
+        permission_codes:
+          company.id === activeCompanyId ? permissions : [],
+      }),
+    ),
+  };
 }
 
 export async function getWorkspaceConfigRequest() {
@@ -1634,14 +1659,499 @@ export async function createKnowledgeCategoryRequest(values) {
   });
 }
 
+/* ------------------------------------------------- company settings (v2)
+ *
+ * The design's Company Settings page keeps its business hours inside the
+ * `company_profile` section, as `business_hours`, shaped
+ * `{ monday: { open: true, from: "09:00", to: "18:00" }, ... }`.
+ *
+ * This platform already owns that decision, in its own `working_hours`
+ * section: `{ enabled, timezone, days: { monday: { open, close, closed } } }`.
+ * It is not a second copy of the same thing — it is *the* copy, and it is the
+ * one the assistant actually consults (`core/working_hours.py`, read from
+ * `core/engine.py` on the escalation path).
+ *
+ * So the translation happens here rather than on the page. Storing
+ * `business_hours` into `company_profile` would have worked — that section is
+ * an open bag and would have accepted it — and would have been the worst
+ * outcome available: an owner setting their hours on the screen, seeing them
+ * saved, and the assistant going on answering at three in the morning from the
+ * other store. The `working_hours` block in `database/schema_tenant.py` names
+ * that exact failure.
+ *
+ * Two shape differences, both real:
+ *   - `open` means "we are open this day" in the design, and "the time we open"
+ *     here. Reading one as the other is a boolean where a clock belongs.
+ *   - the design has no `closed`; a day is open or it is not.
+ */
+const WEEKDAYS = [
+  "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday",
+];
+
+function toBusinessHours(workingHours) {
+  const days = workingHours?.days || {};
+
+  return Object.fromEntries(
+    WEEKDAYS.map((day) => {
+      const stored = days[day] || {};
+
+      return [day, {
+        // `enabled` off means the company has not set hours at all, which the
+        // engine treats as always open. Drawing every day ticked would tell an
+        // owner they had set something they had not.
+        open: Boolean(workingHours?.enabled) && !stored.closed,
+        from: stored.open || "09:00",
+        to: stored.close || "18:00",
+      }];
+    }),
+  );
+}
+
+function toWorkingHours(businessHours, timezone) {
+  const days = Object.fromEntries(
+    WEEKDAYS.map((day) => {
+      const drawn = businessHours?.[day] || {};
+
+      return [day, {
+        open: drawn.from || "09:00",
+        close: drawn.to || "18:00",
+        closed: !drawn.open,
+      }];
+    }),
+  );
+
+  return {
+    // Saving the screen is the act that turns hours on. Leaving `enabled` false
+    // would store the whole week and have the engine ignore all of it.
+    enabled: true,
+    timezone: timezone || "Asia/Beirut",
+    days,
+  };
+}
+
 export async function getCompanySettingSectionRequest(section) {
-  return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`);
+  const result = await apiRequest(
+    `/api/company-settings/${encodeURIComponent(section)}`,
+  );
+
+  if (section !== "company_profile") {
+    return result;
+  }
+
+  // A second request, not a wider one: the two sections are stored separately
+  // and are read by different screens. The profile screen is the only place
+  // that draws them together.
+  let workingHours = null;
+
+  try {
+    workingHours = await apiRequest("/api/company-settings/working_hours");
+  } catch {
+    // Hours are one row of the profile form. Failing to read them should not
+    // blank the company's name and timezone with an error.
+  }
+
+  return {
+    ...result,
+    values: {
+      ...result?.values,
+      business_hours: toBusinessHours(workingHours?.values),
+    },
+    locked_keys: [
+      ...(result?.locked_keys || []),
+      // A Super Admin lock on the hours is a lock on the control that edits
+      // them, wherever that control is drawn.
+      ...((workingHours?.locked_keys || []).length ? ["business_hours"] : []),
+    ],
+  };
 }
 
 export async function updateCompanySettingSectionRequest(section, values) {
-  return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`, {
+  if (section !== "company_profile") {
+    return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`, {
+      method: "PUT",
+      body: { values },
+    });
+  }
+
+  const { business_hours: businessHours, ...profile } = values || {};
+
+  const result = await apiRequest("/api/company-settings/company_profile", {
     method: "PUT",
-    body: { values },
+    body: { values: profile },
+  });
+
+  let workingHours = null;
+
+  if (businessHours) {
+    workingHours = await apiRequest("/api/company-settings/working_hours", {
+      method: "PUT",
+      body: { values: toWorkingHours(businessHours, profile.timezone) },
+    });
+  }
+
+  return {
+    ...result,
+    values: {
+      ...result?.values,
+      business_hours: workingHours
+        ? toBusinessHours(workingHours.values)
+        : businessHours,
+    },
+  };
+}
+
+/* ------------------------------------------------------------- billing (v2)
+ *
+ * The design calls these /api/platform/my-* . On this platform the
+ * /api/platform prefix
+ * is the operator's console and runs on a platform-scope session no company
+ * login can obtain, so the company's own view of its plan lives at
+ * /api/billing instead (backend/api/routes/billing.py). Same information,
+ * a prefix that does not claim an authority the caller does not have.
+ */
+
+export async function getMySubscriptionRequest() {
+  const result = await apiRequest("/api/billing/subscription");
+
+  return {
+    ...result,
+    // The plan's feature flags are `voice_ai_enabled` and friends here; the
+    // design reads `features.voice_ai`. Both names are returned, so anything
+    // reading the API's own spelling keeps working. Getting this wrong is
+    // invisible: the voice-reply toggle simply stays disabled and tells the
+    // owner to upgrade a plan they are already on.
+    features: {
+      ...result?.features,
+      voice_ai: Boolean(result?.features?.voice_ai_enabled),
+      image_ai: Boolean(result?.features?.image_ai_enabled),
+      accounting: Boolean(result?.features?.accounting_connector_enabled),
+      products: Boolean(result?.features?.product_connector_enabled),
+    },
+  };
+}
+
+export async function getMyModulesRequest() {
+  // The design indexes the result directly (`modules[key]`); this API wraps it.
+  const result = await apiRequest("/api/billing/modules");
+
+  return result?.modules || {};
+}
+
+export async function getPlansCatalogRequest() {
+  return apiRequest("/api/billing/plans");
+}
+
+export async function requestPlanChangeRequest(planId, note) {
+  return apiRequest("/api/billing/requests", {
+    method: "POST",
+    body: { plan_id: planId, note: note || "" },
+  });
+}
+
+export async function getMySubscriptionRequestsRequest() {
+  return apiRequest("/api/billing/requests");
+}
+
+/* ------------------------------------------- secure channels panel (v2)
+ *
+ * `SecureChannelsPanel` is the design's Channels section, and it is drawn
+ * against a subsystem this platform does not have: a six-digit email code that
+ * buys a 20-minute *elevated* session (/api/security/send-code ,
+ * `/verify-code`, `/changes` and an `X-Elevated-Token` header on every write),
+ * plus per-provider connect flows — a WhatsApp QR pairing bridge, and direct
+ * Instagram/Facebook credential logins.
+ *
+ * None of it exists here. What this platform has is one generic channel
+ * account API: `GET /api/channels`, `POST /api/channels`, and
+ * `DELETE /api/channels/{id}`, all behind `channels.view`/`channels.manage`.
+ *
+ * So the two calls that DO have a home here are adapted below and are real,
+ * which is what lets the section draw the company's connected accounts and its
+ * plan usage rather than an empty shell. The rest reject with the reason. They
+ * are deliberately NOT pointed at a plausible-looking endpoint: inventing a
+ * destination for a credential-handling flow is how a connect form comes to
+ * report success and store nothing, and an elevated-session check comes to be
+ * skipped rather than implemented. The panel's own error handling shows the
+ * message.
+ */
+
+/* One message, one reason, for every design control whose backend this platform
+ * does not have. It rejects rather than resolving empty on purpose: a screen
+ * that quietly renders "no items" for a feature that was never built is
+ * indistinguishable from one whose data failed to load, and both look like a
+ * feature that exists and is broken. An error the section shows says which it
+ * is. No request is made — there is no endpoint to make it to, and pointing one
+ * at a plausible-looking path is how a form comes to report success and store
+ * nothing. */
+function notBuiltHere(what, instead = "") {
+  return Promise.reject(
+    new Error(
+      `${what} is not available on this platform yet.` +
+      (instead ? ` ${instead}` : ""),
+    ),
+  );
+}
+
+export async function listMyChannelsRequest() {
+  // Real. `/api/channels` answers `items`; the panel reads `channels`.
+  const result = await apiRequest("/api/channels");
+
+  return { ...result, channels: result?.items || [] };
+}
+
+export async function disconnectChannelRequest(accountId, elevatedToken) {
+  // Real, minus the elevated token: there is no elevated session to prove, and
+  // sending a header the server does not read would look like one existed.
+  // `channels.manage` is what actually guards this.
+  void elevatedToken;
+
+  return apiRequest(`/api/channels/${encodeURIComponent(accountId)}`, {
+    method: "DELETE",
+  });
+}
+
+export function sendVerificationCodeRequest() {
+  return notBuiltHere("Email verification for channel access",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function verifyCodeRequest() {
+  return notBuiltHere("Email verification for channel access",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function getSessionChangesRequest() {
+  return notBuiltHere("The verified-session change log",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function connectTelegramRequest() {
+  return notBuiltHere("Connecting Telegram from this screen",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function connectWhatsAppRequest() {
+  return notBuiltHere("Connecting WhatsApp Cloud from this screen",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function connectInstagramDirectRequest() {
+  return notBuiltHere("Connecting Instagram with a username and password",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function connectFacebookDirectRequest() {
+  return notBuiltHere("Connecting Facebook with session cookies",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function startFacebookOAuthRequest() {
+  return notBuiltHere("Connecting Facebook over OAuth",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function startWhatsAppQrRequest() {
+  return notBuiltHere("WhatsApp QR pairing",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+export function whatsAppQrStatusRequest() {
+  return notBuiltHere("WhatsApp QR pairing",
+    "Connect and disconnect accounts from the Channels screen instead.");
+}
+
+/* ----------------------------------------------- support tickets (v2)
+ *
+ * To the T-ZONE team about the platform, not to the company about a customer —
+ * `/api/tickets` is that other thing and is a different table entirely.
+ */
+
+export async function listSupportTicketsRequest() {
+  return apiRequest("/api/support-tickets");
+}
+
+export async function createSupportTicketRequest(subject, description, priority) {
+  return apiRequest("/api/support-tickets", {
+    method: "POST",
+    body: { subject, description, priority },
+  });
+}
+
+/* ------------------------------------------------- AI Knowledge (v2)
+ *
+ * The design's Knowledge section keeps an entry as
+ * `{ title, content, department, tags }`. This platform's knowledge base is
+ * `knowledge_items`: one title, Arabic and English content side by side, a
+ * department and a `keywords` string.
+ *
+ * They are the same feature, so this adapts rather than stubs. Two real
+ * differences:
+ *   - one `content` box, two content columns. What the employee typed goes to
+ *     `content_en`, and `content` is read back as whichever column has text —
+ *     an entry written in Arabic through the older screen still shows here
+ *     instead of appearing blank.
+ *   - `tags` is a list; `keywords` is one comma-separated string.
+ */
+
+function toKnowledgeEntry(item = {}) {
+  return {
+    id: item.id,
+    title: item.title,
+    content: item.content_en || item.content_ar || "",
+    department: item.department || "Unassigned",
+    tags: String(item.keywords || "")
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean),
+  };
+}
+
+function toKnowledgeItem(title, content, department, tags) {
+  return {
+    title,
+    // Never both, and never neither: the API refuses an item with no content at
+    // all, which is the one thing this screen can produce by accident.
+    content_en: content || "",
+    department: department && department !== "Unassigned" ? department : null,
+    keywords: (tags || []).join(", "),
+  };
+}
+
+export async function listKnowledgeEntriesRequest() {
+  const result = await apiRequest("/api/knowledge");
+
+  return { ...result, entries: (result?.items || []).map(toKnowledgeEntry) };
+}
+
+export async function createKnowledgeEntryRequest(title, content, department, tags) {
+  return apiRequest("/api/knowledge", {
+    method: "POST",
+    body: toKnowledgeItem(title, content, department, tags),
+  });
+}
+
+export async function updateKnowledgeEntryRequest(entryId, title, content, department, tags) {
+  return apiRequest(`/api/knowledge/${encodeURIComponent(entryId)}`, {
+    method: "PUT",
+    body: toKnowledgeItem(title, content, department, tags),
+  });
+}
+
+export async function deleteKnowledgeEntryRequest(entryId) {
+  return apiRequest(`/api/knowledge/${encodeURIComponent(entryId)}`, {
+    method: "DELETE",
+  });
+}
+
+/* --------------------------------- AI Instructions and Reply Flows (v2)
+ *
+ * Two more sections of the design's Company Settings drawn against backends
+ * this platform does not have.
+ *
+ * `InstructionsPage` wants /api/instructions — an ordered list of behaviour
+ * rules, each scoped to a department or channel, with a reorder endpoint that
+ * decides which rule wins a conflict. `ReplyFlowsListPage` wants
+ * /api/reply-flows — the step-by-step conversation builder.
+ *
+ * Neither exists here, and neither is a rename of something that does: the
+ * nearest things this platform owns are the AI profile
+ * (`/api/ai-teaching/profile`) and the per-channel reply policy
+ * (`/api/ai-teaching/reply-policy`), which are different models answering
+ * different questions. Mapping one onto the other would produce a screen that
+ * accepted rules and silently changed nothing about how the assistant replies.
+ *
+ * So they reject with the reason, and the sections stay in the navigation
+ * drawn exactly as the design draws them.
+ */
+
+export function listInstructionsRequest() {
+  return notBuiltHere("AI Instructions");
+}
+
+export function createInstructionRequest() {
+  return notBuiltHere("AI Instructions");
+}
+
+export function updateInstructionRequest() {
+  return notBuiltHere("AI Instructions");
+}
+
+export function deleteInstructionRequest() {
+  return notBuiltHere("AI Instructions");
+}
+
+export function reorderInstructionsRequest() {
+  return notBuiltHere("AI Instructions");
+}
+
+export function listReplyFlowsRequest() {
+  return notBuiltHere("Reply Flows");
+}
+
+export function createReplyFlowRequest() {
+  return notBuiltHere("Reply Flows");
+}
+
+export function deleteReplyFlowRequest() {
+  return notBuiltHere("Reply Flows");
+}
+
+export function duplicateReplyFlowRequest() {
+  return notBuiltHere("Reply Flows");
+}
+
+/* ------------------------------------------- notification preferences (v2) */
+
+export async function getNotificationPreferencesRequest() {
+  return apiRequest("/api/notification-preferences");
+}
+
+export async function updateNotificationPreferencesRequest(preferences) {
+  return apiRequest("/api/notification-preferences", {
+    method: "PUT",
+    body: preferences,
+  });
+}
+
+/* --------------------------------------------------- two-factor auth (v2)
+ *
+ * The design calls /api/auth/2fa/* ; this platform serves the same second
+ * factor at `/api/auth/totp`, with `DELETE` where the design sends
+ * `POST /disable`. Adapted here rather than on the page, and verified against
+ * backend/api/routes/auth.py.
+ */
+
+export async function twoFactorStatusRequest() {
+  return apiRequest("/api/auth/totp");
+}
+
+export async function twoFactorEnrollStartRequest() {
+  const result = await apiRequest("/api/auth/totp/begin", { method: "POST" });
+
+  // The enrolment screen reads `otpauth_uri`; this API answers `uri`. Without
+  // this the "add to your authenticator" field renders empty and the only way
+  // through the flow is the manual base32 key beside it.
+  return { ...result, otpauth_uri: result?.uri ?? "" };
+}
+
+export async function twoFactorEnrollConfirmRequest(code) {
+  return apiRequest("/api/auth/totp/confirm", {
+    method: "POST",
+    body: { code },
+  });
+}
+
+export async function twoFactorDisableRequest(password, code) {
+  // The password is deliberately not sent. This platform proves the caller
+  // still holds the second factor with a current code and asks for nothing
+  // else, so forwarding a password would be posting a credential to an
+  // endpoint that does not want it. The design's form still asks for it, and
+  // the request is refused without a valid code either way.
+  void password;
+
+  return apiRequest("/api/auth/totp", {
+    method: "DELETE",
+    body: { code },
   });
 }
 

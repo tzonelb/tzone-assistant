@@ -12,11 +12,13 @@ the gates are in two different files and nothing compares them. A module added
 to `PLATFORM_MODULES` without a matching `_module(...)` on its router gets a
 switch in the console that does nothing to the API.
 
-One module has no router by design. `preferences` is the personal-settings
-screen, and it is exempt only because its screen makes no request at all —
-which this file checks rather than takes on trust. The moment that screen calls
-an endpoint, "there is nothing to gate" stops being true and the exemption
-fails, which is the point of writing it down here instead of in a comment.
+One module used to have no router by design. `preferences` is the
+personal-settings screen, and it was exempt only because that screen made no
+request at all — which this file checked rather than took on trust. That is
+exactly what happened: the screen gained the per-employee notification choices
+it now saves, "there is nothing to gate" stopped being true, and this file said
+so. The module gates that router in `main.py` now and the exemption list is
+empty, which is the state to keep it in.
 """
 
 from __future__ import annotations
@@ -32,9 +34,14 @@ ROOT = Path(__file__).resolve().parent.parent
 # A module with no API to guard, and the screen that has to stay silent for
 # that to remain true. Adding an entry means asserting the screen makes no
 # request; the test below verifies the assertion rather than believing it.
-UI_ONLY: dict[str, str] = {
-    "preferences": "frontend/src/pages/dashboard/UISettingsPage.jsx",
-}
+#
+# Empty, and the intended state. It held `preferences` until that screen
+# started saving the per-employee notification choices, at which point the
+# module began gating a real router in `main.py` and there was nothing left to
+# exempt. An entry here should have to be argued for: the moment an exempted
+# module's screen saves anything, switching the module off hides the link and
+# leaves the endpoint reachable, which is the failure the gates exist for.
+UI_ONLY: dict[str, str] = {}
 
 
 def _catalogue() -> tuple[str, ...]:

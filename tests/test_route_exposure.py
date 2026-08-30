@@ -115,6 +115,28 @@ IDENTITY_ONLY_ROUTES: dict[str, str] = {
     # `main.py`, which this per-file scan cannot see.
     "dialer.py:GET:/status": "Whether this deployment has a phone line.",
     "dialer.py:GET:/calls": "Your own company's dialer history.",
+    # Which kinds of notification one employee wants delivered to them. Keyed
+    # on (company from the session, user from the session) — the same shape as
+    # the notification bell above, and for the same reason: a permission here
+    # would let an administrator silence a colleague's notifications, which is
+    # a different feature from tuning your own and one nobody asked for. No
+    # `user_id` is taken from a parameter anywhere on this router. It is also
+    # behind `require_module("notifications")` in `main.py`, which this
+    # per-file scan cannot see.
+    "notification_preferences.py:GET:": "Your own notification choices.",
+    "notification_preferences.py:PUT:": "Your own notification choices.",
+    # Reporting that the platform itself is broken, to the operator. Anybody
+    # who can hit a bug can report it — gating this behind an administrator's
+    # permission would mean the person who actually saw the failure has to find
+    # somebody else to describe it, which is how a report stops being filed.
+    #
+    # It is not a hole in the tenant boundary: the company is resolved from the
+    # session, so a ticket can only ever be filed against, or read from, the
+    # filer's own company. Nothing a company owns is in these rows — no
+    # customer, no conversation, only what an employee typed about T-ZONE. The
+    # router is behind `require_module("company_settings")` in `main.py`.
+    "support_tickets.py:GET:": "Your own company's tickets to T-ZONE.",
+    "support_tickets.py:POST:": "Reporting a platform fault you just hit.",
 }
 
 
