@@ -9,12 +9,12 @@
     "phone": null,
     "status": "active",
     "is_super_admin": false,
-    "last_login_at": "2026-08-30T16:46:15.508999+00:00",
+    "last_login_at": "2026-08-30T19:49:12.870114+00:00",
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T16:46:14.554078+00:00",
-    "updated_at": "2026-08-30T16:46:15.509019+00:00",
+    "created_at": "2026-08-30T19:49:11.918616+00:00",
+    "updated_at": "2026-08-30T19:49:12.870134+00:00",
     "active_company_id": 1,
     "session_scope": "company"
    },
@@ -140,7 +140,7 @@
     "timezone": "Asia/Beirut",
     "default_language": "ar",
     "status": "active",
-    "created_at": "2026-08-30T16:46:13.348836+00:00"
+    "created_at": "2026-08-30T19:49:10.730177+00:00"
    },
    "subscription": null,
    "subscription_active": false,
@@ -214,8 +214,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T16:46:15.600108+00:00",
-     "created_at": "2026-08-30T16:46:15.593841+00:00",
+     "last_message_at": "2026-08-30T19:49:12.964122+00:00",
+     "created_at": "2026-08-30T19:49:12.957521+00:00",
      "official_customer_name": "Maya Rizk",
      "customer_alias": "مايا رزق",
      "customer_name": "Maya Rizk"
@@ -229,8 +229,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T16:46:15.588158+00:00",
-     "created_at": "2026-08-30T16:46:15.581469+00:00",
+     "last_message_at": "2026-08-30T19:49:12.951334+00:00",
+     "created_at": "2026-08-30T19:49:12.944496+00:00",
      "official_customer_name": "Karim Fares",
      "customer_alias": "Karim Fares",
      "customer_name": "Karim Fares"
@@ -244,8 +244,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T16:46:15.575532+00:00",
-     "created_at": "2026-08-30T16:46:15.569114+00:00",
+     "last_message_at": "2026-08-30T19:49:12.938706+00:00",
+     "created_at": "2026-08-30T19:49:12.931205+00:00",
      "official_customer_name": "Nour Aoun",
      "customer_alias": "نور عون",
      "customer_name": "Nour Aoun"
@@ -259,8 +259,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T16:46:15.563189+00:00",
-     "created_at": "2026-08-30T16:46:15.552747+00:00",
+     "last_message_at": "2026-08-30T19:49:12.924713+00:00",
+     "created_at": "2026-08-30T19:49:12.912928+00:00",
      "official_customer_name": "Omar Saad",
      "customer_alias": "Omar Saad",
      "customer_name": "Omar Saad"
@@ -274,8 +274,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T16:46:15.546211+00:00",
-     "created_at": "2026-08-30T16:46:15.534516+00:00",
+     "last_message_at": "2026-08-30T19:49:12.906469+00:00",
+     "created_at": "2026-08-30T19:49:12.894348+00:00",
      "official_customer_name": "Lina Khoury",
      "customer_alias": "لينا خوري",
      "customer_name": "Lina Khoury"
@@ -314,7 +314,7 @@
      "takeover_expires_at": null,
      "last_message": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T16:46:15.600108+00:00",
+     "updated_at": "2026-08-30T19:49:12.964122+00:00",
      "message_count": 2,
      "branch_id": null,
      "channel_account_id": null,
@@ -348,7 +348,7 @@
      "takeover_expires_at": null,
      "last_message": "We do — sending it over now.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T16:46:15.588158+00:00",
+     "updated_at": "2026-08-30T19:49:12.951334+00:00",
      "message_count": 2,
      "branch_id": null,
      "channel_account_id": null,
@@ -382,7 +382,7 @@
      "takeover_expires_at": null,
      "last_message": "أهلاً نور! العرض شغال لآخر الشهر.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T16:46:15.575532+00:00",
+     "updated_at": "2026-08-30T19:49:12.938706+00:00",
      "message_count": 2,
      "branch_id": null,
      "channel_account_id": null,
@@ -416,7 +416,7 @@
      "takeover_expires_at": null,
      "last_message": "Yes please, reserve it under my name.",
      "last_direction": "in",
-     "updated_at": "2026-08-30T16:46:15.563189+00:00",
+     "updated_at": "2026-08-30T19:49:12.924713+00:00",
      "message_count": 3,
      "branch_id": null,
      "channel_account_id": null,
@@ -450,7 +450,7 @@
      "takeover_expires_at": null,
      "last_message": "تمام، وكم سعر الباقة الشهرية؟",
      "last_direction": "in",
-     "updated_at": "2026-08-30T16:46:15.546211+00:00",
+     "updated_at": "2026-08-30T19:49:12.906469+00:00",
      "message_count": 3,
      "branch_id": null,
      "channel_account_id": null,
@@ -574,7 +574,7 @@
      "task_type": "task",
      "due_date": null,
      "created_by_user_id": 1,
-     "closed_at": "2026-08-30T16:46:16.329160+00:00",
+     "closed_at": "2026-08-30T19:49:13.836586+00:00",
      "platform": null,
      "user_id": null,
      "language": null,
@@ -587,8 +587,8 @@
      "assigned_user_id": null,
      "status": "resolved",
      "priority": "normal",
-     "created_at": "2026-08-30T16:46:16.329160+00:00",
-     "updated_at": "2026-08-30T16:46:16.329160+00:00",
+     "created_at": "2026-08-30T19:49:13.836586+00:00",
+     "updated_at": "2026-08-30T19:49:13.836586+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -614,8 +614,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "low",
-     "created_at": "2026-08-30T16:46:16.302089+00:00",
-     "updated_at": "2026-08-30T16:46:16.302089+00:00",
+     "created_at": "2026-08-30T19:49:13.808738+00:00",
+     "updated_at": "2026-08-30T19:49:13.808738+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -641,8 +641,8 @@
      "assigned_user_id": null,
      "status": "in_progress",
      "priority": "normal",
-     "created_at": "2026-08-30T16:46:16.278787+00:00",
-     "updated_at": "2026-08-30T16:46:16.278787+00:00",
+     "created_at": "2026-08-30T19:49:13.781681+00:00",
+     "updated_at": "2026-08-30T19:49:13.781681+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -668,8 +668,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "high",
-     "created_at": "2026-08-30T16:46:16.255179+00:00",
-     "updated_at": "2026-08-30T16:46:16.255179+00:00",
+     "created_at": "2026-08-30T19:49:13.755745+00:00",
+     "updated_at": "2026-08-30T19:49:13.755745+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -727,8 +727,8 @@
      "status": "confirmed",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T16:46:16.363176+00:00",
-     "updated_at": "2026-08-30T16:46:16.363176+00:00",
+     "created_at": "2026-08-30T19:49:13.870294+00:00",
+     "updated_at": "2026-08-30T19:49:13.870294+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -748,8 +748,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T16:46:16.391131+00:00",
-     "updated_at": "2026-08-30T16:46:16.391131+00:00",
+     "created_at": "2026-08-30T19:49:13.899257+00:00",
+     "updated_at": "2026-08-30T19:49:13.899257+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -769,8 +769,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T16:46:16.418167+00:00",
-     "updated_at": "2026-08-30T16:46:16.418167+00:00",
+     "created_at": "2026-08-30T19:49:13.926532+00:00",
+     "updated_at": "2026-08-30T19:49:13.926532+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -913,10 +913,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T16:46:16.641522+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.641522+00:00",
-     "created_at": "2026-08-30T16:46:16.641522+00:00",
-     "updated_at": "2026-08-30T16:46:16.790993+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.154161+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.154161+00:00",
+     "created_at": "2026-08-30T19:49:14.154161+00:00",
+     "updated_at": "2026-08-30T19:49:14.308557+00:00",
      "identity_count": 0,
      "conversation_count": 0,
      "tags": [
@@ -941,10 +941,10 @@
      "notes": null,
      "lifecycle_stage": "customer",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T16:46:16.623437+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.623437+00:00",
-     "created_at": "2026-08-30T16:46:16.623437+00:00",
-     "updated_at": "2026-08-30T16:46:16.765251+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.132519+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.132519+00:00",
+     "created_at": "2026-08-30T19:49:14.132519+00:00",
+     "updated_at": "2026-08-30T19:49:14.282246+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -971,10 +971,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T16:46:16.616749+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.616749+00:00",
-     "created_at": "2026-08-30T16:46:16.616749+00:00",
-     "updated_at": "2026-08-30T16:46:16.740537+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.126237+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.126237+00:00",
+     "created_at": "2026-08-30T19:49:14.126237+00:00",
+     "updated_at": "2026-08-30T19:49:14.257034+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1001,10 +1001,10 @@
      "notes": null,
      "lifecycle_stage": "active",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T16:46:16.610258+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.610258+00:00",
-     "created_at": "2026-08-30T16:46:16.610258+00:00",
-     "updated_at": "2026-08-30T16:46:16.718049+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.120130+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.120130+00:00",
+     "created_at": "2026-08-30T19:49:14.120130+00:00",
+     "updated_at": "2026-08-30T19:49:14.233642+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1031,10 +1031,10 @@
      "notes": null,
      "lifecycle_stage": "customer",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T16:46:16.603213+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.603213+00:00",
-     "created_at": "2026-08-30T16:46:16.603213+00:00",
-     "updated_at": "2026-08-30T16:46:16.692471+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.113554+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.113554+00:00",
+     "created_at": "2026-08-30T19:49:14.113554+00:00",
+     "updated_at": "2026-08-30T19:49:14.208632+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1062,10 +1062,10 @@
      "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
      "lifecycle_stage": "vip",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T16:46:16.596587+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.596587+00:00",
-     "created_at": "2026-08-30T16:46:16.596587+00:00",
-     "updated_at": "2026-08-30T16:46:16.666900+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.106284+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.106284+00:00",
+     "created_at": "2026-08-30T19:49:14.106284+00:00",
+     "updated_at": "2026-08-30T19:49:14.181357+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1101,10 +1101,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T16:46:16.560965+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.560965+00:00",
-     "created_at": "2026-08-30T16:46:16.560965+00:00",
-     "updated_at": "2026-08-30T16:46:16.560965+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.068958+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.068958+00:00",
+     "created_at": "2026-08-30T19:49:14.068958+00:00",
+     "updated_at": "2026-08-30T19:49:14.068958+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1129,10 +1129,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T16:46:16.554485+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.554485+00:00",
-     "created_at": "2026-08-30T16:46:16.554485+00:00",
-     "updated_at": "2026-08-30T16:46:16.554485+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.059613+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.059613+00:00",
+     "created_at": "2026-08-30T19:49:14.059613+00:00",
+     "updated_at": "2026-08-30T19:49:14.059613+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1157,10 +1157,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T16:46:16.547009+00:00",
-     "last_seen_at": "2026-08-30T16:46:16.547009+00:00",
-     "created_at": "2026-08-30T16:46:16.547009+00:00",
-     "updated_at": "2026-08-30T16:46:16.547009+00:00",
+     "first_seen_at": "2026-08-30T19:49:14.052201+00:00",
+     "last_seen_at": "2026-08-30T19:49:14.052201+00:00",
+     "created_at": "2026-08-30T19:49:14.052201+00:00",
+     "updated_at": "2026-08-30T19:49:14.052201+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1203,8 +1203,8 @@
      "company_id": 1,
      "name": "VIP clients",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T16:46:16.820979+00:00",
-     "updated_at": "2026-08-30T16:46:16.820979+00:00",
+     "created_at": "2026-08-30T19:49:14.336871+00:00",
+     "updated_at": "2026-08-30T19:49:14.336871+00:00",
      "filters": {
       "lifecycle_stage": "vip"
      }
@@ -1214,8 +1214,8 @@
      "company_id": 1,
      "name": "Waiting on delivery",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T16:46:16.842451+00:00",
-     "updated_at": "2026-08-30T16:46:16.842451+00:00",
+     "created_at": "2026-08-30T19:49:14.356307+00:00",
+     "updated_at": "2026-08-30T19:49:14.356307+00:00",
      "filters": {
       "tag": "توصيل"
      }
@@ -1238,8 +1238,8 @@
      "department": null,
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T16:46:16.469472+00:00",
-     "updated_at": "2026-08-30T16:46:16.469472+00:00",
+     "created_at": "2026-08-30T19:49:13.982827+00:00",
+     "updated_at": "2026-08-30T19:49:13.982827+00:00",
      "category_name": null
     },
     {
@@ -1253,8 +1253,8 @@
      "department": "Sales",
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T16:46:16.444621+00:00",
-     "updated_at": "2026-08-30T16:46:16.444621+00:00",
+     "created_at": "2026-08-30T19:49:13.955517+00:00",
+     "updated_at": "2026-08-30T19:49:13.955517+00:00",
      "category_name": null
     }
    ],
@@ -1292,8 +1292,8 @@
      "body": "Delivery is $2 inside Beirut and $3 outside, arriving within 24 hours.",
      "department": "Sales",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T16:46:16.522301+00:00",
-     "updated_at": "2026-08-30T16:46:16.522301+00:00"
+     "created_at": "2026-08-30T19:49:14.030032+00:00",
+     "updated_at": "2026-08-30T19:49:14.030032+00:00"
     },
     {
      "id": 1,
@@ -1302,8 +1302,8 @@
      "body": "أهلاً وسهلاً فيك! كيف فينا نساعدك اليوم؟",
      "department": "",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T16:46:16.498946+00:00",
-     "updated_at": "2026-08-30T16:46:16.498946+00:00"
+     "created_at": "2026-08-30T19:49:14.009655+00:00",
+     "updated_at": "2026-08-30T19:49:14.009655+00:00"
     }
    ],
    "can_manage": true
@@ -1314,6 +1314,178 @@
   "body": {
    "items": [],
    "total": 0
+  }
+ },
+ "/api/analytics/summary": {
+  "status": 200,
+  "body": {
+   "overview": {
+    "range_days": 30,
+    "from": "2026-07-31T19:49:14.697476+00:00",
+    "to": "2026-08-30T19:49:14.697476+00:00",
+    "messages": {
+     "total": 12,
+     "inbound": 7,
+     "outbound": 5,
+     "by_assistant": 0,
+     "by_employee": 0,
+     "automation_rate": 0.0
+    },
+    "conversations": {
+     "total": 5,
+     "new_in_range": 5,
+     "human_handled": 0,
+     "unread": 0,
+     "needs_human": 0
+    },
+    "customers": {
+     "new_in_range": 9
+    }
+   },
+   "volume_by_day": [
+    {
+     "day": "2026-08-30",
+     "total": 12,
+     "inbound": 7,
+     "outbound": 5
+    }
+   ],
+   "by_channel": [
+    {
+     "channel": "messenger",
+     "messages": 5,
+     "conversations": 2
+    },
+    {
+     "channel": "whatsapp",
+     "messages": 3,
+     "conversations": 1
+    },
+    {
+     "channel": "instagram",
+     "messages": 2,
+     "conversations": 1
+    },
+    {
+     "channel": "telegram",
+     "messages": 2,
+     "conversations": 1
+    }
+   ],
+   "hourly_distribution": [
+    {
+     "hour": "00",
+     "messages": 0
+    },
+    {
+     "hour": "01",
+     "messages": 0
+    },
+    {
+     "hour": "02",
+     "messages": 0
+    },
+    {
+     "hour": "03",
+     "messages": 0
+    },
+    {
+     "hour": "04",
+     "messages": 0
+    },
+    {
+     "hour": "05",
+     "messages": 0
+    },
+    {
+     "hour": "06",
+     "messages": 0
+    },
+    {
+     "hour": "07",
+     "messages": 0
+    },
+    {
+     "hour": "08",
+     "messages": 0
+    },
+    {
+     "hour": "09",
+     "messages": 0
+    },
+    {
+     "hour": "10",
+     "messages": 0
+    },
+    {
+     "hour": "11",
+     "messages": 0
+    },
+    {
+     "hour": "12",
+     "messages": 0
+    },
+    {
+     "hour": "13",
+     "messages": 0
+    },
+    {
+     "hour": "14",
+     "messages": 0
+    },
+    {
+     "hour": "15",
+     "messages": 0
+    },
+    {
+     "hour": "16",
+     "messages": 0
+    },
+    {
+     "hour": "17",
+     "messages": 0
+    },
+    {
+     "hour": "18",
+     "messages": 0
+    },
+    {
+     "hour": "19",
+     "messages": 7
+    },
+    {
+     "hour": "20",
+     "messages": 0
+    },
+    {
+     "hour": "21",
+     "messages": 0
+    },
+    {
+     "hour": "22",
+     "messages": 0
+    },
+    {
+     "hour": "23",
+     "messages": 0
+    }
+   ],
+   "assistant": {
+    "replies_sent": 0,
+    "replies_failed": 0,
+    "failure_rate": 0.0,
+    "average_reply_ms": null,
+    "handovers_to_human": 0,
+    "queued_now": 0,
+    "events": {}
+   },
+   "employees": [],
+   "first_response": {
+    "answered": 5,
+    "unanswered": 0,
+    "average_seconds": 0.0,
+    "median_seconds": 0.0
+   }
   }
  },
  "/api/admin/access/overview": {
@@ -1586,7 +1758,7 @@
      "email": "demo@tz-lb.com",
      "phone": null,
      "user_status": "active",
-     "last_login_at": "2026-08-30T16:46:15.508999+00:00",
+     "last_login_at": "2026-08-30T19:49:12.870114+00:00",
      "password_changed_at": null,
      "must_change_password": 0,
      "locked_until": null,
@@ -1639,8 +1811,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.862848+00:00",
-     "updated_at": "2026-08-30T16:46:15.862848+00:00",
+     "created_at": "2026-08-30T19:49:13.250509+00:00",
+     "updated_at": "2026-08-30T19:49:13.250509+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1662,8 +1834,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.888242+00:00",
-     "updated_at": "2026-08-30T16:46:15.888242+00:00",
+     "created_at": "2026-08-30T19:49:13.279089+00:00",
+     "updated_at": "2026-08-30T19:49:13.279089+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1685,8 +1857,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.913080+00:00",
-     "updated_at": "2026-08-30T16:46:15.913080+00:00",
+     "created_at": "2026-08-30T19:49:13.306149+00:00",
+     "updated_at": "2026-08-30T19:49:13.306149+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1708,8 +1880,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.937507+00:00",
-     "updated_at": "2026-08-30T16:46:15.937507+00:00",
+     "created_at": "2026-08-30T19:49:13.344854+00:00",
+     "updated_at": "2026-08-30T19:49:13.344854+00:00",
      "branch_name": null,
      "has_access_token": true,
      "has_verify_token": false,
@@ -1767,8 +1939,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.862848+00:00",
-     "updated_at": "2026-08-30T16:46:15.862848+00:00",
+     "created_at": "2026-08-30T19:49:13.250509+00:00",
+     "updated_at": "2026-08-30T19:49:13.250509+00:00",
      "branch_name": null
     },
     {
@@ -1786,8 +1958,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.888242+00:00",
-     "updated_at": "2026-08-30T16:46:15.888242+00:00",
+     "created_at": "2026-08-30T19:49:13.279089+00:00",
+     "updated_at": "2026-08-30T19:49:13.279089+00:00",
      "branch_name": null
     },
     {
@@ -1805,8 +1977,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.913080+00:00",
-     "updated_at": "2026-08-30T16:46:15.913080+00:00",
+     "created_at": "2026-08-30T19:49:13.306149+00:00",
+     "updated_at": "2026-08-30T19:49:13.306149+00:00",
      "branch_name": null
     },
     {
@@ -1824,8 +1996,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T16:46:15.937507+00:00",
-     "updated_at": "2026-08-30T16:46:15.937507+00:00",
+     "created_at": "2026-08-30T19:49:13.344854+00:00",
+     "updated_at": "2026-08-30T19:49:13.344854+00:00",
      "branch_name": null
     }
    ],
@@ -1854,7 +2026,7 @@
      "media_type": null,
      "send_lock_acquired_at": null,
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T16:46:16.588253+00:00",
+     "created_at": "2026-08-30T19:49:14.098700+00:00",
      "sent_at": null
     },
     {
@@ -1875,7 +2047,7 @@
      "media_type": null,
      "send_lock_acquired_at": null,
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T16:46:16.567262+00:00",
+     "created_at": "2026-08-30T19:49:14.076545+00:00",
      "sent_at": null
     }
    ]
@@ -1902,7 +2074,7 @@
     "media_type": null,
     "send_lock_acquired_at": null,
     "created_by_user_id": 1,
-    "created_at": "2026-08-30T16:46:16.567262+00:00",
+    "created_at": "2026-08-30T19:49:14.076545+00:00",
     "sent_at": null
    },
    "totals": {
@@ -1944,7 +2116,7 @@
     "media_type": null,
     "send_lock_acquired_at": null,
     "created_by_user_id": 1,
-    "created_at": "2026-08-30T16:46:16.588253+00:00",
+    "created_at": "2026-08-30T19:49:14.098700+00:00",
     "sent_at": null
    },
    "totals": {
@@ -1975,7 +2147,7 @@
     {
      "id": 1,
      "conversation_id": 1,
-     "time": "2026-08-30T16:46:15.537549+00:00",
+     "time": "2026-08-30T19:49:12.897267+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -1989,7 +2161,7 @@
     {
      "id": 2,
      "conversation_id": 1,
-     "time": "2026-08-30T16:46:15.542010+00:00",
+     "time": "2026-08-30T19:49:12.902072+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "out",
@@ -2003,7 +2175,7 @@
     {
      "id": 3,
      "conversation_id": 1,
-     "time": "2026-08-30T16:46:15.546211+00:00",
+     "time": "2026-08-30T19:49:12.906469+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -2027,7 +2199,7 @@
     {
      "id": 4,
      "conversation_id": 2,
-     "time": "2026-08-30T16:46:15.555297+00:00",
+     "time": "2026-08-30T19:49:12.915652+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -2041,7 +2213,7 @@
     {
      "id": 5,
      "conversation_id": 2,
-     "time": "2026-08-30T16:46:15.559171+00:00",
+     "time": "2026-08-30T19:49:12.920090+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "out",
@@ -2055,7 +2227,7 @@
     {
      "id": 6,
      "conversation_id": 2,
-     "time": "2026-08-30T16:46:15.563189+00:00",
+     "time": "2026-08-30T19:49:12.924713+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -2079,7 +2251,7 @@
     {
      "id": 7,
      "conversation_id": 3,
-     "time": "2026-08-30T16:46:15.571496+00:00",
+     "time": "2026-08-30T19:49:12.934350+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "in",
@@ -2093,7 +2265,7 @@
     {
      "id": 8,
      "conversation_id": 3,
-     "time": "2026-08-30T16:46:15.575532+00:00",
+     "time": "2026-08-30T19:49:12.938706+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "out",
@@ -2117,7 +2289,7 @@
     {
      "id": 9,
      "conversation_id": 4,
-     "time": "2026-08-30T16:46:15.583918+00:00",
+     "time": "2026-08-30T19:49:12.946885+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "in",
@@ -2131,7 +2303,7 @@
     {
      "id": 10,
      "conversation_id": 4,
-     "time": "2026-08-30T16:46:15.588158+00:00",
+     "time": "2026-08-30T19:49:12.951334+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "out",
@@ -2155,7 +2327,7 @@
     {
      "id": 11,
      "conversation_id": 5,
-     "time": "2026-08-30T16:46:15.596301+00:00",
+     "time": "2026-08-30T19:49:12.960240+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "in",
@@ -2169,7 +2341,7 @@
     {
      "id": 12,
      "conversation_id": 5,
-     "time": "2026-08-30T16:46:15.600108+00:00",
+     "time": "2026-08-30T19:49:12.964122+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "out",
@@ -2199,10 +2371,10 @@
    "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
    "lifecycle_stage": "vip",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T16:46:16.596587+00:00",
-   "last_seen_at": "2026-08-30T16:46:16.596587+00:00",
-   "created_at": "2026-08-30T16:46:16.596587+00:00",
-   "updated_at": "2026-08-30T16:46:16.666900+00:00",
+   "first_seen_at": "2026-08-30T19:49:14.106284+00:00",
+   "last_seen_at": "2026-08-30T19:49:14.106284+00:00",
+   "created_at": "2026-08-30T19:49:14.106284+00:00",
+   "updated_at": "2026-08-30T19:49:14.181357+00:00",
    "identities": [
     {
      "channel": "messenger",
@@ -2210,8 +2382,8 @@
      "username": null,
      "display_name": "Lina Khoury",
      "profile_picture": null,
-     "created_at": "2026-08-30T16:46:16.596587+00:00",
-     "updated_at": "2026-08-30T16:46:16.596587+00:00"
+     "created_at": "2026-08-30T19:49:14.106284+00:00",
+     "updated_at": "2026-08-30T19:49:14.106284+00:00"
     }
    ],
    "channels": [
@@ -2254,7 +2426,7 @@
       "documents_json": "[{\"label\": \"بطاقة الهوية\", \"url\": \"https://files.example.com/lina-id.pdf\"}]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T16:46:16.666900+00:00"
+     "created_at": "2026-08-30T19:49:14.181357+00:00"
     },
     {
      "type": "conversation_started",
@@ -2264,7 +2436,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T16:46:15.534516+00:00"
+     "created_at": "2026-08-30T19:49:12.894348+00:00"
     }
    ]
   }
@@ -2285,10 +2457,10 @@
    "notes": null,
    "lifecycle_stage": "customer",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T16:46:16.603213+00:00",
-   "last_seen_at": "2026-08-30T16:46:16.603213+00:00",
-   "created_at": "2026-08-30T16:46:16.603213+00:00",
-   "updated_at": "2026-08-30T16:46:16.692471+00:00",
+   "first_seen_at": "2026-08-30T19:49:14.113554+00:00",
+   "last_seen_at": "2026-08-30T19:49:14.113554+00:00",
+   "created_at": "2026-08-30T19:49:14.113554+00:00",
+   "updated_at": "2026-08-30T19:49:14.208632+00:00",
    "identities": [
     {
      "channel": "whatsapp",
@@ -2296,8 +2468,8 @@
      "username": null,
      "display_name": "Omar Saad",
      "profile_picture": null,
-     "created_at": "2026-08-30T16:46:16.603213+00:00",
-     "updated_at": "2026-08-30T16:46:16.603213+00:00"
+     "created_at": "2026-08-30T19:49:14.113554+00:00",
+     "updated_at": "2026-08-30T19:49:14.113554+00:00"
     }
    ],
    "channels": [
@@ -2330,7 +2502,7 @@
       "tags_json": "[\"reserved\", \"small package\"]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T16:46:16.692471+00:00"
+     "created_at": "2026-08-30T19:49:14.208632+00:00"
     },
     {
      "type": "conversation_started",
@@ -2340,7 +2512,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T16:46:15.552747+00:00"
+     "created_at": "2026-08-30T19:49:12.912928+00:00"
     }
    ]
   }
@@ -2361,10 +2533,10 @@
    "notes": null,
    "lifecycle_stage": "active",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T16:46:16.610258+00:00",
-   "last_seen_at": "2026-08-30T16:46:16.610258+00:00",
-   "created_at": "2026-08-30T16:46:16.610258+00:00",
-   "updated_at": "2026-08-30T16:46:16.718049+00:00",
+   "first_seen_at": "2026-08-30T19:49:14.120130+00:00",
+   "last_seen_at": "2026-08-30T19:49:14.120130+00:00",
+   "created_at": "2026-08-30T19:49:14.120130+00:00",
+   "updated_at": "2026-08-30T19:49:14.233642+00:00",
    "identities": [
     {
      "channel": "instagram",
@@ -2372,8 +2544,8 @@
      "username": null,
      "display_name": "Nour Aoun",
      "profile_picture": null,
-     "created_at": "2026-08-30T16:46:16.610258+00:00",
-     "updated_at": "2026-08-30T16:46:16.610258+00:00"
+     "created_at": "2026-08-30T19:49:14.120130+00:00",
+     "updated_at": "2026-08-30T19:49:14.120130+00:00"
     }
    ],
    "channels": [
@@ -2400,7 +2572,7 @@
       "lifecycle_stage": "active",
       "tags_json": "[\"عرض الشهر\"]"
      },
-     "created_at": "2026-08-30T16:46:16.718049+00:00"
+     "created_at": "2026-08-30T19:49:14.233642+00:00"
     },
     {
      "type": "conversation_started",
@@ -2410,7 +2582,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T16:46:15.569114+00:00"
+     "created_at": "2026-08-30T19:49:12.931205+00:00"
     }
    ]
   }
@@ -2431,10 +2603,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T16:46:16.616749+00:00",
-   "last_seen_at": "2026-08-30T16:46:16.616749+00:00",
-   "created_at": "2026-08-30T16:46:16.616749+00:00",
-   "updated_at": "2026-08-30T16:46:16.740537+00:00",
+   "first_seen_at": "2026-08-30T19:49:14.126237+00:00",
+   "last_seen_at": "2026-08-30T19:49:14.126237+00:00",
+   "created_at": "2026-08-30T19:49:14.126237+00:00",
+   "updated_at": "2026-08-30T19:49:14.257034+00:00",
    "identities": [
     {
      "channel": "telegram",
@@ -2442,8 +2614,8 @@
      "username": null,
      "display_name": "Karim Fares",
      "profile_picture": null,
-     "created_at": "2026-08-30T16:46:16.616749+00:00",
-     "updated_at": "2026-08-30T16:46:16.616749+00:00"
+     "created_at": "2026-08-30T19:49:14.126237+00:00",
+     "updated_at": "2026-08-30T19:49:14.126237+00:00"
     }
    ],
    "channels": [
@@ -2471,7 +2643,7 @@
       "lifecycle_stage": "lead",
       "tags_json": "[\"catalogue\"]"
      },
-     "created_at": "2026-08-30T16:46:16.740537+00:00"
+     "created_at": "2026-08-30T19:49:14.257034+00:00"
     },
     {
      "type": "conversation_started",
@@ -2481,7 +2653,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T16:46:15.581469+00:00"
+     "created_at": "2026-08-30T19:49:12.944496+00:00"
     }
    ]
   }
@@ -2502,10 +2674,10 @@
    "notes": null,
    "lifecycle_stage": "customer",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T16:46:16.623437+00:00",
-   "last_seen_at": "2026-08-30T16:46:16.623437+00:00",
-   "created_at": "2026-08-30T16:46:16.623437+00:00",
-   "updated_at": "2026-08-30T16:46:16.765251+00:00",
+   "first_seen_at": "2026-08-30T19:49:14.132519+00:00",
+   "last_seen_at": "2026-08-30T19:49:14.132519+00:00",
+   "created_at": "2026-08-30T19:49:14.132519+00:00",
+   "updated_at": "2026-08-30T19:49:14.282246+00:00",
    "identities": [
     {
      "channel": "messenger",
@@ -2513,8 +2685,8 @@
      "username": null,
      "display_name": "Maya Rizk",
      "profile_picture": null,
-     "created_at": "2026-08-30T16:46:16.623437+00:00",
-     "updated_at": "2026-08-30T16:46:16.623437+00:00"
+     "created_at": "2026-08-30T19:49:14.132519+00:00",
+     "updated_at": "2026-08-30T19:49:14.132519+00:00"
     }
    ],
    "channels": [
@@ -2543,7 +2715,7 @@
       "tags_json": "[\"مواعيد\"]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T16:46:16.765251+00:00"
+     "created_at": "2026-08-30T19:49:14.282246+00:00"
     },
     {
      "type": "conversation_started",
@@ -2553,7 +2725,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T16:46:15.593841+00:00"
+     "created_at": "2026-08-30T19:49:12.957521+00:00"
     }
    ]
   }
@@ -2574,10 +2746,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T16:46:16.641522+00:00",
-   "last_seen_at": "2026-08-30T16:46:16.641522+00:00",
-   "created_at": "2026-08-30T16:46:16.641522+00:00",
-   "updated_at": "2026-08-30T16:46:16.790993+00:00",
+   "first_seen_at": "2026-08-30T19:49:14.154161+00:00",
+   "last_seen_at": "2026-08-30T19:49:14.154161+00:00",
+   "created_at": "2026-08-30T19:49:14.154161+00:00",
+   "updated_at": "2026-08-30T19:49:14.308557+00:00",
    "identities": [],
    "channels": [],
    "conversation_count": 0,
@@ -2600,7 +2772,7 @@
       "lifecycle_stage": "lead",
       "tags_json": "[\"walk-in\"]"
      },
-     "created_at": "2026-08-30T16:46:16.790993+00:00"
+     "created_at": "2026-08-30T19:49:14.308557+00:00"
     },
     {
      "type": "profile_updated",
@@ -2610,7 +2782,7 @@
       "phone": "+96170445566",
       "email": "rita.ghanem@example.com"
      },
-     "created_at": "2026-08-30T16:46:16.641522+00:00"
+     "created_at": "2026-08-30T19:49:14.154161+00:00"
     }
    ]
   }
@@ -2618,7 +2790,7 @@
  "/api/auth/login": {
   "status": 200,
   "body": {
-   "access_token": "gJotc7-p6L-E-ehVxseSejv2uk-42tGdNe604CMQ26ShwJjDEevvKtQ2Mz8Rskt7",
+   "access_token": "50ORiWYu0J7m1ZXnmNXFFRRxLDnYS2gmauNXPpmC37BhoIZayeIammynCL5_D6-T",
    "token_type": "bearer",
    "expires_in": 43200,
    "user": {
@@ -2632,8 +2804,8 @@
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T16:46:14.554078+00:00",
-    "updated_at": "2026-08-30T16:46:14.554078+00:00",
+    "created_at": "2026-08-30T19:49:11.918616+00:00",
+    "updated_at": "2026-08-30T19:49:11.918616+00:00",
     "active_company_id": 1,
     "active_company_name": "T-ZONE Demo",
     "active_company_slug": "tzone-demo"
@@ -2668,7 +2840,7 @@
     "users.manage",
     "users.view"
    ],
-   "csrf_token": "THtm453xXIQhibDERFZBUKvQEi1X2xGAQMPtV8xA994"
+   "csrf_token": "lLvT70LXOt1d2Nr-iSXuGECebRYmEN9GV7z11WO9R8I"
   }
  }
 }

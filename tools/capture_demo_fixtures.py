@@ -257,6 +257,10 @@ GETS = [
     "/api/customers", "/api/customers/options", "/api/customer-segments",
     "/api/knowledge", "/api/knowledge/options", "/api/knowledge/categories",
     "/api/saved-replies", "/api/catalogue/products",
+    # Reporting: the screen draws message volume, channel mix and reply health
+    # from this one summary, so without it the preview shows its empty state and
+    # reads as though the feature were unbuilt.
+    "/api/analytics/summary",
     "/api/admin/access/overview", "/api/admin/access/roles",
     "/api/admin/access/users", "/api/admin/access/branches", "/api/channels", "/api/dashboard/channels",
     "/api/broadcasts",
