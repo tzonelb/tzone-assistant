@@ -749,6 +749,9 @@ TENANT_TABLES: tuple[str, ...] = (
         error TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY(broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE
+    )
+    """,
+    """
     -- The call history of record: one row per phone call the company had with
     -- a contact, however it happened. A call typed in by hand after a walk-in
     -- and a call the Dialer placed through Twilio land in the same table, so
