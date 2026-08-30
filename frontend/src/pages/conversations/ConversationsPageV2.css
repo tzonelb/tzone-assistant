@@ -360,6 +360,23 @@
   cursor: pointer;
 }
 
+/* Deliberately after the rule above rather than inside the earlier media block:
+   at equal specificity the later declaration wins, so an override written above
+   the base rule is simply ignored.
+
+   Going back to the list is the primary move on a phone, so the sliver that
+   works as a hover affordance on a wide screen becomes a real touch target.
+   44px is the smallest square a finger hits reliably. */
+@media (max-width: 940px) {
+  .tzv2-list-toggle {
+    top: 8px;
+    width: 44px;
+    height: 44px;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  }
+}
+
 .tzv2-conv-detail {
   flex: 1 1 auto;
   min-width: 0;

@@ -28,6 +28,11 @@ import "./ConversationsPageV2.css";
 // untouched and still backs the standalone `/conversations/:channel/:userId/full`
 // route (outside AppLayout, so it never gets the .tzv2-scoped design-system
 // classes ConversationDetailPageV2 relies on).
+// Matches the @media (max-width: 940px) rule in ConversationsPageV2.css, where
+// the list stops being a column beside the thread and becomes an overlay on top
+// of it. Change one and change the other.
+const NARROW_SCREEN_PX = 940;
+
 const CHANNELS = ["all", "messenger", "whatsapp", "instagram", "telegram"];
 const FOLDERS = [
   { value: "inbox", label: "Inbox" },
@@ -142,6 +147,15 @@ export default function ConversationsPageV2() {
   const hasSelectedConversation = Boolean(routeChannel && routeUserId);
 
   function openConversation(row) {
+    // On a phone the list is a full-screen overlay, so leaving it open would
+    // render the thread underneath it -- tapping a conversation appeared to do
+    // nothing. Close it on the way in, the way every chat app does: the list is
+    // the screen until you pick someone, then the conversation is. The toggle
+    // brings it back, and on a wide screen both panes stay side by side.
+    if (typeof window !== "undefined" && window.innerWidth <= NARROW_SCREEN_PX) {
+      setListOpen(false);
+    }
+
     navigate(`/conversations/${encodeURIComponent(row.channel)}/${encodeURIComponent(row.external_user_id)}`);
   }
 
@@ -179,9 +193,16 @@ export default function ConversationsPageV2() {
               All channels
               {totalCount ? <span className="tzv2-channel-chip-count">{totalCount}</span> : null}
             </button>
-            {CHANNELS.filter((name) => name !== "all").map((name) => {
+            {/* Only the channels this company has actually connected. A chip
+                for a channel nobody linked is a filter that can only ever
+                return nothing, and greying it out still spends header room on
+                four names most companies do not all use. `available_channels`
+                is the API's list of connected accounts, not the list of
+                channels the platform supports. */}
+            {CHANNELS.filter(
+              (name) => name !== "all" && enabledChannels.has(name),
+            ).map((name) => {
               const Icon = channelIcon(name);
-              const enabled = enabledChannels.has(name);
               const count = Number(channelCounts[name] || 0);
               return (
                 <button
@@ -189,8 +210,7 @@ export default function ConversationsPageV2() {
                   key={name}
                   className={`tzv2-channel-chip ${activeChannel === name ? "is-active" : ""}`}
                   style={{ "--channel-color": `var(--color-channel-${name})` }}
-                  disabled={!enabled}
-                  title={enabled ? humanize(name) : `No ${humanize(name)} channel connected yet`}
+                  title={humanize(name)}
                   onClick={() => setActiveChannel(name)}
                 >
                   <Icon fontSize="inherit" />
