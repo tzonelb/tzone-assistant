@@ -46,13 +46,13 @@ for mod in list(sys.modules.values()):
     if isinstance(held, DatabaseManager) and held is not manager:
         setattr(mod, "database_manager", manager)
 
-COMPANY_NAME = "T-ZONE Demo"
+COMPANY_NAME = "Cedar Home Appliances"
 with manager.control() as conn:
     now = utc_now_iso()
     conn.execute("INSERT INTO workspaces (name, slug, status, created_at, updated_at)"
                  " VALUES ('T-ZONE', 'tzone', 'active', ?, ?)", (now, now))
     cur = conn.execute("INSERT INTO companies (workspace_id, name, slug, status, created_at, updated_at)"
-                       " VALUES (1, ?, 'tzone-demo', 'active', ?, ?)", (COMPANY_NAME, now, now))
+                       " VALUES (1, ?, 'cedar-home', 'active', ?, ?)", (COMPANY_NAME, now, now))
     COMPANY_ID = int(cur.lastrowid)
     conn.commit()
 
@@ -73,7 +73,7 @@ with manager.control() as conn:
     conn.commit()
 
 from backend.services.auth_service import auth_service
-EMAIL, PASSWORD = "demo@tz-lb.com", "DemoOwner123!"
+EMAIL, PASSWORD = "rana@cedarhome.example", "DemoOwner123!"
 USER_ID = auth_service.create_user(email=EMAIL, password=PASSWORD, full_name="Rana Haddad")
 with manager.control() as conn:
     role = conn.execute("SELECT id FROM roles WHERE company_id = ? AND code = 'owner'", (COMPANY_ID,)).fetchone()
@@ -138,10 +138,10 @@ for code, ar, en in (("sales","المبيعات","Sales"),("support","الدعم
     post("/api/ai-teaching/departments", {"code":code,"name_ar":ar,"name_en":en,"enabled":True})
 
 CHANNEL_SEED = [
-    ("messenger", "T-ZONE Page",      {"page_id": "104857600011"}),
-    ("whatsapp",  "T-ZONE WhatsApp",  {"phone_number_id": "159357456123"}),
-    ("instagram", "T-ZONE Instagram", {"instagram_business_id": "178899220033"}),
-    ("telegram",  "T-ZONE Telegram",  {"access_token": "7654321098:AAHdemoBotTokenForThePreviewSite01234"}),
+    ("messenger", "Cedar Home",      {"page_id": "104857600011"}),
+    ("whatsapp",  "Cedar Home Sales",  {"phone_number_id": "159357456123"}),
+    ("instagram", "cedarhome.lb", {"instagram_business_id": "178899220033"}),
+    ("telegram",  "Cedar Home Bot",  {"access_token": "7654321098:AAHdemoBotTokenForThePreviewSite01234"}),
 ]
 for ch, nm, ids in CHANNEL_SEED:
     post("/api/channels", {"channel":ch, "name":nm, "ai_enabled":True, **ids})
