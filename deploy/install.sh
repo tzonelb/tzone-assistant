@@ -163,6 +163,11 @@ else
   set_env TZONE_MASTER_KEY "$MASTER_KEY"
 fi
 set_env APP_ENV production
+# Explicit rather than relying on the APP_ENV-aware default: an install made
+# before this line has `ENABLE_DOCS=true` sitting in its env file from the old
+# .env.example, and the default cannot override a value that is set. A re-run
+# is how that install gets corrected.
+set_env ENABLE_DOCS false
 set_env DATA_DIR "$APP_DIR/data"
 set_env LOG_DIR "$APP_DIR/logs"
 set_env APP_PUBLIC_URL "https://$DOMAIN"
