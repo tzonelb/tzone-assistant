@@ -293,6 +293,9 @@ app.include_router(company_settings.router, dependencies=_module("company_settin
 # people, from the same screen area, under the same permission.
 app.include_router(activity.router, dependencies=_module("company_settings"))
 app.include_router(customers.router, dependencies=_module("customers"))
+# Saved Contacts filters. Its own prefix, the same module gate: a company
+# without Customers has no contacts to segment.
+app.include_router(customers.segments_router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))
 app.include_router(catalogue.router, dependencies=_module("catalogue"))

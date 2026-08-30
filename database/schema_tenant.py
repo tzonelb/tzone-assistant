@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 4
+TENANT_SCHEMA_VERSION = 5
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -149,6 +149,11 @@ TENANT_TABLES: tuple[str, ...] = (
         country TEXT,
         timezone TEXT,
         notes TEXT,
+        lifecycle_stage TEXT NOT NULL DEFAULT 'lead',
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        assigned_user_id INTEGER,
+        custom_fields_json TEXT NOT NULL DEFAULT '{}',
+        documents_json TEXT NOT NULL DEFAULT '[]',
         first_seen_at TEXT NOT NULL,
         last_seen_at TEXT NOT NULL,
         created_at TEXT NOT NULL,
@@ -181,6 +186,18 @@ TENANT_TABLES: tuple[str, ...] = (
         data_json TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS customer_segments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        filters_json TEXT NOT NULL DEFAULT '{}',
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(company_id, name)
     )
     """,
     """
@@ -678,6 +695,23 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "due_date": "TEXT",
         "created_by_user_id": "INTEGER",
         "closed_at": "TEXT",
+    },
+    # The CRM fields the Contacts screen edits: a lifecycle stage, free-form
+    # tags, an owning employee, and the two free-form stores (custom fields and
+    # documents) a contact file needs. A company provisioned before this
+    # release has a `customers` table without them, so they arrive here rather
+    # than through CREATE TABLE.
+    #
+    # `assigned_user_id` carries no REFERENCES clause: `users` lives in the
+    # control-plane database and SQLite cannot key across files. It is resolved
+    # through `auth_service.user_display_names`, the same way every other
+    # user id in a tenant table is.
+    "customers": {
+        "lifecycle_stage": "TEXT NOT NULL DEFAULT 'lead'",
+        "tags_json": "TEXT NOT NULL DEFAULT '[]'",
+        "assigned_user_id": "INTEGER",
+        "custom_fields_json": "TEXT NOT NULL DEFAULT '{}'",
+        "documents_json": "TEXT NOT NULL DEFAULT '[]'",
     },
 }
 
