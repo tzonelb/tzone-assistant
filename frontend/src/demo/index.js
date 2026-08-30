@@ -299,6 +299,26 @@ export function installDemoMode() {
     const method = String(init.method || "GET").toUpperCase();
 
     if (method === "GET") {
+      /*
+       * A recorded file rather than a recorded object: the report exports are
+       * CSV, and they differ per `?report=`, so they are keyed by path *and*
+       * query and replayed with the headers that name the download. Without
+       * this the export button on the reporting screen would hand the visitor
+       * a .csv file containing `{"status":"ok"}`.
+       */
+      const file = store[`${url.pathname}${url.search}`];
+
+      if (typeof file?.text === "string") {
+        return new Response(file.text, {
+          status: file.status || 200,
+          headers: {
+            "Content-Type": file.content_type || "text/plain; charset=utf-8",
+            "Content-Disposition":
+              file.content_disposition || "attachment; filename=\"export.csv\"",
+          },
+        });
+      }
+
       const body = readPath(url.pathname, url.searchParams);
       return json(body ?? { status: "ok", items: [], total: 0 });
     }

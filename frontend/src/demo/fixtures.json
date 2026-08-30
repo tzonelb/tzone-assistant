@@ -9,12 +9,12 @@
     "phone": null,
     "status": "active",
     "is_super_admin": false,
-    "last_login_at": "2026-08-30T20:20:50.168451+00:00",
+    "last_login_at": "2026-08-30T21:36:35.521603+00:00",
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T20:20:49.217949+00:00",
-    "updated_at": "2026-08-30T20:20:50.168469+00:00",
+    "created_at": "2026-08-30T21:36:34.384019+00:00",
+    "updated_at": "2026-08-30T21:36:35.521626+00:00",
     "active_company_id": 1,
     "session_scope": "company"
    },
@@ -140,19 +140,19 @@
     "timezone": "Asia/Beirut",
     "default_language": "ar",
     "status": "active",
-    "created_at": "2026-08-30T20:20:47.949603+00:00"
+    "created_at": "2026-08-30T21:36:33.109434+00:00"
    },
    "subscription": null,
    "subscription_active": false,
    "counts": {
     "users": 1,
     "channel_accounts": 4,
-    "conversations": 5,
-    "open_conversations": 5,
+    "conversations": 6,
+    "open_conversations": 6,
     "unread_conversations": 0,
-    "human_handled": 0,
-    "messages": 12,
-    "customers": 9,
+    "human_handled": 2,
+    "messages": 127,
+    "customers": 10,
     "knowledge_items": 2,
     "tickets": 4,
     "open_tickets": 2,
@@ -214,8 +214,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T20:20:50.272866+00:00",
-     "created_at": "2026-08-30T20:20:50.262322+00:00",
+     "last_message_at": "2026-08-30T21:36:36.213015+00:00",
+     "created_at": "2026-08-30T21:36:35.676938+00:00",
      "official_customer_name": "Maya Rizk",
      "customer_alias": "مايا رزق",
      "customer_name": "Maya Rizk"
@@ -227,10 +227,10 @@
      "language": null,
      "department": "support",
      "topic": null,
-     "status": "ai_handling",
-     "needs_human": 0,
-     "last_message_at": "2026-08-30T20:20:50.257001+00:00",
-     "created_at": "2026-08-30T20:20:50.251272+00:00",
+     "status": "human_handling",
+     "needs_human": 1,
+     "last_message_at": "2026-08-30T21:36:36.195674+00:00",
+     "created_at": "2026-08-30T21:36:35.654212+00:00",
      "official_customer_name": "Karim Fares",
      "customer_alias": "Karim Fares",
      "customer_name": "Karim Fares"
@@ -244,8 +244,8 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T20:20:50.246013+00:00",
-     "created_at": "2026-08-30T20:20:50.240316+00:00",
+     "last_message_at": "2026-08-30T21:36:36.186733+00:00",
+     "created_at": "2026-08-30T21:36:35.629405+00:00",
      "official_customer_name": "Nour Aoun",
      "customer_alias": "نور عون",
      "customer_name": "Nour Aoun"
@@ -257,10 +257,10 @@
      "language": null,
      "department": "sales",
      "topic": null,
-     "status": "ai_handling",
-     "needs_human": 0,
-     "last_message_at": "2026-08-30T20:20:50.234839+00:00",
-     "created_at": "2026-08-30T20:20:50.219625+00:00",
+     "status": "human_handling",
+     "needs_human": 1,
+     "last_message_at": "2026-08-30T21:36:36.162594+00:00",
+     "created_at": "2026-08-30T21:36:35.589577+00:00",
      "official_customer_name": "Omar Saad",
      "customer_alias": "Omar Saad",
      "customer_name": "Omar Saad"
@@ -274,11 +274,26 @@
      "topic": null,
      "status": "ai_handling",
      "needs_human": 0,
-     "last_message_at": "2026-08-30T20:20:50.214238+00:00",
-     "created_at": "2026-08-30T20:20:50.205131+00:00",
+     "last_message_at": "2026-08-30T21:36:36.146283+00:00",
+     "created_at": "2026-08-30T21:36:35.548355+00:00",
      "official_customer_name": "Lina Khoury",
      "customer_alias": "لينا خوري",
      "customer_name": "Lina Khoury"
+    },
+    {
+     "id": 6,
+     "channel": "whatsapp",
+     "external_user_id": "cust-rami",
+     "language": null,
+     "department": "Unassigned",
+     "topic": null,
+     "status": "ai_handling",
+     "needs_human": 0,
+     "last_message_at": "2026-08-30T21:36:36.136332+00:00",
+     "created_at": "2026-08-30T21:36:35.700055+00:00",
+     "official_customer_name": "Rami Daher",
+     "customer_alias": null,
+     "customer_name": "Rami Daher"
     }
    ]
   }
@@ -314,8 +329,8 @@
      "takeover_expires_at": null,
      "last_message": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T20:20:50.272866+00:00",
-     "message_count": 2,
+     "updated_at": "2026-08-30T21:36:36.213015+00:00",
+     "message_count": 22,
      "branch_id": null,
      "channel_account_id": null,
      "assigned_user_name": null,
@@ -338,23 +353,23 @@
      "department": "support",
      "department_id": 2,
      "topic": "General",
-     "status": "ai_handling",
+     "status": "human_handling",
      "priority": "normal",
-     "handled_by_ai": true,
-     "ai_enabled": true,
-     "ai_status": "active",
-     "assigned_user_id": null,
+     "handled_by_ai": false,
+     "ai_enabled": false,
+     "ai_status": "human",
+     "assigned_user_id": 1,
      "unread_count": 0,
-     "takeover_expires_at": null,
-     "last_message": "We do — sending it over now.",
+     "takeover_expires_at": "2026-08-30T21:41:37.096385+00:00",
+     "last_message": "We do — sending it over now, sorry for the wait.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T20:20:50.257001+00:00",
-     "message_count": 2,
+     "updated_at": "2026-08-30T21:36:36.195674+00:00",
+     "message_count": 12,
      "branch_id": null,
      "channel_account_id": null,
-     "assigned_user_name": null,
+     "assigned_user_name": "Rana Haddad",
      "can_manage": true,
-     "is_assigned_to_me": false
+     "is_assigned_to_me": true
     },
     {
      "id": "instagram:cust-nour",
@@ -380,10 +395,10 @@
      "assigned_user_id": null,
      "unread_count": 0,
      "takeover_expires_at": null,
-     "last_message": "أهلاً نور! العرض شغال لآخر الشهر.",
+     "last_message": "تكرم عينك، وقت ما بتجهز خبرنا.",
      "last_direction": "out",
-     "updated_at": "2026-08-30T20:20:50.246013+00:00",
-     "message_count": 2,
+     "updated_at": "2026-08-30T21:36:36.186733+00:00",
+     "message_count": 32,
      "branch_id": null,
      "channel_account_id": null,
      "assigned_user_name": null,
@@ -406,23 +421,23 @@
      "department": "sales",
      "department_id": 1,
      "topic": "General",
-     "status": "ai_handling",
+     "status": "human_handling",
      "priority": "normal",
-     "handled_by_ai": true,
-     "ai_enabled": true,
-     "ai_status": "active",
-     "assigned_user_id": null,
+     "handled_by_ai": false,
+     "ai_enabled": false,
+     "ai_status": "human",
+     "assigned_user_id": 1,
      "unread_count": 0,
-     "takeover_expires_at": null,
-     "last_message": "Yes please, reserve it under my name.",
-     "last_direction": "in",
-     "updated_at": "2026-08-30T20:20:50.234839+00:00",
-     "message_count": 3,
+     "takeover_expires_at": "2026-08-30T21:41:37.132624+00:00",
+     "last_message": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "last_direction": "out",
+     "updated_at": "2026-08-30T21:36:36.162594+00:00",
+     "message_count": 24,
      "branch_id": null,
      "channel_account_id": null,
-     "assigned_user_name": null,
+     "assigned_user_name": "Rana Haddad",
      "can_manage": true,
-     "is_assigned_to_me": false
+     "is_assigned_to_me": true
     },
     {
      "id": "messenger:cust-lina",
@@ -448,10 +463,44 @@
      "assigned_user_id": null,
      "unread_count": 0,
      "takeover_expires_at": null,
-     "last_message": "تمام، وكم سعر الباقة الشهرية؟",
+     "last_message": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "last_direction": "out",
+     "updated_at": "2026-08-30T21:36:36.146283+00:00",
+     "message_count": 12,
+     "branch_id": null,
+     "channel_account_id": null,
+     "assigned_user_name": null,
+     "can_manage": true,
+     "is_assigned_to_me": false
+    },
+    {
+     "id": "whatsapp:cust-rami",
+     "conversation_id": 6,
+     "channel": "whatsapp",
+     "external_user_id": "cust-rami",
+     "customer_id": 9,
+     "customer_name": "Rami Daher",
+     "customer_alias": null,
+     "customer_profile_picture": null,
+     "folder": "inbox",
+     "is_starred": false,
+     "is_pinned": false,
+     "tags": [],
+     "department": "Unassigned",
+     "department_id": null,
+     "topic": "General",
+     "status": "ai_handling",
+     "priority": "normal",
+     "handled_by_ai": true,
+     "ai_enabled": true,
+     "ai_status": "active",
+     "assigned_user_id": null,
+     "unread_count": 0,
+     "takeover_expires_at": null,
+     "last_message": "بعتلكن مبارح وما وصلني جواب، بدي اعرف اذا الطلب جهز",
      "last_direction": "in",
-     "updated_at": "2026-08-30T20:20:50.214238+00:00",
-     "message_count": 3,
+     "updated_at": "2026-08-30T21:36:36.136332+00:00",
+     "message_count": 25,
      "branch_id": null,
      "channel_account_id": null,
      "assigned_user_name": null,
@@ -515,7 +564,7 @@
    "pagination": {
     "page": 1,
     "page_size": 20,
-    "total": 5,
+    "total": 6,
     "total_pages": 1
    }
   }
@@ -574,7 +623,7 @@
      "task_type": "task",
      "due_date": null,
      "created_by_user_id": 1,
-     "closed_at": "2026-08-30T20:20:51.033908+00:00",
+     "closed_at": "2026-08-30T21:36:37.282545+00:00",
      "platform": null,
      "user_id": null,
      "language": null,
@@ -587,8 +636,8 @@
      "assigned_user_id": null,
      "status": "resolved",
      "priority": "normal",
-     "created_at": "2026-08-30T20:20:51.033908+00:00",
-     "updated_at": "2026-08-30T20:20:51.033908+00:00",
+     "created_at": "2026-08-30T21:36:37.282545+00:00",
+     "updated_at": "2026-08-30T21:36:37.282545+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -614,8 +663,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "low",
-     "created_at": "2026-08-30T20:20:51.010455+00:00",
-     "updated_at": "2026-08-30T20:20:51.010455+00:00",
+     "created_at": "2026-08-30T21:36:37.256219+00:00",
+     "updated_at": "2026-08-30T21:36:37.256219+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -641,8 +690,8 @@
      "assigned_user_id": null,
      "status": "in_progress",
      "priority": "normal",
-     "created_at": "2026-08-30T20:20:50.984509+00:00",
-     "updated_at": "2026-08-30T20:20:50.984509+00:00",
+     "created_at": "2026-08-30T21:36:37.229258+00:00",
+     "updated_at": "2026-08-30T21:36:37.229258+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -668,8 +717,8 @@
      "assigned_user_id": null,
      "status": "open",
      "priority": "high",
-     "created_at": "2026-08-30T20:20:50.961322+00:00",
-     "updated_at": "2026-08-30T20:20:50.961322+00:00",
+     "created_at": "2026-08-30T21:36:37.202252+00:00",
+     "updated_at": "2026-08-30T21:36:37.202252+00:00",
      "is_overdue": false,
      "assigned_user_name": null,
      "created_by_user_name": "Rana Haddad"
@@ -727,8 +776,8 @@
      "status": "confirmed",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T20:20:51.059917+00:00",
-     "updated_at": "2026-08-30T20:20:51.059917+00:00",
+     "created_at": "2026-08-30T21:36:37.310309+00:00",
+     "updated_at": "2026-08-30T21:36:37.310309+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -748,8 +797,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T20:20:51.084255+00:00",
-     "updated_at": "2026-08-30T20:20:51.084255+00:00",
+     "created_at": "2026-08-30T21:36:37.335913+00:00",
+     "updated_at": "2026-08-30T21:36:37.335913+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -769,8 +818,8 @@
      "status": "scheduled",
      "created_by_user_id": 1,
      "cancelled_reason": null,
-     "created_at": "2026-08-30T20:20:51.109354+00:00",
-     "updated_at": "2026-08-30T20:20:51.109354+00:00",
+     "created_at": "2026-08-30T21:36:37.362200+00:00",
+     "updated_at": "2026-08-30T21:36:37.362200+00:00",
      "customer_name": null,
      "customer_phone": null,
      "staff_name": "Rana Haddad",
@@ -825,6 +874,11 @@
     },
     {
      "id": 9,
+     "label": "Rami Daher",
+     "phone": null
+    },
+    {
+     "id": 10,
      "label": "Rita Ghanem",
      "phone": "+96170445566"
     },
@@ -885,13 +939,50 @@
  },
  "/api/notifications": {
   "status": 200,
-  "body": []
+  "body": [
+   {
+    "id": 2,
+    "company_id": 1,
+    "recipient_user_id": null,
+    "notification_type": "handover",
+    "title": "A conversation was taken over",
+    "body": null,
+    "channel": "whatsapp",
+    "external_user_id": "cust-omar",
+    "conversation_id": 2,
+    "actor_user_id": 1,
+    "severity": "info",
+    "data": {},
+    "grouped_count": 1,
+    "is_read": false,
+    "read_at": null,
+    "created_at": "2026-08-30T21:36:37.143588+00:00"
+   },
+   {
+    "id": 1,
+    "company_id": 1,
+    "recipient_user_id": null,
+    "notification_type": "handover",
+    "title": "A conversation was taken over",
+    "body": null,
+    "channel": "telegram",
+    "external_user_id": "cust-karim",
+    "conversation_id": 4,
+    "actor_user_id": 1,
+    "severity": "info",
+    "data": {},
+    "grouped_count": 1,
+    "is_read": false,
+    "read_at": null,
+    "created_at": "2026-08-30T21:36:37.109757+00:00"
+   }
+  ]
  },
  "/api/notifications/summary": {
   "status": 200,
   "body": {
-   "total": 0,
-   "unread": 0,
+   "total": 2,
+   "unread": 2,
    "read": 0
   }
  },
@@ -900,7 +991,7 @@
   "body": {
    "items": [
     {
-     "id": 9,
+     "id": 10,
      "company_id": 1,
      "display_name": "Rita Ghanem",
      "internal_name": null,
@@ -913,16 +1004,44 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T20:20:51.344051+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.344051+00:00",
-     "created_at": "2026-08-30T20:20:51.344051+00:00",
-     "updated_at": "2026-08-30T20:20:51.503777+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.815819+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.815819+00:00",
+     "created_at": "2026-08-30T21:36:37.815819+00:00",
+     "updated_at": "2026-08-30T21:36:37.965546+00:00",
      "identity_count": 0,
      "conversation_count": 0,
      "tags": [
       "walk-in"
      ],
      "channels": [],
+     "assigned_user_name": null,
+     "custom_fields": {},
+     "documents": []
+    },
+    {
+     "id": 9,
+     "company_id": 1,
+     "display_name": "Rami Daher",
+     "internal_name": null,
+     "profile_picture": null,
+     "phone": null,
+     "email": null,
+     "language": null,
+     "country": null,
+     "timezone": null,
+     "notes": null,
+     "lifecycle_stage": "lead",
+     "assigned_user_id": null,
+     "first_seen_at": "2026-08-30T21:36:37.798277+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.798277+00:00",
+     "created_at": "2026-08-30T21:36:37.798277+00:00",
+     "updated_at": "2026-08-30T21:36:37.798277+00:00",
+     "identity_count": 1,
+     "conversation_count": 1,
+     "tags": [],
+     "channels": [
+      "whatsapp"
+     ],
      "assigned_user_name": null,
      "custom_fields": {},
      "documents": []
@@ -941,10 +1060,10 @@
      "notes": null,
      "lifecycle_stage": "customer",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T20:20:51.321515+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.321515+00:00",
-     "created_at": "2026-08-30T20:20:51.321515+00:00",
-     "updated_at": "2026-08-30T20:20:51.479586+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.792093+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.792093+00:00",
+     "created_at": "2026-08-30T21:36:37.792093+00:00",
+     "updated_at": "2026-08-30T21:36:37.940308+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -971,10 +1090,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T20:20:51.312476+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.312476+00:00",
-     "created_at": "2026-08-30T20:20:51.312476+00:00",
-     "updated_at": "2026-08-30T20:20:51.452680+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.785821+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.785821+00:00",
+     "created_at": "2026-08-30T21:36:37.785821+00:00",
+     "updated_at": "2026-08-30T21:36:37.915761+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1001,10 +1120,10 @@
      "notes": null,
      "lifecycle_stage": "active",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T20:20:51.305565+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.305565+00:00",
-     "created_at": "2026-08-30T20:20:51.305565+00:00",
-     "updated_at": "2026-08-30T20:20:51.420618+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.779643+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.779643+00:00",
+     "created_at": "2026-08-30T21:36:37.779643+00:00",
+     "updated_at": "2026-08-30T21:36:37.892779+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1031,10 +1150,10 @@
      "notes": null,
      "lifecycle_stage": "customer",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T20:20:51.296755+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.296755+00:00",
-     "created_at": "2026-08-30T20:20:51.296755+00:00",
-     "updated_at": "2026-08-30T20:20:51.395922+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.772940+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.772940+00:00",
+     "created_at": "2026-08-30T21:36:37.772940+00:00",
+     "updated_at": "2026-08-30T21:36:37.867444+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1062,10 +1181,10 @@
      "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
      "lifecycle_stage": "vip",
      "assigned_user_id": 1,
-     "first_seen_at": "2026-08-30T20:20:51.286777+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.286777+00:00",
-     "created_at": "2026-08-30T20:20:51.286777+00:00",
-     "updated_at": "2026-08-30T20:20:51.370653+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.766357+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.766357+00:00",
+     "created_at": "2026-08-30T21:36:37.766357+00:00",
+     "updated_at": "2026-08-30T21:36:37.842432+00:00",
      "identity_count": 1,
      "conversation_count": 1,
      "tags": [
@@ -1101,10 +1220,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T20:20:51.243009+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.243009+00:00",
-     "created_at": "2026-08-30T20:20:51.243009+00:00",
-     "updated_at": "2026-08-30T20:20:51.243009+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.729470+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.729470+00:00",
+     "created_at": "2026-08-30T21:36:37.729470+00:00",
+     "updated_at": "2026-08-30T21:36:37.729470+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1129,10 +1248,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T20:20:51.236309+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.236309+00:00",
-     "created_at": "2026-08-30T20:20:51.236309+00:00",
-     "updated_at": "2026-08-30T20:20:51.236309+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.723023+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.723023+00:00",
+     "created_at": "2026-08-30T21:36:37.723023+00:00",
+     "updated_at": "2026-08-30T21:36:37.723023+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1157,10 +1276,10 @@
      "notes": null,
      "lifecycle_stage": "lead",
      "assigned_user_id": null,
-     "first_seen_at": "2026-08-30T20:20:51.229332+00:00",
-     "last_seen_at": "2026-08-30T20:20:51.229332+00:00",
-     "created_at": "2026-08-30T20:20:51.229332+00:00",
-     "updated_at": "2026-08-30T20:20:51.229332+00:00",
+     "first_seen_at": "2026-08-30T21:36:37.716589+00:00",
+     "last_seen_at": "2026-08-30T21:36:37.716589+00:00",
+     "created_at": "2026-08-30T21:36:37.716589+00:00",
+     "updated_at": "2026-08-30T21:36:37.716589+00:00",
      "identity_count": 1,
      "conversation_count": 0,
      "tags": [],
@@ -1172,7 +1291,7 @@
      "documents": []
     }
    ],
-   "total": 9
+   "total": 10
   }
  },
  "/api/customers/options": {
@@ -1203,8 +1322,8 @@
      "company_id": 1,
      "name": "VIP clients",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T20:20:51.532802+00:00",
-     "updated_at": "2026-08-30T20:20:51.532802+00:00",
+     "created_at": "2026-08-30T21:36:37.992941+00:00",
+     "updated_at": "2026-08-30T21:36:37.992941+00:00",
      "filters": {
       "lifecycle_stage": "vip"
      }
@@ -1214,8 +1333,8 @@
      "company_id": 1,
      "name": "Waiting on delivery",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T20:20:51.553706+00:00",
-     "updated_at": "2026-08-30T20:20:51.553706+00:00",
+     "created_at": "2026-08-30T21:36:38.011224+00:00",
+     "updated_at": "2026-08-30T21:36:38.011224+00:00",
      "filters": {
       "tag": "توصيل"
      }
@@ -1238,8 +1357,8 @@
      "department": null,
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T20:20:51.159807+00:00",
-     "updated_at": "2026-08-30T20:20:51.159807+00:00",
+     "created_at": "2026-08-30T21:36:37.417421+00:00",
+     "updated_at": "2026-08-30T21:36:37.417421+00:00",
      "category_name": null
     },
     {
@@ -1253,8 +1372,8 @@
      "department": "Sales",
      "keywords": null,
      "status": "active",
-     "created_at": "2026-08-30T20:20:51.138021+00:00",
-     "updated_at": "2026-08-30T20:20:51.138021+00:00",
+     "created_at": "2026-08-30T21:36:37.389979+00:00",
+     "updated_at": "2026-08-30T21:36:37.389979+00:00",
      "category_name": null
     }
    ],
@@ -1292,8 +1411,8 @@
      "body": "Delivery is $2 inside Beirut and $3 outside, arriving within 24 hours.",
      "department": "Sales",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T20:20:51.205629+00:00",
-     "updated_at": "2026-08-30T20:20:51.205629+00:00"
+     "created_at": "2026-08-30T21:36:37.695406+00:00",
+     "updated_at": "2026-08-30T21:36:37.695406+00:00"
     },
     {
      "id": 1,
@@ -1302,8 +1421,8 @@
      "body": "أهلاً وسهلاً فيك! كيف فينا نساعدك اليوم؟",
      "department": "",
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T20:20:51.185151+00:00",
-     "updated_at": "2026-08-30T20:20:51.185151+00:00"
+     "created_at": "2026-08-30T21:36:37.676707+00:00",
+     "updated_at": "2026-08-30T21:36:37.676707+00:00"
     }
    ],
    "can_manage": true
@@ -1312,8 +1431,274 @@
  "/api/catalogue/products": {
   "status": 200,
   "body": {
-   "items": [],
-   "total": 0
+   "items": [
+    {
+     "id": 8,
+     "company_id": 1,
+     "category_id": null,
+     "sku": "PKG-OLD-00",
+     "name": "Legacy starter kit",
+     "name_en": null,
+     "description": "Discontinued — kept so old invoices still resolve.",
+     "brand": "Cedar Home",
+     "price": 15.0,
+     "sale_price": null,
+     "currency": "USD",
+     "stock_quantity": 0,
+     "in_stock": false,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "archived",
+     "created_at": "2026-08-30T21:36:37.653728+00:00",
+     "updated_at": "2026-08-30T21:36:37.653728+00:00",
+     "category_name": null,
+     "attributes": {}
+    },
+    {
+     "id": 7,
+     "company_id": 1,
+     "category_id": 3,
+     "sku": "PRM-GC-50",
+     "name": "Gift voucher $50",
+     "name_en": null,
+     "description": null,
+     "brand": null,
+     "price": 50.0,
+     "sale_price": null,
+     "currency": "USD",
+     "stock_quantity": 30,
+     "in_stock": true,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "draft",
+     "created_at": "2026-08-30T21:36:37.631553+00:00",
+     "updated_at": "2026-08-30T21:36:37.631553+00:00",
+     "category_name": "عروض",
+     "attributes": {}
+    },
+    {
+     "id": 6,
+     "company_id": 1,
+     "category_id": 3,
+     "sku": "PRM-SUM-26",
+     "name": "عرض الصيف",
+     "name_en": "Summer offer",
+     "description": "خصم ٢٥٪ لآخر الشهر.",
+     "brand": null,
+     "price": 60.0,
+     "sale_price": 45.0,
+     "currency": "USD",
+     "stock_quantity": 75,
+     "in_stock": true,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.608466+00:00",
+     "updated_at": "2026-08-30T21:36:37.608466+00:00",
+     "category_name": "عروض",
+     "attributes": {}
+    },
+    {
+     "id": 5,
+     "company_id": 1,
+     "category_id": 2,
+     "sku": "ACC-CBL-2M",
+     "name": "USB-C cable 2m",
+     "name_en": null,
+     "description": null,
+     "brand": "Falcon",
+     "price": 7.0,
+     "sale_price": null,
+     "currency": "USD",
+     "stock_quantity": 260,
+     "in_stock": true,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.586144+00:00",
+     "updated_at": "2026-08-30T21:36:37.586144+00:00",
+     "category_name": "Accessories",
+     "attributes": {}
+    },
+    {
+     "id": 4,
+     "company_id": 1,
+     "category_id": 2,
+     "sku": "ACC-CASE-01",
+     "name": "Carry case",
+     "name_en": null,
+     "description": "Padded case. Out of stock until the next shipment.",
+     "brand": "Falcon",
+     "price": 18.5,
+     "sale_price": null,
+     "currency": "USD",
+     "stock_quantity": 0,
+     "in_stock": false,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.563672+00:00",
+     "updated_at": "2026-08-30T21:36:37.563672+00:00",
+     "category_name": "Accessories",
+     "attributes": {}
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "category_id": 1,
+     "sku": "PKG-S-01",
+     "name": "Small package",
+     "name_en": null,
+     "description": "Entry package — the one Omar asked us to reserve.",
+     "brand": "Cedar Home",
+     "price": 25.0,
+     "sale_price": null,
+     "currency": "USD",
+     "stock_quantity": 3,
+     "in_stock": true,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.541859+00:00",
+     "updated_at": "2026-08-30T21:36:37.541859+00:00",
+     "category_name": "باقات الاشتراك",
+     "attributes": {}
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "category_id": 1,
+     "sku": "PKG-Y-01",
+     "name": "الباقة السنوية",
+     "name_en": "Annual package",
+     "description": "باقة سنوية مع خصم شهرين.",
+     "brand": "Cedar Home",
+     "price": 480.0,
+     "sale_price": 420.0,
+     "currency": "USD",
+     "stock_quantity": 40,
+     "in_stock": true,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.518760+00:00",
+     "updated_at": "2026-08-30T21:36:37.518760+00:00",
+     "category_name": "باقات الاشتراك",
+     "attributes": {}
+    },
+    {
+     "id": 1,
+     "company_id": 1,
+     "category_id": 1,
+     "sku": "PKG-M-01",
+     "name": "الباقة الشهرية",
+     "name_en": "Monthly package",
+     "description": "باقة شهرية بتشمل التوصيل المجاني داخل بيروت.",
+     "brand": "Cedar Home",
+     "price": 45.0,
+     "sale_price": null,
+     "currency": "USD",
+     "stock_quantity": 120,
+     "in_stock": true,
+     "image_url": null,
+     "attributes_json": "{}",
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.497356+00:00",
+     "updated_at": "2026-08-30T21:36:37.497356+00:00",
+     "category_name": "باقات الاشتراك",
+     "attributes": {}
+    }
+   ],
+   "total": 8
+  }
+ },
+ "/api/catalogue/options": {
+  "status": 200,
+  "body": {
+   "categories": [
+    {
+     "id": 1,
+     "company_id": 1,
+     "name": "باقات الاشتراك",
+     "parent_id": null,
+     "sort_order": 0,
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.442334+00:00",
+     "updated_at": "2026-08-30T21:36:37.442334+00:00",
+     "product_count": 3
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "name": "Accessories",
+     "parent_id": null,
+     "sort_order": 1,
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.459646+00:00",
+     "updated_at": "2026-08-30T21:36:37.459646+00:00",
+     "product_count": 2
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "name": "عروض",
+     "parent_id": null,
+     "sort_order": 2,
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.477546+00:00",
+     "updated_at": "2026-08-30T21:36:37.477546+00:00",
+     "product_count": 2
+    }
+   ],
+   "statuses": [
+    "active",
+    "draft",
+    "archived"
+   ],
+   "stock_filters": [
+    "in_stock",
+    "out_of_stock"
+   ]
+  }
+ },
+ "/api/catalogue/categories": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 1,
+     "company_id": 1,
+     "name": "باقات الاشتراك",
+     "parent_id": null,
+     "sort_order": 0,
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.442334+00:00",
+     "updated_at": "2026-08-30T21:36:37.442334+00:00",
+     "product_count": 3
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "name": "Accessories",
+     "parent_id": null,
+     "sort_order": 1,
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.459646+00:00",
+     "updated_at": "2026-08-30T21:36:37.459646+00:00",
+     "product_count": 2
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "name": "عروض",
+     "parent_id": null,
+     "sort_order": 2,
+     "status": "active",
+     "created_at": "2026-08-30T21:36:37.477546+00:00",
+     "updated_at": "2026-08-30T21:36:37.477546+00:00",
+     "product_count": 2
+    }
+   ]
   }
  },
  "/api/analytics/summary": {
@@ -1321,55 +1706,490 @@
   "body": {
    "overview": {
     "range_days": 30,
-    "from": "2026-07-31T20:20:51.953236+00:00",
-    "to": "2026-08-30T20:20:51.953236+00:00",
+    "from": "2026-07-31T21:36:38.377377+00:00",
+    "to": "2026-08-30T21:36:38.377377+00:00",
     "messages": {
-     "total": 12,
-     "inbound": 7,
-     "outbound": 5,
-     "by_assistant": 0,
-     "by_employee": 0,
-     "automation_rate": 0.0
+     "total": 127,
+     "inbound": 64,
+     "outbound": 63,
+     "by_assistant": 51,
+     "by_employee": 12,
+     "automation_rate": 0.8095
     },
     "conversations": {
-     "total": 5,
-     "new_in_range": 5,
-     "human_handled": 0,
+     "total": 6,
+     "new_in_range": 6,
+     "human_handled": 2,
      "unread": 0,
-     "needs_human": 0
+     "needs_human": 2
     },
     "customers": {
-     "new_in_range": 9
+     "new_in_range": 10
     }
    },
    "volume_by_day": [
     {
+     "day": "2026-08-02",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-03",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-04",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-05",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-06",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-07",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-08",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-09",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-10",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-11",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-12",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-13",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-14",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-15",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-16",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-17",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-18",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-19",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-20",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-21",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-22",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-23",
+     "total": 4,
+     "inbound": 2,
+     "outbound": 2
+    },
+    {
+     "day": "2026-08-24",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-25",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-26",
+     "total": 6,
+     "inbound": 3,
+     "outbound": 3
+    },
+    {
+     "day": "2026-08-27",
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
+    },
+    {
+     "day": "2026-08-28",
+     "total": 8,
+     "inbound": 4,
+     "outbound": 4
+    },
+    {
+     "day": "2026-08-29",
+     "total": 5,
+     "inbound": 3,
+     "outbound": 2
+    },
+    {
      "day": "2026-08-30",
-     "total": 12,
-     "inbound": 7,
-     "outbound": 5
+     "total": 2,
+     "inbound": 1,
+     "outbound": 1
     }
    ],
    "by_channel": [
     {
-     "channel": "messenger",
-     "messages": 5,
+     "channel": "whatsapp",
+     "messages": 49,
      "conversations": 2
     },
     {
-     "channel": "whatsapp",
-     "messages": 3,
-     "conversations": 1
+     "channel": "messenger",
+     "messages": 34,
+     "conversations": 2
     },
     {
      "channel": "instagram",
-     "messages": 2,
+     "messages": 32,
      "conversations": 1
     },
     {
      "channel": "telegram",
-     "messages": 2,
+     "messages": 12,
      "conversations": 1
+    }
+   ],
+   "channel_trend": {
+    "channels": [
+     "messenger",
+     "telegram",
+     "instagram",
+     "whatsapp"
+    ],
+    "days": [
+     {
+      "messenger": 4,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-02"
+     },
+     {
+      "messenger": 0,
+      "telegram": 2,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-03"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 6,
+      "whatsapp": 0,
+      "day": "2026-08-04"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 4,
+      "day": "2026-08-05"
+     },
+     {
+      "messenger": 2,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-06"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 6,
+      "day": "2026-08-07"
+     },
+     {
+      "messenger": 4,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-08"
+     },
+     {
+      "messenger": 0,
+      "telegram": 2,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-09"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 6,
+      "whatsapp": 0,
+      "day": "2026-08-10"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 4,
+      "day": "2026-08-11"
+     },
+     {
+      "messenger": 2,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-12"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 6,
+      "day": "2026-08-13"
+     },
+     {
+      "messenger": 4,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-14"
+     },
+     {
+      "messenger": 0,
+      "telegram": 2,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-15"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 6,
+      "whatsapp": 0,
+      "day": "2026-08-16"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 4,
+      "day": "2026-08-17"
+     },
+     {
+      "messenger": 2,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-18"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 6,
+      "day": "2026-08-19"
+     },
+     {
+      "messenger": 4,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-20"
+     },
+     {
+      "messenger": 4,
+      "telegram": 2,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-21"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 6,
+      "whatsapp": 0,
+      "day": "2026-08-22"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 4,
+      "day": "2026-08-23"
+     },
+     {
+      "messenger": 2,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 4,
+      "day": "2026-08-24"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 6,
+      "day": "2026-08-25"
+     },
+     {
+      "messenger": 4,
+      "telegram": 0,
+      "instagram": 2,
+      "whatsapp": 0,
+      "day": "2026-08-26"
+     },
+     {
+      "messenger": 0,
+      "telegram": 2,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-27"
+     },
+     {
+      "messenger": 0,
+      "telegram": 2,
+      "instagram": 6,
+      "whatsapp": 0,
+      "day": "2026-08-28"
+     },
+     {
+      "messenger": 0,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 5,
+      "day": "2026-08-29"
+     },
+     {
+      "messenger": 2,
+      "telegram": 0,
+      "instagram": 0,
+      "whatsapp": 0,
+      "day": "2026-08-30"
+     }
+    ]
+   },
+   "by_department": [
+    {
+     "code": "support",
+     "name": "Support",
+     "name_ar": "الدعم",
+     "defined": true,
+     "messages": 44,
+     "conversations": 2,
+     "inbound": 22,
+     "by_assistant": 16,
+     "by_employee": 6,
+     "automation_rate": 0.7273,
+     "waiting_for_human": 1
+    },
+    {
+     "code": "sales",
+     "name": "Sales",
+     "name_ar": "المبيعات",
+     "defined": true,
+     "messages": 36,
+     "conversations": 2,
+     "inbound": 18,
+     "by_assistant": 16,
+     "by_employee": 2,
+     "automation_rate": 0.8889,
+     "waiting_for_human": 1
+    },
+    {
+     "code": "Unassigned",
+     "name": "Unassigned",
+     "name_ar": null,
+     "defined": true,
+     "messages": 25,
+     "conversations": 1,
+     "inbound": 13,
+     "by_assistant": 8,
+     "by_employee": 4,
+     "automation_rate": 0.6667,
+     "waiting_for_human": 0
+    },
+    {
+     "code": "delivery",
+     "name": "Delivery",
+     "name_ar": "التوصيل",
+     "defined": true,
+     "messages": 22,
+     "conversations": 1,
+     "inbound": 11,
+     "by_assistant": 11,
+     "by_employee": 0,
+     "automation_rate": 1.0,
+     "waiting_for_human": 0
     }
    ],
    "hourly_distribution": [
@@ -1379,7 +2199,7 @@
     },
     {
      "hour": "01",
-     "messages": 0
+     "messages": 1
     },
     {
      "hour": "02",
@@ -1411,43 +2231,43 @@
     },
     {
      "hour": "09",
-     "messages": 0
+     "messages": 5
     },
     {
      "hour": "10",
-     "messages": 0
+     "messages": 2
     },
     {
      "hour": "11",
-     "messages": 0
+     "messages": 6
     },
     {
      "hour": "12",
-     "messages": 0
+     "messages": 8
     },
     {
      "hour": "13",
-     "messages": 0
+     "messages": 1
     },
     {
      "hour": "14",
-     "messages": 0
+     "messages": 2
     },
     {
      "hour": "15",
-     "messages": 0
+     "messages": 4
     },
     {
      "hour": "16",
-     "messages": 0
+     "messages": 6
     },
     {
      "hour": "17",
-     "messages": 0
+     "messages": 2
     },
     {
      "hour": "18",
-     "messages": 0
+     "messages": 10
     },
     {
      "hour": "19",
@@ -1455,11 +2275,11 @@
     },
     {
      "hour": "20",
-     "messages": 7
+     "messages": 8
     },
     {
      "hour": "21",
-     "messages": 0
+     "messages": 9
     },
     {
      "hour": "22",
@@ -1471,20 +2291,129 @@
     }
    ],
    "assistant": {
-    "replies_sent": 0,
-    "replies_failed": 0,
-    "failure_rate": 0.0,
-    "average_reply_ms": null,
-    "handovers_to_human": 0,
+    "replies_sent": 51,
+    "replies_failed": 2,
+    "failure_rate": 0.0377,
+    "average_reply_ms": 3021,
+    "handovers_to_human": 1,
     "queued_now": 0,
-    "events": {}
+    "events": {
+     "ai_buffer_waiting_for_human_timeout": {
+      "count": 1,
+      "average_ms": null
+     },
+     "ai_reply_error": {
+      "count": 2,
+      "average_ms": null
+     },
+     "ai_reply_sent": {
+      "count": 51,
+      "average_ms": 3021
+     }
+    }
    },
-   "employees": [],
+   "employees": [
+    {
+     "user_id": 1,
+     "replies": 12,
+     "conversations": 5,
+     "takeovers": 2,
+     "answered": 7,
+     "average_response_seconds": 1517.1,
+     "slowest_response_seconds": 7320.0,
+     "first_reply_at": "2026-08-04T20:50:00+00:00",
+     "last_reply_at": "2026-08-28T23:38:35.672196+00:00",
+     "name": "Rana Haddad"
+    }
+   ],
    "first_response": {
-    "answered": 5,
+    "answered": 6,
     "unanswered": 0,
-    "average_seconds": 0.0,
-    "median_seconds": 0.0
+    "average_seconds": 290.0,
+    "median_seconds": 270.0,
+    "percentiles": {
+     "p50": 240.0,
+     "p75": 360.0,
+     "p90": 360.0,
+     "p95": 360.0
+    },
+    "buckets": [
+     {
+      "label": "under 1 min",
+      "conversations": 0
+     },
+     {
+      "label": "1-5 min",
+      "conversations": 3
+     },
+     {
+      "label": "5-15 min",
+      "conversations": 3
+     },
+     {
+      "label": "15-60 min",
+      "conversations": 0
+     },
+     {
+      "label": "1-4 hours",
+      "conversations": 0
+     },
+     {
+      "label": "over 4 hours",
+      "conversations": 0
+     }
+    ],
+    "slowest": [
+     {
+      "conversation_id": 3,
+      "channel": "instagram",
+      "external_user_id": "cust-nour",
+      "customer": "نور عون",
+      "asked_at": "2026-08-04T20:25:00+00:00",
+      "waited_seconds": 360.0
+     },
+     {
+      "conversation_id": 6,
+      "channel": "whatsapp",
+      "external_user_id": "cust-rami",
+      "customer": "Rami Daher",
+      "asked_at": "2026-08-07T18:13:00+00:00",
+      "waited_seconds": 360.0
+     },
+     {
+      "conversation_id": 2,
+      "channel": "whatsapp",
+      "external_user_id": "cust-omar",
+      "customer": "Omar Saad",
+      "asked_at": "2026-08-05T14:19:00+00:00",
+      "waited_seconds": 300.0
+     },
+     {
+      "conversation_id": 1,
+      "channel": "messenger",
+      "external_user_id": "cust-lina",
+      "customer": "لينا خوري",
+      "asked_at": "2026-08-06T11:25:00+00:00",
+      "waited_seconds": 240.0
+     },
+     {
+      "conversation_id": 4,
+      "channel": "telegram",
+      "external_user_id": "cust-karim",
+      "customer": "Karim Fares",
+      "asked_at": "2026-08-03T16:01:00+00:00",
+      "waited_seconds": 240.0
+     },
+     {
+      "conversation_id": 5,
+      "channel": "messenger",
+      "external_user_id": "cust-maya",
+      "customer": "مايا رزق",
+      "asked_at": "2026-08-02T20:19:00+00:00",
+      "waited_seconds": 240.0
+     }
+    ],
+    "never_answered": []
    }
   }
  },
@@ -1758,7 +2687,7 @@
      "email": "rana@cedarhome.example",
      "phone": null,
      "user_status": "active",
-     "last_login_at": "2026-08-30T20:20:50.168451+00:00",
+     "last_login_at": "2026-08-30T21:36:35.521603+00:00",
      "password_changed_at": null,
      "must_change_password": 0,
      "locked_until": null,
@@ -1811,8 +2740,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.621861+00:00",
-     "updated_at": "2026-08-30T20:20:50.621861+00:00",
+     "created_at": "2026-08-30T21:36:36.728889+00:00",
+     "updated_at": "2026-08-30T21:36:36.728889+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1834,8 +2763,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.648930+00:00",
-     "updated_at": "2026-08-30T20:20:50.648930+00:00",
+     "created_at": "2026-08-30T21:36:36.760749+00:00",
+     "updated_at": "2026-08-30T21:36:36.760749+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1857,8 +2786,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.675514+00:00",
-     "updated_at": "2026-08-30T20:20:50.675514+00:00",
+     "created_at": "2026-08-30T21:36:36.791308+00:00",
+     "updated_at": "2026-08-30T21:36:36.791308+00:00",
      "branch_name": null,
      "has_access_token": false,
      "has_verify_token": false,
@@ -1880,8 +2809,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.701979+00:00",
-     "updated_at": "2026-08-30T20:20:50.701979+00:00",
+     "created_at": "2026-08-30T21:36:36.822935+00:00",
+     "updated_at": "2026-08-30T21:36:36.822935+00:00",
      "branch_name": null,
      "has_access_token": true,
      "has_verify_token": false,
@@ -1939,8 +2868,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.621861+00:00",
-     "updated_at": "2026-08-30T20:20:50.621861+00:00",
+     "created_at": "2026-08-30T21:36:36.728889+00:00",
+     "updated_at": "2026-08-30T21:36:36.728889+00:00",
      "branch_name": null
     },
     {
@@ -1958,8 +2887,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.648930+00:00",
-     "updated_at": "2026-08-30T20:20:50.648930+00:00",
+     "created_at": "2026-08-30T21:36:36.760749+00:00",
+     "updated_at": "2026-08-30T21:36:36.760749+00:00",
      "branch_name": null
     },
     {
@@ -1977,8 +2906,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.675514+00:00",
-     "updated_at": "2026-08-30T20:20:50.675514+00:00",
+     "created_at": "2026-08-30T21:36:36.791308+00:00",
+     "updated_at": "2026-08-30T21:36:36.791308+00:00",
      "branch_name": null
     },
     {
@@ -1996,8 +2925,8 @@
      "flow_enabled": 1,
      "voice_ai_enabled": 0,
      "image_ai_enabled": 0,
-     "created_at": "2026-08-30T20:20:50.701979+00:00",
-     "updated_at": "2026-08-30T20:20:50.701979+00:00",
+     "created_at": "2026-08-30T21:36:36.822935+00:00",
+     "updated_at": "2026-08-30T21:36:36.822935+00:00",
      "branch_name": null
     }
    ],
@@ -2026,7 +2955,7 @@
      "media_type": null,
      "send_lock_acquired_at": null,
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T20:20:51.273509+00:00",
+     "created_at": "2026-08-30T21:36:37.757122+00:00",
      "sent_at": null
     },
     {
@@ -2047,7 +2976,7 @@
      "media_type": null,
      "send_lock_acquired_at": null,
      "created_by_user_id": 1,
-     "created_at": "2026-08-30T20:20:51.249121+00:00",
+     "created_at": "2026-08-30T21:36:37.735946+00:00",
      "sent_at": null
     }
    ]
@@ -2074,7 +3003,7 @@
     "media_type": null,
     "send_lock_acquired_at": null,
     "created_by_user_id": 1,
-    "created_at": "2026-08-30T20:20:51.249121+00:00",
+    "created_at": "2026-08-30T21:36:37.735946+00:00",
     "sent_at": null
    },
    "totals": {
@@ -2116,7 +3045,7 @@
     "media_type": null,
     "send_lock_acquired_at": null,
     "created_by_user_id": 1,
-    "created_at": "2026-08-30T20:20:51.273509+00:00",
+    "created_at": "2026-08-30T21:36:37.757122+00:00",
     "sent_at": null
    },
    "totals": {
@@ -2137,6 +3066,41 @@
    "recipient_count": 1
   }
  },
+ "/api/analytics/export?report=employees": {
+  "status": 200,
+  "body": null,
+  "text": "employee,user_id,conversations_handled,replies_sent,takeovers,replies_to_a_waiting_customer,average_response_seconds,slowest_response_seconds,first_reply_at,last_reply_at\r\nRana Haddad,1,5,12,2,7,1517.1,7320.0,2026-08-04T20:50:00+00:00,2026-08-28T23:38:35.672196+00:00\r\n",
+  "content_type": "text/csv; charset=utf-8",
+  "content_disposition": "attachment; filename=\"analytics_employees_30d_20260830_213638.csv\""
+ },
+ "/api/analytics/export?report=departments": {
+  "status": 200,
+  "body": null,
+  "text": "department,code,conversations,messages,from_customers,answered_by_assistant,answered_by_employees,automation_rate,waiting_for_a_human_now\r\nSupport,support,2,44,22,16,6,0.7273,1\r\nSales,sales,2,36,18,16,2,0.8889,1\r\nUnassigned,Unassigned,1,25,13,8,4,0.6667,0\r\nDelivery,delivery,1,22,11,11,0,1.0,0\r\n",
+  "content_type": "text/csv; charset=utf-8",
+  "content_disposition": "attachment; filename=\"analytics_departments_30d_20260830_213638.csv\""
+ },
+ "/api/analytics/export?report=channels": {
+  "status": 200,
+  "body": null,
+  "text": "day,channel,messages\r\n2026-08-02,messenger,4\r\n2026-08-02,telegram,0\r\n2026-08-02,instagram,0\r\n2026-08-02,whatsapp,0\r\n2026-08-03,messenger,0\r\n2026-08-03,telegram,2\r\n2026-08-03,instagram,0\r\n2026-08-03,whatsapp,0\r\n2026-08-04,messenger,0\r\n2026-08-04,telegram,0\r\n2026-08-04,instagram,6\r\n2026-08-04,whatsapp,0\r\n2026-08-05,messenger,0\r\n2026-08-05,telegram,0\r\n2026-08-05,instagram,0\r\n2026-08-05,whatsapp,4\r\n2026-08-06,messenger,2\r\n2026-08-06,telegram,0\r\n2026-08-06,instagram,0\r\n2026-08-06,whatsapp,0\r\n2026-08-07,messenger,0\r\n2026-08-07,telegram,0\r\n2026-08-07,instagram,0\r\n2026-08-07,whatsapp,6\r\n2026-08-08,messenger,4\r\n2026-08-08,telegram,0\r\n2026-08-08,instagram,0\r\n2026-08-08,whatsapp,0\r\n2026-08-09,messenger,0\r\n2026-08-09,telegram,2\r\n2026-08-09,instagram,0\r\n2026-08-09,whatsapp,0\r\n2026-08-10,messenger,0\r\n2026-08-10,telegram,0\r\n2026-08-10,instagram,6\r\n2026-08-10,whatsapp,0\r\n2026-08-11,messenger,0\r\n2026-08-11,telegram,0\r\n2026-08-11,instagram,0\r\n2026-08-11,whatsapp,4\r\n2026-08-12,messenger,2\r\n2026-08-12,telegram,0\r\n2026-08-12,instagram,0\r\n2026-08-12,whatsapp,0\r\n2026-08-13,messenger,0\r\n2026-08-13,telegram,0\r\n2026-08-13,instagram,0\r\n2026-08-13,whatsapp,6\r\n2026-08-14,messenger,4\r\n2026-08-14,telegram,0\r\n2026-08-14,instagram,0\r\n2026-08-14,whatsapp,0\r\n2026-08-15,messenger,0\r\n2026-08-15,telegram,2\r\n2026-08-15,instagram,0\r\n2026-08-15,whatsapp,0\r\n2026-08-16,messenger,0\r\n2026-08-16,telegram,0\r\n2026-08-16,instagram,6\r\n2026-08-16,whatsapp,0\r\n2026-08-17,messenger,0\r\n2026-08-17,telegram,0\r\n2026-08-17,instagram,0\r\n2026-08-17,whatsapp,4\r\n2026-08-18,messenger,2\r\n2026-08-18,telegram,0\r\n2026-08-18,instagram,0\r\n2026-08-18,whatsapp,0\r\n2026-08-19,messenger,0\r\n2026-08-19,telegram,0\r\n2026-08-19,instagram,0\r\n2026-08-19,whatsapp,6\r\n2026-08-20,messenger,4\r\n2026-08-20,telegram,0\r\n2026-08-20,instagram,0\r\n2026-08-20,whatsapp,0\r\n2026-08-21,messenger,4\r\n2026-08-21,telegram,2\r\n2026-08-21,instagram,0\r\n2026-08-21,whatsapp,0\r\n2026-08-22,messenger,0\r\n2026-08-22,telegram,0\r\n2026-08-22,instagram,6\r\n2026-08-22,whatsapp,0\r\n2026-08-23,messenger,0\r\n2026-08-23,telegram,0\r\n2026-08-23,instagram,0\r\n2026-08-23,whatsapp,4\r\n2026-08-24,messenger,2\r\n2026-08-24,telegram,0\r\n2026-08-24,instagram,0\r\n2026-08-24,whatsapp,4\r\n2026-08-25,messenger,0\r\n2026-08-25,telegram,0\r\n2026-08-25,instagram,0\r\n2026-08-25,whatsapp,6\r\n2026-08-26,messenger,4\r\n2026-08-26,telegram,0\r\n2026-08-26,instagram,2\r\n2026-08-26,whatsapp,0\r\n2026-08-27,messenger,0\r\n2026-08-27,telegram,2\r\n2026-08-27,instagram,0\r\n2026-08-27,whatsapp,0\r\n2026-08-28,messenger,0\r\n2026-08-28,telegram,2\r\n2026-08-28,instagram,6\r\n2026-08-28,whatsapp,0\r\n2026-08-29,messenger,0\r\n2026-08-29,telegram,0\r\n2026-08-29,instagram,0\r\n2026-08-29,whatsapp,5\r\n2026-08-30,messenger,2\r\n2026-08-30,telegram,0\r\n2026-08-30,instagram,0\r\n2026-08-30,whatsapp,0\r\n",
+  "content_type": "text/csv; charset=utf-8",
+  "content_disposition": "attachment; filename=\"analytics_channels_30d_20260830_213638.csv\""
+ },
+ "/api/analytics/export?report=volume": {
+  "status": 200,
+  "body": null,
+  "text": "day,inbound,outbound,total\r\n2026-08-02,2,2,4\r\n2026-08-03,1,1,2\r\n2026-08-04,3,3,6\r\n2026-08-05,2,2,4\r\n2026-08-06,1,1,2\r\n2026-08-07,3,3,6\r\n2026-08-08,2,2,4\r\n2026-08-09,1,1,2\r\n2026-08-10,3,3,6\r\n2026-08-11,2,2,4\r\n2026-08-12,1,1,2\r\n2026-08-13,3,3,6\r\n2026-08-14,2,2,4\r\n2026-08-15,1,1,2\r\n2026-08-16,3,3,6\r\n2026-08-17,2,2,4\r\n2026-08-18,1,1,2\r\n2026-08-19,3,3,6\r\n2026-08-20,2,2,4\r\n2026-08-21,3,3,6\r\n2026-08-22,3,3,6\r\n2026-08-23,2,2,4\r\n2026-08-24,3,3,6\r\n2026-08-25,3,3,6\r\n2026-08-26,3,3,6\r\n2026-08-27,1,1,2\r\n2026-08-28,4,4,8\r\n2026-08-29,3,2,5\r\n2026-08-30,1,1,2\r\n",
+  "content_type": "text/csv; charset=utf-8",
+  "content_disposition": "attachment; filename=\"analytics_volume_30d_20260830_213638.csv\""
+ },
+ "/api/analytics/export?report=response": {
+  "status": 200,
+  "body": null,
+  "text": "record_type,label,conversations,waited_seconds,channel,conversation_id,asked_at\r\nbucket,under 1 min,0,,,,\r\nbucket,1-5 min,3,,,,\r\nbucket,5-15 min,3,,,,\r\nbucket,15-60 min,0,,,,\r\nbucket,1-4 hours,0,,,,\r\nbucket,over 4 hours,0,,,,\r\npercentile,p50,,240.0,,,\r\npercentile,p75,,360.0,,,\r\npercentile,p90,,360.0,,,\r\npercentile,p95,,360.0,,,\r\nslowest_answered,نور عون,,360.0,instagram,3,2026-08-04T20:25:00+00:00\r\nslowest_answered,Rami Daher,,360.0,whatsapp,6,2026-08-07T18:13:00+00:00\r\nslowest_answered,Omar Saad,,300.0,whatsapp,2,2026-08-05T14:19:00+00:00\r\nslowest_answered,لينا خوري,,240.0,messenger,1,2026-08-06T11:25:00+00:00\r\nslowest_answered,Karim Fares,,240.0,telegram,4,2026-08-03T16:01:00+00:00\r\nslowest_answered,مايا رزق,,240.0,messenger,5,2026-08-02T20:19:00+00:00\r\n",
+  "content_type": "text/csv; charset=utf-8",
+  "content_disposition": "attachment; filename=\"analytics_response_30d_20260830_213638.csv\""
+ },
  "/conversations/messenger/cust-lina": {
   "status": 200,
   "body": {
@@ -2145,9 +3109,93 @@
    "user_id": "cust-lina",
    "messages": [
     {
+     "id": 110,
+     "conversation_id": 1,
+     "time": "2026-08-06T11:25:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 111,
+     "conversation_id": 1,
+     "time": "2026-08-06T11:29:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 86,
+     "conversation_id": 1,
+     "time": "2026-08-12T09:24:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 87,
+     "conversation_id": 1,
+     "time": "2026-08-12T09:27:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 62,
+     "conversation_id": 1,
+     "time": "2026-08-18T10:37:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 63,
+     "conversation_id": 1,
+     "time": "2026-08-18T10:39:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
      "id": 1,
      "conversation_id": 1,
-     "time": "2026-08-30T20:20:50.207248+00:00",
+     "time": "2026-08-21T21:36:35.559264+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
@@ -2161,11 +3209,11 @@
     {
      "id": 2,
      "conversation_id": 1,
-     "time": "2026-08-30T20:20:50.210808+00:00",
+     "time": "2026-08-21T21:37:35.568528+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "out",
-     "sender_type": "bot",
+     "sender_type": "ai",
      "sender_user_id": null,
      "text": "أهلاً لينا! نعم منوصّل عالمنصورية، الرسوم ٣ دولار والتوصيل خلال ٢٤ ساعة.",
      "provider_message_id": null,
@@ -2175,13 +3223,55 @@
     {
      "id": 3,
      "conversation_id": 1,
-     "time": "2026-08-30T20:20:50.214238+00:00",
+     "time": "2026-08-21T21:40:35.577024+00:00",
      "channel": "messenger",
      "user_id": "cust-lina",
      "direction": "in",
      "sender_type": "customer",
      "sender_user_id": null,
      "text": "تمام، وكم سعر الباقة الشهرية؟",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 4,
+     "conversation_id": 1,
+     "time": "2026-08-21T21:58:35.585646+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "الباقة الشهرية ٢٥ دولار، وفيها تركيب مجاني.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 38,
+     "conversation_id": 1,
+     "time": "2026-08-24T12:19:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 39,
+     "conversation_id": 1,
+     "time": "2026-08-24T12:21:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
      "provider_message_id": null,
      "source": null,
      "metadata": {}
@@ -2197,9 +3287,233 @@
    "user_id": "cust-omar",
    "messages": [
     {
-     "id": 4,
+     "id": 112,
      "conversation_id": 2,
-     "time": "2026-08-30T20:20:50.222057+00:00",
+     "time": "2026-08-05T14:19:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 113,
+     "conversation_id": 2,
+     "time": "2026-08-05T14:24:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 114,
+     "conversation_id": 2,
+     "time": "2026-08-05T14:29:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 115,
+     "conversation_id": 2,
+     "time": "2026-08-05T14:37:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 88,
+     "conversation_id": 2,
+     "time": "2026-08-11T11:12:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 90,
+     "conversation_id": 2,
+     "time": "2026-08-11T11:16:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 89,
+     "conversation_id": 2,
+     "time": "2026-08-11T11:17:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 91,
+     "conversation_id": 2,
+     "time": "2026-08-11T11:18:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 64,
+     "conversation_id": 2,
+     "time": "2026-08-17T12:02:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 65,
+     "conversation_id": 2,
+     "time": "2026-08-17T12:05:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 67,
+     "conversation_id": 2,
+     "time": "2026-08-17T12:08:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 66,
+     "conversation_id": 2,
+     "time": "2026-08-17T12:10:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 40,
+     "conversation_id": 2,
+     "time": "2026-08-23T09:36:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 41,
+     "conversation_id": 2,
+     "time": "2026-08-23T09:39:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 43,
+     "conversation_id": 2,
+     "time": "2026-08-23T09:45:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 42,
+     "conversation_id": 2,
+     "time": "2026-08-23T09:46:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 5,
+     "conversation_id": 2,
+     "time": "2026-08-24T21:36:35.598942+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
@@ -2211,13 +3525,13 @@
      "metadata": {}
     },
     {
-     "id": 5,
+     "id": 6,
      "conversation_id": 2,
-     "time": "2026-08-30T20:20:50.231075+00:00",
+     "time": "2026-08-24T21:37:35.607483+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "out",
-     "sender_type": "bot",
+     "sender_type": "ai",
      "sender_user_id": null,
      "text": "Hello Omar — yes, it is. Would you like me to reserve one for you?",
      "provider_message_id": null,
@@ -2225,15 +3539,85 @@
      "metadata": {}
     },
     {
-     "id": 6,
+     "id": 7,
      "conversation_id": 2,
-     "time": "2026-08-30T20:20:50.234839+00:00",
+     "time": "2026-08-24T21:41:35.615970+00:00",
      "channel": "whatsapp",
      "user_id": "cust-omar",
      "direction": "in",
      "sender_type": "customer",
      "sender_user_id": null,
      "text": "Yes please, reserve it under my name.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 8,
+     "conversation_id": 2,
+     "time": "2026-08-24T21:47:35.625093+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "Done — it is reserved under your name until Friday.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 16,
+     "conversation_id": 2,
+     "time": "2026-08-29T09:14:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 17,
+     "conversation_id": 2,
+     "time": "2026-08-29T09:16:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 18,
+     "conversation_id": 2,
+     "time": "2026-08-29T09:18:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 19,
+     "conversation_id": 2,
+     "time": "2026-08-29T09:32:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
      "provider_message_id": null,
      "source": null,
      "metadata": {}
@@ -2249,9 +3633,345 @@
    "user_id": "cust-nour",
    "messages": [
     {
-     "id": 7,
+     "id": 116,
      "conversation_id": 3,
-     "time": "2026-08-30T20:20:50.242368+00:00",
+     "time": "2026-08-04T20:25:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 117,
+     "conversation_id": 3,
+     "time": "2026-08-04T20:31:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 118,
+     "conversation_id": 3,
+     "time": "2026-08-04T20:35:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 119,
+     "conversation_id": 3,
+     "time": "2026-08-04T20:43:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 120,
+     "conversation_id": 3,
+     "time": "2026-08-04T20:49:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 121,
+     "conversation_id": 3,
+     "time": "2026-08-04T20:50:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 92,
+     "conversation_id": 3,
+     "time": "2026-08-10T15:01:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 94,
+     "conversation_id": 3,
+     "time": "2026-08-10T15:05:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 93,
+     "conversation_id": 3,
+     "time": "2026-08-10T15:06:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 95,
+     "conversation_id": 3,
+     "time": "2026-08-10T15:10:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 97,
+     "conversation_id": 3,
+     "time": "2026-08-10T15:16:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 96,
+     "conversation_id": 3,
+     "time": "2026-08-10T15:25:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 68,
+     "conversation_id": 3,
+     "time": "2026-08-16T18:08:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 70,
+     "conversation_id": 3,
+     "time": "2026-08-16T18:12:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 69,
+     "conversation_id": 3,
+     "time": "2026-08-16T18:14:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 73,
+     "conversation_id": 3,
+     "time": "2026-08-16T18:23:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 71,
+     "conversation_id": 3,
+     "time": "2026-08-16T18:26:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 72,
+     "conversation_id": 3,
+     "time": "2026-08-16T18:32:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 44,
+     "conversation_id": 3,
+     "time": "2026-08-22T21:16:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 45,
+     "conversation_id": 3,
+     "time": "2026-08-22T21:19:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 46,
+     "conversation_id": 3,
+     "time": "2026-08-22T21:26:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 47,
+     "conversation_id": 3,
+     "time": "2026-08-22T21:31:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 48,
+     "conversation_id": 3,
+     "time": "2026-08-22T21:32:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 49,
+     "conversation_id": 3,
+     "time": "2026-08-22T21:46:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 9,
+     "conversation_id": 3,
+     "time": "2026-08-26T21:36:35.640516+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "in",
@@ -2263,15 +3983,99 @@
      "metadata": {}
     },
     {
-     "id": 8,
+     "id": 10,
      "conversation_id": 3,
-     "time": "2026-08-30T20:20:50.246013+00:00",
+     "time": "2026-08-26T21:37:35.650334+00:00",
      "channel": "instagram",
      "user_id": "cust-nour",
      "direction": "out",
-     "sender_type": "bot",
+     "sender_type": "ai",
      "sender_user_id": null,
      "text": "أهلاً نور! العرض شغال لآخر الشهر.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 20,
+     "conversation_id": 3,
+     "time": "2026-08-28T20:18:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 21,
+     "conversation_id": 3,
+     "time": "2026-08-28T20:22:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 22,
+     "conversation_id": 3,
+     "time": "2026-08-28T20:22:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 23,
+     "conversation_id": 3,
+     "time": "2026-08-28T20:27:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 24,
+     "conversation_id": 3,
+     "time": "2026-08-28T20:38:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 25,
+     "conversation_id": 3,
+     "time": "2026-08-28T20:48:00+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
      "provider_message_id": null,
      "source": null,
      "metadata": {}
@@ -2287,9 +4091,149 @@
    "user_id": "cust-karim",
    "messages": [
     {
-     "id": 9,
+     "id": 122,
      "conversation_id": 4,
-     "time": "2026-08-30T20:20:50.253451+00:00",
+     "time": "2026-08-03T16:01:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 123,
+     "conversation_id": 4,
+     "time": "2026-08-03T16:05:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 98,
+     "conversation_id": 4,
+     "time": "2026-08-09T18:02:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 99,
+     "conversation_id": 4,
+     "time": "2026-08-09T18:08:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 74,
+     "conversation_id": 4,
+     "time": "2026-08-15T16:04:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 75,
+     "conversation_id": 4,
+     "time": "2026-08-15T16:10:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 50,
+     "conversation_id": 4,
+     "time": "2026-08-21T10:19:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 51,
+     "conversation_id": 4,
+     "time": "2026-08-21T10:25:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 26,
+     "conversation_id": 4,
+     "time": "2026-08-27T18:42:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 27,
+     "conversation_id": 4,
+     "time": "2026-08-27T18:46:00+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 11,
+     "conversation_id": 4,
+     "time": "2026-08-28T21:36:35.663597+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "in",
@@ -2301,15 +4245,15 @@
      "metadata": {}
     },
     {
-     "id": 10,
+     "id": 12,
      "conversation_id": 4,
-     "time": "2026-08-30T20:20:50.257001+00:00",
+     "time": "2026-08-28T23:38:35.672196+00:00",
      "channel": "telegram",
      "user_id": "cust-karim",
      "direction": "out",
-     "sender_type": "bot",
-     "sender_user_id": null,
-     "text": "We do — sending it over now.",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "We do — sending it over now, sorry for the wait.",
      "provider_message_id": null,
      "source": null,
      "metadata": {}
@@ -2325,9 +4269,289 @@
    "user_id": "cust-maya",
    "messages": [
     {
-     "id": 11,
+     "id": 124,
      "conversation_id": 5,
-     "time": "2026-08-30T20:20:50.268264+00:00",
+     "time": "2026-08-02T20:19:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 125,
+     "conversation_id": 5,
+     "time": "2026-08-02T20:23:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 126,
+     "conversation_id": 5,
+     "time": "2026-08-02T20:29:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 127,
+     "conversation_id": 5,
+     "time": "2026-08-02T20:31:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 100,
+     "conversation_id": 5,
+     "time": "2026-08-08T16:05:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 101,
+     "conversation_id": 5,
+     "time": "2026-08-08T16:07:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 102,
+     "conversation_id": 5,
+     "time": "2026-08-08T16:17:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 103,
+     "conversation_id": 5,
+     "time": "2026-08-08T16:17:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 76,
+     "conversation_id": 5,
+     "time": "2026-08-14T16:05:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 77,
+     "conversation_id": 5,
+     "time": "2026-08-14T16:09:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 78,
+     "conversation_id": 5,
+     "time": "2026-08-14T16:17:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 79,
+     "conversation_id": 5,
+     "time": "2026-08-14T16:23:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 52,
+     "conversation_id": 5,
+     "time": "2026-08-20T17:08:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 53,
+     "conversation_id": 5,
+     "time": "2026-08-20T17:10:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 54,
+     "conversation_id": 5,
+     "time": "2026-08-20T17:14:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 55,
+     "conversation_id": 5,
+     "time": "2026-08-20T17:14:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 28,
+     "conversation_id": 5,
+     "time": "2026-08-26T18:33:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 29,
+     "conversation_id": 5,
+     "time": "2026-08-26T18:36:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 30,
+     "conversation_id": 5,
+     "time": "2026-08-26T18:45:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 31,
+     "conversation_id": 5,
+     "time": "2026-08-26T18:45:00+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 13,
+     "conversation_id": 5,
+     "time": "2026-08-30T01:36:35.687982+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "in",
@@ -2339,15 +4563,375 @@
      "metadata": {}
     },
     {
-     "id": 12,
+     "id": 14,
      "conversation_id": 5,
-     "time": "2026-08-30T20:20:50.272866+00:00",
+     "time": "2026-08-30T01:37:35.696084+00:00",
      "channel": "messenger",
      "user_id": "cust-maya",
      "direction": "out",
-     "sender_type": "bot",
+     "sender_type": "ai",
      "sender_user_id": null,
      "text": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    }
+   ]
+  }
+ },
+ "/conversations/whatsapp/cust-rami": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "channel": "whatsapp",
+   "user_id": "cust-rami",
+   "messages": [
+    {
+     "id": 104,
+     "conversation_id": 6,
+     "time": "2026-08-07T18:13:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 105,
+     "conversation_id": 6,
+     "time": "2026-08-07T18:19:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 106,
+     "conversation_id": 6,
+     "time": "2026-08-07T18:23:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 107,
+     "conversation_id": 6,
+     "time": "2026-08-07T18:28:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 108,
+     "conversation_id": 6,
+     "time": "2026-08-07T18:37:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 109,
+     "conversation_id": 6,
+     "time": "2026-08-07T18:43:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 80,
+     "conversation_id": 6,
+     "time": "2026-08-13T12:36:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 81,
+     "conversation_id": 6,
+     "time": "2026-08-13T12:40:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 82,
+     "conversation_id": 6,
+     "time": "2026-08-13T12:40:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 83,
+     "conversation_id": 6,
+     "time": "2026-08-13T12:45:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 85,
+     "conversation_id": 6,
+     "time": "2026-08-13T12:56:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 84,
+     "conversation_id": 6,
+     "time": "2026-08-13T13:00:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 56,
+     "conversation_id": 6,
+     "time": "2026-08-19T12:16:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 57,
+     "conversation_id": 6,
+     "time": "2026-08-19T12:20:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 58,
+     "conversation_id": 6,
+     "time": "2026-08-19T12:22:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 59,
+     "conversation_id": 6,
+     "time": "2026-08-19T12:34:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 61,
+     "conversation_id": 6,
+     "time": "2026-08-19T12:36:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 60,
+     "conversation_id": 6,
+     "time": "2026-08-19T12:40:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 32,
+     "conversation_id": 6,
+     "time": "2026-08-25T11:42:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي استفسر عن الباقة",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 33,
+     "conversation_id": 6,
+     "time": "2026-08-25T11:45:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "أهلاً فيك! الباقة الشهرية ٤٥ دولار وبتشمل التوصيل المجاني داخل بيروت.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 34,
+     "conversation_id": 6,
+     "time": "2026-08-25T11:50:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you deliver outside Beirut?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 35,
+     "conversation_id": 6,
+     "time": "2026-08-25T11:51:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "ai",
+     "sender_user_id": null,
+     "text": "Yes — $3 outside Beirut, arriving within 24 hours.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 37,
+     "conversation_id": 6,
+     "time": "2026-08-25T11:57:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "out",
+     "sender_type": "employee",
+     "sender_user_id": 1,
+     "text": "تكرم عينك، وقت ما بتجهز خبرنا.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 36,
+     "conversation_id": 6,
+     "time": "2026-08-25T11:58:00+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شكراً، بفكر فيها",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 15,
+     "conversation_id": 6,
+     "time": "2026-08-29T15:36:35.709127+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-rami",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "بعتلكن مبارح وما وصلني جواب، بدي اعرف اذا الطلب جهز",
      "provider_message_id": null,
      "source": null,
      "metadata": {}
@@ -2371,10 +4955,10 @@
    "notes": "بتفضل التواصل عالماسنجر بعد الظهر.",
    "lifecycle_stage": "vip",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T20:20:51.286777+00:00",
-   "last_seen_at": "2026-08-30T20:20:51.286777+00:00",
-   "created_at": "2026-08-30T20:20:51.286777+00:00",
-   "updated_at": "2026-08-30T20:20:51.370653+00:00",
+   "first_seen_at": "2026-08-30T21:36:37.766357+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.766357+00:00",
+   "created_at": "2026-08-30T21:36:37.766357+00:00",
+   "updated_at": "2026-08-30T21:36:37.842432+00:00",
    "identities": [
     {
      "channel": "messenger",
@@ -2382,8 +4966,8 @@
      "username": null,
      "display_name": "Lina Khoury",
      "profile_picture": null,
-     "created_at": "2026-08-30T20:20:51.286777+00:00",
-     "updated_at": "2026-08-30T20:20:51.286777+00:00"
+     "created_at": "2026-08-30T21:36:37.766357+00:00",
+     "updated_at": "2026-08-30T21:36:37.766357+00:00"
     }
    ],
    "channels": [
@@ -2426,7 +5010,7 @@
       "documents_json": "[{\"label\": \"بطاقة الهوية\", \"url\": \"https://files.example.com/lina-id.pdf\"}]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T20:20:51.370653+00:00"
+     "created_at": "2026-08-30T21:36:37.842432+00:00"
     },
     {
      "type": "conversation_started",
@@ -2436,7 +5020,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T20:20:50.205131+00:00"
+     "created_at": "2026-08-30T21:36:35.548355+00:00"
     }
    ]
   }
@@ -2457,10 +5041,10 @@
    "notes": null,
    "lifecycle_stage": "customer",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T20:20:51.296755+00:00",
-   "last_seen_at": "2026-08-30T20:20:51.296755+00:00",
-   "created_at": "2026-08-30T20:20:51.296755+00:00",
-   "updated_at": "2026-08-30T20:20:51.395922+00:00",
+   "first_seen_at": "2026-08-30T21:36:37.772940+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.772940+00:00",
+   "created_at": "2026-08-30T21:36:37.772940+00:00",
+   "updated_at": "2026-08-30T21:36:37.867444+00:00",
    "identities": [
     {
      "channel": "whatsapp",
@@ -2468,8 +5052,8 @@
      "username": null,
      "display_name": "Omar Saad",
      "profile_picture": null,
-     "created_at": "2026-08-30T20:20:51.296755+00:00",
-     "updated_at": "2026-08-30T20:20:51.296755+00:00"
+     "created_at": "2026-08-30T21:36:37.772940+00:00",
+     "updated_at": "2026-08-30T21:36:37.772940+00:00"
     }
    ],
    "channels": [
@@ -2502,7 +5086,7 @@
       "tags_json": "[\"reserved\", \"small package\"]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T20:20:51.395922+00:00"
+     "created_at": "2026-08-30T21:36:37.867444+00:00"
     },
     {
      "type": "conversation_started",
@@ -2510,9 +5094,9 @@
      "external_user_id": "cust-omar",
      "department": "sales",
      "topic": null,
-     "status": "ai_handling",
-     "handled_by_name": null,
-     "created_at": "2026-08-30T20:20:50.219625+00:00"
+     "status": "human_handling",
+     "handled_by_name": "Rana Haddad",
+     "created_at": "2026-08-30T21:36:35.589577+00:00"
     }
    ]
   }
@@ -2533,10 +5117,10 @@
    "notes": null,
    "lifecycle_stage": "active",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T20:20:51.305565+00:00",
-   "last_seen_at": "2026-08-30T20:20:51.305565+00:00",
-   "created_at": "2026-08-30T20:20:51.305565+00:00",
-   "updated_at": "2026-08-30T20:20:51.420618+00:00",
+   "first_seen_at": "2026-08-30T21:36:37.779643+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.779643+00:00",
+   "created_at": "2026-08-30T21:36:37.779643+00:00",
+   "updated_at": "2026-08-30T21:36:37.892779+00:00",
    "identities": [
     {
      "channel": "instagram",
@@ -2544,8 +5128,8 @@
      "username": null,
      "display_name": "Nour Aoun",
      "profile_picture": null,
-     "created_at": "2026-08-30T20:20:51.305565+00:00",
-     "updated_at": "2026-08-30T20:20:51.305565+00:00"
+     "created_at": "2026-08-30T21:36:37.779643+00:00",
+     "updated_at": "2026-08-30T21:36:37.779643+00:00"
     }
    ],
    "channels": [
@@ -2572,7 +5156,7 @@
       "lifecycle_stage": "active",
       "tags_json": "[\"عرض الشهر\"]"
      },
-     "created_at": "2026-08-30T20:20:51.420618+00:00"
+     "created_at": "2026-08-30T21:36:37.892779+00:00"
     },
     {
      "type": "conversation_started",
@@ -2582,7 +5166,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T20:20:50.240316+00:00"
+     "created_at": "2026-08-30T21:36:35.629405+00:00"
     }
    ]
   }
@@ -2603,10 +5187,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T20:20:51.312476+00:00",
-   "last_seen_at": "2026-08-30T20:20:51.312476+00:00",
-   "created_at": "2026-08-30T20:20:51.312476+00:00",
-   "updated_at": "2026-08-30T20:20:51.452680+00:00",
+   "first_seen_at": "2026-08-30T21:36:37.785821+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.785821+00:00",
+   "created_at": "2026-08-30T21:36:37.785821+00:00",
+   "updated_at": "2026-08-30T21:36:37.915761+00:00",
    "identities": [
     {
      "channel": "telegram",
@@ -2614,8 +5198,8 @@
      "username": null,
      "display_name": "Karim Fares",
      "profile_picture": null,
-     "created_at": "2026-08-30T20:20:51.312476+00:00",
-     "updated_at": "2026-08-30T20:20:51.312476+00:00"
+     "created_at": "2026-08-30T21:36:37.785821+00:00",
+     "updated_at": "2026-08-30T21:36:37.785821+00:00"
     }
    ],
    "channels": [
@@ -2643,7 +5227,7 @@
       "lifecycle_stage": "lead",
       "tags_json": "[\"catalogue\"]"
      },
-     "created_at": "2026-08-30T20:20:51.452680+00:00"
+     "created_at": "2026-08-30T21:36:37.915761+00:00"
     },
     {
      "type": "conversation_started",
@@ -2651,9 +5235,9 @@
      "external_user_id": "cust-karim",
      "department": "support",
      "topic": null,
-     "status": "ai_handling",
-     "handled_by_name": null,
-     "created_at": "2026-08-30T20:20:50.251272+00:00"
+     "status": "human_handling",
+     "handled_by_name": "Rana Haddad",
+     "created_at": "2026-08-30T21:36:35.654212+00:00"
     }
    ]
   }
@@ -2674,10 +5258,10 @@
    "notes": null,
    "lifecycle_stage": "customer",
    "assigned_user_id": 1,
-   "first_seen_at": "2026-08-30T20:20:51.321515+00:00",
-   "last_seen_at": "2026-08-30T20:20:51.321515+00:00",
-   "created_at": "2026-08-30T20:20:51.321515+00:00",
-   "updated_at": "2026-08-30T20:20:51.479586+00:00",
+   "first_seen_at": "2026-08-30T21:36:37.792093+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.792093+00:00",
+   "created_at": "2026-08-30T21:36:37.792093+00:00",
+   "updated_at": "2026-08-30T21:36:37.940308+00:00",
    "identities": [
     {
      "channel": "messenger",
@@ -2685,8 +5269,8 @@
      "username": null,
      "display_name": "Maya Rizk",
      "profile_picture": null,
-     "created_at": "2026-08-30T20:20:51.321515+00:00",
-     "updated_at": "2026-08-30T20:20:51.321515+00:00"
+     "created_at": "2026-08-30T21:36:37.792093+00:00",
+     "updated_at": "2026-08-30T21:36:37.792093+00:00"
     }
    ],
    "channels": [
@@ -2715,7 +5299,7 @@
       "tags_json": "[\"مواعيد\"]",
       "assigned_user_id": 1
      },
-     "created_at": "2026-08-30T20:20:51.479586+00:00"
+     "created_at": "2026-08-30T21:36:37.940308+00:00"
     },
     {
      "type": "conversation_started",
@@ -2725,7 +5309,7 @@
      "topic": null,
      "status": "ai_handling",
      "handled_by_name": null,
-     "created_at": "2026-08-30T20:20:50.262322+00:00"
+     "created_at": "2026-08-30T21:36:35.676938+00:00"
     }
    ]
   }
@@ -2734,6 +5318,64 @@
   "status": 200,
   "body": {
    "id": 9,
+   "company_id": 1,
+   "display_name": "Rami Daher",
+   "internal_name": null,
+   "profile_picture": null,
+   "phone": null,
+   "email": null,
+   "language": null,
+   "country": null,
+   "timezone": null,
+   "notes": null,
+   "lifecycle_stage": "lead",
+   "assigned_user_id": null,
+   "first_seen_at": "2026-08-30T21:36:37.798277+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.798277+00:00",
+   "created_at": "2026-08-30T21:36:37.798277+00:00",
+   "updated_at": "2026-08-30T21:36:37.798277+00:00",
+   "identities": [
+    {
+     "channel": "whatsapp",
+     "external_user_id": "cust-rami",
+     "username": null,
+     "display_name": "Rami Daher",
+     "profile_picture": null,
+     "created_at": "2026-08-30T21:36:37.798277+00:00",
+     "updated_at": "2026-08-30T21:36:37.798277+00:00"
+    }
+   ],
+   "channels": [
+    "whatsapp"
+   ],
+   "conversation_count": 1,
+   "tags": [],
+   "custom_fields": {},
+   "documents": [],
+   "assigned_user_name": null
+  }
+ },
+ "/api/customers/9/timeline": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "type": "conversation_started",
+     "channel": "whatsapp",
+     "external_user_id": "cust-rami",
+     "department": "Unassigned",
+     "topic": null,
+     "status": "ai_handling",
+     "handled_by_name": null,
+     "created_at": "2026-08-30T21:36:35.700055+00:00"
+    }
+   ]
+  }
+ },
+ "/api/customers/10": {
+  "status": 200,
+  "body": {
+   "id": 10,
    "company_id": 1,
    "display_name": "Rita Ghanem",
    "internal_name": null,
@@ -2746,10 +5388,10 @@
    "notes": null,
    "lifecycle_stage": "lead",
    "assigned_user_id": null,
-   "first_seen_at": "2026-08-30T20:20:51.344051+00:00",
-   "last_seen_at": "2026-08-30T20:20:51.344051+00:00",
-   "created_at": "2026-08-30T20:20:51.344051+00:00",
-   "updated_at": "2026-08-30T20:20:51.503777+00:00",
+   "first_seen_at": "2026-08-30T21:36:37.815819+00:00",
+   "last_seen_at": "2026-08-30T21:36:37.815819+00:00",
+   "created_at": "2026-08-30T21:36:37.815819+00:00",
+   "updated_at": "2026-08-30T21:36:37.965546+00:00",
    "identities": [],
    "channels": [],
    "conversation_count": 0,
@@ -2761,7 +5403,7 @@
    "assigned_user_name": null
   }
  },
- "/api/customers/9/timeline": {
+ "/api/customers/10/timeline": {
   "status": 200,
   "body": {
    "items": [
@@ -2772,7 +5414,7 @@
       "lifecycle_stage": "lead",
       "tags_json": "[\"walk-in\"]"
      },
-     "created_at": "2026-08-30T20:20:51.503777+00:00"
+     "created_at": "2026-08-30T21:36:37.965546+00:00"
     },
     {
      "type": "profile_updated",
@@ -2782,7 +5424,7 @@
       "phone": "+96170445566",
       "email": "rita.ghanem@example.com"
      },
-     "created_at": "2026-08-30T20:20:51.344051+00:00"
+     "created_at": "2026-08-30T21:36:37.815819+00:00"
     }
    ]
   }
@@ -2790,7 +5432,7 @@
  "/api/auth/login": {
   "status": 200,
   "body": {
-   "access_token": "HZiOxxh2545I-tYouFiNk8x0Ju2qEmdUJodZyvAWO1W-Fk8ntF7NmFPlKbJiwmfg",
+   "access_token": "c3_8oQ0B1O1na6y7jJgwp0tG6OnIMstljnx48LWl35XDrTq2if8dReEwucqG8nil",
    "token_type": "bearer",
    "expires_in": 43200,
    "user": {
@@ -2804,8 +5446,8 @@
     "password_changed_at": null,
     "must_change_password": 0,
     "totp_enabled": 0,
-    "created_at": "2026-08-30T20:20:49.217949+00:00",
-    "updated_at": "2026-08-30T20:20:49.217949+00:00",
+    "created_at": "2026-08-30T21:36:34.384019+00:00",
+    "updated_at": "2026-08-30T21:36:34.384019+00:00",
     "active_company_id": 1,
     "active_company_name": "Cedar Home Appliances",
     "active_company_slug": "cedar-home"
@@ -2840,7 +5482,7 @@
     "users.manage",
     "users.view"
    ],
-   "csrf_token": "dt3JkoGkycaIGwY2peq2eZCEtckYnsL7H27tEHMC-ns"
+   "csrf_token": "2NfgyXHwg6PUPCXWcQ3TWO5rLNeZ2FlzmZ2YRnNwi-E"
   }
  }
 }
