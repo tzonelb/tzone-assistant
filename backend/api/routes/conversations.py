@@ -96,6 +96,13 @@ class ConversationReminderRequest(BaseModel):
 
 class ConversationNoteCreate(BaseModel):
     note: str = Field(min_length=1, max_length=4000)
+    # Who the note is for. The picker in the composer sends the ids of the
+    # colleagues it offered; the service checks every one of them against this
+    # company's own directory before it stores or notifies anything, so an id
+    # from another company that was typed into the payload by hand names
+    # nobody. Bounded so a payload cannot ask for an unbounded fan-out of
+    # notifications.
+    mentioned_user_ids: list[int] = Field(default_factory=list, max_length=100)
 
 
 # ----------------------------------------------------------------------
@@ -846,6 +853,7 @@ def add_note(
             external_user_id=user_id,
             author_user_id=int(current_user["id"]),
             note=payload.note,
+            mentioned_user_ids=payload.mentioned_user_ids,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

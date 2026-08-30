@@ -39,6 +39,7 @@ const SavedRepliesPage = lazy(() => import("./pages/saved-replies/SavedRepliesPa
 const SchedulerPage = lazy(() => import("./pages/scheduler/SchedulerPage"));
 const TasksPage = lazy(() => import("./pages/tasks/TasksPage"));
 const TeamChatPage = lazy(() => import("./pages/team-chat/TeamChatPage"));
+const TeamChatPageV2 = lazy(() => import("./pages/team-chat/TeamChatPageV2"));
 const TrainAndTestPage = lazy(() => import("./pages/ai-teaching/TrainAndTestPage"));
 const UISettingsPage = lazy(() => import("./pages/dashboard/UISettingsPage"));
 
@@ -90,6 +91,10 @@ const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
 // props, so `standalone` reaches whichever component the flag selects —
 // both versions accept it and drop their embedded chrome accordingly.
 const ConversationDetailScreen = v2Route(ConversationDetailPage, ConversationDetailPageV2);
+// Both halves are lazy here, and v2Route picks between them at render time —
+// so a user on the old interface never downloads the redesigned screen, and
+// turning the flag off puts the previous one back without a reload.
+const TeamChatScreen = v2Route(TeamChatPage, TeamChatPageV2);
 
 
 export default function App() {
@@ -132,7 +137,7 @@ export default function App() {
               link. */}
           <Route path="/publish" element={<ModuleRoute module="scheduler"><PublishStandalonePage /></ModuleRoute>} />
           <Route path="/analytics" element={<ModuleRoute module="analytics"><AnalyticsPage /></ModuleRoute>} />
-          <Route path="/team-chat" element={<ModuleRoute module="team_chat"><TeamChatPage /></ModuleRoute>} />
+          <Route path="/team-chat" element={<ModuleRoute module="team_chat"><TeamChatScreen /></ModuleRoute>} />
           <Route path="/channels" element={<ModuleRoute module="channels"><ChannelsPage /></ModuleRoute>} />
           <Route path="/settings" element={<ModuleRoute module="preferences"><UISettingsPage /></ModuleRoute>} />
           <Route path="/company-settings/*" element={<ModuleRoute module="company_settings"><CompanySettingsPage /></ModuleRoute>} />
