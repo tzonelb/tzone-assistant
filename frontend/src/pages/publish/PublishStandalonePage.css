@@ -1,0 +1,26 @@
+.publish-standalone-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* CommunityHubPage.css's ".community-hub-shell { height: 100% }" rule is
+   meant for that page's own full-viewport nav+content shell layout
+   (AITeachingHubPage/CommunityHubPage use it together with
+   .company-settings-shell.company-settings-locked-layout). This page only
+   borrows the .community-hub-shell class for its Buffer-style CSS
+   variables, not that layout — so height:100% was forcing this plain
+   content grid to stretch to fill the whole workspace viewport. With
+   nothing else giving the grid a definite height, the browser's default
+   align-content:stretch then inflated BOTH of this grid's auto rows (the
+   tabs row and the Overview/Posts content row) to fill that leftover
+   space — and that same stretch cascaded into PublishPage's own nested
+   grid, ballooning .publish-header-row (and the empty-state card next to
+   it) far past their real content height. Overriding back to auto lets
+   every nested grid size to its actual content again. */
+.community-hub-shell.publish-standalone-page {
+  height: auto;
+}
+
+.publish-standalone-tabs {
+  align-self: flex-start;
+}

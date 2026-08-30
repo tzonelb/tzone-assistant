@@ -1,0 +1,157 @@
+.saved-replies-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.saved-replies-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.saved-replies-header h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+}
+
+.saved-replies-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  max-width: 560px;
+}
+
+.saved-replies-primary {
+  flex-shrink: 0;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: #0b6fce;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saved-replies-toolbar label {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.saved-replies-toolbar select,
+.saved-replies-form select,
+.saved-replies-form input,
+.saved-replies-form textarea {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #d5dae5;
+  font: inherit;
+  background: #fff;
+}
+
+.saved-replies-error {
+  color: #c0392b;
+  margin: 0;
+}
+
+.saved-replies-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #f9fafb;
+}
+
+.saved-replies-form-dept {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+}
+
+.saved-replies-form-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.saved-replies-empty {
+  color: #6b7280;
+  padding: 20px 0;
+}
+
+.saved-replies-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.saved-reply-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.saved-reply-main {
+  min-width: 0;
+}
+
+.saved-reply-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.saved-reply-dept {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #0b6fce;
+  background: #eaf3fc;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.saved-reply-main p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.saved-reply-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.saved-reply-actions button {
+  padding: 6px 12px;
+  border: 1px solid #d5dae5;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.saved-reply-delete {
+  color: #c0392b;
+  border-color: #f0c8c2;
+}

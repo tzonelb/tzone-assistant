@@ -1,0 +1,227 @@
+/* Roles & Permissions — built on the shared Classical design system
+   (classical-styles.css, tzone-theme.css): everything below reads
+   --color-*, --space-*, --radius-* tokens and composes .btn/.card/.table/
+   .input/.field/.tag/.dialog/.seg. No hex colors, no raw px. */
+
+.rp-page {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.rp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.rp-toolbar-search {
+  position: relative;
+  flex: 1 1 240px;
+  min-width: 200px;
+  display: flex;
+  align-items: center;
+}
+
+.rp-toolbar-search svg {
+  position: absolute;
+  left: var(--space-2);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.rp-toolbar-search input {
+  width: 100%;
+  padding-left: calc(var(--space-3) * 2.2);
+}
+
+.rp-toolbar-filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.rp-toolbar-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.rp-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.rp-summary span {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 13px;
+}
+
+.rp-group-seg {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+}
+
+.rp-table-wrap {
+  overflow-x: auto;
+}
+
+.rp-group-row td {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: var(--space-2) var(--space-3);
+}
+
+.rp-cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+}
+
+.rp-cell-stack span {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 12px;
+}
+
+.rp-row-actions {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.rp-panel {
+  margin-top: 0;
+}
+
+.rp-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.rp-roles-grid {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--space-4);
+}
+
+.rp-role-list {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.rp-role-list-item {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+}
+
+.rp-role-list-item span {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 12px;
+}
+
+.rp-role-list-item.is-active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.rp-override-list {
+  display: grid;
+  gap: var(--space-2);
+  max-height: 56vh;
+  overflow: auto;
+  padding-right: var(--space-1);
+}
+
+.rp-override-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.rp-override-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 180px;
+}
+
+.rp-override-row span {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 12px;
+}
+
+.rp-dialog-wide {
+  width: min(720px, 100%);
+  max-height: 85dvh;
+  overflow: auto;
+}
+
+.rp-form-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rp-form-grid .field input,
+.rp-form-grid .field select,
+.rp-form-grid .field textarea {
+  width: 100%;
+}
+
+.rp-permission-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.rp-permission-mini-grid label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+
+.rp-empty {
+  padding: var(--space-8) var(--space-4);
+  text-align: center;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.rp-temp-password {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  font-family: monospace;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 900px) {
+  .rp-roles-grid {
+    grid-template-columns: 1fr;
+  }
+}

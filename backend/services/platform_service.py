@@ -117,6 +117,48 @@ LAYOUT_FLAGS: tuple[str, ...] = (
     "show_brand_footer",
 )
 
+# The design tokens the interface renders with. A company that has never
+# opened Theme Studio stores nothing, and these values are what it gets — they
+# reproduce the look the platform already had, so adding the theme layer is a
+# visual no-op until somebody deliberately changes something.
+#
+# Deliberately separate from `modules` above: that one is a security gate the
+# platform operator controls, and a company must never be able to widen it by
+# publishing a theme. A theme decides how the interface looks, never what it
+# may reach.
+DEFAULT_THEME_TOKENS: dict[str, Any] = {
+    "color": {
+        "accent": "#1689e8",
+        "accent2": "#22c07d",
+        "mode": "light",
+        "rail": "paper",
+    },
+    "type": {
+        "headingFont": "Inter",
+        "bodyFont": "Inter",
+        "baseSize": 15,
+        "headingScale": 1.0,
+    },
+    "shape": {
+        "radius": 16,
+        "buttons": "solid",
+        "cardFill": True,
+        "shadow": "sm",
+    },
+    "layout": {
+        "density": 1.0,
+        "railWidth": 236,
+        "direction": "auto",
+    },
+}
+
+# Only these groups, and only these keys inside them, are ever stored. Anything
+# else a caller sends is dropped rather than rejected, so a newer interface can
+# post a token this build has not heard of without failing the save.
+THEME_TOKEN_GROUPS: dict[str, tuple[str, ...]] = {
+    group: tuple(values) for group, values in DEFAULT_THEME_TOKENS.items()
+}
+
 COMPANY_STATUSES: tuple[str, ...] = ("active", "suspended")
 
 MAX_BRANDING_VALUE = 200
@@ -1454,6 +1496,9 @@ class PlatformService:
         stored_modules = self._loads(row["modules_json"]) if row else {}
         branding = self._loads(row["branding_json"]) if row else {}
         layout = self._loads(row["layout_json"]) if row else {}
+        # `theme_json` arrived with a later migration, so a row written before it
+        # has no such key. Read it defensively rather than by index.
+        stored_theme = self._loads(self._column(row, "theme_json")) if row else {}
 
         modules = {
             key: bool(stored_modules.get(key, True)) for key in PLATFORM_MODULES
@@ -1464,12 +1509,138 @@ class PlatformService:
             "modules": modules,
             "branding": branding,
             "layout": layout,
+            "theme": self.resolve_theme(stored_theme),
             "available_modules": list(PLATFORM_MODULES),
             "available_branding_fields": list(BRANDING_FIELDS),
             "available_layout_flags": list(LAYOUT_FLAGS),
             "updated_at": row["updated_at"] if row else None,
             "updated_by_user_id": row["updated_by_user_id"] if row else None,
         }
+
+    @staticmethod
+    def _column(row: Any, name: str) -> Any:
+        """A column that may predate its migration, read without raising."""
+        try:
+            return row[name]
+        except (IndexError, KeyError):
+            return None
+
+    @staticmethod
+    def resolve_theme(stored: dict[str, Any] | None) -> dict[str, Any]:
+        """The company's tokens laid over the platform defaults.
+
+        Group by group and key by key, so a company that has set only an accent
+        colour still gets every other token, and a token added in a later
+        release appears for companies that published a theme before it existed.
+        """
+        resolved: dict[str, Any] = {}
+        stored = stored if isinstance(stored, dict) else {}
+
+        for group, defaults in DEFAULT_THEME_TOKENS.items():
+            values = dict(defaults)
+            candidate = stored.get(group)
+
+            if isinstance(candidate, dict):
+                for key in defaults:
+                    if key in candidate and candidate[key] is not None:
+                        values[key] = candidate[key]
+
+            resolved[group] = values
+
+        return resolved
+
+    def _validate_theme(self, theme: dict[str, Any]) -> dict[str, Any]:
+        """Keep the tokens this build knows, drop the rest.
+
+        Unknown groups and keys are dropped rather than refused: the interface
+        and the API ship separately, and a newer screen posting a token this
+        build has not heard of should save what it can instead of failing.
+        A colour must still look like a colour — a value that cannot render is
+        a silently broken theme, which is the failure this check exists for.
+        """
+        if not isinstance(theme, dict):
+            raise PlatformError("Theme must be a mapping of token group to values.")
+
+        cleaned: dict[str, Any] = {}
+
+        for group, allowed in THEME_TOKEN_GROUPS.items():
+            candidate = theme.get(group)
+
+            if not isinstance(candidate, dict):
+                continue
+
+            values: dict[str, Any] = {}
+
+            for key in allowed:
+                if key not in candidate or candidate[key] is None:
+                    continue
+
+                value = candidate[key]
+
+                if key in ("accent", "accent2"):
+                    text = str(value).strip()
+
+                    if not _COLOR_PATTERN.match(text):
+                        raise PlatformError(
+                            f"{group}.{key} must be a hex colour such as #1689e8."
+                        )
+
+                    value = text
+
+                values[key] = value
+
+            if values:
+                cleaned[group] = values
+
+        return cleaned
+
+    def update_theme(
+        self,
+        company_id: int,
+        theme: dict[str, Any],
+        *,
+        actor_user_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Publish this company's design tokens.
+
+        Writes only `theme_json`. Modules stay exactly where the platform
+        operator left them: a company styling its own workspace must never be
+        able to switch a module on by sending it inside a theme.
+        """
+        company_id = int(company_id)
+        cleaned = self._validate_theme(theme)
+        now = utc_now_iso()
+
+        with database_manager.control() as conn:
+            company = conn.execute(
+                "SELECT id FROM companies WHERE id = ? LIMIT 1", (company_id,)
+            ).fetchone()
+
+            if not company:
+                raise PlatformNotFound(f"No company with id {company_id}.")
+
+            conn.execute(
+                """
+                INSERT INTO company_platform_config (
+                    company_id, theme_json, updated_by_user_id, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(company_id) DO UPDATE SET
+                    theme_json = excluded.theme_json,
+                    updated_by_user_id = excluded.updated_by_user_id,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    company_id,
+                    json.dumps(cleaned, ensure_ascii=False),
+                    int(actor_user_id) if actor_user_id else None,
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
+        return self.resolve_theme(cleaned)
 
     def _validate_modules(self, modules: dict[str, Any]) -> dict[str, bool]:
         if not isinstance(modules, dict):

@@ -1,0 +1,268 @@
+/* This hub intentionally does NOT use the T-ZONE purple/gradient theme —
+   it matches Buffer's own real (light) visual language. These values are
+   NOT approximations: pulled directly from Buffer's live production CSS
+   (static.buffer.com/publish/common-*.css → the --global-color-* and
+   --color-* design tokens in its :root block), not eyeballed from a
+   screenshot. Scoped to .community-hub-shell so the rest of the platform's
+   theme is untouched. */
+
+:root {
+  --buffer-bg: #ffffff;
+  --buffer-page-bg: #f7f6f3;
+  --buffer-text: #292928;
+  --buffer-text-muted: #7c7b79;
+  --buffer-border: #eae8e5;
+  --buffer-border-strong: #dedcd9;
+  --buffer-hover: #f7f6f3;
+  --buffer-green: #337046;
+  --buffer-green-soft: #edf5eb;
+  --buffer-green-pill-bg: #b0ec9c;
+  --buffer-green-pill-text: #213130;
+  --buffer-green-pill-bg-hover: #90d788;
+  --buffer-channel-facebook: #0766ff;
+  --buffer-channel-instagram: #f00276;
+  --buffer-channel-tiktok: #000000;
+}
+
+.community-hub-shell {
+  height: 100%;
+}
+
+.community-hub-shell .company-settings-nav {
+  background: var(--buffer-bg);
+  color: var(--buffer-text);
+  border-right: 1px solid var(--buffer-border);
+}
+
+.community-hub-shell .company-settings-back {
+  color: var(--buffer-text-muted);
+}
+
+.community-hub-shell .company-settings-back:hover {
+  color: var(--buffer-text);
+}
+
+.community-hub-shell .company-settings-nav-heading span {
+  color: var(--buffer-green);
+}
+
+.community-hub-shell .company-settings-nav-heading h1 {
+  color: var(--buffer-text);
+}
+
+.community-hub-shell .company-settings-content {
+  background: var(--buffer-bg);
+}
+
+.community-hub-shell .company-settings-nav-scroll a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--buffer-text);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.community-hub-shell .company-settings-nav-scroll a:hover,
+.community-hub-shell .company-settings-nav-scroll a.is-active {
+  background: var(--buffer-hover);
+}
+
+.community-hub-shell .company-settings-nav-scroll a.is-active {
+  color: var(--buffer-green);
+  font-weight: 700;
+}
+
+.community-coming-soon {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 60px 20px;
+  color: var(--buffer-text-muted);
+  text-align: center;
+}
+
+.community-coming-soon h3 {
+  margin: 0;
+  color: var(--buffer-text);
+}
+
+.community-coming-soon p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 13px;
+}
+
+.community-hub-new-row {
+  flex: 0 0 auto;
+  margin: 6px 0 10px;
+}
+
+.community-hub-new-row button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--buffer-green-pill-text);
+  background: var(--buffer-green-pill-bg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.community-hub-new-row button:hover {
+  background: var(--buffer-green-pill-bg-hover);
+}
+
+.community-channels-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 4px;
+  padding: 0 9px;
+  color: var(--buffer-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.community-channels-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.community-channels-heading-actions button {
+  display: flex;
+  border: 0;
+  color: var(--buffer-text-muted);
+  background: transparent;
+}
+
+.community-channels-heading-actions button:hover {
+  color: var(--buffer-text);
+}
+
+.community-channels-empty {
+  display: block;
+  width: calc(100% - 6px);
+  margin: 2px 3px;
+  padding: 8px 9px;
+  border: 1px dashed var(--buffer-border);
+  border-radius: 9px;
+  color: var(--buffer-text-muted);
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.community-channels-empty:hover {
+  color: var(--buffer-text);
+  border-color: var(--buffer-green);
+}
+
+.community-channel-group {
+  margin-bottom: 2px;
+}
+
+.community-channel-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--buffer-text);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.community-channel-group-head:hover {
+  background: var(--buffer-hover);
+}
+
+.community-channel-group-head span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-channel-group-links {
+  display: flex;
+  flex-direction: column;
+  padding-left: 16px;
+}
+
+.community-channel-group-links a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 9px;
+  border-radius: 8px;
+  color: var(--buffer-text-muted);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.community-channel-group-links a:hover,
+.community-channel-group-links a.is-active {
+  color: var(--buffer-green);
+  background: var(--buffer-green-soft);
+}
+
+.community-hub-footer {
+  flex: 0 0 auto;
+  padding: 10px 9px 2px;
+  color: var(--buffer-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Buffer-style buttons/cards for every dialog and control rendered inside
+   this hub (Create Post, saved-reply pickers, etc) — overrides the
+   platform's default purple gradient button/card styling in this scope only.
+   Buffer's real primary-action buttons are a mint-green pill with dark
+   green text, not a solid dark button with white text. */
+.community-hub-shell .tz-button-primary {
+  color: var(--buffer-green-pill-text);
+  background: var(--buffer-green-pill-bg);
+  border-color: var(--buffer-green-pill-bg);
+}
+
+.community-hub-shell .tz-button-primary:hover:not(:disabled) {
+  background: var(--buffer-green-pill-bg-hover);
+  border-color: var(--buffer-green-pill-bg-hover);
+}
+
+.community-hub-shell .tz-button-secondary {
+  color: var(--buffer-text);
+  border-color: var(--buffer-border);
+  background: var(--buffer-bg);
+}
+
+.community-hub-shell .tz-button-secondary:hover:not(:disabled) {
+  background: var(--buffer-hover);
+}
+
+.community-hub-shell .tz-dialog {
+  border-radius: 16px;
+}
+
+.community-hub-shell .tz-card {
+  border-color: var(--buffer-border);
+}

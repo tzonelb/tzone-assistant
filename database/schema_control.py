@@ -369,6 +369,13 @@ CONTROL_TABLES: tuple[str, ...] = (
 # EXISTS never adds a column to a table that already exists, so an installation
 # from an earlier release would be missing them and fail at query time.
 CONTROL_COLUMNS: dict[str, dict[str, str]] = {
+    # The company's design tokens (colour, type, shape, layout) for the theme
+    # the interface renders with. Additive: a company with no theme published
+    # falls back to the platform defaults, so an existing install looks exactly
+    # as it did before anyone opens Theme Studio.
+    "company_platform_config": {
+        "theme_json": "TEXT NOT NULL DEFAULT '{}'",
+    },
     "auth_sessions": {
         "scope": "TEXT NOT NULL DEFAULT 'company'",
     },
