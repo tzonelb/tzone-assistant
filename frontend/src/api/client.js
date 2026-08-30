@@ -1076,11 +1076,22 @@ export async function clearVisibleNotificationsRequest(notificationIds) {
 
 export async function getCustomersRequest({
   search = "",
+  lifecycleStage = "",
+  tag = "",
+  assignedUserId = "",
+  segmentId = "",
   limit = 20,
   offset = 0,
 } = {}) {
+  // The Contacts screen names its filters in camelCase; the API reads the same
+  // five as query parameters in snake_case. `createQueryString` drops the empty
+  // ones, so an unfiltered list is still a bare `/api/customers`.
   const query = createQueryString({
     search,
+    lifecycle_stage: lifecycleStage,
+    tag,
+    assigned_user_id: assignedUserId,
+    segment_id: segmentId,
     limit,
     offset,
   });
@@ -1088,10 +1099,27 @@ export async function getCustomersRequest({
   return apiRequest(`/api/customers${query}`);
 }
 
+export async function customerOptionsRequest() {
+  return apiRequest("/api/customers/options");
+}
+
 export async function getCustomerRequest(customerId) {
   return apiRequest(
     `/api/customers/${encodeURIComponent(customerId)}`,
   );
+}
+
+export async function getCustomerTimelineRequest(customerId) {
+  return apiRequest(
+    `/api/customers/${encodeURIComponent(customerId)}/timeline`,
+  );
+}
+
+export async function createCustomerRequest(values) {
+  return apiRequest("/api/customers", {
+    method: "POST",
+    body: values,
+  });
 }
 
 export async function updateCustomerRequest(customerId, values) {
@@ -1101,6 +1129,31 @@ export async function updateCustomerRequest(customerId, values) {
       method: "PUT",
       body: values,
     },
+  );
+}
+
+export async function bulkUpdateCustomersRequest(payload) {
+  return apiRequest("/api/customers/bulk-update", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function listCustomerSegmentsRequest() {
+  return apiRequest("/api/customer-segments");
+}
+
+export async function createCustomerSegmentRequest(name, filters) {
+  return apiRequest("/api/customer-segments", {
+    method: "POST",
+    body: { name, filters: filters || {} },
+  });
+}
+
+export async function deleteCustomerSegmentRequest(segmentId) {
+  return apiRequest(
+    `/api/customer-segments/${encodeURIComponent(segmentId)}`,
+    { method: "DELETE" },
   );
 }
 

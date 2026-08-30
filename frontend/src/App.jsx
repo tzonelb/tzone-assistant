@@ -31,6 +31,9 @@ const ChannelsPage = lazy(() => import("./pages/channels/ChannelsPage"));
 const CommentsPage = lazy(() => import("./pages/comments/CommentsPage"));
 const CompanySettingsPage = lazy(() => import("./pages/company/CompanySettingsPage"));
 const CustomersPage = lazy(() => import("./pages/customers/CustomersPage"));
+const CustomersPageV2 = lazy(() => import("./pages/customers/CustomersPageV2"));
+const CustomerDetailPage = lazy(() => import("./pages/customers/CustomerDetailPage"));
+const CustomerDetailPageV2 = lazy(() => import("./pages/customers/CustomerDetailPageV2"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
@@ -88,6 +91,8 @@ const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
 // props, so `standalone` reaches whichever component the flag selects —
 // both versions accept it and drop their embedded chrome accordingly.
 const ConversationDetailScreen = v2Route(ConversationDetailPage, ConversationDetailPageV2);
+const CustomersScreen = v2Route(CustomersPage, CustomersPageV2);
+const CustomerDetailScreen = v2Route(CustomerDetailPage, CustomerDetailPageV2);
 
 
 export default function App() {
@@ -107,7 +112,12 @@ export default function App() {
           <Route path="/conversations" element={<ModuleRoute module="conversations"><ConversationsScreen /></ModuleRoute>} />
           <Route path="/conversations/:channel/:userId" element={<ModuleRoute module="conversations"><ConversationsScreen /></ModuleRoute>} />
           <Route path="/comments" element={<ModuleRoute module="comments"><CommentsPage /></ModuleRoute>} />
-          <Route path="/customers" element={<ModuleRoute module="customers"><CustomersPage /></ModuleRoute>} />
+          <Route path="/customers" element={<ModuleRoute module="customers"><CustomersScreen /></ModuleRoute>} />
+          {/* The single-contact client file. `customerId` is the name both
+              detail pages read with `useParams`, and it is where the topbar's
+              global search sends a customer result — without this route that
+              click fell through to the catch-all and landed on the dashboard. */}
+          <Route path="/customers/:customerId" element={<ModuleRoute module="customers"><CustomerDetailScreen /></ModuleRoute>} />
           <Route path="/tasks" element={<ModuleRoute module="tasks"><TasksScreen /></ModuleRoute>} />
           {/* Gated on `conversations`, matching main.py: the API registers
               saved_replies under that module because the library exists to be
