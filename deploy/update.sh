@@ -60,7 +60,18 @@ if [ "$LOCAL" = "$REMOTE" ]; then
 fi
 
 log "updating $BRANCH:  $LOCAL -> $REMOTE"
-PREV="$LOCAL"   # for rollback
+# What to go back to if the new version does not come up. The branch matters as
+# much as the commit: switching TZONE_DEPLOY_BRANCH is a normal thing to do, and
+# a rollback that only reset the commit would leave the *new* branch pointing at
+# the *old* branch's commit -- a repository that then differs from its remote on
+# every check, so the updater would redeploy and roll back on every tick.
+PREV="$LOCAL"
+PREV_BRANCH="$(as_owner "cd '$APP_DIR' && git rev-parse --abbrev-ref HEAD")"
+[ "$PREV_BRANCH" = "HEAD" ] && PREV_BRANCH=""
+
+if [ "$PREV_BRANCH" != "$BRANCH" ]; then
+  log "switching deployed branch: ${PREV_BRANCH:-detached} -> $BRANCH"
+fi
 
 # --- what kind of change is it? -----------------------------------------
 CHANGED="$(as_owner "cd '$APP_DIR' && git diff --name-only '$LOCAL' '$REMOTE'")"
@@ -122,8 +133,13 @@ if healthy; then
 fi
 
 # --- rollback ------------------------------------------------------------
-log "NEW VERSION FAILED ITS HEALTH CHECK -- rolling back to $PREV"
-as_owner "cd '$APP_DIR' && git reset --hard '$PREV'" || die "rollback checkout failed (service is down)"
+log "NEW VERSION FAILED ITS HEALTH CHECK -- rolling back to ${PREV_BRANCH:-$PREV} @ $PREV"
+if [ -n "$PREV_BRANCH" ]; then
+  as_owner "cd '$APP_DIR' && git checkout --quiet '$PREV_BRANCH' && git reset --hard '$PREV'" \
+    || die "rollback checkout failed (service is down)"
+else
+  as_owner "cd '$APP_DIR' && git reset --hard '$PREV'" || die "rollback checkout failed (service is down)"
+fi
 if echo "$CHANGED" | grep -qE '^requirements\.txt$'; then
   as_owner "'$APP_DIR/venv/bin/pip' install -q -r '$APP_DIR/requirements.txt'" || true
 fi
