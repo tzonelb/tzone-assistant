@@ -40,47 +40,62 @@ import {
 // screen it would link to isn't built yet (Phase 4), and a nav entry
 // to a page that doesn't exist is exactly the "fake button" pattern
 // this platform's audits have been removing all session.
+//
+// Two independent gates, and the fifth element belongs to exactly one of
+// them. `moduleKey` is the module gate — the owner's Theme Studio deciding
+// whether the company bought the screen. The fifth element is a list of
+// *permission codes* — the role screen deciding whether this employee may
+// use it — and it must name codes the control schema actually seeds, which
+// are the same ones `require_permission` asks for in the router that serves
+// the screen. Both halves of that had gone wrong at once: `catalogue` and
+// eight others declared nothing and were offered to employees the API then
+// refused, while `appointments`, `comments` and `team_chat` declared
+// `modules.<name>` — a shape no permission has and nothing on the server
+// ever issues — so no employee could hold one and the three screens were
+// invisible to everybody but an owner, whatever their role granted.
+// tests/test_the_menu_offers_nothing_that_refuses.py keeps both directions
+// honest.
 const NAV_GROUPS = [
   {
     label: "Desk",
     items: [
-      ["dashboard", "/dashboard", "Dashboard", DashboardOutlined],
-      ["conversations", "/conversations", "Conversations", ChatOutlined],
+      ["dashboard", "/dashboard", "Dashboard", DashboardOutlined, ["dashboard.view"]],
+      ["conversations", "/conversations", "Conversations", ChatOutlined, ["conversations.view"]],
       ["notifications", "/notifications", "Notification Center", NotificationsOutlined],
-      ["tasks", "/tasks", "Tasks", TaskAltOutlined],
-      ["appointments", "/appointments", "Appointments", CalendarMonthOutlined, ["modules.appointments"]],
-      ["team_chat", "/team-chat", "Team Chat", EventNoteOutlined, ["modules.team_chat"]],
+      ["tasks", "/tasks", "Tasks", TaskAltOutlined, ["tasks.view"]],
+      ["appointments", "/appointments", "Appointments", CalendarMonthOutlined, ["appointments.view", "appointments.manage"]],
+      ["team_chat", "/team-chat", "Team Chat", EventNoteOutlined],
     ],
   },
   {
     label: "Customers",
     items: [
-      ["customers", "/customers", "Customers", GroupOutlined],
+      ["customers", "/customers", "Customers", GroupOutlined, ["customers.view"]],
       ["broadcast", "/broadcast", "Broadcast", CampaignOutlined, ["channels.view"]],
-      ["calls", "/calls", "Calls", CallOutlined],
+      ["calls", "/calls", "Calls", CallOutlined, ["conversations.view"]],
       ["dialer", "/dialer", "Dialer", DialpadOutlined, ["dialer.use"]],
     ],
   },
   {
     label: "Intelligence",
     items: [
-      ["test_ai", "/test-ai", "Test & Train AI", AutoAwesomeOutlined],
-      ["saved_replies", "/saved-replies", "Saved Replies", QuickreplyOutlined],
+      ["test_ai", "/test-ai", "Test & Train AI", AutoAwesomeOutlined, ["settings.view"]],
+      ["saved_replies", "/saved-replies", "Saved Replies", QuickreplyOutlined, ["conversations.view"]],
     ],
   },
   {
     label: "Growth",
     items: [
-      ["publish", "/publish", "Publish", SendOutlined, ["channels.view"]],
-      ["comments", "/comments", "Comments", ForumOutlined, ["modules.comments"]],
-      ["catalogue", "/catalogue", "Master Catalogue", Inventory2Outlined],
+      ["publish", "/publish", "Publish", SendOutlined, ["scheduler.view", "scheduler.manage"]],
+      ["comments", "/comments", "Comments", ForumOutlined, ["comments.view", "comments.reply"]],
+      ["catalogue", "/catalogue", "Master Catalogue", Inventory2Outlined, ["catalogue.view"]],
       ["analytics", "/analytics", "Analytics", QueryStatsOutlined, ["analytics.view"]],
     ],
   },
   {
     label: "Administration",
     items: [
-      ["company_settings", "/company-settings", "Company Settings", TuneOutlined],
+      ["company_settings", "/company-settings", "Company Settings", TuneOutlined, ["settings.view"]],
       ["settings", "/settings", "Settings", SettingsOutlined],
     ],
   },
