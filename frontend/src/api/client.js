@@ -4,7 +4,7 @@
 // not on the visitor's own machine. Only local `vite` dev (a separate :5173
 // origin) needs the explicit backend URL. An explicit VITE_API_BASE_URL always
 // wins (?? keeps an intentional empty string).
-const API_BASE_URL =
+export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ??
   (import.meta.env.PROD ? "" : "http://127.0.0.1:8000");
 

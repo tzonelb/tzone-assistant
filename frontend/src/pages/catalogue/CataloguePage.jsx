@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AddOutlined,
   CloseOutlined,
@@ -155,8 +156,14 @@ function StockBadge({ product }) {
 }
 
 export default function CataloguePage() {
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  // Deep-link support for the topbar quick-search ("/catalogue?q=...") —
+  // TopbarV2 sends every product result here as `/catalogue?q=<name>`, and
+  // without this the term was dropped and the visitor landed on the whole
+  // unfiltered catalogue. Mirrors CustomersPageV2's own ?q= handling.
+  const initialQuery = searchParams.get("q") || "";
+  const [searchInput, setSearchInput] = useState(initialQuery);
+  const [search, setSearch] = useState(initialQuery);
   const [categoryId, setCategoryId] = useState("");
   const [stock, setStock] = useState("");
   const [status, setStatus] = useState("");
