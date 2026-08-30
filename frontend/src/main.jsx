@@ -9,6 +9,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { ConversationLiveProvider } from "./contexts/ConversationLiveContext";
 import { WorkspaceConfigProvider } from "./contexts/WorkspaceConfigContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 import "./index.css";
 import "./styles/theme.css";
@@ -16,10 +17,13 @@ import "./styles/global.css";
 import "./styles/ui-kit.css";
 import "./styles/table.css";
 import "./styles/chat.css";
+import "./styles/classical-styles.css";
+import "./styles/tzone-theme.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
+      <ThemeProvider>
       <AuthProvider>
         <WorkspaceConfigProvider>
           <NotificationProvider>
@@ -40,6 +44,7 @@ createRoot(document.getElementById("root")).render(
           </NotificationProvider>
         </WorkspaceConfigProvider>
       </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>
 );

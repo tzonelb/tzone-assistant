@@ -341,6 +341,48 @@ export async function getWorkspaceConfigRequest() {
   return apiRequest("/api/platform-ui/config");
 }
 
+/* The same configuration under the name the design system's ThemeContext
+ * imports. One endpoint, two callers: the shell reads modules and branding,
+ * the theme reads `tokens` and `brand` from the same response. */
+export async function getPlatformUiConfigRequest() {
+  return apiRequest("/api/platform-ui/config");
+}
+
+/* ------------------------------------------------------------------ *
+ * Names the design system's shell imports.
+ *
+ * TopbarV2's global search asks for four lists under the names the design
+ * project used. Three of them are this platform's existing endpoints under a
+ * different name, so they delegate rather than duplicate. Broadcast is a module
+ * this branch does not carry yet: it answers empty so the search still works
+ * and simply finds nothing there, which is what the caller already handles.
+ * ------------------------------------------------------------------ */
+export async function listCustomersRequest(options = {}) {
+  return getCustomersRequest(options);
+}
+
+export async function listProductsRequest({ search = "", limit = 24 } = {}) {
+  return apiRequest(
+    `/api/catalogue/products${createQueryString({ search, limit })}`,
+  );
+}
+
+export async function listTasksRequest({ search = "", limit = 20 } = {}) {
+  return apiRequest(`/api/tasks${createQueryString({ search, limit })}`);
+}
+
+export async function listBroadcastsRequest() {
+  return { items: [] };
+}
+
+/* Publish this company's design tokens (Theme Studio). */
+export async function updatePlatformUiThemeRequest(tokens) {
+  return apiRequest("/api/platform-ui/theme", {
+    method: "PUT",
+    body: tokens,
+  });
+}
+
 export async function getDashboardSummaryRequest() {
   return apiRequest("/api/dashboard/summary");
 }
