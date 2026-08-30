@@ -1,0 +1,1715 @@
+{
+ "/api/auth/me": {
+  "status": 200,
+  "body": {
+   "user": {
+    "id": 1,
+    "email": "demo@tz-lb.com",
+    "full_name": "Rana Haddad",
+    "phone": null,
+    "status": "active",
+    "is_super_admin": false,
+    "last_login_at": "2026-08-30T11:50:08.032538+00:00",
+    "password_changed_at": null,
+    "must_change_password": 0,
+    "totp_enabled": 0,
+    "created_at": "2026-08-30T11:50:06.964661+00:00",
+    "updated_at": "2026-08-30T11:50:08.032563+00:00",
+    "active_company_id": 1,
+    "session_scope": "company"
+   },
+   "companies": [
+    {
+     "id": 1,
+     "workspace_id": 1,
+     "name": "T-ZONE Demo",
+     "slug": "tzone-demo",
+     "country": null,
+     "currency": "USD",
+     "timezone": "Asia/Beirut",
+     "default_language": "ar",
+     "status": "active",
+     "branch_id": null,
+     "role_id": 1,
+     "role_name": "Owner",
+     "role_code": "owner"
+    }
+   ],
+   "permissions": [
+    "analytics.view",
+    "appointments.manage",
+    "appointments.view",
+    "catalogue.manage",
+    "catalogue.view",
+    "channels.manage",
+    "channels.view",
+    "comments.reply",
+    "comments.view",
+    "conversations.manage",
+    "conversations.reply",
+    "conversations.view",
+    "customers.manage",
+    "customers.view",
+    "dashboard.view",
+    "knowledge.manage",
+    "knowledge.view",
+    "scheduler.manage",
+    "scheduler.view",
+    "settings.manage",
+    "settings.view",
+    "subscriptions.view",
+    "tasks.manage",
+    "tasks.view",
+    "team_chat.use",
+    "users.manage",
+    "users.view"
+   ]
+  }
+ },
+ "/api/platform-ui/config": {
+  "status": 200,
+  "body": {
+   "company_id": 1,
+   "modules": {
+    "dashboard": true,
+    "notifications": true,
+    "conversations": true,
+    "comments": true,
+    "customers": true,
+    "appointments": true,
+    "tasks": true,
+    "catalogue": true,
+    "scheduler": true,
+    "team_chat": true,
+    "knowledge": true,
+    "ai_teaching": true,
+    "analytics": true,
+    "channels": true,
+    "roles": true,
+    "company_settings": true,
+    "preferences": true
+   },
+   "branding": {},
+   "layout": {},
+   "tokens": {
+    "color": {
+     "accent": "#1689e8",
+     "accent2": "#22c07d",
+     "mode": "light",
+     "rail": "paper"
+    },
+    "type": {
+     "headingFont": "Inter",
+     "bodyFont": "Inter",
+     "baseSize": 15,
+     "headingScale": 1.0
+    },
+    "shape": {
+     "radius": 16,
+     "buttons": "solid",
+     "cardFill": true,
+     "shadow": "sm"
+    },
+    "layout": {
+     "density": 1.0,
+     "railWidth": 236,
+     "direction": "auto"
+    }
+   },
+   "brand": {
+    "name": "T-ZONE",
+    "logoUrl": "/tzone-logo.png"
+   },
+   "updated_at": null
+  }
+ },
+ "/api/dashboard/summary": {
+  "status": 200,
+  "body": {
+   "company": {
+    "id": 1,
+    "name": "T-ZONE Demo",
+    "slug": "tzone-demo",
+    "country": null,
+    "currency": "USD",
+    "timezone": "Asia/Beirut",
+    "default_language": "ar",
+    "status": "active",
+    "created_at": "2026-08-30T11:50:05.602439+00:00"
+   },
+   "subscription": null,
+   "subscription_active": false,
+   "counts": {
+    "users": 1,
+    "channel_accounts": 4,
+    "conversations": 5,
+    "open_conversations": 5,
+    "unread_conversations": 0,
+    "human_handled": 0,
+    "messages": 12,
+    "customers": 0,
+    "knowledge_items": 2,
+    "tickets": 4,
+    "open_tickets": 2,
+    "pending_replies": 0
+   },
+   "channels": [
+    {
+     "id": 1,
+     "channel": "messenger",
+     "name": "T-ZONE Page",
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "branch_name": null
+    },
+    {
+     "id": 2,
+     "channel": "whatsapp",
+     "name": "T-ZONE WhatsApp",
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "branch_name": null
+    },
+    {
+     "id": 3,
+     "channel": "instagram",
+     "name": "T-ZONE Instagram",
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "branch_name": null
+    },
+    {
+     "id": 4,
+     "channel": "telegram",
+     "name": "T-ZONE Telegram",
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "branch_name": null
+    }
+   ],
+   "recent_conversations": [
+    {
+     "id": 5,
+     "channel": "messenger",
+     "external_user_id": "cust-maya",
+     "language": null,
+     "department": "delivery",
+     "topic": null,
+     "status": "ai_handling",
+     "needs_human": 0,
+     "last_message_at": "2026-08-30T11:50:08.122820+00:00",
+     "created_at": "2026-08-30T11:50:08.116094+00:00"
+    },
+    {
+     "id": 4,
+     "channel": "telegram",
+     "external_user_id": "cust-karim",
+     "language": null,
+     "department": "support",
+     "topic": null,
+     "status": "ai_handling",
+     "needs_human": 0,
+     "last_message_at": "2026-08-30T11:50:08.110183+00:00",
+     "created_at": "2026-08-30T11:50:08.103464+00:00"
+    },
+    {
+     "id": 3,
+     "channel": "instagram",
+     "external_user_id": "cust-nour",
+     "language": null,
+     "department": "support",
+     "topic": null,
+     "status": "ai_handling",
+     "needs_human": 0,
+     "last_message_at": "2026-08-30T11:50:08.097569+00:00",
+     "created_at": "2026-08-30T11:50:08.090637+00:00"
+    },
+    {
+     "id": 2,
+     "channel": "whatsapp",
+     "external_user_id": "cust-omar",
+     "language": null,
+     "department": "sales",
+     "topic": null,
+     "status": "ai_handling",
+     "needs_human": 0,
+     "last_message_at": "2026-08-30T11:50:08.084821+00:00",
+     "created_at": "2026-08-30T11:50:08.073268+00:00"
+    },
+    {
+     "id": 1,
+     "channel": "messenger",
+     "external_user_id": "cust-lina",
+     "language": null,
+     "department": "sales",
+     "topic": null,
+     "status": "ai_handling",
+     "needs_human": 0,
+     "last_message_at": "2026-08-30T11:50:08.066976+00:00",
+     "created_at": "2026-08-30T11:50:08.056928+00:00"
+    }
+   ]
+  }
+ },
+ "/conversations/": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "items": [
+    {
+     "id": "messenger:cust-maya",
+     "conversation_id": 5,
+     "channel": "messenger",
+     "external_user_id": "cust-maya",
+     "customer_id": null,
+     "customer_name": "مايا رزق",
+     "customer_alias": "مايا رزق",
+     "customer_profile_picture": null,
+     "folder": "inbox",
+     "is_starred": false,
+     "is_pinned": false,
+     "tags": [],
+     "department": "delivery",
+     "department_id": 3,
+     "topic": "General",
+     "status": "ai_handling",
+     "priority": "normal",
+     "handled_by_ai": true,
+     "ai_enabled": true,
+     "ai_status": "active",
+     "assigned_user_id": null,
+     "unread_count": 0,
+     "takeover_expires_at": null,
+     "last_message": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
+     "last_direction": "out",
+     "updated_at": "2026-08-30T11:50:08.122820+00:00",
+     "message_count": 2,
+     "branch_id": null,
+     "channel_account_id": null,
+     "assigned_user_name": null,
+     "can_manage": true,
+     "is_assigned_to_me": false
+    },
+    {
+     "id": "telegram:cust-karim",
+     "conversation_id": 4,
+     "channel": "telegram",
+     "external_user_id": "cust-karim",
+     "customer_id": null,
+     "customer_name": "Karim Fares",
+     "customer_alias": "Karim Fares",
+     "customer_profile_picture": null,
+     "folder": "inbox",
+     "is_starred": false,
+     "is_pinned": false,
+     "tags": [],
+     "department": "support",
+     "department_id": 2,
+     "topic": "General",
+     "status": "ai_handling",
+     "priority": "normal",
+     "handled_by_ai": true,
+     "ai_enabled": true,
+     "ai_status": "active",
+     "assigned_user_id": null,
+     "unread_count": 0,
+     "takeover_expires_at": null,
+     "last_message": "We do — sending it over now.",
+     "last_direction": "out",
+     "updated_at": "2026-08-30T11:50:08.110183+00:00",
+     "message_count": 2,
+     "branch_id": null,
+     "channel_account_id": null,
+     "assigned_user_name": null,
+     "can_manage": true,
+     "is_assigned_to_me": false
+    },
+    {
+     "id": "instagram:cust-nour",
+     "conversation_id": 3,
+     "channel": "instagram",
+     "external_user_id": "cust-nour",
+     "customer_id": null,
+     "customer_name": "نور عون",
+     "customer_alias": "نور عون",
+     "customer_profile_picture": null,
+     "folder": "inbox",
+     "is_starred": false,
+     "is_pinned": false,
+     "tags": [],
+     "department": "support",
+     "department_id": 2,
+     "topic": "General",
+     "status": "ai_handling",
+     "priority": "normal",
+     "handled_by_ai": true,
+     "ai_enabled": true,
+     "ai_status": "active",
+     "assigned_user_id": null,
+     "unread_count": 0,
+     "takeover_expires_at": null,
+     "last_message": "أهلاً نور! العرض شغال لآخر الشهر.",
+     "last_direction": "out",
+     "updated_at": "2026-08-30T11:50:08.097569+00:00",
+     "message_count": 2,
+     "branch_id": null,
+     "channel_account_id": null,
+     "assigned_user_name": null,
+     "can_manage": true,
+     "is_assigned_to_me": false
+    },
+    {
+     "id": "whatsapp:cust-omar",
+     "conversation_id": 2,
+     "channel": "whatsapp",
+     "external_user_id": "cust-omar",
+     "customer_id": null,
+     "customer_name": "Omar Saad",
+     "customer_alias": "Omar Saad",
+     "customer_profile_picture": null,
+     "folder": "inbox",
+     "is_starred": false,
+     "is_pinned": true,
+     "tags": [],
+     "department": "sales",
+     "department_id": 1,
+     "topic": "General",
+     "status": "ai_handling",
+     "priority": "normal",
+     "handled_by_ai": true,
+     "ai_enabled": true,
+     "ai_status": "active",
+     "assigned_user_id": null,
+     "unread_count": 0,
+     "takeover_expires_at": null,
+     "last_message": "Yes please, reserve it under my name.",
+     "last_direction": "in",
+     "updated_at": "2026-08-30T11:50:08.084821+00:00",
+     "message_count": 3,
+     "branch_id": null,
+     "channel_account_id": null,
+     "assigned_user_name": null,
+     "can_manage": true,
+     "is_assigned_to_me": false
+    },
+    {
+     "id": "messenger:cust-lina",
+     "conversation_id": 1,
+     "channel": "messenger",
+     "external_user_id": "cust-lina",
+     "customer_id": null,
+     "customer_name": "لينا خوري",
+     "customer_alias": "لينا خوري",
+     "customer_profile_picture": null,
+     "folder": "inbox",
+     "is_starred": true,
+     "is_pinned": false,
+     "tags": [],
+     "department": "sales",
+     "department_id": 1,
+     "topic": "General",
+     "status": "ai_handling",
+     "priority": "high",
+     "handled_by_ai": true,
+     "ai_enabled": true,
+     "ai_status": "active",
+     "assigned_user_id": null,
+     "unread_count": 0,
+     "takeover_expires_at": null,
+     "last_message": "تمام، وكم سعر الباقة الشهرية؟",
+     "last_direction": "in",
+     "updated_at": "2026-08-30T11:50:08.066976+00:00",
+     "message_count": 3,
+     "branch_id": null,
+     "channel_account_id": null,
+     "assigned_user_name": null,
+     "can_manage": true,
+     "is_assigned_to_me": false
+    }
+   ],
+   "channel_counts": {
+    "all": 0
+   },
+   "available_channels": [
+    "instagram",
+    "messenger",
+    "telegram",
+    "whatsapp"
+   ],
+   "supported_channels": [
+    "messenger",
+    "instagram",
+    "whatsapp",
+    "telegram"
+   ],
+   "current_user_id": 1,
+   "current_user_is_admin": true,
+   "departments": [
+    "Unassigned",
+    "sales",
+    "support",
+    "delivery"
+   ],
+   "department_options": [
+    {
+     "code": "Unassigned",
+     "label": "Unassigned"
+    },
+    {
+     "code": "sales",
+     "label": "Sales"
+    },
+    {
+     "code": "support",
+     "label": "Support"
+    },
+    {
+     "code": "delivery",
+     "label": "Delivery"
+    }
+   ],
+   "employees": [
+    {
+     "id": 1,
+     "full_name": "Rana Haddad",
+     "email": "demo@tz-lb.com",
+     "phone": null,
+     "role_name": "Owner",
+     "role_code": "owner",
+     "branch_id": null,
+     "display_name": "Rana Haddad"
+    }
+   ],
+   "pagination": {
+    "page": 1,
+    "page_size": 20,
+    "total": 5,
+    "total_pages": 1
+   }
+  }
+ },
+ "/conversations/options": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "departments": [
+    "Unassigned",
+    "sales",
+    "support",
+    "delivery"
+   ],
+   "department_options": [
+    {
+     "code": "Unassigned",
+     "label": "Unassigned"
+    },
+    {
+     "code": "sales",
+     "label": "Sales"
+    },
+    {
+     "code": "support",
+     "label": "Support"
+    },
+    {
+     "code": "delivery",
+     "label": "Delivery"
+    }
+   ],
+   "employees": [
+    {
+     "id": 1,
+     "full_name": "Rana Haddad",
+     "email": "demo@tz-lb.com",
+     "phone": null,
+     "role_name": "Owner",
+     "role_code": "owner",
+     "branch_id": null,
+     "display_name": "Rana Haddad"
+    }
+   ]
+  }
+ },
+ "/api/tasks": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 4,
+     "company_id": 1,
+     "conversation_id": null,
+     "title": "Weekly report to the owner",
+     "task_type": "task",
+     "due_date": null,
+     "created_by_user_id": 1,
+     "closed_at": "2026-08-30T11:50:08.816741+00:00",
+     "platform": null,
+     "user_id": null,
+     "language": null,
+     "department": null,
+     "iptv_username": null,
+     "device": null,
+     "os": null,
+     "app": null,
+     "problem": null,
+     "assigned_user_id": null,
+     "status": "resolved",
+     "priority": "normal",
+     "created_at": "2026-08-30T11:50:08.816741+00:00",
+     "updated_at": "2026-08-30T11:50:08.816741+00:00",
+     "is_overdue": false,
+     "assigned_user_name": null,
+     "created_by_user_name": "Rana Haddad"
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "conversation_id": null,
+     "title": "تجهيز الكتالوج بالإنكليزي",
+     "task_type": "task",
+     "due_date": null,
+     "created_by_user_id": 1,
+     "closed_at": null,
+     "platform": null,
+     "user_id": null,
+     "language": null,
+     "department": null,
+     "iptv_username": null,
+     "device": null,
+     "os": null,
+     "app": null,
+     "problem": null,
+     "assigned_user_id": null,
+     "status": "open",
+     "priority": "low",
+     "created_at": "2026-08-30T11:50:08.794071+00:00",
+     "updated_at": "2026-08-30T11:50:08.794071+00:00",
+     "is_overdue": false,
+     "assigned_user_name": null,
+     "created_by_user_name": "Rana Haddad"
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "conversation_id": null,
+     "title": "Reserve small package for Omar",
+     "task_type": "task",
+     "due_date": null,
+     "created_by_user_id": 1,
+     "closed_at": null,
+     "platform": null,
+     "user_id": null,
+     "language": null,
+     "department": null,
+     "iptv_username": null,
+     "device": null,
+     "os": null,
+     "app": null,
+     "problem": "Customer asked to reserve one unit",
+     "assigned_user_id": null,
+     "status": "in_progress",
+     "priority": "normal",
+     "created_at": "2026-08-30T11:50:08.769354+00:00",
+     "updated_at": "2026-08-30T11:50:08.769354+00:00",
+     "is_overdue": false,
+     "assigned_user_name": null,
+     "created_by_user_name": "Rana Haddad"
+    },
+    {
+     "id": 1,
+     "company_id": 1,
+     "conversation_id": null,
+     "title": "متابعة طلب لينا",
+     "task_type": "task",
+     "due_date": null,
+     "created_by_user_id": 1,
+     "closed_at": null,
+     "platform": null,
+     "user_id": null,
+     "language": null,
+     "department": "Sales",
+     "iptv_username": null,
+     "device": null,
+     "os": null,
+     "app": null,
+     "problem": "العميلة بدها تعرف سعر الباقة الشهرية",
+     "assigned_user_id": null,
+     "status": "open",
+     "priority": "high",
+     "created_at": "2026-08-30T11:50:08.746146+00:00",
+     "updated_at": "2026-08-30T11:50:08.746146+00:00",
+     "is_overdue": false,
+     "assigned_user_name": null,
+     "created_by_user_name": "Rana Haddad"
+    }
+   ],
+   "total": 4
+  }
+ },
+ "/api/tasks/options": {
+  "status": 200,
+  "body": {
+   "statuses": [
+    "open",
+    "in_progress",
+    "resolved",
+    "closed"
+   ],
+   "priorities": [
+    "low",
+    "normal",
+    "high",
+    "urgent"
+   ],
+   "task_types": [
+    "support",
+    "task",
+    "follow_up",
+    "maintenance",
+    "delivery",
+    "internal"
+   ],
+   "employees": [
+    {
+     "id": 1,
+     "display_name": "Rana Haddad"
+    }
+   ]
+  }
+ },
+ "/api/appointments": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 1,
+     "company_id": 1,
+     "customer_id": null,
+     "conversation_id": null,
+     "staff_user_id": 1,
+     "branch_id": null,
+     "title": "استشارة — مايا رزق",
+     "notes": null,
+     "starts_at": "2026-09-05T09:00:00+00:00",
+     "ends_at": "2026-09-05T09:30:00+00:00",
+     "status": "confirmed",
+     "created_by_user_id": 1,
+     "cancelled_reason": null,
+     "created_at": "2026-08-30T11:50:08.845895+00:00",
+     "updated_at": "2026-08-30T11:50:08.845895+00:00",
+     "customer_name": null,
+     "customer_phone": null,
+     "staff_name": "Rana Haddad",
+     "created_by_name": "Rana Haddad"
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "customer_id": null,
+     "conversation_id": null,
+     "staff_user_id": 1,
+     "branch_id": null,
+     "title": "Product demo — Omar Saad",
+     "notes": null,
+     "starts_at": "2026-09-05T11:00:00+00:00",
+     "ends_at": "2026-09-05T12:00:00+00:00",
+     "status": "scheduled",
+     "created_by_user_id": 1,
+     "cancelled_reason": null,
+     "created_at": "2026-08-30T11:50:08.869979+00:00",
+     "updated_at": "2026-08-30T11:50:08.869979+00:00",
+     "customer_name": null,
+     "customer_phone": null,
+     "staff_name": "Rana Haddad",
+     "created_by_name": "Rana Haddad"
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "customer_id": null,
+     "conversation_id": null,
+     "staff_user_id": 1,
+     "branch_id": null,
+     "title": "متابعة — نور عون",
+     "notes": null,
+     "starts_at": "2026-09-06T14:00:00+00:00",
+     "ends_at": "2026-09-06T14:45:00+00:00",
+     "status": "scheduled",
+     "created_by_user_id": 1,
+     "cancelled_reason": null,
+     "created_at": "2026-08-30T11:50:08.898179+00:00",
+     "updated_at": "2026-08-30T11:50:08.898179+00:00",
+     "customer_name": null,
+     "customer_phone": null,
+     "staff_name": "Rana Haddad",
+     "created_by_name": "Rana Haddad"
+    }
+   ],
+   "total": 3,
+   "status_counts": {
+    "scheduled": 2,
+    "confirmed": 1,
+    "completed": 0,
+    "no_show": 0,
+    "cancelled": 0
+   }
+  }
+ },
+ "/api/appointments/options": {
+  "status": 200,
+  "body": {
+   "staff": [
+    {
+     "id": 1,
+     "name": "Rana Haddad",
+     "role": null
+    }
+   ],
+   "customers": [],
+   "statuses": [
+    "scheduled",
+    "confirmed",
+    "completed",
+    "no_show",
+    "cancelled"
+   ],
+   "weekdays": [
+    {
+     "value": 0,
+     "name": "Monday"
+    },
+    {
+     "value": 1,
+     "name": "Tuesday"
+    },
+    {
+     "value": 2,
+     "name": "Wednesday"
+    },
+    {
+     "value": 3,
+     "name": "Thursday"
+    },
+    {
+     "value": 4,
+     "name": "Friday"
+    },
+    {
+     "value": 5,
+     "name": "Saturday"
+    },
+    {
+     "value": 6,
+     "name": "Sunday"
+    }
+   ]
+  }
+ },
+ "/api/notifications": {
+  "status": 200,
+  "body": []
+ },
+ "/api/notifications/summary": {
+  "status": 200,
+  "body": {
+   "total": 0,
+   "unread": 0,
+   "read": 0
+  }
+ },
+ "/api/customers": {
+  "status": 200,
+  "body": {
+   "items": [],
+   "total": 0
+  }
+ },
+ "/api/knowledge": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 2,
+     "company_id": 1,
+     "category_id": null,
+     "external_id": null,
+     "title": "ساعات العمل",
+     "content_ar": "من الاثنين للجمعة، ٩ صباحاً حتى ٦ مساءً.",
+     "content_en": "Monday to Friday, 9am to 6pm.",
+     "department": null,
+     "keywords": null,
+     "status": "active",
+     "created_at": "2026-08-30T11:50:08.949174+00:00",
+     "updated_at": "2026-08-30T11:50:08.949174+00:00",
+     "category_name": null
+    },
+    {
+     "id": 1,
+     "company_id": 1,
+     "category_id": null,
+     "external_id": null,
+     "title": "سياسة التوصيل",
+     "content_ar": "منوصّل لكل لبنان. رسوم بيروت ٢$ وخارج بيروت ٣$. التوصيل خلال ٢٤ ساعة.",
+     "content_en": "We deliver across Lebanon. Beirut $2, outside Beirut $3, within 24 hours.",
+     "department": "Sales",
+     "keywords": null,
+     "status": "active",
+     "created_at": "2026-08-30T11:50:08.925611+00:00",
+     "updated_at": "2026-08-30T11:50:08.925611+00:00",
+     "category_name": null
+    }
+   ],
+   "total": 2
+  }
+ },
+ "/api/knowledge/options": {
+  "status": 200,
+  "body": {
+   "departments": [
+    "Sales"
+   ],
+   "categories": [],
+   "statuses": [
+    "active",
+    "draft",
+    "archived"
+   ]
+  }
+ },
+ "/api/knowledge/categories": {
+  "status": 200,
+  "body": {
+   "items": []
+  }
+ },
+ "/api/saved-replies": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 2,
+     "company_id": 1,
+     "title": "Delivery fees",
+     "body": "Delivery is $2 inside Beirut and $3 outside, arriving within 24 hours.",
+     "department": "Sales",
+     "created_by_user_id": 1,
+     "created_at": "2026-08-30T11:50:08.991416+00:00",
+     "updated_at": "2026-08-30T11:50:08.991416+00:00"
+    },
+    {
+     "id": 1,
+     "company_id": 1,
+     "title": "ترحيب",
+     "body": "أهلاً وسهلاً فيك! كيف فينا نساعدك اليوم؟",
+     "department": "",
+     "created_by_user_id": 1,
+     "created_at": "2026-08-30T11:50:08.971751+00:00",
+     "updated_at": "2026-08-30T11:50:08.971751+00:00"
+    }
+   ],
+   "can_manage": true
+  }
+ },
+ "/api/catalogue/products": {
+  "status": 200,
+  "body": {
+   "items": [],
+   "total": 0
+  }
+ },
+ "/api/admin/access/overview": {
+  "status": 200,
+  "body": {
+   "company": {
+    "id": 1,
+    "name": "T-ZONE Demo",
+    "slug": "tzone-demo"
+   },
+   "permissions": [
+    {
+     "id": 2,
+     "code": "analytics.view",
+     "name": "View Analytics",
+     "description": "See channel, assistant and team performance reports."
+    },
+    {
+     "id": 26,
+     "code": "appointments.manage",
+     "name": "Manage Appointments",
+     "description": "Book, reschedule and cancel appointments."
+    },
+    {
+     "id": 25,
+     "code": "appointments.view",
+     "name": "View Appointments",
+     "description": "See the appointment calendar."
+    },
+    {
+     "id": 20,
+     "code": "catalogue.manage",
+     "name": "Manage Catalogue",
+     "description": "Add, edit and remove products and categories."
+    },
+    {
+     "id": 19,
+     "code": "catalogue.view",
+     "name": "View Catalogue",
+     "description": "Browse the product catalogue."
+    },
+    {
+     "id": 11,
+     "code": "channels.manage",
+     "name": "Manage Channels",
+     "description": "Connect, edit and disconnect messaging channels."
+    },
+    {
+     "id": 10,
+     "code": "channels.view",
+     "name": "View Channels",
+     "description": "See connected messaging channels."
+    },
+    {
+     "id": 22,
+     "code": "comments.reply",
+     "name": "Reply to Comments",
+     "description": "Publish replies to post comments."
+    },
+    {
+     "id": 21,
+     "code": "comments.view",
+     "name": "View Comments",
+     "description": "Read comments left on the company's posts."
+    },
+    {
+     "id": 5,
+     "code": "conversations.manage",
+     "name": "Manage Conversations",
+     "description": "Reassign, tag, archive and close any conversation."
+    },
+    {
+     "id": 4,
+     "code": "conversations.reply",
+     "name": "Reply to Conversations",
+     "description": "Take over a conversation and send replies."
+    },
+    {
+     "id": 3,
+     "code": "conversations.view",
+     "name": "View Conversations",
+     "description": "Open the shared inbox and read conversations."
+    },
+    {
+     "id": 7,
+     "code": "customers.manage",
+     "name": "Manage Customers",
+     "description": "Edit customer records and internal notes."
+    },
+    {
+     "id": 6,
+     "code": "customers.view",
+     "name": "View Customers",
+     "description": "Open the customer directory."
+    },
+    {
+     "id": 1,
+     "code": "dashboard.view",
+     "name": "View Dashboard",
+     "description": "Open the dashboard and see company totals."
+    },
+    {
+     "id": 9,
+     "code": "knowledge.manage",
+     "name": "Manage Knowledge",
+     "description": "Add, edit and remove knowledge entries."
+    },
+    {
+     "id": 8,
+     "code": "knowledge.view",
+     "name": "View Knowledge",
+     "description": "Read the knowledge base used by the assistant."
+    },
+    {
+     "id": 24,
+     "code": "scheduler.manage",
+     "name": "Manage Scheduled Posts",
+     "description": "Create, approve and cancel scheduled posts."
+    },
+    {
+     "id": 23,
+     "code": "scheduler.view",
+     "name": "View Scheduled Posts",
+     "description": "See the publishing calendar."
+    },
+    {
+     "id": 15,
+     "code": "settings.manage",
+     "name": "Manage Settings",
+     "description": "Change company settings, including assistant behaviour."
+    },
+    {
+     "id": 14,
+     "code": "settings.view",
+     "name": "View Settings",
+     "description": "Open company settings."
+    },
+    {
+     "id": 16,
+     "code": "subscriptions.view",
+     "name": "View Subscription",
+     "description": "See the current plan and billing status."
+    },
+    {
+     "id": 18,
+     "code": "tasks.manage",
+     "name": "Manage Tasks",
+     "description": "Create, assign, edit and close tasks."
+    },
+    {
+     "id": 17,
+     "code": "tasks.view",
+     "name": "View Tasks",
+     "description": "See the team's tasks and follow-ups."
+    },
+    {
+     "id": 27,
+     "code": "team_chat.use",
+     "name": "Use Team Chat",
+     "description": "Read and post in internal team channels."
+    },
+    {
+     "id": 13,
+     "code": "users.manage",
+     "name": "Manage Users",
+     "description": "Invite users, assign roles and edit permissions."
+    },
+    {
+     "id": 12,
+     "code": "users.view",
+     "name": "View Users",
+     "description": "See team members and their roles."
+    }
+   ],
+   "roles": [
+    {
+     "id": 3,
+     "name": "Agent",
+     "code": "agent",
+     "description": "Answers customers in the shared inbox.",
+     "is_system": 1,
+     "permission_codes": [
+      "appointments.manage",
+      "appointments.view",
+      "catalogue.view",
+      "comments.reply",
+      "comments.view",
+      "conversations.reply",
+      "conversations.view",
+      "customers.view",
+      "dashboard.view",
+      "knowledge.view",
+      "tasks.manage",
+      "tasks.view",
+      "team_chat.use"
+     ]
+    },
+    {
+     "id": 2,
+     "name": "Manager",
+     "code": "manager",
+     "description": "Runs day-to-day operations and the team.",
+     "is_system": 1,
+     "permission_codes": [
+      "analytics.view",
+      "appointments.manage",
+      "appointments.view",
+      "catalogue.manage",
+      "catalogue.view",
+      "channels.view",
+      "comments.reply",
+      "comments.view",
+      "conversations.manage",
+      "conversations.reply",
+      "conversations.view",
+      "customers.manage",
+      "customers.view",
+      "dashboard.view",
+      "knowledge.manage",
+      "knowledge.view",
+      "scheduler.manage",
+      "scheduler.view",
+      "settings.view",
+      "subscriptions.view",
+      "tasks.manage",
+      "tasks.view",
+      "team_chat.use",
+      "users.view"
+     ]
+    },
+    {
+     "id": 1,
+     "name": "Owner",
+     "code": "owner",
+     "description": "Full access to the company.",
+     "is_system": 1,
+     "permission_codes": []
+    },
+    {
+     "id": 4,
+     "name": "Viewer",
+     "code": "viewer",
+     "description": "Read-only access for reporting.",
+     "is_system": 1,
+     "permission_codes": [
+      "analytics.view",
+      "appointments.view",
+      "catalogue.view",
+      "comments.view",
+      "conversations.view",
+      "customers.view",
+      "dashboard.view",
+      "knowledge.view",
+      "scheduler.view",
+      "subscriptions.view",
+      "tasks.view"
+     ]
+    }
+   ],
+   "users": [
+    {
+     "id": 1,
+     "full_name": "Rana Haddad",
+     "email": "demo@tz-lb.com",
+     "phone": null,
+     "user_status": "active",
+     "last_login_at": "2026-08-30T11:50:08.032538+00:00",
+     "password_changed_at": null,
+     "must_change_password": 0,
+     "locked_until": null,
+     "membership_status": "active",
+     "branch_id": null,
+     "role_id": 1,
+     "role_name": "Owner",
+     "role_code": "owner",
+     "branch_name": null
+    }
+   ],
+   "branches": []
+  }
+ },
+ "/api/admin/access/roles": {
+  "status": 405,
+  "body": {
+   "detail": "Method Not Allowed"
+  }
+ },
+ "/api/admin/access/users": {
+  "status": 405,
+  "body": {
+   "detail": "Method Not Allowed"
+  }
+ },
+ "/api/admin/access/branches": {
+  "status": 200,
+  "body": {
+   "branches": []
+  }
+ },
+ "/api/channels": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 1,
+     "company_id": 1,
+     "branch_id": null,
+     "department_id": null,
+     "channel": "messenger",
+     "name": "T-ZONE Page",
+     "external_account_id": "104857600011",
+     "phone_number_id": null,
+     "page_id": "104857600011",
+     "instagram_business_id": null,
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.386624+00:00",
+     "updated_at": "2026-08-30T11:50:08.386624+00:00",
+     "branch_name": null,
+     "has_access_token": false,
+     "has_verify_token": false,
+     "has_app_secret": false
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "branch_id": null,
+     "department_id": null,
+     "channel": "whatsapp",
+     "name": "T-ZONE WhatsApp",
+     "external_account_id": "159357456123",
+     "phone_number_id": "159357456123",
+     "page_id": null,
+     "instagram_business_id": null,
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.420350+00:00",
+     "updated_at": "2026-08-30T11:50:08.420350+00:00",
+     "branch_name": null,
+     "has_access_token": false,
+     "has_verify_token": false,
+     "has_app_secret": false
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "branch_id": null,
+     "department_id": null,
+     "channel": "instagram",
+     "name": "T-ZONE Instagram",
+     "external_account_id": "178899220033",
+     "phone_number_id": null,
+     "page_id": null,
+     "instagram_business_id": "178899220033",
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.448689+00:00",
+     "updated_at": "2026-08-30T11:50:08.448689+00:00",
+     "branch_name": null,
+     "has_access_token": false,
+     "has_verify_token": false,
+     "has_app_secret": false
+    },
+    {
+     "id": 4,
+     "company_id": 1,
+     "branch_id": null,
+     "department_id": null,
+     "channel": "telegram",
+     "name": "T-ZONE Telegram",
+     "external_account_id": "7654321098",
+     "phone_number_id": null,
+     "page_id": null,
+     "instagram_business_id": null,
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.476309+00:00",
+     "updated_at": "2026-08-30T11:50:08.476309+00:00",
+     "branch_name": null,
+     "has_access_token": true,
+     "has_verify_token": false,
+     "has_app_secret": false
+    }
+   ],
+   "supported_channels": [
+    "messenger",
+    "instagram",
+    "whatsapp",
+    "telegram"
+   ],
+   "routing_fields": {
+    "messenger": "page_id",
+    "instagram": "instagram_business_id",
+    "whatsapp": "phone_number_id",
+    "telegram": "external_account_id"
+   },
+   "departments": [
+    {
+     "id": 1,
+     "code": "sales",
+     "label": "Sales"
+    },
+    {
+     "id": 2,
+     "code": "support",
+     "label": "Support"
+    },
+    {
+     "id": 3,
+     "code": "delivery",
+     "label": "Delivery"
+    }
+   ],
+   "branches": []
+  }
+ },
+ "/api/dashboard/channels": {
+  "status": 200,
+  "body": {
+   "items": [
+    {
+     "id": 1,
+     "company_id": 1,
+     "branch_id": null,
+     "channel": "messenger",
+     "name": "T-ZONE Page",
+     "external_account_id": "104857600011",
+     "phone_number_id": null,
+     "page_id": "104857600011",
+     "instagram_business_id": null,
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.386624+00:00",
+     "updated_at": "2026-08-30T11:50:08.386624+00:00",
+     "branch_name": null
+    },
+    {
+     "id": 2,
+     "company_id": 1,
+     "branch_id": null,
+     "channel": "whatsapp",
+     "name": "T-ZONE WhatsApp",
+     "external_account_id": "159357456123",
+     "phone_number_id": "159357456123",
+     "page_id": null,
+     "instagram_business_id": null,
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.420350+00:00",
+     "updated_at": "2026-08-30T11:50:08.420350+00:00",
+     "branch_name": null
+    },
+    {
+     "id": 3,
+     "company_id": 1,
+     "branch_id": null,
+     "channel": "instagram",
+     "name": "T-ZONE Instagram",
+     "external_account_id": "178899220033",
+     "phone_number_id": null,
+     "page_id": null,
+     "instagram_business_id": "178899220033",
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.448689+00:00",
+     "updated_at": "2026-08-30T11:50:08.448689+00:00",
+     "branch_name": null
+    },
+    {
+     "id": 4,
+     "company_id": 1,
+     "branch_id": null,
+     "channel": "telegram",
+     "name": "T-ZONE Telegram",
+     "external_account_id": "7654321098",
+     "phone_number_id": null,
+     "page_id": null,
+     "instagram_business_id": null,
+     "status": "active",
+     "ai_enabled": 1,
+     "flow_enabled": 1,
+     "voice_ai_enabled": 0,
+     "image_ai_enabled": 0,
+     "created_at": "2026-08-30T11:50:08.476309+00:00",
+     "updated_at": "2026-08-30T11:50:08.476309+00:00",
+     "branch_name": null
+    }
+   ],
+   "total": 4
+  }
+ },
+ "/conversations/messenger/cust-lina": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "channel": "messenger",
+   "user_id": "cust-lina",
+   "messages": [
+    {
+     "id": 1,
+     "conversation_id": 1,
+     "time": "2026-08-30T11:50:08.059640+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "مرحبا، بدي اعرف اذا في توصيل عالمنصورية؟",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 2,
+     "conversation_id": 1,
+     "time": "2026-08-30T11:50:08.063435+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "out",
+     "sender_type": "bot",
+     "sender_user_id": null,
+     "text": "أهلاً لينا! نعم منوصّل عالمنصورية، الرسوم ٣ دولار والتوصيل خلال ٢٤ ساعة.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 3,
+     "conversation_id": 1,
+     "time": "2026-08-30T11:50:08.066976+00:00",
+     "channel": "messenger",
+     "user_id": "cust-lina",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "تمام، وكم سعر الباقة الشهرية؟",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    }
+   ]
+  }
+ },
+ "/conversations/whatsapp/cust-omar": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "channel": "whatsapp",
+   "user_id": "cust-omar",
+   "messages": [
+    {
+     "id": 4,
+     "conversation_id": 2,
+     "time": "2026-08-30T11:50:08.076530+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Hi, is the small package still available?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 5,
+     "conversation_id": 2,
+     "time": "2026-08-30T11:50:08.080857+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "out",
+     "sender_type": "bot",
+     "sender_user_id": null,
+     "text": "Hello Omar — yes, it is. Would you like me to reserve one for you?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 6,
+     "conversation_id": 2,
+     "time": "2026-08-30T11:50:08.084821+00:00",
+     "channel": "whatsapp",
+     "user_id": "cust-omar",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Yes please, reserve it under my name.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    }
+   ]
+  }
+ },
+ "/conversations/instagram/cust-nour": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "channel": "instagram",
+   "user_id": "cust-nour",
+   "messages": [
+    {
+     "id": 7,
+     "conversation_id": 3,
+     "time": "2026-08-30T11:50:08.093417+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "شفت البوست تبع العرض، لسا شغال؟",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 8,
+     "conversation_id": 3,
+     "time": "2026-08-30T11:50:08.097569+00:00",
+     "channel": "instagram",
+     "user_id": "cust-nour",
+     "direction": "out",
+     "sender_type": "bot",
+     "sender_user_id": null,
+     "text": "أهلاً نور! العرض شغال لآخر الشهر.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    }
+   ]
+  }
+ },
+ "/conversations/telegram/cust-karim": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "channel": "telegram",
+   "user_id": "cust-karim",
+   "messages": [
+    {
+     "id": 9,
+     "conversation_id": 4,
+     "time": "2026-08-30T11:50:08.106219+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "Do you have an English catalogue?",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 10,
+     "conversation_id": 4,
+     "time": "2026-08-30T11:50:08.110183+00:00",
+     "channel": "telegram",
+     "user_id": "cust-karim",
+     "direction": "out",
+     "sender_type": "bot",
+     "sender_user_id": null,
+     "text": "We do — sending it over now.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    }
+   ]
+  }
+ },
+ "/conversations/messenger/cust-maya": {
+  "status": 200,
+  "body": {
+   "status": "ok",
+   "channel": "messenger",
+   "user_id": "cust-maya",
+   "messages": [
+    {
+     "id": 11,
+     "conversation_id": 5,
+     "time": "2026-08-30T11:50:08.118801+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "in",
+     "sender_type": "customer",
+     "sender_user_id": null,
+     "text": "بدي غيّر موعدي من الخميس للسبت",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    },
+    {
+     "id": 12,
+     "conversation_id": 5,
+     "time": "2026-08-30T11:50:08.122820+00:00",
+     "channel": "messenger",
+     "user_id": "cust-maya",
+     "direction": "out",
+     "sender_type": "bot",
+     "sender_user_id": null,
+     "text": "أكيد مايا، عدّلتلك الموعد للسبت الساعة ١١ صباحاً.",
+     "provider_message_id": null,
+     "source": null,
+     "metadata": {}
+    }
+   ]
+  }
+ },
+ "/api/auth/login": {
+  "status": 200,
+  "body": {
+   "access_token": "EWgJcahk0PO0enTaNccwd23k_iUtjL9b6BGefUziQn_o5KGSf3u1cbrHjsp2J4CC",
+   "token_type": "bearer",
+   "expires_in": 43200,
+   "user": {
+    "id": 1,
+    "email": "demo@tz-lb.com",
+    "full_name": "Rana Haddad",
+    "phone": null,
+    "status": "active",
+    "is_super_admin": false,
+    "last_login_at": null,
+    "password_changed_at": null,
+    "must_change_password": 0,
+    "totp_enabled": 0,
+    "created_at": "2026-08-30T11:50:06.964661+00:00",
+    "updated_at": "2026-08-30T11:50:06.964661+00:00",
+    "active_company_id": 1,
+    "active_company_name": "T-ZONE Demo",
+    "active_company_slug": "tzone-demo"
+   },
+   "permissions": [
+    "analytics.view",
+    "appointments.manage",
+    "appointments.view",
+    "catalogue.manage",
+    "catalogue.view",
+    "channels.manage",
+    "channels.view",
+    "comments.reply",
+    "comments.view",
+    "conversations.manage",
+    "conversations.reply",
+    "conversations.view",
+    "customers.manage",
+    "customers.view",
+    "dashboard.view",
+    "knowledge.manage",
+    "knowledge.view",
+    "scheduler.manage",
+    "scheduler.view",
+    "settings.manage",
+    "settings.view",
+    "subscriptions.view",
+    "tasks.manage",
+    "tasks.view",
+    "team_chat.use",
+    "users.manage",
+    "users.view"
+   ],
+   "csrf_token": "9BSWWKpRWra8O-JsHaPOb4MMfJ_Bg4oXM4S_x8j09Pg"
+  }
+ }
+}

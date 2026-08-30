@@ -66,6 +66,21 @@ class ChannelAccountCreate(BaseModel):
         Catching this here gives a clear field-level message instead of a
         database error, and prevents a record that silently receives nothing.
         """
+        # Telegram is the exception, and deliberately so: its routing id is the
+        # prefix of the bot token, so channel_account_service._validate derives
+        # it rather than asking the operator to transcribe it. That means the
+        # field is not on this model at all -- checking for it here rejected
+        # every Telegram account ever submitted, because getattr found nothing
+        # and returned None. What this layer can check is the token the
+        # derivation needs.
+        if self.channel == "telegram":
+            if not self.access_token:
+                raise ValueError(
+                    "A telegram account requires the bot token from BotFather."
+                )
+
+            return self
+
         field = ROUTING_FIELD[self.channel]
 
         if not getattr(self, field, None):

@@ -38,6 +38,15 @@ PUBLIC_ROUTES: dict[str, str] = {
         "and stored only as a hash — the same shape as a session token."
     ),
     "platform.py:POST:/auth/login": "The console sign-in, same reason.",
+    "media_uploads.py:GET:/{company_id}/{stored_name}": (
+        "An attachment an employee sent to a customer. The channel — Meta, "
+        "WhatsApp, Telegram — fetches this URL from its own servers with no "
+        "session of ours, so a dependency here would stop every attachment "
+        "from being delivered. The unguessable name is the credential: 32 hex "
+        "characters from secrets.token_hex(16), checked against a strict "
+        "pattern before the filesystem is touched, under a directory keyed by "
+        "an integer company id."
+    ),
     "health.py:GET:/": (
         "A liveness probe. It returns a constant and reads nothing, so there "
         "is nothing behind it to protect."

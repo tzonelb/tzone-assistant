@@ -1,0 +1,107 @@
+# Publish the clickable preview of the platform to GitHub Pages.
+#
+# The preview is the real frontend, built with VITE_DEMO_MODE=1 so that a small
+# module intercepts every API call and answers it from fixtures recorded off the
+# real application (tools/capture_demo_fixtures.py). There is no server behind
+# it and no data of anyone's in it -- it exists so the redesign can be looked at
+# and clicked through from a link.
+#
+# It enables the Pages site itself (`enablement: true` on configure-pages), so
+# nobody has to open a settings screen for the link to start working. That is
+# deliberate: this platform's rule is that shipping never requires opening a web
+# console.
+
+name: Demo preview
+
+on:
+  push:
+    branches: ["claude/ui-v2-full-merge-trial", "main"]
+  workflow_dispatch:
+
+# Pages needs to write the deployment; id-token is what the deploy step uses to
+# prove the artifact came from this workflow run.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One live preview at a time. A queued run is allowed to finish rather than be
+# cancelled, so the published site is never left half-replaced.
+concurrency:
+  group: demo-preview
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          # Create the Pages site on the first run instead of failing with
+          # "Pages is not enabled". This is what keeps the link working without
+          # a visit to repository settings.
+          enablement: true
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build the demo bundle
+        working-directory: frontend
+        env:
+          VITE_DEMO_MODE: "1"
+        # base_path comes from configure-pages: "/<repo>/" for a project site,
+        # "/" for a user site, so the same workflow is correct either way.
+        run: npx vite build --base=${{ steps.pages.outputs.base_path }} --outDir dist-demo
+
+      - name: Add the single-page fallback
+        working-directory: frontend
+        # Pages serves 404.html for any path it has no file for. The router
+        # then reads the URL and renders the right screen, which is what makes
+        # a deep link like /conversations work on a static host.
+        run: |
+          cp dist-demo/index.html dist-demo/404.html
+          touch dist-demo/.nojekyll
+
+      # The preview must never carry real credentials. It is a public URL, and
+      # its fixtures were recorded from a throwaway company -- this proves that
+      # stayed true.
+      - name: No secrets in the preview bundle
+        working-directory: frontend
+        run: |
+          if grep -rqE 'TZONE_MASTER_KEY|SMTP_PASSWORD|OPENAI_API_KEY|META_APP_SECRET|password_hash' dist-demo/assets/; then
+            echo "A secret-shaped string is present in the preview bundle."
+            exit 1
+          fi
+          echo "No secret names found in dist-demo/."
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist-demo
+
+  deploy:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

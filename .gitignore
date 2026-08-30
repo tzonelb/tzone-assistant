@@ -128,3 +128,4 @@ gather_project.py
 
 # Claude Code local session state (agent worktrees, etc.)
 .claude/
+frontend/dist-demo/
