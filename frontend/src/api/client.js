@@ -393,7 +393,24 @@ export async function listActivityLogRequest({
  * imports. One endpoint, two callers: the shell reads modules and branding,
  * the theme reads `tokens` and `brand` from the same response. */
 export async function getPlatformUiConfigRequest() {
-  return apiRequest("/api/platform-ui/config");
+  // `authenticated: false` here means "a 401 is an answer, not a session
+  // expiry" -- it does not stop the session cookie being sent, which
+  // `credentials: "include"` does unconditionally, and this is a GET so the
+  // CSRF header it also suppresses was never added.
+  //
+  // ThemeProvider mounts once for the whole tree and fetches this immediately,
+  // which on a clean browser is before anyone has signed in to anything. Under
+  // the default flag that 401 ran handleUnauthorized() and
+  // window.location.replace("/login") -- so an operator opening /superadmin was
+  // thrown onto the *company* login screen before the console had painted, and
+  // no amount of retrying got them in. The console has its own sign-in at
+  // /superadmin/login and its own client, and this endpoint answers for a
+  // company session it does not have.
+  //
+  // Nothing is lost on the company app: ThemeProvider already treats a failure
+  // as "use platformDefaults", and a session that expires mid-session is caught
+  // by the next real request the screen makes, all of which still redirect.
+  return apiRequest("/api/platform-ui/config", { authenticated: false });
 }
 
 /* ------------------------------------------------------------------ *
