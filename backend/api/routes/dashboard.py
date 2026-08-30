@@ -193,6 +193,15 @@ def dashboard_summary(
                 "knowledge_items": (
                     "SELECT COUNT(*) AS total FROM knowledge_items WHERE status = 'active'"
                 ),
+                # The screen has always drawn a "Products" tile reading
+                # `counts.products`, and nothing here ever answered it -- so
+                # `counts[key] ?? 0` rendered a confident 0 on the first screen
+                # after login, for every company, however full its catalogue.
+                # Counted the same way as knowledge: what the owner would call
+                # their catalogue is the products they have not archived.
+                "products": (
+                    "SELECT COUNT(*) AS total FROM products WHERE status != 'archived'"
+                ),
                 "tickets": "SELECT COUNT(*) AS total FROM tickets",
                 "open_tickets": (
                     "SELECT COUNT(*) AS total FROM tickets WHERE status = 'open'"
