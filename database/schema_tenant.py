@@ -691,6 +691,28 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
     "conversation_notes": {
         "mentioned_user_ids_json": "TEXT NOT NULL DEFAULT '[]'",
     },
+    # A team channel is one of three things now. `channel` is the named,
+    # joinable discussion team chat has always had; `dm` is a two-person
+    # conversation and `group` a private one with a member list. All three are
+    # the same row under the same membership and privacy rules — the kind only
+    # decides how a client titles it, which is why this is a column and not a
+    # second set of tables.
+    #
+    # `display_name` keeps the name as a person typed it. `name` is normalised
+    # for the uniqueness constraint (lowercased, spaces to hyphens), which is
+    # the right key and the wrong label.
+    "team_channels": {
+        "kind": "TEXT NOT NULL DEFAULT 'channel'",
+        "display_name": "TEXT",
+    },
+    # One file per message, uploaded through `/api/media/upload` exactly as the
+    # customer composer uploads one. The URL names a file this workspace has
+    # already stored; nothing here accepts an arbitrary address.
+    "team_messages": {
+        "attachment_url": "TEXT",
+        "attachment_type": "TEXT",
+        "attachment_filename": "TEXT",
+    },
 }
 
 
@@ -750,6 +772,7 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_availability_staff ON availability_rules(staff_user_id, weekday)",
     "CREATE INDEX IF NOT EXISTS idx_team_messages ON team_messages(channel_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_team_members ON team_channel_members(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_team_channels_kind ON team_channels(kind, updated_at DESC)",
 )
 
 

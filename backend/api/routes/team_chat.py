@@ -22,10 +22,17 @@ from starlette.concurrency import run_in_threadpool
 from backend.api.schemas.team_chat import (
     ChannelCreateRequest,
     ChannelMemberRequest,
+    CreateDmRequest,
+    CreateGroupRequest,
     MessageCreateRequest,
     MessageEditRequest,
+    StreamMessageCreateRequest,
 )
 from backend.services.auth_service import auth_service, require_permission
+from backend.services.media_upload_service import (
+    MediaUploadError,
+    media_upload_service,
+)
 from backend.services.stream_access import may_continue
 from backend.services.team_chat_service import (
     ChannelNameTaken,
@@ -388,6 +395,298 @@ def edit_message(
         raise _handle(error) from error
 
     return _decorate_messages(company_id, [message])[0]
+
+
+# ----------------------------------------------------------------------
+# The composer's view: one company stream, plus direct messages and groups
+#
+# The same channels, the same membership and the same visibility rule as
+# everything above — read through the shape the redesigned screen speaks:
+# `sender_user_id`/`sender_name`/`text` rather than `author_user_id`/`body`,
+# and a room titled by who is in it rather than by its storage key. Kept as a
+# translation in this file rather than a rename in the service, so the older
+# screen and the API's existing consumers keep the names they were built on.
+# ----------------------------------------------------------------------
+
+
+def _stream_shape(
+    company_id: int, messages: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": int(message["id"]),
+            "sender_user_id": int(message["author_user_id"]),
+            "sender_name": message.get("author_name"),
+            "text": message.get("body") or "",
+            "mentioned_user_ids": message.get("mentions") or [],
+            "attachment_url": message.get("attachment_url"),
+            "attachment_type": message.get("attachment_type"),
+            "attachment_filename": message.get("attachment_filename"),
+            "created_at": message.get("created_at"),
+            "edited_at": message.get("edited_at"),
+        }
+        for message in _decorate_messages(company_id, messages)
+    ]
+
+
+def _checked_attachment(company_id: int, url: str | None) -> str | None:
+    """An attachment must name a file this company already uploaded.
+
+    Without this an employee could point a message at any address and have the
+    platform render it inside the company's own chat — and could name another
+    company's upload path, which is the leak this check exists for. The same
+    rule `manual_messages` applies to a customer-bound attachment.
+    """
+    if not url:
+        return None
+
+    prefix = f"/api/media/{int(company_id)}/"
+
+    if not url.startswith(prefix):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attach a file uploaded to this workspace.",
+        )
+
+    try:
+        media_upload_service.path_for(
+            company_id=int(company_id), stored_name=url[len(prefix):]
+        )
+    except MediaUploadError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(error)
+        ) from error
+
+    return url
+
+
+def _post(
+    *,
+    company_id: int,
+    user_id: int,
+    channel_id: int,
+    payload: StreamMessageCreateRequest,
+) -> dict[str, Any]:
+    try:
+        message = team_chat_service.post_message(
+            company_id=company_id,
+            user_id=user_id,
+            channel_id=channel_id,
+            body=payload.text,
+            mentioned_user_ids=payload.mentioned_user_ids,
+            attachment_url=_checked_attachment(company_id, payload.attachment_url),
+            attachment_type=payload.attachment_type,
+            attachment_filename=payload.attachment_filename,
+        )
+    except TeamChatRouteErrors as error:
+        raise _handle(error) from error
+
+    return _stream_shape(company_id, [message])[0]
+
+
+@router.get("/options")
+def team_chat_options(
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    """Who can be messaged and mentioned."""
+    company_id = auth_service.resolve_company_id(current_user)
+
+    return {
+        "status": "ok",
+        "employees": team_chat_service.directory(company_id),
+    }
+
+
+@router.get("/stream")
+def list_stream_messages(
+    limit: int = Query(default=100, ge=1, le=200),
+    before_id: int | None = Query(default=None, ge=1),
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+    user_id = int(current_user["id"])
+    channel_id = team_chat_service.company_stream_id(
+        company_id=company_id, user_id=user_id
+    )
+
+    page = team_chat_service.list_messages(
+        company_id=company_id,
+        user_id=user_id,
+        channel_id=channel_id,
+        limit=limit,
+        before_id=before_id,
+    )
+
+    return {
+        "status": "ok",
+        "channel_id": channel_id,
+        "items": _stream_shape(company_id, page["items"]),
+        "has_more": page["has_more"],
+        "next_before_id": page["next_before_id"],
+    }
+
+
+@router.post("/stream", status_code=status.HTTP_201_CREATED)
+def send_stream_message(
+    payload: StreamMessageCreateRequest,
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+    user_id = int(current_user["id"])
+
+    return _post(
+        company_id=company_id,
+        user_id=user_id,
+        channel_id=team_chat_service.company_stream_id(
+            company_id=company_id, user_id=user_id
+        ),
+        payload=payload,
+    )
+
+
+@router.delete("/messages/{message_id}")
+def delete_message(
+    message_id: int,
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    try:
+        team_chat_service.delete_message(
+            company_id=company_id,
+            user_id=int(current_user["id"]),
+            message_id=message_id,
+        )
+    except TeamChatRouteErrors as error:
+        raise _handle(error) from error
+
+    return {"status": "ok", "deleted": True}
+
+
+@router.get("/rooms")
+def list_rooms(
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    return {
+        "status": "ok",
+        "rooms": team_chat_service.list_rooms(
+            company_id=company_id, user_id=int(current_user["id"])
+        ),
+    }
+
+
+@router.post("/rooms/dm", status_code=status.HTTP_201_CREATED)
+def create_dm(
+    payload: CreateDmRequest,
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    try:
+        return team_chat_service.get_or_create_dm(
+            company_id=company_id,
+            user_id=int(current_user["id"]),
+            other_user_id=payload.user_id,
+        )
+    except TeamChatRouteErrors as error:
+        raise _handle(error) from error
+
+
+@router.post("/rooms/group", status_code=status.HTTP_201_CREATED)
+def create_group(
+    payload: CreateGroupRequest,
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    try:
+        return team_chat_service.create_group(
+            company_id=company_id,
+            user_id=int(current_user["id"]),
+            name=payload.name,
+            member_user_ids=payload.member_user_ids,
+            department=payload.department,
+        )
+    except TeamChatRouteErrors as error:
+        raise _handle(error) from error
+
+
+@router.get("/rooms/{room_id}/messages")
+def list_room_messages(
+    room_id: int,
+    limit: int = Query(default=100, ge=1, le=200),
+    before_id: int | None = Query(default=None, ge=1),
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    try:
+        page = team_chat_service.list_messages(
+            company_id=company_id,
+            user_id=int(current_user["id"]),
+            channel_id=room_id,
+            limit=limit,
+            before_id=before_id,
+        )
+    except TeamChatRouteErrors as error:
+        raise _handle(error) from error
+
+    return {
+        "status": "ok",
+        "items": _stream_shape(company_id, page["items"]),
+        "has_more": page["has_more"],
+        "next_before_id": page["next_before_id"],
+    }
+
+
+@router.post("/rooms/{room_id}/messages", status_code=status.HTTP_201_CREATED)
+def send_room_message(
+    room_id: int,
+    payload: StreamMessageCreateRequest,
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    return _post(
+        company_id=company_id,
+        user_id=int(current_user["id"]),
+        channel_id=room_id,
+        payload=payload,
+    )
+
+
+@router.delete("/rooms/{room_id}/messages/{message_id}")
+def delete_room_message(
+    room_id: int,
+    message_id: int,
+    current_user: dict[str, Any] = Depends(require_permission(PERMISSION)),
+):
+    """`room_id` is in the path because the screen knows it; the message's own
+    channel is what decides access, so a mismatched pair is refused rather than
+    quietly deleting from the other room."""
+    company_id = auth_service.resolve_company_id(current_user)
+    user_id = int(current_user["id"])
+
+    try:
+        room = team_chat_service.get_room(
+            company_id=company_id, user_id=user_id, room_id=room_id
+        )
+        message = team_chat_service.get_message(
+            company_id=company_id, user_id=user_id, message_id=message_id
+        )
+
+        if int(message["channel_id"]) != int(room["id"]):
+            raise ChannelNotFound("Message not found.")
+
+        team_chat_service.delete_message(
+            company_id=company_id, user_id=user_id, message_id=message_id
+        )
+    except TeamChatRouteErrors as error:
+        raise _handle(error) from error
+
+    return {"status": "ok", "deleted": True}
 
 
 # ----------------------------------------------------------------------

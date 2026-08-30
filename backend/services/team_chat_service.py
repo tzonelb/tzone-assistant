@@ -41,6 +41,33 @@ DEFAULT_PAGE = 50
 MAX_PAGE = 200
 
 
+# The three shapes a `team_channels` row can take. They differ only in how a
+# client titles them: a `channel` is the named discussion anyone in the company
+# can join, a `dm` is the two-person conversation between a fixed pair, and a
+# `group` is a private discussion with a member list chosen when it was made.
+# Membership and the privacy rule at the top of this file apply identically to
+# all three, which is why one table holds them.
+KIND_CHANNEL = "channel"
+KIND_DM = "dm"
+KIND_GROUP = "group"
+
+# The company-wide stream every employee shares. It is an ordinary public
+# channel — created on first use rather than at provisioning, so a company that
+# never opens team chat never gets a row it did not ask for.
+COMPANY_STREAM_NAME = "general"
+
+
+def dm_channel_name(user_a: int, user_b: int) -> str:
+    """The one name a pair's direct message can have.
+
+    Derived from the two ids in a fixed order, so the second person to open the
+    conversation lands in the first person's, and `UNIQUE(company_id, name)`
+    makes a duplicate impossible even if two requests race.
+    """
+    low, high = sorted((int(user_a), int(user_b)))
+    return f"dm-{low}-{high}"
+
+
 # ``@`` followed by up to three words. The longest run that resolves to an
 # employee wins, so both "@sara.nasr" and "@Sara Nasr" reach the same person.
 MENTION_PATTERN = re.compile(r"@([\w.\-']+(?:[ \t][\w.\-']+){0,2})", re.UNICODE)
@@ -209,6 +236,10 @@ class TeamChatService:
         channel["is_member"] = bool(channel.get("is_member"))
         channel["unread_count"] = int(channel.get("unread_count") or 0)
         channel["member_count"] = int(channel.get("member_count") or 0)
+        channel["kind"] = str(channel.get("kind") or KIND_CHANNEL)
+        # Older rows have no `display_name`; the normalised name is what they
+        # were always shown under, so it stays the label rather than a blank.
+        channel["display_name"] = channel.get("display_name") or channel.get("name")
         channel.pop("joined_at", None)
         return channel
 
@@ -225,14 +256,22 @@ class TeamChatService:
         topic: str | None = None,
         is_private: bool = False,
         member_user_ids: Iterable[int] | None = None,
+        kind: str = KIND_CHANNEL,
+        display_name: str | None = None,
+        stored_name: str | None = None,
     ) -> dict[str, Any]:
         company_id = int(company_id)
         user_id = int(user_id)
-        clean_name = normalize_channel_name(name)
+        # `stored_name` is for the two callers that own the key themselves: a
+        # direct message, whose name is derived from the pair, and a group,
+        # whose typed name may already be taken by another group. Everything
+        # else keys on the name a person typed.
+        clean_name = normalize_channel_name(stored_name or name)
 
         if not clean_name:
             raise ValueError("Give the channel a name.")
 
+        label = str(display_name or name).strip()[:MAX_CHANNEL_NAME] or clean_name
         now = utc_now_iso()
         clean_topic = (str(topic).strip()[:MAX_TOPIC] if topic else None)
 
@@ -264,14 +303,16 @@ class TeamChatService:
                 cursor = conn.execute(
                     """
                     INSERT INTO team_channels (
-                        company_id, name, topic, is_private,
+                        company_id, name, display_name, kind, topic, is_private,
                         created_by_user_id, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         company_id,
                         clean_name,
+                        label,
+                        str(kind or KIND_CHANNEL),
                         clean_topic,
                         1 if is_private else 0,
                         user_id,
@@ -552,17 +593,42 @@ class TeamChatService:
         linked_conversation_id: int | None = None,
         employees: Iterable[dict[str, Any]] | None = None,
         author_name: str | None = None,
+        mentioned_user_ids: Iterable[int] | None = None,
+        attachment_url: str | None = None,
+        attachment_type: str | None = None,
+        attachment_filename: str | None = None,
     ) -> dict[str, Any]:
         """Store one message and notify the people it mentions."""
         company_id = int(company_id)
         user_id = int(user_id)
         text = str(body or "").strip()[:MAX_BODY]
 
-        if not text:
+        # A message is empty only when it carries neither words nor a file. A
+        # photo with no caption is a message; refusing it would be refusing the
+        # attachment button its own composer offers.
+        if not text and not attachment_url:
             raise ValueError("Write something before sending.")
 
         directory = list(employees) if employees is not None else self._employees(company_id)
         mentioned = extract_mentions(text, directory)
+
+        # The composer resolves each `@name` to an id as it is picked, which is
+        # the only way a name two people answer to reaches the right one. Those
+        # ids are checked against the directory this company actually has, so
+        # an id typed into the payload by hand names nobody, and then merged
+        # with what the text itself resolves to — a mention that survived a
+        # rename still counts.
+        if mentioned_user_ids:
+            known = {int(employee["id"]) for employee in directory}
+            for value in mentioned_user_ids:
+                try:
+                    candidate = int(value)
+                except (TypeError, ValueError):
+                    continue
+
+                if candidate in known and candidate not in mentioned:
+                    mentioned.append(candidate)
+
         now = utc_now_iso()
 
         with database_manager.tenant(company_id) as conn:
@@ -594,9 +660,11 @@ class TeamChatService:
                 """
                 INSERT INTO team_messages (
                     company_id, channel_id, author_user_id, body,
-                    mentions_json, linked_conversation_id, created_at
+                    mentions_json, linked_conversation_id,
+                    attachment_url, attachment_type, attachment_filename,
+                    created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id,
@@ -605,6 +673,9 @@ class TeamChatService:
                     text,
                     json.dumps(mentioned),
                     linked_conversation_id,
+                    attachment_url,
+                    attachment_type,
+                    attachment_filename,
                     now,
                 ),
             )
@@ -632,10 +703,10 @@ class TeamChatService:
 
         self._notify_mentions(
             company_id=company_id,
-            channel_name=str(channel["name"]),
+            channel_name=str(self._channel_dict(channel)["display_name"]),
             channel_id=int(channel_id),
             message_id=message_id,
-            body=text,
+            body=text or (attachment_filename or "Attachment"),
             author_user_id=user_id,
             author_name=author_name,
             mentioned_user_ids=mentioned,
@@ -780,6 +851,424 @@ class TeamChatService:
         )
 
         return self._message_dict(row)
+
+    def get_message(
+        self, *, company_id: int, user_id: int, message_id: int
+    ) -> dict[str, Any]:
+        """One message, through the same visibility rule as its channel."""
+        company_id = int(company_id)
+
+        with database_manager.tenant(company_id) as conn:
+            row = conn.execute(
+                "SELECT * FROM team_messages WHERE id = ? AND company_id = ? LIMIT 1",
+                (int(message_id), company_id),
+            ).fetchone()
+
+            if not row:
+                raise ChannelNotFound("Message not found.")
+
+            self._require_channel(
+                conn,
+                company_id=company_id,
+                channel_id=int(row["channel_id"]),
+                user_id=int(user_id),
+            )
+
+        return self._message_dict(row)
+
+    def delete_message(
+        self, *, company_id: int, user_id: int, message_id: int
+    ) -> None:
+        """Withdraw one's own message.
+
+        Only the author, and only through the visibility rule: a message in a
+        private channel the caller is not in is "not found", never "not yours",
+        so a probe cannot confirm that a message id exists.
+        """
+        company_id = int(company_id)
+        user_id = int(user_id)
+
+        with database_manager.tenant(company_id) as conn:
+            existing = conn.execute(
+                "SELECT * FROM team_messages WHERE id = ? AND company_id = ? LIMIT 1",
+                (int(message_id), company_id),
+            ).fetchone()
+
+            if not existing:
+                raise ChannelNotFound("Message not found.")
+
+            self._require_channel(
+                conn,
+                company_id=company_id,
+                channel_id=int(existing["channel_id"]),
+                user_id=user_id,
+            )
+
+            if int(existing["author_user_id"]) != user_id:
+                raise NotMessageAuthor("You can only delete your own messages.")
+
+            conn.execute(
+                "DELETE FROM team_messages WHERE id = ? AND company_id = ?",
+                (int(message_id), company_id),
+            )
+            conn.commit()
+
+    # ------------------------------------------------------------------
+    # The company stream, direct messages and groups
+    # ------------------------------------------------------------------
+
+    def company_stream_id(self, *, company_id: int, user_id: int) -> int:
+        """The id of the one channel the whole company shares.
+
+        Created on first use and joined by whoever asked. It is an ordinary
+        public channel, so every rule above already applies to it; this exists
+        only so a client does not have to know its name.
+        """
+        company_id = int(company_id)
+        user_id = int(user_id)
+        now = utc_now_iso()
+
+        # The common case by a wide margin: the channel exists and the caller is
+        # already in it. The screen asks for this every few seconds while it is
+        # open, so it is answered with one read and no write lock — taking a
+        # `BEGIN IMMEDIATE` on every poll would serialise every employee's
+        # refresh against every other one's.
+        with database_manager.tenant(company_id) as conn:
+            settled = conn.execute(
+                """
+                SELECT c.id FROM team_channels c
+                JOIN team_channel_members m
+                    ON m.channel_id = c.id AND m.user_id = ?
+                WHERE c.company_id = ? AND c.name = ?
+                LIMIT 1
+                """,
+                (user_id, company_id, COMPANY_STREAM_NAME),
+            ).fetchone()
+
+        if settled:
+            return int(settled["id"])
+
+        with database_manager.tenant(company_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
+
+            try:
+                row = conn.execute(
+                    """
+                    SELECT id FROM team_channels
+                    WHERE company_id = ? AND name = ?
+                    LIMIT 1
+                    """,
+                    (company_id, COMPANY_STREAM_NAME),
+                ).fetchone()
+
+                if row:
+                    channel_id = int(row["id"])
+                else:
+                    cursor = conn.execute(
+                        """
+                        INSERT INTO team_channels (
+                            company_id, name, display_name, kind, topic,
+                            is_private, created_by_user_id, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, ?, NULL, 0, ?, ?, ?)
+                        """,
+                        (
+                            company_id,
+                            COMPANY_STREAM_NAME,
+                            "Team Chat",
+                            KIND_CHANNEL,
+                            user_id,
+                            now,
+                            now,
+                        ),
+                    )
+                    channel_id = int(cursor.lastrowid)
+
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO team_channel_members (
+                        company_id, channel_id, user_id, last_read_at, joined_at
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (company_id, channel_id, user_id, now, now),
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+
+        return channel_id
+
+    def get_or_create_dm(
+        self, *, company_id: int, user_id: int, other_user_id: int
+    ) -> dict[str, Any]:
+        """The two-person conversation between the caller and one colleague.
+
+        `assert_employees` first: the colleague's id arrives in a request body,
+        and an id in a request body is a global number. Without the check a
+        caller could open a private channel naming an employee of another
+        company and then write into it.
+        """
+        company_id = int(company_id)
+        user_id = int(user_id)
+        other_user_id = int(other_user_id)
+
+        if other_user_id == user_id:
+            raise ValueError("Pick a colleague to message.")
+
+        assert_employees(company_id, [other_user_id])
+
+        name = dm_channel_name(user_id, other_user_id)
+
+        with database_manager.tenant(company_id) as conn:
+            row = conn.execute(
+                "SELECT id FROM team_channels WHERE company_id = ? AND name = ? LIMIT 1",
+                (company_id, name),
+            ).fetchone()
+
+        if row:
+            channel_id = int(row["id"])
+        else:
+            try:
+                created = self.create_channel(
+                    company_id=company_id,
+                    user_id=user_id,
+                    name=name,
+                    is_private=True,
+                    member_user_ids=[other_user_id],
+                    kind=KIND_DM,
+                    display_name=name,
+                    stored_name=name,
+                )
+                channel_id = int(created["id"])
+            except ChannelNameTaken:
+                # Two requests for the same pair at once. The name is derived
+                # from the pair, so the winner's row is the one this caller
+                # wanted; there is nothing to reconcile.
+                with database_manager.tenant(company_id) as conn:
+                    channel_id = int(
+                        conn.execute(
+                            """
+                            SELECT id FROM team_channels
+                            WHERE company_id = ? AND name = ? LIMIT 1
+                            """,
+                            (company_id, name),
+                        ).fetchone()["id"]
+                    )
+
+        return self.get_room(
+            company_id=company_id, user_id=user_id, room_id=channel_id
+        )
+
+    def create_group(
+        self,
+        *,
+        company_id: int,
+        user_id: int,
+        name: str,
+        member_user_ids: Iterable[int] | None = None,
+        department: str | None = None,
+    ) -> dict[str, Any]:
+        """A private discussion whose membership is fixed when it is made.
+
+        Two groups may carry the same name — people name them after the work,
+        and the work repeats — so the typed name is kept as the label and the
+        unique key gets a suffix. `UNIQUE(company_id, name)` is what makes the
+        suffix search terminate rather than a loop that hopes.
+        """
+        company_id = int(company_id)
+        user_id = int(user_id)
+        label = str(name or "").strip()[:MAX_CHANNEL_NAME]
+
+        if not label:
+            raise ValueError("Give the group a name.")
+
+        members = set(assert_employees(company_id, list(member_user_ids or [])))
+
+        if department:
+            # Membership of a department is not something this platform
+            # records: an employee has a role and a branch, and a department is
+            # a line in the customer's menu (`business_departments`), not a
+            # roster. Inventing one here — everybody, or everybody with a
+            # matching role — would put people in a private discussion on a
+            # guess, which is the kind of mistake a group makes sticky.
+            raise ValueError(
+                "This platform does not record which employees belong to a "
+                "department, so a group cannot be built from one. Pick the "
+                "colleagues for this group instead."
+            )
+
+        members.add(user_id)
+
+        if len(members) < 2:
+            raise ValueError("Pick at least one other employee for this group.")
+
+        base = normalize_channel_name(label) or "group"
+        candidate = base
+
+        for attempt in range(2, 100):
+            try:
+                created = self.create_channel(
+                    company_id=company_id,
+                    user_id=user_id,
+                    name=label,
+                    is_private=True,
+                    member_user_ids=sorted(members - {user_id}),
+                    kind=KIND_GROUP,
+                    display_name=label,
+                    stored_name=candidate,
+                )
+            except ChannelNameTaken:
+                candidate = f"{base}-{attempt}"[:MAX_CHANNEL_NAME]
+                continue
+
+            return self.get_room(
+                company_id=company_id, user_id=user_id, room_id=int(created["id"])
+            )
+
+        raise ValueError("Too many groups already share that name.")
+
+    def _room_dict(
+        self, row: Any, *, viewer_user_id: int, members: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        room = self._channel_dict(row)
+        room["members"] = members
+
+        if room["kind"] == KIND_DM:
+            # A direct message is titled by whoever is on the other end of it,
+            # so the same row reads "Sara Nasr" to one person and "Omar Hadi"
+            # to the other. The stored name is a key, never a label.
+            others = [
+                member
+                for member in members
+                if int(member["id"]) != int(viewer_user_id)
+            ]
+            room["display_name"] = (
+                others[0]["display_name"] if others else room["display_name"]
+            )
+
+        return room
+
+    def _room_members(
+        self, *, company_id: int, channel_ids: list[int]
+    ) -> dict[int, list[dict[str, Any]]]:
+        """Every room's roster, in one tenant read and one control read.
+
+        A name per member would be one control-plane query per member per room;
+        the roster of a company is small and read whole instead.
+        """
+        if not channel_ids:
+            return {}
+
+        placeholders = ",".join("?" for _ in channel_ids)
+
+        with database_manager.tenant(int(company_id)) as conn:
+            rows = conn.execute(
+                f"""
+                SELECT channel_id, user_id FROM team_channel_members
+                WHERE company_id = ? AND channel_id IN ({placeholders})
+                ORDER BY joined_at ASC, id ASC
+                """,
+                (int(company_id), *[int(value) for value in channel_ids]),
+            ).fetchall()
+
+        directory = {
+            int(employee["id"]): employee
+            for employee in self._employees(int(company_id))
+        }
+        names = auth_service.user_display_names(
+            int(company_id), [int(row["user_id"]) for row in rows]
+        )
+
+        rosters: dict[int, list[dict[str, Any]]] = {
+            int(value): [] for value in channel_ids
+        }
+
+        for row in rows:
+            member_id = int(row["user_id"])
+            employee = directory.get(member_id) or {}
+            rosters.setdefault(int(row["channel_id"]), []).append(
+                {
+                    "id": member_id,
+                    "display_name": (
+                        employee.get("display_name")
+                        or names.get(member_id)
+                        or f"User {member_id}"
+                    ),
+                    "role_name": employee.get("role_name"),
+                }
+            )
+
+        return rosters
+
+    def list_rooms(self, *, company_id: int, user_id: int) -> list[dict[str, Any]]:
+        """The caller's direct messages and groups, most recent first."""
+        company_id = int(company_id)
+        user_id = int(user_id)
+
+        with database_manager.tenant(company_id) as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    c.*,
+                    1 AS is_member,
+                    m.last_read_at AS last_read_at,
+                    (
+                        SELECT MAX(t.created_at) FROM team_messages t
+                        WHERE t.channel_id = c.id
+                    ) AS last_message_at,
+                    (
+                        SELECT COUNT(*) FROM team_messages t
+                        WHERE t.channel_id = c.id
+                          AND t.author_user_id != ?
+                          AND (
+                              m.last_read_at IS NULL
+                              OR t.created_at > m.last_read_at
+                          )
+                    ) AS unread_count
+                FROM team_channels c
+                JOIN team_channel_members m
+                    ON m.channel_id = c.id AND m.user_id = ?
+                WHERE c.company_id = ? AND c.kind IN (?, ?)
+                ORDER BY c.updated_at DESC, c.id DESC
+                """,
+                (user_id, user_id, company_id, KIND_DM, KIND_GROUP),
+            ).fetchall()
+
+        rosters = self._room_members(
+            company_id=company_id, channel_ids=[int(row["id"]) for row in rows]
+        )
+
+        return [
+            self._room_dict(
+                row,
+                viewer_user_id=user_id,
+                members=rosters.get(int(row["id"]), []),
+            )
+            for row in rows
+        ]
+
+    def get_room(
+        self, *, company_id: int, user_id: int, room_id: int
+    ) -> dict[str, Any]:
+        company_id = int(company_id)
+        user_id = int(user_id)
+
+        with database_manager.tenant(company_id) as conn:
+            row = self._require_channel(
+                conn, company_id=company_id, channel_id=room_id, user_id=user_id
+            )
+
+        rosters = self._room_members(
+            company_id=company_id, channel_ids=[int(row["id"])]
+        )
+
+        return self._room_dict(
+            row,
+            viewer_user_id=user_id,
+            members=rosters.get(int(row["id"]), []),
+        )
 
     # ------------------------------------------------------------------
     # Unread state

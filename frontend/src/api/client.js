@@ -1184,3 +1184,89 @@ export async function updateCompanySettingSectionRequest(section, values) {
     body: { values },
   });
 }
+
+/* ---------------------------------------------------------- team chat (v2)
+ *
+ * The redesigned Team Chat screen speaks in one company-wide stream plus the
+ * direct messages and groups a person belongs to. All of it is the same
+ * `team_channels` storage the older screen reads through
+ * `frontend/src/api/teamChat.js`; these endpoints serve it in the shape that
+ * screen was drawn for, rather than adding a second chat system beside it.
+ */
+
+export async function teamChatOptionsRequest() {
+  return apiRequest("/api/team-chat/options");
+}
+
+export async function listTeamMessagesRequest({ limit = 100 } = {}) {
+  return apiRequest(`/api/team-chat/stream?limit=${encodeURIComponent(limit)}`);
+}
+
+export async function sendTeamMessageRequest(payload) {
+  return apiRequest("/api/team-chat/stream", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteTeamMessageRequest(messageId) {
+  return apiRequest(
+    `/api/team-chat/messages/${encodeURIComponent(messageId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listTeamRoomsRequest() {
+  return apiRequest("/api/team-chat/rooms");
+}
+
+export async function createTeamDmRequest(userId) {
+  return apiRequest("/api/team-chat/rooms/dm", {
+    method: "POST",
+    body: { user_id: userId },
+  });
+}
+
+export async function createTeamGroupRequest({
+  name,
+  memberUserIds = [],
+  department = null,
+}) {
+  return apiRequest("/api/team-chat/rooms/group", {
+    method: "POST",
+    body: {
+      name,
+      member_user_ids: memberUserIds,
+      department,
+    },
+  });
+}
+
+export async function listTeamRoomMessagesRequest(
+  roomId,
+  { limit = 100 } = {},
+) {
+  const room = encodeURIComponent(roomId);
+
+  return apiRequest(
+    `/api/team-chat/rooms/${room}/messages?limit=${encodeURIComponent(limit)}`,
+  );
+}
+
+export async function sendTeamRoomMessageRequest(roomId, payload) {
+  const room = encodeURIComponent(roomId);
+
+  return apiRequest(`/api/team-chat/rooms/${room}/messages`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export async function deleteTeamRoomMessageRequest(roomId, messageId) {
+  const room = encodeURIComponent(roomId);
+  const message = encodeURIComponent(messageId);
+
+  return apiRequest(`/api/team-chat/rooms/${room}/messages/${message}`, {
+    method: "DELETE",
+  });
+}
