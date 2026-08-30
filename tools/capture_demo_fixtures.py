@@ -87,13 +87,15 @@ from backend.api.routes import (auth, platform_ui, dashboard, conversations, man
                                 conversation_tags, saved_replies, customers, knowledge, catalogue,
                                 comments, scheduler, appointments, team_chat, notifications,
                                 roles, tickets, analytics, ai_teaching, channels, company_settings,
-                                activity, broadcasts)
+                                activity, broadcasts, billing, support_tickets,
+                                notification_preferences)
 
 app = FastAPI()
 for module in (auth, platform_ui, dashboard, conversations, manual_messages, conversation_tags,
                saved_replies, customers, knowledge, catalogue, comments, scheduler, appointments,
                team_chat, notifications, roles, analytics, ai_teaching, channels,
-               company_settings, activity, broadcasts):
+               company_settings, activity, broadcasts, billing, support_tickets,
+               notification_preferences):
     app.include_router(module.router)
 app.include_router(tickets.router)
 app.include_router(tickets.tasks_router)
@@ -247,6 +249,70 @@ if "walk-in" in CONTACT_IDS:
 post("/api/customer-segments", {"name": "VIP clients", "filters": {"lifecycle_stage": "vip"}})
 post("/api/customer-segments", {"name": "Waiting on delivery", "filters": {"tag": "توصيل"}})
 
+# ---- company settings, billing and support ------------------------------
+# The Company Settings screen opens on Company Profile and offers Billing,
+# Ticketing and the chatbot wizard beside it. Every one of those reads a real
+# endpoint, so the preview drew an empty form and "No active subscription yet"
+# until they were seeded and captured here.
+#
+# The subscription is written straight into the control plane rather than
+# through an endpoint, because assigning a plan is the operator's action and
+# `/api/platform/**` needs a platform-scope session this script does not hold.
+# It is the same row `platform_service.assign_plan` writes.
+with manager.control() as conn:
+    now = utc_now_iso()
+    PLAN_ID = int(conn.execute("SELECT id FROM plans WHERE code = 'business'").fetchone()["id"])
+    conn.execute(
+        "INSERT INTO subscriptions (company_id, plan_id, status, starts_at, expires_at,"
+        " auto_renew, created_at, updated_at)"
+        " VALUES (?, ?, 'active', ?, '2026-12-31T00:00:00+00:00', 1, ?, ?)",
+        (COMPANY_ID, PLAN_ID, now, now, now),
+    )
+    conn.commit()
+
+put("/api/company-settings/company_profile", {"values": {
+    "company_name": COMPANY_NAME, "workspace_code": "CEDAR-2026",
+    "timezone": "Asia/Beirut", "default_language": "ar",
+    "logo_url": "", "country": "Lebanon", "currency": "USD",
+}})
+# The hours the profile form draws live in their own section, because that is
+# the section the assistant reads. See the adapter in frontend/src/api/client.js.
+put("/api/company-settings/working_hours", {"values": {
+    "enabled": True, "timezone": "Asia/Beirut",
+    "days": {
+        "sunday": {"open": "09:00", "close": "18:00", "closed": True},
+        "monday": {"open": "09:00", "close": "18:00", "closed": False},
+        "tuesday": {"open": "09:00", "close": "18:00", "closed": False},
+        "wednesday": {"open": "09:00", "close": "18:00", "closed": False},
+        "thursday": {"open": "09:00", "close": "18:00", "closed": False},
+        "friday": {"open": "09:00", "close": "14:00", "closed": False},
+        "saturday": {"open": "09:00", "close": "18:00", "closed": True},
+    },
+}})
+put("/api/company-settings/ai_behavior", {"values": {
+    "mode": "ai_first",
+    "greeting_message": "أهلاً فيك! كيف فينا نساعدك اليوم؟",
+    "reply_access_mode": "take_required",
+    "return_to_ai_timeout_minutes": 5,
+    "auto_release_to_ai": True,
+    "voice_reply_enabled": False,
+}})
+
+# One renewal request already submitted, so Billing history is not an empty box.
+post("/api/billing/requests", {"plan_id": PLAN_ID, "note": "Whish transfer #4471"})
+
+post("/api/support-tickets", {
+    "subject": "Instagram replies are delayed",
+    "description": "Replies to Instagram DMs take about ten minutes to leave the platform. "
+                   "Messenger and WhatsApp are immediate on the same account.",
+    "priority": "high",
+})
+post("/api/support-tickets", {
+    "subject": "Add a second workspace for the Tripoli branch",
+    "description": "We are opening a second branch and want its own workspace under the same plan.",
+    "priority": "normal",
+})
+
 # ---- capture every GET the frontend makes -------------------------------
 GETS = [
     "/api/auth/me", "/api/platform-ui/config", "/api/dashboard/summary",
@@ -264,6 +330,18 @@ GETS = [
     "/api/admin/access/overview", "/api/admin/access/roles",
     "/api/admin/access/users", "/api/admin/access/branches", "/api/channels", "/api/dashboard/channels",
     "/api/broadcasts",
+    # Company Settings: the profile form, the chatbot wizard, and the hours the
+    # profile form draws.
+    "/api/company-settings/company_profile",
+    "/api/company-settings/working_hours",
+    "/api/company-settings/ai_behavior",
+    # Billing and Ticketing, two more sections of that same screen.
+    "/api/billing/subscription", "/api/billing/modules",
+    "/api/billing/plans", "/api/billing/requests",
+    "/api/support-tickets",
+    # User Settings: the per-employee notification choices, and the second
+    # factor's current state.
+    "/api/notification-preferences", "/api/auth/totp",
 ]
 
 # The Broadcast detail screen reads one campaign's report, and the send dialog

@@ -1340,6 +1340,23 @@ body[data-ui-density="compact"] .app-content {
 
 .workflow-settings-card{display:grid;gap:12px;margin-top:22px}.workflow-setting-row,.workflow-toggle{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px;border:1px solid var(--tz-border);border-radius:14px;background:var(--tz-surface)}.workflow-setting-row>div:first-child,.workflow-toggle>div{display:grid;gap:5px}.workflow-setting-row span,.workflow-toggle span{color:var(--tz-text-muted);font-size:12px;line-height:1.5}.workflow-setting-row select,.workflow-setting-row input{min-height:40px;border:1px solid var(--tz-border);border-radius:10px;background:#fff;padding:0 12px}.timeout-input{display:flex!important;grid-template-columns:none!important;align-items:center;gap:8px}.timeout-input input{width:90px}.workflow-toggle{justify-content:flex-start;cursor:pointer}.workflow-toggle input{width:20px;height:20px}.workflow-settings-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-top:4px}.workflow-settings-footer span{color:var(--tz-success,#059669);font-size:12px}.workflow-settings-footer button{min-height:42px;padding:0 18px;border:0;border-radius:11px;background:var(--tz-primary);color:#fff;font-weight:850}@media(max-width:760px){.workflow-setting-row{align-items:stretch;flex-direction:column}.workflow-settings-footer{align-items:stretch;flex-direction:column}}
 
+/* The design's Company Settings sections, from the branch this screen came
+ * from. They were missing because the port that brought the pages over
+ * added new files only, and this file already existed — so the wizard's
+ * step buttons rendered as bare browser buttons and the Security section's
+ * rows had no card. Copied verbatim rather than rewritten. */
+.company-setting-fields{display:grid;gap:9px;margin:18px 0}.company-setting-field{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;border:1px solid var(--tz-border);border-radius:14px;background:var(--tz-surface)}.company-setting-field div{display:grid;gap:3px}.company-setting-field span{color:var(--tz-text-muted);font-size:12px}.company-setting-field button{min-height:32px;padding:0 12px;border:1px solid var(--tz-border);border-radius:10px;background:#fff;color:var(--tz-primary);font-weight:800;font-size:13px}
+.workflow-wizard-steps{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.workflow-wizard-step-btn{display:flex;align-items:center;gap:8px;min-height:36px;padding:0 14px;border:1px solid var(--tz-border);border-radius:999px;background:var(--tz-surface);color:var(--tz-text-muted);font-weight:700;font-size:13px}
+.workflow-wizard-step-btn.is-active{border-color:var(--tz-primary);color:var(--tz-primary);background:var(--tz-primary-soft)}
+.workflow-wizard-step-btn.is-done{color:var(--tz-success);border-color:var(--tz-success)}
+.workflow-wizard-step-num{display:grid;place-items:center;width:20px;height:20px;border-radius:999px;background:var(--tz-border);color:var(--tz-surface);font-size:11px}
+.workflow-wizard-step-btn.is-active .workflow-wizard-step-num{background:var(--tz-primary)}
+.workflow-wizard-step-btn.is-done .workflow-wizard-step-num{background:var(--tz-success)}
+.workflow-wizard-panel{min-height:64px}
+.workflow-wizard-nav{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:4px}
+.workflow-wizard-progress{color:var(--tz-text-muted);font-size:12px;font-weight:700}
+
 /* Patch 9 workflow stabilization: theme-safe surfaces and controls. */
 .notification-dropdown,
 .notification-dropdown-head,
@@ -1351,7 +1368,8 @@ body[data-ui-density="compact"] .app-content {
 .user-settings-content-scroll,
 .company-settings-content,
 .company-settings-content-scroll,
-.workflow-settings-card {
+.workflow-settings-card,
+.company-setting-field {
   color: var(--tz-text-primary);
   background-color: var(--tz-surface);
   border-color: var(--tz-border);

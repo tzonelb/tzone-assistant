@@ -380,6 +380,57 @@ CONTROL_TABLES: tuple[str, ...] = (
         published_at TEXT
     )
     """,
+    # A company asking to move onto a different plan, or to renew the one it is
+    # on. Control-plane rather than tenant, and for the same reason the
+    # subscription itself is: the operator reviews these across every company
+    # from the console, and a table inside one company's encrypted file cannot
+    # be read from a screen that lists all of them.
+    #
+    # Nothing a company owns is here — a plan id, a status and a short note the
+    # employee typed about how they paid. No customer, no conversation.
+    #
+    # `note` is the company's own words (a transfer reference, usually), so it
+    # is bounded at the route rather than trusted at whatever length it arrives.
+    """
+    CREATE TABLE IF NOT EXISTS subscription_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        plan_id INTEGER NOT NULL,
+        requested_by_user_id INTEGER,
+        note TEXT,
+        -- 'pending' until an operator acts on it, then 'approved' or
+        -- 'rejected'. No `reviewed_by`/`reviewed_at` columns: the console side
+        -- that would set them is not built yet, and columns nothing writes are
+        -- how a table comes to hold fields that look answered and are not.
+        -- They belong in the release that adds the review screen.
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE RESTRICT
+    )
+    """,
+    # A company reporting a problem with the platform itself to the T-ZONE team.
+    #
+    # Distinct from `tickets` in the tenant schema, which is a company's own
+    # end-customers' cases and belongs inside that company's file. This one is
+    # addressed *to the operator*, so it lives where the operator can read it
+    # without opening a company's encrypted database — the same reasoning as
+    # `subscription_requests` above.
+    """
+    CREATE TABLE IF NOT EXISTS support_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        created_by_user_id INTEGER,
+        subject TEXT NOT NULL,
+        description TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'normal',
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
