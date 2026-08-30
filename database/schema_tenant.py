@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 3
+TENANT_SCHEMA_VERSION = 4
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -603,6 +603,50 @@ TENANT_TABLES: tuple[str, ...] = (
         created_at TEXT NOT NULL
     )
     """,
+    """
+    -- Canned replies an employee can drop into a conversation.
+    --
+    -- Company-owned text, so it lives in the company's own encrypted database
+    -- rather than the control plane, and needs no company_id filter to be safe:
+    -- the file is the tenant. `company_id` is carried anyway for the same
+    -- reason every other tenant table carries it -- it makes an exported row
+    -- self-describing and a restore into the wrong file obvious.
+    --
+    -- `department` is a plain string, empty for a reply that suits every
+    -- section, because a reply written for one section is noise in another.
+    CREATE TABLE IF NOT EXISTS saved_replies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        department TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    -- A follow-up an employee set on one conversation: come back to this at a
+    -- time, optionally sending a message when it arrives.
+    --
+    -- One live reminder per conversation, enforced by the unique key rather
+    -- than by the caller: setting a second one replaces the first, which is
+    -- what "remind me at" means to the person clicking it.
+    CREATE TABLE IF NOT EXISTS conversation_reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        remind_at TEXT NOT NULL,
+        note TEXT,
+        auto_send INTEGER NOT NULL DEFAULT 0,
+        message_text TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(channel, external_user_id)
+    )
+    """,
 )
 
 
@@ -639,6 +683,10 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
 
 
 TENANT_INDEXES: tuple[str, ...] = (
+    # Saved replies are listed for the whole company or filtered to one
+    # section, and reminders are swept by the time they come due.
+    "CREATE INDEX IF NOT EXISTS idx_saved_replies_department ON saved_replies(department, title)",
+    "CREATE INDEX IF NOT EXISTS idx_reminders_due ON conversation_reminders(remind_at)",
     # The log is read newest-first, filtered by category or by actor, and swept
     # by kind for retention. Each index matches one of those three readings.
     "CREATE INDEX IF NOT EXISTS idx_activity_recent ON activity_log(created_at DESC)",

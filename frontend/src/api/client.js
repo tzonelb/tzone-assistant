@@ -375,6 +375,40 @@ export async function listBroadcastsRequest() {
   return { items: [] };
 }
 
+/* ---------------------------------------------------------------- *
+ * Saved replies -- the canned wording the composer offers.
+ * Reading rides on conversations.view; writing takes settings.manage.
+ * ---------------------------------------------------------------- */
+export async function listSavedRepliesRequest({ department = "" } = {}) {
+  return apiRequest(`/api/saved-replies${createQueryString({ department })}`);
+}
+
+export async function createSavedReplyRequest(title, body, department = "") {
+  return apiRequest("/api/saved-replies", {
+    method: "POST",
+    body: { title, body, department },
+  });
+}
+
+export async function updateSavedReplyRequest(id, title, body, department) {
+  const payload = { title, body };
+
+  if (department !== undefined) {
+    payload.department = department;
+  }
+
+  return apiRequest(`/api/saved-replies/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function deleteSavedReplyRequest(id) {
+  return apiRequest(`/api/saved-replies/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 /* The redesigned Tasks and Appointments screens import these from here, while
  * this platform keeps them in api/tasks.js and api/appointments.js. Re-declared
  * against the same endpoints rather than re-exported: those modules import

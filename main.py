@@ -30,6 +30,7 @@ from backend.api.routes import (
     comments,
     company_settings,
     conversation_tags,
+    saved_replies,
     conversations,
     customers,
     dashboard,
@@ -281,6 +282,7 @@ app.include_router(ai_teaching.router, dependencies=_module("ai_teaching"))
 app.include_router(conversations.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
+app.include_router(saved_replies.router, dependencies=_module("conversations"))
 app.include_router(company_settings.router, dependencies=_module("company_settings"))
 # The activity log rides with company_settings: it is read by the same
 # people, from the same screen area, under the same permission.
