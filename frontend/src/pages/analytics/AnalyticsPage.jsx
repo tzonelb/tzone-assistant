@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshOutlined } from "@mui/icons-material";
+import { FileDownloadOutlined, RefreshOutlined } from "@mui/icons-material";
 import {
   Area,
   AreaChart,
@@ -13,7 +13,10 @@ import {
   YAxis,
 } from "recharts";
 
-import { getAnalyticsSummaryRequest } from "../../api/analytics";
+import {
+  downloadAnalyticsReportRequest,
+  getAnalyticsSummaryRequest,
+} from "../../api/analytics";
 import {
   AppButton,
   AppCard,
@@ -37,6 +40,25 @@ const RANGES = [
 // changes: inbound is always the brand blue, outbound always the teal.
 const INBOUND_COLOR = "var(--tz-primary)";
 const OUTBOUND_COLOR = "var(--tz-secondary)";
+
+/*
+ * A channel keeps its colour across the whole screen and across reloads,
+ * because it is assigned by the channel's position in the server's own list
+ * rather than by whatever order a chart happened to render. Recolouring
+ * WhatsApp between two visits would make the two charts uncomparable.
+ */
+const SERIES_COLORS = [
+  "var(--tz-primary)",
+  "var(--tz-secondary)",
+  "var(--tz-info)",
+  "var(--tz-warning)",
+  "var(--tz-brand-green)",
+  "var(--tz-brand-blue-deep)",
+];
+
+function seriesColor(index) {
+  return SERIES_COLORS[index % SERIES_COLORS.length];
+}
 
 const AXIS_TICK = { fill: "var(--tz-text-muted)", fontSize: 11 };
 const AXIS_LINE = { stroke: "var(--tz-border)" };
@@ -124,6 +146,8 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [volumeAsTable, setVolumeAsTable] = useState(false);
+  const [exporting, setExporting] = useState("");
+  const [exportError, setExportError] = useState("");
 
   const loadReport = useCallback(async () => {
     setLoading(true);
@@ -143,6 +167,30 @@ export default function AnalyticsPage() {
     loadReport();
   }, [loadReport]);
 
+  /*
+   * The export is a file, so there is nothing on the screen to show for it
+   * afterwards. The button reports its own progress and its own failure
+   * instead — a download that silently does nothing is indistinguishable from
+   * a broken one.
+   */
+  const exportReport = useCallback(
+    async (name) => {
+      setExporting(name);
+      setExportError("");
+
+      try {
+        await downloadAnalyticsReportRequest({ report: name, days });
+      } catch (requestError) {
+        setExportError(
+          requestError.message || "The report could not be exported.",
+        );
+      } finally {
+        setExporting("");
+      }
+    },
+    [days],
+  );
+
   const overview = report?.overview || null;
   const assistant = report?.assistant || null;
   const firstResponse = report?.first_response || null;
@@ -159,6 +207,20 @@ export default function AnalyticsPage() {
   const hourly = report?.hourly_distribution || [];
   const byChannel = report?.by_channel || [];
   const employees = report?.employees || [];
+  const departments = report?.by_department || [];
+  const waitBuckets = firstResponse?.buckets || [];
+  const percentiles = firstResponse?.percentiles || {};
+
+  const channelSeries = report?.channel_trend?.channels || [];
+
+  const channelTrend = useMemo(
+    () =>
+      (report?.channel_trend?.days || []).map((row) => ({
+        ...row,
+        label: formatDayLabel(row.day),
+      })),
+    [report],
+  );
 
   const channelPeak = useMemo(
     () =>
@@ -204,16 +266,88 @@ export default function AnalyticsPage() {
         ),
       },
       {
+        key: "conversations",
+        label: "Conversations",
+        align: "right",
+        render: (value) => formatNumber(value),
+      },
+      {
         key: "replies",
         label: "Replies sent",
         align: "right",
         render: (value) => formatNumber(value),
       },
       {
+        key: "average_response_seconds",
+        label: "Average reply",
+        align: "right",
+        /*
+         * A dash, never a zero. An employee whose replies never followed a
+         * waiting customer has no measured response time, and printing 0s
+         * would read as "answered instantly" — the opposite of the truth.
+         */
+        render: (value, row) =>
+          row.answered ? formatSeconds(value) : "—",
+      },
+      {
+        key: "slowest_response_seconds",
+        label: "Slowest reply",
+        align: "right",
+        render: (value, row) =>
+          row.answered ? formatSeconds(value) : "—",
+      },
+      {
         key: "takeovers",
         label: "Takeovers",
         align: "right",
         render: (value) => formatNumber(value),
+      },
+    ],
+    [],
+  );
+
+  const departmentColumns = useMemo(
+    () => [
+      {
+        key: "name",
+        label: "Section",
+        render: (value, row) => (
+          <>
+            <strong>{value}</strong>
+            {row.defined ? null : (
+              <small className="analytics-note"> not in the section list</small>
+            )}
+          </>
+        ),
+      },
+      {
+        key: "conversations",
+        label: "Conversations",
+        align: "right",
+        render: (value) => formatNumber(value),
+      },
+      {
+        key: "messages",
+        label: "Messages",
+        align: "right",
+        render: (value) => formatNumber(value),
+      },
+      {
+        key: "automation_rate",
+        label: "Answered by assistant",
+        align: "right",
+        render: (value) => formatPercent(value),
+      },
+      {
+        key: "waiting_for_human",
+        label: "Waiting now",
+        align: "right",
+        render: (value) =>
+          Number(value) ? (
+            <strong className="analytics-alert">{formatNumber(value)}</strong>
+          ) : (
+            formatNumber(value)
+          ),
       },
     ],
     [],
@@ -283,6 +417,18 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
+      {exportError ? (
+        <ErrorState
+          title="The export did not download"
+          description={exportError}
+          action={
+            <AppButton variant="secondary" onClick={() => setExportError("")}>
+              Dismiss
+            </AppButton>
+          }
+        />
+      ) : null}
+
       {error ? (
         <ErrorState
           title="The report could not load"
@@ -324,13 +470,25 @@ export default function AnalyticsPage() {
                 </p>
               </div>
 
-              <AppButton
-                variant="ghost"
-                size="small"
-                onClick={() => setVolumeAsTable((current) => !current)}
-              >
-                {volumeAsTable ? "Show chart" : "Show table"}
-              </AppButton>
+              <div className="analytics-head-actions">
+                <AppButton
+                  variant="ghost"
+                  size="small"
+                  onClick={() => setVolumeAsTable((current) => !current)}
+                >
+                  {volumeAsTable ? "Show chart" : "Show table"}
+                </AppButton>
+
+                <AppButton
+                  variant="ghost"
+                  size="small"
+                  icon={<FileDownloadOutlined fontSize="small" />}
+                  disabled={exporting === "volume"}
+                  onClick={() => exportReport("volume")}
+                >
+                  {exporting === "volume" ? "Exporting..." : "Export CSV"}
+                </AppButton>
+              </div>
             </header>
 
             {volume.length === 0 ? (
@@ -398,6 +556,83 @@ export default function AnalyticsPage() {
                       fillOpacity={0.14}
                       activeDot={{ r: 4, strokeWidth: 2 }}
                     />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </AppCard>
+
+          <AppCard padding="medium" className="analytics-chart-card">
+            <header className="analytics-section-head">
+              <div>
+                <h3>Channels over time</h3>
+                <p>
+                  Messages per channel, per day. The period totals below cannot
+                  show a channel that went quiet three weeks ago — its total
+                  still looks healthy.
+                </p>
+              </div>
+
+              <AppButton
+                variant="ghost"
+                size="small"
+                icon={<FileDownloadOutlined fontSize="small" />}
+                disabled={exporting === "channels"}
+                onClick={() => exportReport("channels")}
+              >
+                {exporting === "channels" ? "Exporting..." : "Export CSV"}
+              </AppButton>
+            </header>
+
+            {channelTrend.length === 0 ? (
+              <EmptyState
+                title="No channel activity"
+                description="No messages were exchanged on any connected channel in this period."
+              />
+            ) : (
+              <div className="analytics-chart">
+                <ResponsiveContainer width="100%" height={280}>
+                  <AreaChart
+                    data={channelTrend}
+                    margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+                  >
+                    <CartesianGrid
+                      stroke="var(--tz-border)"
+                      strokeDasharray="3 3"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tick={AXIS_TICK}
+                      tickLine={false}
+                      axisLine={AXIS_LINE}
+                      minTickGap={24}
+                    />
+                    <YAxis
+                      tick={AXIS_TICK}
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                      allowDecimals={false}
+                    />
+                    <Tooltip {...TOOLTIP_STYLES} />
+                    <Legend
+                      wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
+                      iconType="plainline"
+                    />
+                    {channelSeries.map((channel, index) => (
+                      <Area
+                        key={channel}
+                        type="monotone"
+                        dataKey={channel}
+                        name={humanize(channel)}
+                        stackId="channels"
+                        stroke={seriesColor(index)}
+                        strokeWidth={2}
+                        fill={seriesColor(index)}
+                        fillOpacity={0.18}
+                      />
+                    ))}
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -608,12 +843,189 @@ export default function AnalyticsPage() {
             </AppCard>
           </div>
 
+          <AppCard padding="medium" className="analytics-chart-card">
+            <header className="analytics-section-head">
+              <div>
+                <h3>How long customers waited</h3>
+                <p>
+                  Every conversation placed in the band it actually waited in.
+                  An average of four minutes and a customer who waited nine
+                  hours are the same average; only this is the customer.
+                </p>
+              </div>
+
+              <AppButton
+                variant="ghost"
+                size="small"
+                icon={<FileDownloadOutlined fontSize="small" />}
+                disabled={exporting === "response"}
+                onClick={() => exportReport("response")}
+              >
+                {exporting === "response" ? "Exporting..." : "Export CSV"}
+              </AppButton>
+            </header>
+
+            <div className="analytics-wait-split">
+              <div className="analytics-chart">
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart
+                    data={waitBuckets}
+                    margin={{ top: 8, right: 12, bottom: 0, left: 0 }}
+                  >
+                    <CartesianGrid
+                      stroke="var(--tz-border)"
+                      strokeDasharray="3 3"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tick={AXIS_TICK}
+                      tickLine={false}
+                      axisLine={AXIS_LINE}
+                      interval={0}
+                    />
+                    <YAxis
+                      tick={AXIS_TICK}
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                      allowDecimals={false}
+                    />
+                    <Tooltip {...TOOLTIP_STYLES} />
+                    <Bar
+                      dataKey="conversations"
+                      name="Conversations"
+                      fill={INBOUND_COLOR}
+                      radius={[4, 4, 0, 0]}
+                      maxBarSize={54}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="analytics-facts analytics-facts-narrow">
+                {[
+                  ["p50", "Half of customers waited less than this"],
+                  ["p75", "Three in four waited less than this"],
+                  ["p90", "Nine in ten waited less than this"],
+                  ["p95", "The worst one in twenty starts here"],
+                ].map(([key, note]) => (
+                  <div key={key}>
+                    <span>{key}</span>
+                    <strong>{formatSeconds(percentiles[key])}</strong>
+                    <small>{note}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="analytics-split analytics-waits">
+              <div>
+                <h4>Longest waits</h4>
+
+                {(firstResponse?.slowest || []).length === 0 ? (
+                  <p className="analytics-note">
+                    Nothing was answered in this period.
+                  </p>
+                ) : (
+                  <ul className="analytics-wait-list">
+                    {firstResponse.slowest.map((row) => (
+                      <li key={`answered-${row.conversation_id}`}>
+                        <div>
+                          <strong>{row.customer}</strong>
+                          <span>{humanize(row.channel)}</span>
+                        </div>
+                        <b>{formatSeconds(row.waited_seconds)}</b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              {/*
+                Never hidden and never merged into the list above. A customer
+                who wrote and was never answered is the single most actionable
+                row on this screen, and a wait figure would imply somebody
+                eventually replied.
+              */}
+              <div>
+                <h4>Never answered</h4>
+
+                {(firstResponse?.never_answered || []).length === 0 ? (
+                  <p className="analytics-note">
+                    Everyone who wrote in got a reply.
+                  </p>
+                ) : (
+                  <ul className="analytics-wait-list is-bad">
+                    {firstResponse.never_answered.map((row) => (
+                      <li key={`unanswered-${row.conversation_id}`}>
+                        <div>
+                          <strong>{row.customer}</strong>
+                          <span>{humanize(row.channel)}</span>
+                        </div>
+                        <b>no reply</b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </AppCard>
+
           <AppCard padding="medium">
             <header className="analytics-section-head">
               <div>
-                <h3>Employee activity</h3>
-                <p>Replies written by people, and conversations taken over.</p>
+                <h3>By section</h3>
+                <p>
+                  Which part of the business the work landed in, how much of it
+                  the assistant carried, and what is queued for a person right
+                  now.
+                </p>
               </div>
+
+              <AppButton
+                variant="ghost"
+                size="small"
+                icon={<FileDownloadOutlined fontSize="small" />}
+                disabled={exporting === "departments"}
+                onClick={() => exportReport("departments")}
+              >
+                {exporting === "departments" ? "Exporting..." : "Export CSV"}
+              </AppButton>
+            </header>
+
+            <AppTable
+              columns={departmentColumns}
+              rows={departments}
+              rowKey="code"
+              emptyTitle="No section activity"
+              emptyDescription="No conversation carried a section in this period."
+              page={1}
+              pageSize={Math.max(departments.length, 1)}
+              totalRows={departments.length}
+            />
+          </AppCard>
+
+          <AppCard padding="medium">
+            <header className="analytics-section-head">
+              <div>
+                <h3>Employee performance</h3>
+                <p>
+                  Conversations handled, replies written, and how long a
+                  customer waited for them. Reply time is measured only where a
+                  reply actually answered a waiting customer.
+                </p>
+              </div>
+
+              <AppButton
+                variant="ghost"
+                size="small"
+                icon={<FileDownloadOutlined fontSize="small" />}
+                disabled={exporting === "employees"}
+                onClick={() => exportReport("employees")}
+              >
+                {exporting === "employees" ? "Exporting..." : "Export CSV"}
+              </AppButton>
             </header>
 
             <AppTable

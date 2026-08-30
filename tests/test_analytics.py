@@ -223,7 +223,7 @@ def test_channel_breakdown_counts_distinct_conversations(service, platform, alph
     assert breakdown[0]["conversations"] == 2
 
 
-def test_employee_activity_returns_ids_not_names(service, platform, alpha):
+def test_employee_performance_returns_ids_not_names(service, platform, alpha):
     """Names live in the control database. Returning ids keeps the tenant query
     free of a cross-database join the route resolves in one batch."""
     manager = platform["manager"]
@@ -252,9 +252,16 @@ def test_employee_activity_returns_ids_not_names(service, platform, alpha):
             )
         conn.commit()
 
-    activity = service.employee_activity(company_id=alpha["id"], days=30)
+    activity = service.employee_performance(company_id=alpha["id"], days=30)
 
-    assert activity == [{"user_id": 77, "replies": 3, "takeovers": 0}]
+    assert len(activity) == 1
+    assert activity[0]["user_id"] == 77
+    assert activity[0]["replies"] == 3
+    assert activity[0]["takeovers"] == 0
+
+    # An id, never a name: resolving one here would mean joining a tenant table
+    # onto `users`, which lives in the control-plane file.
+    assert "name" not in activity[0]
 
 
 def test_assistant_failure_rate_is_zero_without_attempts(service, alpha):
