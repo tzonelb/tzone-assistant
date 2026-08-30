@@ -56,6 +56,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.services.customer_service import customer_service
+from backend.services.media_upload_service import (
+    MediaUploadError,
+    media_upload_service,
+)
 from backend.services.message_service import message_service
 from channels.sender import (
     SUPPORTED_CHANNELS,
@@ -231,6 +235,17 @@ class BroadcastService:
 
             if not media_url.startswith(expected_prefix):
                 raise ValueError("Attach a file uploaded to this workspace.")
+
+            # And it has to still be there. A draft naming a file that has
+            # since been removed would fail once per recipient at send time,
+            # reporting a whole campaign as rejected by the provider.
+            try:
+                media_upload_service.path_for(
+                    company_id=company_id,
+                    stored_name=media_url[len(expected_prefix):],
+                )
+            except MediaUploadError as exc:
+                raise KeyError(str(exc)) from exc
         else:
             media_type = None
 

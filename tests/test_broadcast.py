@@ -447,6 +447,155 @@ def test_a_send_already_in_flight_is_refused_rather_than_duplicated(
     assert "already being sent" in response.json()["detail"]
 
 
+def test_a_stale_lock_is_reclaimed_rather_than_stranding_the_campaign(
+    client, owner, sent, platform, alpha
+):
+    """The lock is released in a `finally`, but a process killed outright
+    never reaches it. A lock older than the staleness window belongs to a
+    request that cannot still be running, so the next one may take it —
+    otherwise a crash mid-send makes a campaign permanently unsendable."""
+    draft = _create(client, owner).json()
+
+    with platform["manager"].tenant(alpha["id"]) as conn:
+        conn.execute(
+            """
+            UPDATE broadcasts SET status = 'sending', send_lock_acquired_at = ?
+            WHERE id = ?
+            """,
+            ("2020-01-01T00:00:00+00:00", draft["id"]),
+        )
+        conn.commit()
+
+    response = client.post(
+        f"/api/broadcasts/{draft['id']}/send", headers=_headers(owner)
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["sent_count"] == 2
+
+
+def test_the_lock_does_not_outlive_the_send_it_protects(
+    client, owner, sent, platform, alpha
+):
+    """A lock left set would make the next legitimate send wait out the whole
+    staleness window for no reason."""
+    draft = _create(client, owner).json()
+
+    client.post(f"/api/broadcasts/{draft['id']}/send", headers=_headers(owner))
+
+    with platform["manager"].tenant(alpha["id"]) as conn:
+        row = conn.execute(
+            "SELECT send_lock_acquired_at FROM broadcasts WHERE id = ?",
+            (draft["id"],),
+        ).fetchone()
+
+    assert row["send_lock_acquired_at"] is None
+
+
+def test_a_number_already_known_reuses_its_contact(client, owner, platform, alpha):
+    """A pasted number that is already a WhatsApp contact must not become a
+    second, duplicate record of the same person."""
+    existing = _contact_on(platform, alpha, "whatsapp", "+15550100")
+
+    _create(client, owner, numbers=["+1 555 0100"])
+
+    with platform["manager"].tenant(alpha["id"]) as conn:
+        rows = conn.execute(
+            "SELECT customer_id FROM customer_identities WHERE external_user_id = ?",
+            ("+15550100",),
+        ).fetchall()
+
+    assert [row["customer_id"] for row in rows] == [existing["id"]]
+
+
+# ------------------------------------------------------------------- media
+
+
+@pytest.fixture()
+def uploaded(monkeypatch, tmp_path, alpha):
+    """A real attachment, stored the way the compose dialog stores one."""
+    from config.settings import config
+
+    import backend.services.media_upload_service as module
+
+    monkeypatch.setattr(config, "UPLOAD_DIR", tmp_path / "uploads", raising=False)
+    monkeypatch.setattr(config, "APP_PUBLIC_URL", "https://tzone.example.com")
+
+    return module.media_upload_service.save(
+        company_id=alpha["id"],
+        filename="offer.png",
+        content=b"\x89PNG\r\n\x1a\n" + b"0" * 64,
+    )
+
+
+def test_an_attachment_is_stored_and_sent_as_media(
+    client, owner, uploaded, monkeypatch
+):
+    import backend.services.broadcast_service as module
+
+    calls: list[dict] = []
+
+    def fake_send_media(**kwargs):
+        calls.append(kwargs)
+        return {"ok": True, "response": {"message_id": "pmid-media"}}
+
+    monkeypatch.setattr(module, "send_media", fake_send_media)
+    # A campaign with an attachment must not quietly fall back to a text-only
+    # message: the customer would get the words and none of the picture.
+    monkeypatch.setattr(
+        module,
+        "send_text",
+        lambda **_: pytest.fail("an attachment was sent as plain text"),
+    )
+
+    created = _create(
+        client,
+        owner,
+        numbers=["+15550100"],
+        media_url=uploaded["url"],
+        media_type="image",
+    )
+    assert created.status_code == 200, created.text
+    assert created.json()["media_url"] == uploaded["url"]
+    assert created.json()["media_type"] == "image"
+
+    response = client.post(
+        f"/api/broadcasts/{created.json()['id']}/send", headers=_headers(owner)
+    )
+    assert response.status_code == 200, response.text
+
+    assert len(calls) == 1
+    # The channel fetches the file itself, so what it is handed is an address
+    # on the public internet rather than this platform's own path.
+    assert calls[0]["media_url"] == f"https://tzone.example.com{uploaded['url']}"
+    assert calls[0]["caption"] == "Half price this week."
+
+
+def test_a_media_type_no_channel_carries_is_refused(client, owner, uploaded):
+    response = _create(
+        client, owner, media_url=uploaded["url"], media_type="document"
+    )
+
+    assert response.status_code == 400, response.text
+
+
+def test_an_attachment_that_is_no_longer_there_is_refused(
+    client, owner, uploaded, alpha
+):
+    """A draft naming a deleted file would fail once per recipient at send
+    time and report the whole campaign as rejected by the provider."""
+    from backend.services.media_upload_service import media_upload_service
+
+    media_upload_service.remove(
+        company_id=alpha["id"], stored_name=uploaded["stored_name"]
+    )
+
+    response = _create(
+        client, owner, media_url=uploaded["url"], media_type="image"
+    )
+
+    assert response.status_code == 404, response.text
+
+
 # --------------------------------------------------------------- refusals
 
 
