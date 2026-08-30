@@ -1179,11 +1179,19 @@ export async function updateCompanySettingSectionRequest(section, values) {
  * Names the redesigned "Test & Train AI" screen imports.
  *
  * Adapters, like the task/appointment block above. The design branch this
- * screen came from served it from `/api/ai-teaching-chat`, whose `/test` and
- * `/chat-with-bot` both ran one shared reply pipeline. On this platform that
- * pipeline is `/api/ai-teaching/dry-run` — the real assistant, run against a
- * throwaway session, delivering nothing and storing nothing (see
- * `bot_profile_service.preview_reply`). So both of the design's endpoints map
+ * screen came from served it from an /api/ai-teaching-chat router, whose
+ * `/test` and `/chat-with-bot` both ran one shared reply pipeline.
+ *
+ * (Here and in the Publish block below, a path the *design* served but this
+ * platform does not is written without backticks on purpose.
+ * `tests/test_screens_call_real_routes.py` reads a quoted /api/... string in
+ * this file as a path a screen requests, and reports it when the API has no
+ * such route — which is exactly the check that should fail if one of these
+ * ever became a real call.)
+ *
+ * On this platform that pipeline is `/api/ai-teaching/dry-run` — the real
+ * assistant, run against a throwaway session, delivering nothing and storing
+ * nothing (see `bot_profile_service.preview_reply`). Both design endpoints map
  * onto the one this platform already has, rather than a second copy of the
  * assistant being stood up beside it.
  * ------------------------------------------------------------------ */
@@ -1258,10 +1266,10 @@ export async function chatWithBotRequest(values) {
 /* ------------------------------------------------------------------ *
  * Names the redesigned "Publish" screen imports.
  *
- * The design branch served these from `/api/scheduled-posts`, where one row
- * carried many channel accounts and published itself on demand. This platform's
- * publishing calendar is `/api/scheduler`: one row per post per page, moving
- * draft -> approved -> published, with a background publisher
+ * The design branch served these from an /api/scheduled-posts router, where one
+ * row carried many channel accounts and published itself on demand. This
+ * platform's publishing calendar is `/api/scheduler`: one row per post per
+ * page, moving draft -> approved -> published, with a background publisher
  * (`channels/post_publisher.py`) that sends approved posts when they come due.
  *
  * The two vocabularies line up as follows, and every one of these translations
