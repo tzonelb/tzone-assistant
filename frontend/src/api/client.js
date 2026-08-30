@@ -629,13 +629,45 @@ export async function listAppointmentsRequest({
   employeeUserId,
   ...rest
 } = {}) {
-  return apiRequest(
+  const result = await apiRequest(
     `/api/appointments${createQueryString({
       ...rest,
       // The list route filters on staff_user_id.
       staff_user_id: employeeUserId,
     })}`,
   );
+
+  return { ...result, items: (result?.items || []).map(toAppointmentRow) };
+}
+
+/* The list answers `starts_at`/`ends_at`/`staff_name`; the screen reads
+ * `scheduled_at`, `duration_minutes` and `employee_name`. Only the request half
+ * was adapted before, so every row rendered its time as an em dash and its
+ * length as "undefined min" -- a screen that looked loaded and showed no
+ * booking time at all. The original keys are kept alongside, so anything
+ * reading the API's own names keeps working. */
+function toAppointmentRow(row = {}) {
+  const startsAt = row.starts_at ?? null;
+  const endsAt = row.ends_at ?? null;
+
+  let durationMinutes = null;
+
+  if (startsAt && endsAt) {
+    const minutes = Math.round(
+      (new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000,
+    );
+
+    // An unparseable date gives NaN, which would render as "NaN min".
+    durationMinutes = Number.isFinite(minutes) ? minutes : null;
+  }
+
+  return {
+    ...row,
+    scheduled_at: startsAt,
+    duration_minutes: durationMinutes,
+    employee_name: row.staff_name ?? null,
+    employee_user_id: row.staff_user_id ?? null,
+  };
 }
 
 export async function createAppointmentRequest(values = {}) {
@@ -670,6 +702,18 @@ export async function createAppointmentRequest(values = {}) {
 export async function updateAppointmentRequest(appointmentId, values = {}) {
   // The only in-place change the design's row offers is the status, and this
   // API keeps that on its own route.
+  //
+  // Except for "cancelled". The row's dropdown is filled from the service's
+  // ALLOWED_STATUS, which includes it, but the PATCH body is a Literal of the
+  // other four -- cancelling has its own route, because it records a reason and
+  // is the one status change the customer was told about. Sending it to the
+  // PATCH was a raw 422 every time, so the same action failed from the dropdown
+  // and succeeded from the cancel button. Routing it here keeps the designed
+  // control exactly as it is and makes every option in it work.
+  if (values.status === "cancelled") {
+    return deleteAppointmentRequest(appointmentId);
+  }
+
   return apiRequest(
     `/api/appointments/${encodeURIComponent(appointmentId)}/status`,
     { method: "PATCH", body: { status: values.status } },
