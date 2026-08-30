@@ -34,6 +34,10 @@ except ImportError:  # Optional Arabic PDF shaping.
     get_display = None
 
 from backend.services.activity_service import Action, activity_service
+from backend.services.conversation_reminder_service import (
+    ReminderError,
+    conversation_reminder_service,
+)
 from backend.services.auth_service import (
     auth_service,
     client_ip,
@@ -75,6 +79,19 @@ class ConversationControlUpdate(BaseModel):
     tags: list[str] | None = None
     clear_assignment: bool | None = None
     is_unread: bool | None = None
+
+
+class ConversationReminderRequest(BaseModel):
+    """A follow-up on one conversation.
+
+    `message_text` is only meaningful with `auto_send`; the service refuses the
+    combination that promises to send something and carries nothing to send.
+    """
+
+    reminder_at: str = Field(min_length=4, max_length=64)
+    note: str | None = Field(default=None, max_length=500)
+    auto_send: bool = False
+    message_text: str | None = Field(default=None, max_length=4000)
 
 
 class ConversationNoteCreate(BaseModel):
@@ -736,6 +753,69 @@ def update_control(
     )
 
     return {"status": "ok", "conversation": conversation}
+
+
+@router.post("/{channel}/{user_id}/reminder")
+def set_conversation_reminder(
+    channel: str,
+    user_id: str,
+    payload: ConversationReminderRequest,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.reply")),
+):
+    """Come back to this conversation at a time, optionally sending a message.
+
+    Takes `conversations.reply` rather than `conversations.view`: a reminder can
+    carry a message the platform sends to the customer on the employee's behalf,
+    which is a reply scheduled rather than typed.
+    """
+    company_id = auth_service.resolve_company_id(current_user)
+
+    _assert_can_control(
+        current_user=current_user,
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    )
+
+    try:
+        reminder = conversation_reminder_service.set(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            remind_at=payload.reminder_at,
+            note=payload.note,
+            auto_send=payload.auto_send,
+            message_text=payload.message_text,
+            created_by_user_id=int(current_user["id"]),
+        )
+    except ReminderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return reminder
+
+
+@router.delete("/{channel}/{user_id}/reminder")
+def clear_conversation_reminder(
+    channel: str,
+    user_id: str,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.reply")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    _assert_can_control(
+        current_user=current_user,
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    )
+
+    cleared = conversation_reminder_service.clear(
+        company_id=company_id, channel=channel, external_user_id=user_id
+    )
+
+    return {"success": True, "cleared": cleared}
 
 
 @router.post("/{channel}/{user_id}/notes")

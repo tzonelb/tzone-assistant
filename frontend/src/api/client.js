@@ -409,6 +409,36 @@ export async function deleteSavedReplyRequest(id) {
   });
 }
 
+/* ---------------------------------------------------------------- *
+ * Conversation reminders -- come back to this at a time, optionally
+ * sending a message when it arrives. One per conversation: setting a
+ * second replaces the first.
+ * ---------------------------------------------------------------- */
+export async function setConversationReminderRequest(
+  channel,
+  userId,
+  reminderAt,
+  note,
+  autoSend,
+  messageText,
+) {
+  return apiRequest(`${conversationPath(channel, userId)}/reminder`, {
+    method: "POST",
+    body: {
+      reminder_at: reminderAt,
+      note: note || null,
+      auto_send: Boolean(autoSend),
+      message_text: messageText || null,
+    },
+  });
+}
+
+export async function clearConversationReminderRequest(channel, userId) {
+  return apiRequest(`${conversationPath(channel, userId)}/reminder`, {
+    method: "DELETE",
+  });
+}
+
 /* The redesigned Tasks and Appointments screens import these from here, while
  * this platform keeps them in api/tasks.js and api/appointments.js. Re-declared
  * against the same endpoints rather than re-exported: those modules import
