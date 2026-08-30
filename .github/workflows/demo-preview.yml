@@ -3,13 +3,17 @@
 # The preview is the real frontend, built with VITE_DEMO_MODE=1 so that a small
 # module intercepts every API call and answers it from fixtures recorded off the
 # real application (tools/capture_demo_fixtures.py). There is no server behind
-# it and no data of anyone's in it -- it exists so the redesign can be looked at
-# and clicked through from a link.
+# it and nobody's data in it -- it exists so the redesign can be opened from a
+# link and clicked through.
 #
-# It enables the Pages site itself (`enablement: true` on configure-pages), so
-# nobody has to open a settings screen for the link to start working. That is
-# deliberate: this platform's rule is that shipping never requires opening a web
-# console.
+# Why it publishes by pushing a branch rather than with actions/deploy-pages:
+# the workflow's own token cannot create a Pages site. Asking it to
+# ("enablement: true" on actions/configure-pages) fails with "Create Pages site
+# failed: Resource not accessible by integration", because creating a site needs
+# repository-admin rights that GITHUB_TOKEN does not carry, whatever
+# permissions: block is written above. Pushing a branch named gh-pages does
+# enable and serve the site, and it keeps this platform's rule intact: shipping
+# never requires opening a web console.
 
 name: Demo preview
 
@@ -18,22 +22,18 @@ on:
     branches: ["claude/ui-v2-full-merge-trial", "main"]
   workflow_dispatch:
 
-# Pages needs to write the deployment; id-token is what the deploy step uses to
-# prove the artifact came from this workflow run.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# One live preview at a time. A queued run is allowed to finish rather than be
+# One live preview at a time, and a queued run finishes rather than being
 # cancelled, so the published site is never left half-replaced.
 concurrency:
   group: demo-preview
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build the preview
+  publish:
+    name: Build and publish the preview
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -46,15 +46,6 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Configure Pages
-        id: pages
-        uses: actions/configure-pages@v5
-        with:
-          # Create the Pages site on the first run instead of failing with
-          # "Pages is not enabled". This is what keeps the link working without
-          # a visit to repository settings.
-          enablement: true
-
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
@@ -63,22 +54,22 @@ jobs:
         working-directory: frontend
         env:
           VITE_DEMO_MODE: "1"
-        # base_path comes from configure-pages: "/<repo>/" for a project site,
-        # "/" for a user site, so the same workflow is correct either way.
-        run: npx vite build --base=${{ steps.pages.outputs.base_path }} --outDir dist-demo
+        # The project site is served from /<repo>/, so every asset URL has to
+        # carry that prefix and the router has to know its base.
+        run: npx vite build --base=/${{ github.event.repository.name }}/ --outDir dist-demo
 
       - name: Add the single-page fallback
         working-directory: frontend
-        # Pages serves 404.html for any path it has no file for. The router
-        # then reads the URL and renders the right screen, which is what makes
-        # a deep link like /conversations work on a static host.
+        # Pages serves 404.html for any path it has no file for. The router then
+        # reads the URL and renders the right screen, which is what makes a deep
+        # link like /conversations work on a static host. .nojekyll stops Pages
+        # from dropping the _-prefixed files a build can emit.
         run: |
           cp dist-demo/index.html dist-demo/404.html
           touch dist-demo/.nojekyll
 
-      # The preview must never carry real credentials. It is a public URL, and
-      # its fixtures were recorded from a throwaway company -- this proves that
-      # stayed true.
+      # The preview is a public URL. Its fixtures were recorded from a throwaway
+      # company, and this proves no real credential ever rides along.
       - name: No secrets in the preview bundle
         working-directory: frontend
         run: |
@@ -88,20 +79,19 @@ jobs:
           fi
           echo "No secret names found in dist-demo/."
 
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend/dist-demo
-
-  deploy:
-    name: Publish
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish to the gh-pages branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # A single-commit branch: the preview is a build artifact, so its
+        # history is noise. Force-pushing one commit keeps the repository from
+        # growing a copy of every bundle ever built.
+        run: |
+          set -euo pipefail
+          cd frontend/dist-demo
+          git init -q
+          git checkout -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Preview build from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
