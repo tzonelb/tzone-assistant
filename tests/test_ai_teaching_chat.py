@@ -293,7 +293,10 @@ def test_no_model_configured_is_refused_not_crashed(service, alpha, monkeypatch)
 
 
 def test_an_empty_message_is_refused(service, alpha, model_configured):
-    with pytest.raises(Exception):
+    """Whitespace is not a lesson, and it must not cost a model call."""
+    from backend.services.ai_teaching_chat_service import AITeachingChatError
+
+    with pytest.raises(AITeachingChatError):
         service.send_message(company_id=alpha["id"], actor_user_id=1, text="   ")
 
 
