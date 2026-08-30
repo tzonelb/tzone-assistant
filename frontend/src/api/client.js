@@ -1434,6 +1434,14 @@ export async function createScheduledPostRequest(values = {}) {
   return { items: created };
 }
 
+/* The form the create route normalises every timestamp into. The queue's due
+ * check is a plain string comparison, so a `...Z` written straight through the
+ * edit route — which has no such normalisation — would sort against `+00:00`
+ * rows on their punctuation rather than on their time. */
+function utcOffsetIso(date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, "+00:00");
+}
+
 /* "Post now" on a queue-based publisher is "due now, and approved" — the
  * sweep in `backend/workers.py` picks it up on its next pass. There is no
  * endpoint that publishes inline, and pretending otherwise would report a post
@@ -1441,7 +1449,7 @@ export async function createScheduledPostRequest(values = {}) {
 export async function publishScheduledPostNowRequest(postId) {
   await apiRequest(`/api/scheduler/${encodeURIComponent(postId)}`, {
     method: "PATCH",
-    body: { scheduled_for: new Date().toISOString() },
+    body: { scheduled_for: utcOffsetIso(new Date()) },
   });
 
   await approveScheduledPost(postId);
