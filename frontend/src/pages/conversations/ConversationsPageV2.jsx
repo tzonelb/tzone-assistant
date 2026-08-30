@@ -28,7 +28,7 @@ import "./ConversationsPageV2.css";
 // untouched and still backs the standalone `/conversations/:channel/:userId/full`
 // route (outside AppLayout, so it never gets the .tzv2-scoped design-system
 // classes ConversationDetailPageV2 relies on).
-const CHANNELS = ["all", "messenger", "whatsapp", "instagram", "telegram", "website"];
+const CHANNELS = ["all", "messenger", "whatsapp", "instagram", "telegram"];
 const FOLDERS = [
   { value: "inbox", label: "Inbox" },
   { value: "assigned_to_me", label: "Assigned to me" },

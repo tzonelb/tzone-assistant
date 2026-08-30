@@ -85,7 +85,7 @@ function TrainChat() {
 
 function TestYourAI() {
   const [message, setMessage] = useState("");
-  const [channel, setChannel] = useState("website");
+  const [channel, setChannel] = useState("messenger");
   const [department, setDepartment] = useState("");
   const [departments, setDepartments] = useState([]);
   const [testing, setTesting] = useState(false);
@@ -177,7 +177,7 @@ function ChatWithYourBot() {
     setMessages((current) => [...current, outgoing]);
     setDraft("");
     try {
-      const result = await chatWithBotRequest({ message: text, channel: "website" });
+      const result = await chatWithBotRequest({ message: text, channel: "messenger" });
       setMessages((current) => [...current, { id: `bot-${Date.now()}`, role: "assistant", text: result.reply }]);
     } catch (requestError) {
       setError(requestError.message || "The bot could not reply — try again.");

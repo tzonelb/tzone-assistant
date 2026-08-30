@@ -18,7 +18,7 @@ import "./NotificationsPageV2.css";
 // real notification_type values the company has actually received (via
 // counts.type, exactly as v1's category <select> already computed them) -
 // no category is invented that the backend doesn't actually filter by.
-const CHANNELS = ["messenger", "whatsapp", "instagram", "telegram", "website"];
+const CHANNELS = ["messenger", "whatsapp", "instagram", "telegram"];
 function isUnread(item) { return !item?.is_read && !item?.read_at; }
 function humanize(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 

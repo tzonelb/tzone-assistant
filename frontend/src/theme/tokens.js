@@ -70,7 +70,6 @@ export const CHANNELS = {
   messenger: '#1b9be0',
   instagram: '#b06ab3',
   telegram: '#2ca7e6',
-  website: '#7b8492',
 };
 
 /* ---------- type ---------- */

@@ -1,4 +1,4 @@
-export const CHANNEL_OPTIONS = ["messenger", "whatsapp", "instagram", "telegram", "website"];
+export const CHANNEL_OPTIONS = ["messenger", "whatsapp", "instagram", "telegram"];
 
 export function TagPicker({ departments, selectedDepartments, setSelectedDepartments, selectedChannels, setSelectedChannels, extraTagsInput, setExtraTagsInput }) {
   function toggle(list, setList, value) {

@@ -1,12 +1,11 @@
 import { createElement } from "react";
 
-import { FacebookOutlined, Instagram, Language, Telegram, WhatsApp } from "@mui/icons-material";
+import { FacebookOutlined, Instagram, Telegram, WhatsApp } from "@mui/icons-material";
 
 const ICONS = {
   instagram: Instagram,
   whatsapp: WhatsApp,
   telegram: Telegram,
-  website: Language,
   messenger: FacebookOutlined,
 };
 
