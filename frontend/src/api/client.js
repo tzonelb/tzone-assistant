@@ -439,6 +439,60 @@ export async function clearConversationReminderRequest(channel, userId) {
   });
 }
 
+/* ---------------------------------------------------------------- *
+ * Attachments. A multipart POST, so it does not go through apiRequest
+ * (which sets a JSON content type); the browser has to set its own
+ * boundary. Auth still travels as the session cookie, and the CSRF
+ * token is echoed the same way a JSON write echoes it.
+ * ---------------------------------------------------------------- */
+async function uploadFileRequest(path, file) {
+  const form = new FormData();
+  form.append("file", file);
+
+  const headers = { Accept: "application/json" };
+  const csrf = readCookie(CSRF_COOKIE);
+
+  if (csrf) {
+    headers["X-CSRF-Token"] = csrf;
+  }
+
+  let response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: "POST",
+      headers,
+      credentials: "include",
+      body: form,
+    });
+  } catch (error) {
+    throw new Error("The file could not be uploaded.", { cause: error });
+  }
+
+  const data = await parseResponse(response);
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      handleUnauthorized();
+    }
+
+    const error = new Error(resolveApiErrorMessage(data, response.status));
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+export async function uploadMediaRequest(file) {
+  return uploadFileRequest("/api/media/upload", file);
+}
+
+export async function uploadVoiceNoteRequest(file) {
+  return uploadFileRequest("/api/media/upload-voice-note", file);
+}
+
 /* The redesigned Tasks and Appointments screens import these from here, while
  * this platform keeps them in api/tasks.js and api/appointments.js. Re-declared
  * against the same endpoints rather than re-exported: those modules import

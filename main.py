@@ -30,6 +30,7 @@ from backend.api.routes import (
     comments,
     company_settings,
     conversation_tags,
+    media_uploads,
     saved_replies,
     conversations,
     customers,
@@ -283,6 +284,10 @@ app.include_router(conversations.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
 app.include_router(saved_replies.router, dependencies=_module("conversations"))
+app.include_router(media_uploads.router, dependencies=_module("conversations"))
+# Ungated on purpose: the channel fetching a delivered attachment has no
+# session. The 128-bit stored name is what stands in for one.
+app.include_router(media_uploads.public_router)
 app.include_router(company_settings.router, dependencies=_module("company_settings"))
 # The activity log rides with company_settings: it is read by the same
 # people, from the same screen area, under the same permission.

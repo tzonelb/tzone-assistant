@@ -6,6 +6,9 @@
 
 # --- Web framework -----------------------------------------------------
 fastapi==0.139.0
+# Multipart form parsing, which is how a browser uploads a file. FastAPI
+# refuses to start a route taking an UploadFile without it.
+python-multipart==0.0.20
 starlette==1.3.1
 uvicorn==0.49.0
 h11==0.16.0
