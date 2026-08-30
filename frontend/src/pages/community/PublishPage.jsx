@@ -161,7 +161,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
         <header className="bp-header">
           <div className="bp-header-left">
             <h3>Create Post</h3>
-            <button type="button" className="bp-tags-btn" disabled title="Post tagging isn't built yet"><LocalOfferOutlined fontSize="small" /> Tags</button>
+            <button type="button" className="bp-tags-btn" disabled title="Tagging posts isn't available yet"><LocalOfferOutlined fontSize="small" /> Tags</button>
           </div>
           <div className="bp-header-right">
             <button type="button" className={`bp-header-action ${rightPanel === "templates" ? "is-active" : ""}`} onClick={() => setRightPanel("templates")}>
@@ -343,7 +343,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                 <h4><ArticleOutlined fontSize="small" /> Templates</h4>
                 <div className="bp-preview-empty">
                   <p>Reusable post templates aren't built yet.</p>
-                  <span>This needs its own saved-template library, similar to Saved Replies — ask if you want it next.</span>
+                  <span>When it arrives, posts you write often will be saved here to reuse. For now, Saved Replies holds reusable text for conversations.</span>
                 </div>
               </>
             ) : rightPanel === "ai" ? (
@@ -351,7 +351,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                 <h4><AutoAwesomeOutlined fontSize="small" /> AI Assistant</h4>
                 <div className="bp-preview-empty">
                   <p>AI post-writing isn't wired up yet.</p>
-                  <span>T-ZONE already has a real AI pipeline (used for AI Teaching/replies) — connecting it here to draft or repurpose post text is realistic, ask if you want it next.</span>
+                  <span>The assistant writes replies in conversations today, not posts. Write your post here and it publishes exactly as you wrote it.</span>
                 </div>
               </>
             ) : (

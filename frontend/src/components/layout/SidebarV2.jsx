@@ -106,7 +106,7 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [permissionCodes, setPermissionCodes] = useState([]);
-  const { modules } = usePlatformTheme();
+  const { modules, brand } = usePlatformTheme();
   const { unreadCount } = useNotifications();
   const expanded = !collapsed || hovered;
 
@@ -160,12 +160,21 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
       >
         <div className="sidebar-v2-brand">
           <button type="button" className="sidebar-v2-collapse-toggle" onClick={onToggleCollapsed} aria-label={collapsed ? "Expand menu" : "Collapse menu"}>
-            <img src={tzoneLogo} alt="T-ZONE" className="sidebar-v2-logo" />
+            {/* The company's own mark when it has uploaded one. `brand` has
+                carried it since the workspace config was built and nothing
+                read it, so a business that had set its logo still looked at
+                the platform vendor's -- the v1 sidebar got this right and
+                the redesigned one hard-coded the import. */}
+            <img
+              src={brand?.logoUrl || tzoneLogo}
+              alt={brand?.name || companyName || "Workspace"}
+              className="sidebar-v2-logo"
+            />
           </button>
           {expanded ? (
             <div className="sidebar-v2-brand-copy">
               <span className="sidebar-v2-kicker">Workspace</span>
-              <strong>{companyName || "T-ZONE"}</strong>
+              <strong>{companyName || brand?.name || "Workspace"}</strong>
             </div>
           ) : null}
         </div>

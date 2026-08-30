@@ -41,7 +41,9 @@ export const platformDefaults = {
     platform_admin: { visible: true, label: null, order: 22 },
     theme_studio: { visible: true, label: null, order: 23 },
   },
-  brand: { name: "T-ZONE", logoUrl: "/tzone-logo.png" },
+  // null, not a path: nothing serves /tzone-logo.png. The shell falls back
+  // to the mark bundled with the app when a company has not uploaded one.
+  brand: { name: "T-ZONE", logoUrl: null },
 };
 
 /* Reading a module entry, whichever shape it arrived in.

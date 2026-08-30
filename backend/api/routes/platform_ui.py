@@ -88,9 +88,14 @@ async def get_workspace_config(
         # Which published version the tokens above came from. 0 means nobody has
         # published a theme and the interface is on the bundled defaults.
         "version": resolved["version"],
+        # `logoUrl` is null when this company has not uploaded one, rather
+        # than "/tzone-logo.png" -- a path nothing on this server serves, so
+        # every company without a logo was handed a URL that 404s. Null is a
+        # thing the interface can answer (fall back to the bundled mark); a
+        # broken URL is not.
         "brand": {
             "name": branding.get("brand_name") or "T-ZONE",
-            "logoUrl": branding.get("logo_url") or "/tzone-logo.png",
+            "logoUrl": branding.get("logo_url") or None,
         },
         "updated_at": config["updated_at"],
     }
