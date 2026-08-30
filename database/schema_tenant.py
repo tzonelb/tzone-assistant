@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 4
+TENANT_SCHEMA_VERSION = 5
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -678,6 +678,18 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "due_date": "TEXT",
         "created_by_user_id": "INTEGER",
         "closed_at": "TEXT",
+    },
+    # An internal note can name the colleagues it is for. The ids are this
+    # company's own employees, checked against the control plane before they
+    # are written (`conversation_control_service.add_note`), so a note can
+    # never carry an id belonging to somebody else's company.
+    #
+    # A JSON list rather than a join table: it is only ever read with the note
+    # that holds it and never queried across notes, and the default is the
+    # empty list, so every note written before this column existed reads back
+    # correctly the moment it arrives.
+    "conversation_notes": {
+        "mentioned_user_ids_json": "TEXT NOT NULL DEFAULT '[]'",
     },
 }
 

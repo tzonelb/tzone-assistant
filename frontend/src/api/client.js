@@ -841,16 +841,27 @@ export async function updateConversationControlRequest(
   );
 }
 
+/* The colleagues the note is for. The composer's picker resolves each `@name`
+ * to an id as it is chosen, and those ids travel with the note: a name two
+ * people answer to would otherwise be guessed at on the server, and the wrong
+ * colleague would be handed a note about a customer. The server checks every
+ * id against this company's own directory before it stores or notifies. */
 export async function addConversationNoteRequest(
   channel,
   userId,
   note,
+  mentionedUserIds = [],
 ) {
   return apiRequest(
     `${conversationPath(channel, userId)}/notes`,
     {
       method: "POST",
-      body: { note },
+      body: {
+        note,
+        mentioned_user_ids: Array.isArray(mentionedUserIds)
+          ? mentionedUserIds
+          : [],
+      },
     },
   );
 }
