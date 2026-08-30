@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   DomainOutlined,
   FactCheckOutlined,
+  LocalOfferOutlined,
   LogoutOutlined,
   MonitorHeartOutlined,
   ShieldOutlined,
@@ -15,6 +16,7 @@ import { ConsoleBanner } from "./ConsoleUI";
 
 const NAVIGATION = [
   ["companies", "Companies", DomainOutlined],
+  ["plans", "Plans", LocalOfferOutlined],
   ["admins", "Platform admins", ShieldOutlined],
   ["audit", "Audit log", FactCheckOutlined],
   ["health", "Health", MonitorHeartOutlined],

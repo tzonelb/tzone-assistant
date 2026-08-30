@@ -144,6 +144,67 @@ def test_a_plan_edit_is_written_to_the_audit_log(client, token):
     assert entry["data"]["after"] == {"max_users": 9}
 
 
+def test_a_plan_can_be_renamed_without_moving_anybody_off_it(client, token, alpha):
+    """The console's edit form sends `name` alongside the numbers.
+
+    A rename has to change what operators read and nothing else: the code is
+    what every subscription points at, so companies stay where they are.
+    """
+    client.post(
+        f"/api/platform/companies/{alpha['id']}/plan",
+        headers=_bearer(token),
+        json={"plan_code": "starter"},
+    )
+
+    response = client.patch(
+        "/api/platform/plans/starter",
+        headers=_bearer(token),
+        json={"values": {"name": "Starter (2026)"}},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["name"] == "Starter (2026)"
+    assert response.json()["code"] == "starter"
+
+    company = client.get(
+        f"/api/platform/companies/{alpha['id']}", headers=_bearer(token)
+    ).json()["company"]
+
+    assert company["plan_code"] == "starter"
+    assert company["plan_name"] == "Starter (2026)"
+
+
+def test_a_plan_created_from_the_console_can_be_assigned_immediately(
+    client, token, alpha
+):
+    """Creating a plan and putting a company on it is one operator session."""
+    client.post(
+        "/api/platform/plans",
+        headers=_bearer(token),
+        json={
+            "code": "agency",
+            "name": "Agency",
+            "values": {"max_users": 25, "voice_ai_enabled": True},
+        },
+    )
+
+    response = client.post(
+        f"/api/platform/companies/{alpha['id']}/plan",
+        headers=_bearer(token),
+        json={"plan_code": "agency"},
+    )
+
+    assert response.status_code in (200, 201), response.text
+
+    limits = client.get(
+        f"/api/platform/companies/{alpha['id']}/limits", headers=_bearer(token)
+    ).json()
+
+    assert limits["plan_code"] == "agency"
+    assert limits["limits"]["max_users"] == 25
+    assert limits["features"]["voice_ai_enabled"] is True
+
+
 # ------------------------------------------------------------------- overrides
 
 

@@ -319,6 +319,26 @@ export async function listPlansRequest() {
   return platformRequest("/api/platform/plans");
 }
 
+export async function createPlanRequest({ code, name, values = {} }) {
+  return platformRequest("/api/platform/plans", {
+    method: "POST",
+    body: { code, name, values },
+  });
+}
+
+/*
+ * Only `values`. A plan's code is what every subscription row points at by
+ * name, so the route accepts no new one and there is nothing here to send it
+ * in: renaming a code would move every company on it onto a plan that no
+ * longer exists.
+ */
+export async function updatePlanRequest(code, values) {
+  return platformRequest(`/api/platform/plans/${encodeURIComponent(code)}`, {
+    method: "PATCH",
+    body: { values },
+  });
+}
+
 export async function listPlatformAdminsRequest() {
   return platformRequest("/api/platform/admins");
 }
