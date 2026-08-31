@@ -90,3 +90,51 @@ def test_the_webhook_routes_keep_their_own_larger_cap(client):
     prefixes = BodySizeLimitMiddleware._WEBHOOK_PREFIXES
 
     assert any("meta" in p or "webhook" in p for p in prefixes), prefixes
+
+
+def test_the_body_cap_leaves_the_webhook_paths_to_their_own_check(client):
+    """The middleware must skip every mounted webhook, or it wraps a receive
+    that `read_capped_body` also consumes -- which turned the telegram webhook's
+    correct 403 into a 500 the first time the skip-list was wrong.
+
+    Derived from the app's real routes, not from a hand-kept list, so the two
+    cannot drift again.
+    """
+    import main
+    from fastapi.routing import APIRoute
+    from backend.api.middleware import BodySizeLimitMiddleware
+
+    def walk(routes):
+        for route in routes:
+            if isinstance(route, APIRoute):
+                yield route
+                continue
+            nested = getattr(route, "original_router", None) or route
+            if getattr(nested, "routes", None):
+                yield from walk(nested.routes)
+
+    webhook_paths = [
+        r.path
+        for r in walk(main.app.routes)
+        if "/webhook" in r.path.lower()
+    ]
+
+    assert webhook_paths, "no webhook routes found to check"
+
+    prefixes = BodySizeLimitMiddleware._WEBHOOK_PREFIXES
+
+    for path in webhook_paths:
+        assert path.startswith(prefixes), (
+            f"the body-cap middleware does not skip {path}, so it will wrap a "
+            "receive that read_capped_body consumes -- a 500 on a valid "
+            "delivery"
+        )
+
+
+def test_the_skipped_webhooks_still_answer_rather_than_crash(client):
+    """The regression this file caught end to end: a webhook must reach its own
+    signature check (403 with no secret) rather than 500 inside the cap."""
+    for path in ("/webhook/meta", "/webhook/whatsapp/", "/webhook/telegram/5"):
+        response = client.post(path, json={})
+
+        assert response.status_code != 500, f"{path} crashed inside the body cap"

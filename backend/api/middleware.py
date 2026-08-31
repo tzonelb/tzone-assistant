@@ -75,8 +75,17 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
 
     # Meta, WhatsApp and Telegram deliver here, and `read_capped_body` sizes
     # those against WEBHOOK_MAX_BODY_BYTES. Left to that check rather than
-    # capped twice at two different numbers.
-    _WEBHOOK_PREFIXES = ("/api/webhooks", "/webhooks", "/api/meta", "/api/whatsapp", "/api/telegram")
+    # capped twice at two different numbers -- and, more than that, this
+    # middleware MUST NOT wrap their receive at all: `read_capped_body` consumes
+    # `request.stream()`, and wrapping the receive underneath it turned the
+    # telegram webhook's correct 403 into a 500. These are the real mounted
+    # paths (see main.py), not a guess -- the first version of this list matched
+    # none of them, which is how that regression slipped in.
+    _WEBHOOK_PREFIXES = (
+        "/webhook/",
+        "/webhook",
+        "/api/dialer/webhooks",
+    )
 
     async def dispatch(self, request, call_next):
         from config.settings import config
