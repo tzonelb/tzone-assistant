@@ -18,11 +18,8 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import Sidebar from "../components/layout/Sidebar";
-import Topbar from "../components/layout/Topbar";
 import SidebarV2 from "../components/layout/SidebarV2";
 import TopbarV2 from "../components/layout/TopbarV2";
-import { isUiV2Enabled } from "../config/featureFlags";
 import "./AppLayoutV2.css";
 import { useAuth } from "../contexts/AuthContext";
 import { readNotificationPreferences } from "../utils/notificationPreferences";
@@ -175,26 +172,7 @@ function formatChannel(
 
 
 export default function AppLayout() {
-  // Which shell to render. The redesigned one is the default; a user who turned
-  // it off for their own browser keeps the previous layout. The custom event is
-  // what makes the switch take effect in the tab that made it -- localStorage's
-  // own "storage" event only fires in other tabs.
-  const [uiV2, setUiV2] = useState(isUiV2Enabled);
-
-  useEffect(() => {
-    function handleFlagChange() {
-      setUiV2(isUiV2Enabled());
-    }
-
-    window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
-    window.addEventListener("storage", handleFlagChange);
-
-    return () => {
-      window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
-      window.removeEventListener("storage", handleFlagChange);
-    };
-  }, []);
-
+  // The redesigned interface is the only one; there is no flag and no old shell.
   useEffect(() => {
     const applyAppearance = () => {
       const font = localStorage.getItem("tzone_ui_font");
@@ -611,20 +589,12 @@ export default function AppLayout() {
   const companySettingsMode = location.pathname.startsWith("/company-settings");
   const standaloneSettingsMode = companySettingsMode || location.pathname === "/settings";
 
-  const SidebarComponent = uiV2 ? SidebarV2 : Sidebar;
-  const TopbarComponent = uiV2 ? TopbarV2 : Topbar;
+  const SidebarComponent = SidebarV2;
+  const TopbarComponent = TopbarV2;
 
   return (
     <div
-      className={
-        uiV2
-          ? "tzv2 app-layout-v2"
-          : `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
-          sidebarCollapsed
-            ? "app-layout-sidebar-collapsed"
-            : ""
-        }`
-      }
+      className="tzv2 app-layout-v2"
     >
       {!standaloneSettingsMode ? <SidebarComponent
         open={sidebarOpen}
@@ -638,7 +608,7 @@ export default function AppLayout() {
         onToggleCollapsed={toggleSidebarCollapsed}
       /> : null}
 
-      <div className={uiV2 ? "app-main-v2" : "app-main"}>
+      <div className="app-main-v2">
         {!standaloneSettingsMode ? <TopbarComponent
           title={pageTitle}
           sidebarCollapsed={
@@ -828,10 +798,7 @@ export default function AppLayout() {
           </div>
         ) : null}
 
-        <main className={uiV2
-          ? `app-content-v2 ${location.pathname.startsWith("/conversations") ? "app-content-workspace-v2" : ""}`
-          : `app-content ${location.pathname.startsWith("/conversations") ? "app-content-workspace" : "app-content-scroll"}`
-        }>
+        <main className={`app-content-v2 ${location.pathname.startsWith("/conversations") ? "app-content-workspace-v2" : ""}`}>
           <Outlet />
         </main>
       </div>
