@@ -431,6 +431,27 @@ CONTROL_TABLES: tuple[str, ...] = (
         FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
     )
     """,
+    # A verification code sent to an email address during self-service
+    # sign-up. Not an identity check -- it proves somebody reached that mailbox
+    # once, which is enough to make creating workspaces in bulk tedious and is
+    # exactly why the workspace it produces is still a demonstration.
+    #
+    # The code is stored as a hash, like every other code in this schema, and
+    # `attempts` is what keeps six digits from being guessable: past the
+    # ceiling the row is dead and a new code must be requested. One row per
+    # address, so asking again replaces the last code rather than adding a
+    # second valid one.
+    """
+    CREATE TABLE IF NOT EXISTS signup_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        ip_address TEXT
+    )
+    """,
     # A code the operator issues that turns a demo workspace into a real one.
     #
     # The code itself is never stored. `code_hash` is the same pattern as
