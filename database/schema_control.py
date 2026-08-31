@@ -431,6 +431,32 @@ CONTROL_TABLES: tuple[str, ...] = (
         FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
     )
     """,
+    # A code the operator issues that turns a demo workspace into a real one.
+    #
+    # The code itself is never stored. `code_hash` is the same pattern as
+    # `auth_sessions.token_hash` and `password_reset_tokens`: the operator sees
+    # the code once, when it is minted, and a leaked control database yields
+    # nothing anyone can redeem. `used_at` and `used_by_company_id` are what
+    # make it single-use, and they are set in the same transaction that clears
+    # the company's demo flag so a code cannot be spent twice by two requests
+    # arriving together.
+    #
+    # `plan_id` is the plan the workspace lands on. Nullable: a code may simply
+    # lift the demo restriction and leave the plan to be chosen later.
+    """
+    CREATE TABLE IF NOT EXISTS activation_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code_hash TEXT NOT NULL UNIQUE,
+        plan_id INTEGER,
+        note TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        used_at TEXT,
+        used_by_company_id INTEGER,
+        FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE SET NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -452,6 +478,19 @@ CONTROL_TABLES: tuple[str, ...] = (
 # EXISTS never adds a column to a table that already exists, so an installation
 # from an earlier release would be missing them and fail at query time.
 CONTROL_COLUMNS: dict[str, dict[str, str]] = {
+    "companies": {
+        # A workspace anyone can create from the sign-up screen, carrying
+        # sample data so the platform has something to show, and forbidden from
+        # reaching a real customer until an activation code is redeemed.
+        #
+        # Defaulting to 0 is what keeps this additive: every company that
+        # existed before this column was added is a real one, which is true.
+        "is_demo": "INTEGER NOT NULL DEFAULT 0",
+        # When a code was redeemed. Kept after `is_demo` goes to 0 because
+        # "this workspace started as a trial on 3 March" is a fact the operator
+        # wants later and cannot reconstruct from a flag that is now false.
+        "activated_at": "TEXT",
+    },
     # The company's design tokens (colour, type, shape, layout) for the theme
     # the interface renders with. Additive: a company with no theme published
     # falls back to the platform defaults, so an existing install looks exactly

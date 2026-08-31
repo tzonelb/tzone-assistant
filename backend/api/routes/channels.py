@@ -20,6 +20,7 @@ from backend.services.auth_service import (
     require_permission,
 )
 from backend.services.business_department_service import business_department_service
+from backend.services.module_access import refuse_a_demonstration
 from backend.services.channel_account_service import (
     ChannelAccountError,
     ROUTING_FIELD,
@@ -171,11 +172,29 @@ def _branches(company_id: int) -> list[dict[str, Any]]:
     return [{"id": int(row["id"]), "name": row["name"]} for row in rows]
 
 
+# Connecting, editing or removing a channel account, for a workspace allowed to
+# have one at all.
+#
+# `channels.manage` says this employee may; `refuse_a_demonstration` says this
+# workspace may. They are different questions, and the second is what keeps a
+# self-service sign-up from becoming a spam relay -- see
+# `backend/services/demo_gate.py` for why the line is drawn at connecting a
+# channel rather than at sending on one.
+#
+# One object rather than the pair repeated at three routes, so a fourth write
+# route picks both up by asking for the same thing.
+def manage_context(
+    current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
+    _live: dict[str, Any] = Depends(refuse_a_demonstration),
+) -> dict[str, Any]:
+    return current_user
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_channel(
     payload: ChannelAccountCreate,
     request: Request,
-    current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
+    current_user: dict[str, Any] = Depends(manage_context),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     values = payload.model_dump(exclude={"channel", "name"})
@@ -232,7 +251,7 @@ def update_channel(
     account_id: int,
     payload: ChannelAccountUpdate,
     request: Request,
-    current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
+    current_user: dict[str, Any] = Depends(manage_context),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     values = payload.model_dump(exclude_unset=True)
@@ -291,7 +310,7 @@ def update_channel(
 def delete_channel(
     account_id: int,
     request: Request,
-    current_user: dict[str, Any] = Depends(require_permission("channels.manage")),
+    current_user: dict[str, Any] = Depends(manage_context),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     previous = channel_account_service.get_account(company_id, account_id)
