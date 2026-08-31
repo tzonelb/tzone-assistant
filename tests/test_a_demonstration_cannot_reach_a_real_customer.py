@@ -50,6 +50,7 @@ import backend.services.activity_service  # noqa: E402,F401
 import backend.services.auth_service  # noqa: E402,F401
 import backend.services.channel_account_service  # noqa: E402,F401
 import backend.services.demo_gate  # noqa: E402,F401
+import channels.credentials  # noqa: E402,F401
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -270,3 +271,74 @@ def test_an_unreadable_company_is_treated_as_a_demonstration(wired):
     assert demo_gate.is_demo(None) is True
     assert demo_gate.is_demo("not-a-company") is True
     assert demo_gate.is_demo(9_999_999) is True
+
+
+# ---------------------------------------------------------- the deepest door
+
+
+def test_a_demonstration_is_denied_the_single_company_environment_token(
+    wired, alpha, monkeypatch
+):
+    """The promise this whole file rests on, tested at the one place it leaked.
+
+    The docstring above says a workspace that cannot connect a channel cannot
+    resolve credentials by any route. There was one exception, and it is the
+    worst possible one: on an install that serves a single company and has an
+    environment access token configured -- exactly the shape of a fresh server
+    whose *first* company is a self-service demonstration --
+    ``channels.credentials.resolve`` fell back to that platform-wide token when
+    the company had no connected account of its own.
+
+    A demo has no connected account, by construction. So the sole-company demo
+    could send through the operator's own Meta page: a spam relay reaching real
+    strangers, on the operator's name, without ever passing the channel gate.
+
+    The resolver must refuse a demonstration the environment token, and
+    ``is_demo`` fails closed so an unreadable flag refuses too.
+    """
+    import pytest as _pytest
+
+    from channels.credentials import MissingChannelCredentials, resolve
+    from backend.services.channel_account_service import channel_account_service
+    from config.settings import config
+
+    # Precondition: this demo has no connected account, so only the fallback
+    # could hand it a token. If this ever seeds one, the test is testing nothing.
+    assert not (
+        channel_account_service.credentials_for(
+            company_id=alpha["id"], channel="messenger"
+        )
+        or {}
+    ).get("access_token"), "the demo already has a connected account; setup is wrong"
+
+    # A fresh single-company install with the environment token configured.
+    monkeypatch.setattr(wired, "default_company_id", lambda: alpha["id"])
+    monkeypatch.setattr(config, "META_PAGE_ACCESS_TOKEN", "ENV-PAGE-TOKEN")
+
+    _mark_demo(alpha["id"], True)
+
+    with _pytest.raises(MissingChannelCredentials):
+        resolve(alpha["id"], "messenger")
+
+
+def test_a_real_single_company_still_gets_the_environment_token(
+    wired, alpha, monkeypatch
+):
+    """The fix must not take the fallback away from the install it is for.
+
+    A single real company that has not yet migrated to a connected account is
+    exactly who the environment token is for. Once the same workspace is
+    activated, the fallback returns -- because the refusal above is about the
+    demonstration flag, not about being the only company.
+    """
+    from channels.credentials import resolve
+    from config.settings import config
+
+    monkeypatch.setattr(wired, "default_company_id", lambda: alpha["id"])
+    monkeypatch.setattr(config, "META_PAGE_ACCESS_TOKEN", "ENV-PAGE-TOKEN")
+
+    _mark_demo(alpha["id"], False)
+
+    credentials = resolve(alpha["id"], "messenger")
+
+    assert credentials["access_token"] == "ENV-PAGE-TOKEN"
