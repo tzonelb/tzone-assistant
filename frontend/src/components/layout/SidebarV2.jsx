@@ -31,6 +31,7 @@ import {
   isModuleVisible as moduleVisible,
   moduleLabel,
 } from "../../config/platformDefaults";
+import { isHiddenOnThisSurface } from "../../utils/platformSurface";
 
 // Groups match CLAUDE_CODE_UI_IMPLEMENTATION.md §2 exactly. moduleKey ties
 // each item to the Theme Studio modules_json visibility/order/label map
@@ -145,7 +146,11 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
     .map((group) => ({
       ...group,
       items: group.items.filter(([moduleKey, , , , requiredPermissions]) => (
-        isAllowed(requiredPermissions) && isModuleVisible(moduleKey)
+        isAllowed(requiredPermissions)
+        && isModuleVisible(moduleKey)
+        // Desk-only screens (the publisher, broadcast, company settings) are
+        // not carried by the phone app -- task #77.
+        && !isHiddenOnThisSurface(moduleKey)
       )),
     }))
     .filter((group) => group.items.length > 0);
