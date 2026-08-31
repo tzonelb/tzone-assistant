@@ -6,11 +6,10 @@ class Request:
         self,
         channel,
         user_id,
+        company_id,
         language=None,
         message="",
-        company_id=1,
-        workspace_id=1,
-        branch_id=1,
+        workspace_id=None,
         channel_account_id=None,
         external_conversation_id=None,
         external_message_id=None,
@@ -23,7 +22,6 @@ class Request:
     ):
         self.workspace_id = workspace_id
         self.company_id = company_id
-        self.branch_id = branch_id
 
         self.channel = channel
         self.channel_account_id = channel_account_id
@@ -51,7 +49,6 @@ class Request:
         return {
             "workspace_id": self.workspace_id,
             "company_id": self.company_id,
-            "branch_id": self.branch_id,
             "channel": self.channel,
             "channel_account_id": self.channel_account_id,
             "user_id": self.user_id,

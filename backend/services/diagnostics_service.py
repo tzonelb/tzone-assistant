@@ -1,10 +1,28 @@
+"""Small persistent event stream for Super Admin diagnostics.
+
+Deliberately independent from the customer-facing timeline: it records technical
+workflow events (webhook received, buffer started, AI sent, errors) without
+polluting the conversation audit trail.
+
+Every event belongs to exactly one company and is written to that company's own
+encrypted database. There is no platform-wide event table any more, so an event
+that arrives without a company is dropped with a warning rather than guessed
+into somebody's data.
+
+Table creation belongs to `database/schema_tenant.py` alone.
+"""
+
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
+
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -12,46 +30,7 @@ def utc_now_iso() -> str:
 
 
 class DiagnosticsService:
-    """Small persistent event stream for Super Admin diagnostics.
-
-    This is deliberately independent from the customer-facing timeline. It records
-    technical workflow events (webhook received, buffer started, AI sent, errors)
-    without polluting the conversation audit trail.
-    """
-
     RETENTION_DAYS = 14
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS diagnostic_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER,
-                    channel TEXT,
-                    external_user_id TEXT,
-                    event_type TEXT NOT NULL,
-                    severity TEXT NOT NULL DEFAULT 'info',
-                    status TEXT,
-                    duration_ms INTEGER,
-                    data_json TEXT,
-                    created_at TEXT NOT NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_diagnostic_events_company_created
-                ON diagnostic_events(company_id, created_at DESC)
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_diagnostic_events_type_created
-                ON diagnostic_events(event_type, created_at DESC)
-                """
-            )
-            conn.commit()
 
     def record(
         self,
@@ -65,13 +44,25 @@ class DiagnosticsService:
         duration_ms: int | None = None,
         data: dict[str, Any] | None = None,
     ) -> None:
-        self.ensure_schema()
         clean_type = str(event_type or "unknown").strip().lower()
         clean_severity = str(severity or "info").strip().lower()
         if clean_severity not in {"debug", "info", "warning", "error", "critical"}:
             clean_severity = "info"
 
-        with db.connect() as conn:
+        if company_id is None:
+            # There is no shared database to fall back to and choosing a company
+            # would file this event against a tenant it does not belong to.
+            logger.warning(
+                "Diagnostic event dropped: no company. type=%s severity=%s channel=%s",
+                clean_type,
+                clean_severity,
+                channel,
+            )
+            return
+
+        company_id = int(company_id)
+
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 INSERT INTO diagnostic_events (
@@ -102,8 +93,8 @@ class DiagnosticsService:
         severity: str | None = None,
         channel: str | None = None,
     ) -> list[dict[str, Any]]:
-        self.ensure_schema()
-        conditions = ["(company_id = ? OR company_id IS NULL)"]
+        company_id = int(company_id)
+        conditions = ["company_id = ?"]
         params: list[Any] = [company_id]
         if event_type:
             conditions.append("event_type = ?")
@@ -116,7 +107,7 @@ class DiagnosticsService:
             params.append(channel.strip().lower())
         params.append(max(1, min(int(limit), 500)))
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             rows = conn.execute(
                 f"""
                 SELECT * FROM diagnostic_events
@@ -139,9 +130,10 @@ class DiagnosticsService:
         return result
 
     def summary(self, *, company_id: int) -> dict[str, Any]:
-        self.ensure_schema()
+        company_id = int(company_id)
         since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
-        with db.connect() as conn:
+
+        with database_manager.tenant(company_id) as conn:
             counts = conn.execute(
                 """
                 SELECT
@@ -152,7 +144,7 @@ class DiagnosticsService:
                     SUM(CASE WHEN event_type = 'ai_buffer_scheduled' THEN 1 ELSE 0 END) AS buffered,
                     SUM(CASE WHEN event_type = 'ai_reply_sent' THEN 1 ELSE 0 END) AS ai_replies
                 FROM diagnostic_events
-                WHERE (company_id = ? OR company_id IS NULL)
+                WHERE company_id = ?
                   AND created_at >= ?
                 """,
                 (company_id, since),
@@ -161,7 +153,7 @@ class DiagnosticsService:
                 """
                 SELECT event_type, severity, status, channel, external_user_id, created_at
                 FROM diagnostic_events
-                WHERE (company_id = ? OR company_id IS NULL)
+                WHERE company_id = ?
                 ORDER BY id DESC LIMIT 1
                 """,
                 (company_id,),
@@ -179,16 +171,31 @@ class DiagnosticsService:
             "last_event": dict(last_event) if last_event else None,
         }
 
-    def cleanup(self, *, retention_days: int | None = None) -> int:
+    def cleanup(self, *, company_id: int, retention_days: int | None = None) -> int:
+        """Drop events older than the retention window for one company.
+
+        Retention is per company now: each company's events live in its own
+        database file, so there is no single table to sweep.
+        """
+        company_id = int(company_id)
         days = max(1, min(int(retention_days or self.RETENTION_DAYS), 365))
         cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        with db.connect() as conn:
+
+        with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
                 "DELETE FROM diagnostic_events WHERE created_at < ?",
                 (cutoff,),
             )
             conn.commit()
-            return int(cursor.rowcount or 0)
+            deleted = int(cursor.rowcount or 0)
+
+        logger.info(
+            "Diagnostics cleanup company id=%s retention_days=%s deleted=%s",
+            company_id,
+            days,
+            deleted,
+        )
+        return deleted
 
 
 diagnostics_service = DiagnosticsService()

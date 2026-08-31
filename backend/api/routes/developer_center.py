@@ -45,6 +45,9 @@ def cleanup_diagnostic_events(
     retention_days: int = Query(default=14, ge=1, le=365),
     context=Depends(super_admin_context),
 ):
-    _ = context
-    deleted = diagnostics_service.cleanup(retention_days=retention_days)
+    _, company_id = context
+    deleted = diagnostics_service.cleanup(
+        company_id=company_id,
+        retention_days=retention_days,
+    )
     return {"status": "ok", "deleted": deleted, "retention_days": retention_days}

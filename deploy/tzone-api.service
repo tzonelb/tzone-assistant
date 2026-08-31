@@ -1,0 +1,99 @@
+[Unit]
+Description=T-ZONE Platform API
+Documentation=file:///opt/tzone/docs/DEPLOYMENT.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+
+# Dedicated unprivileged account. Create it once with:
+#   sudo adduser --system --group --home /opt/tzone --disabled-login tzone
+User=tzone
+Group=tzone
+
+WorkingDirectory=/opt/tzone
+
+# Holds TZONE_MASTER_KEY, so it is root-owned and group-readable only:
+#   sudo install -o root -g tzone -m 640 /dev/null /etc/tzone/tzone.env
+EnvironmentFile=/etc/tzone/tzone.env
+
+# ---------------------------------------------------------------------------
+# SINGLE WORKER — DO NOT CHANGE THIS TO --workers N
+# ---------------------------------------------------------------------------
+# The application keeps per-conversation state in process memory: the message
+# collection buffer, the AI/human takeover timers and the Server-Sent Events
+# subscriber list all live inside one Python process.
+#
+# With two workers, requests for the same conversation land in different
+# processes at random. The consequences are not subtle:
+#   * a customer's buffered messages are split across workers and answered
+#     twice, or never;
+#   * an agent takes over a conversation in worker A while worker B keeps
+#     letting the AI reply to the same customer;
+#   * a dashboard connected to the SSE stream on worker A never sees events
+#     produced by worker B, so the inbox silently stops updating.
+#
+# This is a correctness limit, not a tuning knob. It can only be raised after
+# that state moves into the database or into a shared broker. Until then, one
+# worker is the configuration, and scaling means a bigger box.
+# ---------------------------------------------------------------------------
+ExecStart=/opt/tzone/venv/bin/uvicorn main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 1 \
+    --proxy-headers \
+    --forwarded-allow-ips 127.0.0.1 \
+    --timeout-keep-alive 65 \
+    --log-level info
+
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=always
+RestartSec=5
+# Do not give up on a service that is crash-looping while an operator fixes
+# the cause; keep restarting instead of entering a permanent failed state.
+StartLimitIntervalSec=0
+
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tzone-api
+
+# --- Hardening -------------------------------------------------------------
+# The process handles untrusted input from public webhooks, so it gets the
+# narrowest view of the machine that still lets it work.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RemoveIPC=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+# ProtectSystem=strict makes the whole filesystem read-only, so the two
+# directories the application genuinely writes to must be named explicitly.
+# These must match DATA_DIR and LOG_DIR in /etc/tzone/tzone.env.
+ReadWritePaths=/opt/tzone/data
+ReadWritePaths=/opt/tzone/logs
+
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

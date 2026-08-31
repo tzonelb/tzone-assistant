@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class ConversationMemory:
@@ -12,7 +12,11 @@ class ConversationMemory:
         user_session["conversation_history"].append({
             "role": role,
             "text": text,
-            "time": datetime.now().isoformat(timespec="seconds")
+            # Aware UTC, like every other timestamp on the platform. This one
+            # goes into the model's context, so a naive server-local clock
+            # would both disagree with the stored message records by the
+            # host's offset and give the model no offset to read it with.
+            "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         })
 
         user_session["conversation_history"] = user_session["conversation_history"][-10:]

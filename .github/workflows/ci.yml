@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # -------------------------------------------------------------------
+      # FRESH DATABASE BOOT TEST
+      # -------------------------------------------------------------------
+      # This job exists because the platform once could not start on a clean
+      # database: schemas were created in several places, they disagreed, and
+      # a first boot on an empty data directory failed. Every fix worked on a
+      # developer machine that already had a populated database, so nothing
+      # caught it until a real deployment did.
+      #
+      # This step reproduces the only situation that matters — a brand new
+      # master key and an empty data directory — and fails the build if the
+      # platform cannot come up in it. Do not weaken or skip this step; if it
+      # goes red, the fix is in the application, not here.
+      # -------------------------------------------------------------------
+      - name: Fresh database boot test
+        run: |
+          set -euo pipefail
+
+          export DATA_DIR="${RUNNER_TEMP}/tzone-fresh-data"
+          export LOG_DIR="${RUNNER_TEMP}/tzone-fresh-logs"
+          rm -rf "$DATA_DIR" "$LOG_DIR"
+          mkdir -p "$DATA_DIR" "$LOG_DIR"
+
+          # A key generated here and thrown away at the end of the job. It
+          # never touches a real deployment, and nothing it encrypts outlives
+          # this runner.
+          TZONE_MASTER_KEY="$(python -c 'from backend.security.keyring import generate_master_key; print(generate_master_key())')"
+          export TZONE_MASTER_KEY
+
+          echo "::group::Import the application on an empty data directory"
+          python - <<'PY'
+          import main
+
+          assert main.app is not None, "FastAPI app object was not created"
+          print("app imported:", main.app.title, main.app.version)
+          PY
+          echo "::endgroup::"
+
+          echo "::group::Preflight check on a freshly created database"
+          python -m tools.manage_platform check
+          echo "::endgroup::"
+
+          # A clean run must actually have built the control database. If the
+          # file is absent, `check` passed without doing its job.
+          test -f "$DATA_DIR/control.db" || {
+            echo "control.db was not created in $DATA_DIR"
+            exit 1
+          }
+
+          echo "::group::Provision a company from scratch"
+          python -m tools.manage_platform create-company \
+            --name "CI Test Company" \
+            --slug ci-test \
+            --workspace "CI Workspace" \
+            --owner-email owner@ci.invalid \
+            --owner-name "CI Owner" \
+            --owner-password "ci-boot-test-password"
+          python -m tools.manage_platform list-companies
+          echo "::endgroup::"
+
+          echo "::group::Preflight check with a provisioned company"
+          python -m tools.manage_platform check
+          echo "::endgroup::"
+
+          echo "::group::Backup round trip"
+          python -m tools.manage_platform backup --output "${RUNNER_TEMP}/tzone-backup"
+          echo "::endgroup::"
+
+      - name: Run tests
+        env:
+          APP_ENV: test
+        run: |
+          set -euo pipefail
+          export DATA_DIR="${RUNNER_TEMP}/tzone-test-data"
+          export LOG_DIR="${RUNNER_TEMP}/tzone-test-logs"
+          mkdir -p "$DATA_DIR" "$LOG_DIR"
+          TZONE_MASTER_KEY="$(python -c 'from backend.security.keyring import generate_master_key; print(generate_master_key())')"
+          export TZONE_MASTER_KEY
+          pytest -q
+
+      # Advisory, like the frontend one: a known-vulnerable pin should be
+      # visible in the run without blocking a merge on an advisory that has no
+      # fixed version yet.
+      - name: Dependency audit (advisory)
+        continue-on-error: true
+        run: |
+          pip install --quiet pip-audit
+          pip-audit --requirement requirements.txt
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx eslint src
+
+      - name: Build
+        run: npx vite build
+
+      # The bundle is public. Anyone who loads the application can read it, so
+      # a secret reaching it is a secret published — and minification is not a
+      # defence, it is a speed bump. This catches the mistake at the commit
+      # that makes it rather than at the disclosure that follows.
+      - name: No secrets in the built bundle
+        run: |
+          if grep -rqE 'TZONE_MASTER_KEY|SMTP_PASSWORD|OPENAI_API_KEY|META_APP_SECRET|password_hash' dist/assets/; then
+            echo "A secret-shaped string is present in the built bundle."
+            exit 1
+          fi
+          echo "No secret names found in dist/."
+
+      # Source maps hand a reader the original code with comments intact.
+      # Vite omits them by default; this fails if a future config turns them on.
+      - name: No source maps shipped
+        run: |
+          if ls dist/assets/*.map >/dev/null 2>&1; then
+            echo "Source maps are present in the production build."
+            exit 1
+          fi
+          echo "No source maps in dist/."
+
+      # Advisory: a known-vulnerable dependency should be visible in the run
+      # without blocking every merge on an advisory nobody can action today.
+      - name: Dependency audit (advisory)
+        continue-on-error: true
+        run: npm audit --audit-level=high

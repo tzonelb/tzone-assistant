@@ -1,22 +1,67 @@
-annotated-doc==0.0.4
-annotated-types==0.7.0
+# T-ZONE Platform — runtime dependencies
+#
+# Install with:  pip install -r requirements.txt
+# Verified by CI on a clean environment, because the platform previously could
+# not be installed from this file at all.
+
+# --- Web framework -----------------------------------------------------
+fastapi==0.139.0
+# Multipart form parsing, which is how a browser uploads a file. FastAPI
+# refuses to start a route taking an UploadFile without it.
+python-multipart==0.0.32
+starlette==1.3.1
+uvicorn==0.49.0
+h11==0.16.0
 anyio==4.14.1
-certifi==2026.6.17
 click==8.4.2
 colorama==0.4.6
-fastapi==0.139.0
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-idna==3.18
+
+# --- Validation --------------------------------------------------------
 pydantic==2.13.4
 pydantic_core==2.46.4
-python-dotenv==1.2.2
-python-telegram-bot==22.8
-starlette==1.3.1
+annotated-types==0.7.0
+annotated-doc==0.0.4
 typing-inspection==0.4.2
 typing_extensions==4.16.0
-uvicorn==0.49.0
+# Backs pydantic's EmailStr, used to validate the login email.
+email-validator==2.3.0
+
+# --- HTTP client -------------------------------------------------------
+# httpx is the only HTTP client. The codebase previously mixed httpx and
+# requests for the same job, and requests was missing from this file, which
+# stopped the application from importing at all on a clean install.
+httpx==0.28.1
+httpcore==1.0.9
+certifi==2026.6.17
+idna==3.18
+
+# --- Encryption --------------------------------------------------------
+# SQLCipher backs the per-company encrypted databases. The -binary wheel ships
+# a bundled SQLCipher, so no system library or compiler is needed on the VPS.
+sqlcipher3-binary==0.6.0
+# AES-GCM for wrapping each company's database key.
+cryptography==50.0.0
+
+# --- Two-factor authentication -----------------------------------------
+# TOTP, the six-digit code an authenticator app produces. Chosen over SMS
+# deliberately: an SMS code can be intercepted by a SIM swap, which is a real
+# and routine attack against exactly the kind of account this protects, and it
+# would also make the platform depend on a paid gateway to let its operator in.
+pyotp==2.10.0
+# Renders the enrolment QR as an SVG the browser draws inline. No image
+# encoder, no temporary file, and the secret never leaves the response.
+segno==1.6.6
+
+# --- Configuration -----------------------------------------------------
+python-dotenv==1.2.2
+
+# --- Channels ----------------------------------------------------------
+python-telegram-bot==22.8
+
+# --- Reports -----------------------------------------------------------
 reportlab>=4.2
 arabic-reshaper>=3.0.0
 python-bidi>=0.6.0
+
+# --- Tests -------------------------------------------------------------
+pytest==9.1.1

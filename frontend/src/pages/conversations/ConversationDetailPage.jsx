@@ -8,10 +8,7 @@ import {
 } from "react";
 
 import {
-  AttachFileOutlined,
   AutoAwesomeOutlined,
-  ImageOutlined,
-  MicNoneOutlined,
   CloseOutlined,
   ChevronLeftOutlined,
   ChevronRightOutlined,
@@ -131,18 +128,6 @@ function resolveDirection(message) {
 }
 
 
-function formatTimer(totalSeconds) {
-  const safeSeconds = Math.max(
-    0,
-    Number(totalSeconds) || 0,
-  );
-  const minutes = Math.floor(safeSeconds / 60);
-  const seconds = safeSeconds % 60;
-
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-
 function getCustomerName(metadata, control) {
   return (
     control?.official_customer_name ||
@@ -215,7 +200,7 @@ export default function ConversationDetailPage({
   const [currentUserIsAdmin, setCurrentUserIsAdmin] = useState(false);
   const [permissions, setPermissions] = useState({});
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -286,10 +271,15 @@ export default function ConversationDetailPage({
             ? controlResult.employees
             : [],
         );
+        // The company's own sections. `department_options` carries the name the
+        // company gave each one; `departments` is the same list as bare codes
+        // and is the fallback for a server that has not been updated yet.
         setDepartments(
-          Array.isArray(controlResult?.departments)
-            ? controlResult.departments
-            : [],
+          Array.isArray(controlResult?.department_options)
+            ? controlResult.department_options
+            : (Array.isArray(controlResult?.departments)
+              ? controlResult.departments.map((code) => ({ code, label: code }))
+              : []),
         );
         setCurrentUserId(
           controlResult?.current_user_id != null
@@ -448,7 +438,6 @@ export default function ConversationDetailPage({
     assignedUserId != null &&
     currentUserId != null &&
     assignedUserId === currentUserId;
-  const isHumanQueue = !aiIsHandling && assignedUserId == null;
   const isAssignedToOther = assignedUserId != null && !isAssignedToMe;
   // Server permissions are authoritative.  Never infer ownership controls
   // from locally cached assignment data because another employee may have
@@ -457,16 +446,6 @@ export default function ConversationDetailPage({
   const canManage = Boolean(permissions?.can_manage);
   const canMarkRead = Boolean(permissions?.can_mark_read);
   const canTakeOver = Boolean(permissions?.can_take_over) && !isAssignedToOther;
-  const expiryDate = control?.takeover_expires_at
-    ? new Date(control.takeover_expires_at)
-    : null;
-  const takeoverSecondsLeft =
-    expiryDate && !Number.isNaN(expiryDate.getTime())
-      ? Math.max(
-          0,
-          Math.floor((expiryDate.getTime() - Date.now()) / 1000),
-        )
-      : 0;
 
 
   const selectedDepartment = control?.department || "Unassigned";
@@ -1012,20 +991,6 @@ export default function ConversationDetailPage({
 
           <form className="conversation-composer conversation-composer-approved" onSubmit={handleSend}>
             <div className="conversation-composer-row conversation-composer-single-row">
-              <label className="composer-tool-button" title="Attach file">
-                <AttachFileOutlined />
-                <input type="file" hidden />
-              </label>
-
-              <label className="composer-tool-button" title="Attach image">
-                <ImageOutlined />
-                <input type="file" accept="image/*" hidden />
-              </label>
-
-              <button className="composer-tool-button" type="button" title="Voice note">
-                <MicNoneOutlined />
-              </button>
-
               <textarea
                 ref={composerRef}
                 value={draft}
@@ -1123,7 +1088,7 @@ export default function ConversationDetailPage({
                     onChange={(event) => handleDepartmentChange(event.target.value)}
                   >
                     {departments.map((item) => (
-                      <option value={item} key={item}>{item}</option>
+                      <option value={item.code} key={item.code}>{item.label}</option>
                     ))}
                   </select>
                 </label>

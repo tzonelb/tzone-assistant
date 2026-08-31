@@ -1,0 +1,28 @@
+{
+  "name": "tzone-theme",
+  "version": "2.0.0",
+  "description": "T-ZONE / Classical design system — tokens, stylesheets and components as JavaScript",
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./tokens": "./tokens.js",
+    "./tokens.css": "./tokens.css",
+    "./theme.css": "./theme.css",
+    "./css": "./css.js",
+    "./ui": "./ui.js",
+    "./page": "./page.js",
+    "./react": "./react.jsx",
+    "./express": "./express-adapter.js"
+  },
+  "files": ["*.js", "*.jsx", "*.css"],
+  "scripts": {
+    "build:tokens": "node build.js"
+  },
+  "peerDependencies": {
+    "react": ">=17"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  }
+}

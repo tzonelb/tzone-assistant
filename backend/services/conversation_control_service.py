@@ -1,9 +1,46 @@
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
+from backend.services.work_index_service import KIND_TAKEOVER, work_index_service
+from backend.services.business_department_service import business_department_service
+from backend.services.company_settings_service import company_settings_service
+from backend.services.notification_service import notification_service
+
+
+# What `conversations.department` holds when the conversation belongs to no
+# section yet. It is the historic default of the column and the value the inbox
+# already renders, so it stays the sentinel rather than becoming a code no
+# company defined.
+UNASSIGNED_DEPARTMENT = "Unassigned"
+
+# Timeline event names, defined where they are written.
+#
+# They used to be bare literals at both ends, and the two ends disagreed:
+# `analytics_service` counted `'human_took_over'` and `'assigned_user_changed'`
+# while this file wrote `human_takeover` and `assignment_changed`. The report
+# read zero for every company since it shipped, and a zero is exactly the kind
+# of wrong answer nobody questions.
+#
+# A constant does not prevent a typo; it makes one fail at import instead of
+# quietly returning nothing.
+EVENT_HUMAN_TAKEOVER = "human_takeover"
+EVENT_RETURNED_TO_AI = "returned_to_ai"
+EVENT_ASSIGNMENT_CHANGED = "assignment_changed"
+
+# Where a conversation's department came from, most specific first. Recorded on
+# the timeline event so an owner can see why a conversation landed where it did,
+# and used here to decide what may overwrite what: the customer's own choice
+# from the menu outranks the account default, which outranks the model's guess.
+DEPARTMENT_SOURCES = (
+    "customer_choice",
+    "channel_account",
+    "employee",
+    "ai_classification",
+)
 
 
 VALID_STATUSES = {
@@ -28,6 +65,42 @@ VALID_PRIORITIES = {
 
 DEFAULT_TAKEOVER_MINUTES = 5
 
+logger = logging.getLogger(__name__)
+
+
+def _note_takeover_deadline(company_id: int, expires_at: Any) -> None:
+    """Tell the control-plane index this company has a takeover to expire.
+
+    The takeover sweep no longer opens every company's database every ten
+    seconds looking for lapsed ones; it opens the companies this index names. A
+    takeover that is never registered is a conversation that stays with an
+    employee who has walked away, until the hourly reconcile notices.
+
+    Registered after the conversation row is committed, and never allowed to
+    raise. This is the opposite of the rule the reply queue follows, and the
+    difference is who is waiting: an unregistered reply is a customer who is
+    never answered, so the enqueue fails loudly instead. Here the employee's
+    takeover has already succeeded, and failing their request — undoing a
+    takeover they can see on their screen — to protect a timer that only ever
+    hands the conversation *back* would be the worse trade. The reconcile is
+    the backstop.
+
+    Only ever moves the deadline earlier, so an extension leaves the old entry
+    in place: the sweep opens the company once, expires nothing, and rewrites
+    the entry with the real deadline.
+    """
+    if not expires_at:
+        return
+
+    try:
+        work_index_service.note(company_id, KIND_TAKEOVER, expires_at)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "Could not register the takeover deadline for company %s; it will "
+            "be picked up by the next work index reconcile",
+            company_id,
+        )
+
 
 class ConversationOwnershipConflict(RuntimeError):
     def __init__(self, owner_user_id: int | None) -> None:
@@ -40,14 +113,14 @@ class ConversationOwnershipConflict(RuntimeError):
 def _takeover_timeout_minutes(company_id: int) -> int:
     """Return the company-configured human takeover timeout safely.
 
-    The import stays local to avoid coupling schema initialization order.
+    Falls back to the default rather than raising: a missing or malformed
+    setting must not stop a conversation being handed back to the assistant,
+    which would leave the customer waiting on nobody.
     """
     try:
-        from backend.services.company_settings_service import company_settings_service
-
         values = company_settings_service.get_section(company_id, "ai_behavior")["values"]
         value = int(values.get("return_to_ai_timeout_minutes", DEFAULT_TAKEOVER_MINUTES))
-    except (ImportError, KeyError, TypeError, ValueError):
+    except (KeyError, TypeError, ValueError):
         value = DEFAULT_TAKEOVER_MINUTES
 
     return max(1, min(1440, value))
@@ -92,381 +165,6 @@ def parse_datetime(
 
 
 class ConversationControlService:
-    def __init__(self) -> None:
-        self.ensure_schema()
-
-    @staticmethod
-    def _table_columns(
-        conn,
-        table_name: str,
-    ) -> set[str]:
-        rows = conn.execute(
-            f"""
-            PRAGMA table_info({table_name})
-            """
-        ).fetchall()
-
-        return {
-            str(row["name"])
-            for row in rows
-        }
-
-    @staticmethod
-    def _table_exists(
-        conn,
-        table_name: str,
-    ) -> bool:
-        row = conn.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table'
-              AND name = ?
-            LIMIT 1
-            """,
-            (table_name,),
-        ).fetchone()
-
-        return row is not None
-
-    @staticmethod
-    def _add_missing_columns(
-        conn,
-        table_name: str,
-        definitions: dict[str, str],
-    ) -> None:
-        existing_columns = (
-            ConversationControlService
-            ._table_columns(
-                conn,
-                table_name,
-            )
-        )
-
-        for (
-            column_name,
-            definition,
-        ) in definitions.items():
-            if column_name in existing_columns:
-                continue
-
-            conn.execute(
-                f"""
-                ALTER TABLE {table_name}
-                ADD COLUMN {column_name}
-                {definition}
-                """
-            )
-
-            existing_columns.add(
-                column_name
-            )
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            if not self._table_exists(
-                conn,
-                "conversations",
-            ):
-                conn.execute(
-                    """
-                    CREATE TABLE conversations (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id INTEGER NOT NULL,
-                        channel TEXT NOT NULL,
-                        external_user_id TEXT NOT NULL,
-                        status TEXT NOT NULL
-                            DEFAULT 'ai_handling',
-                        workflow_state TEXT NOT NULL
-                            DEFAULT 'ai_active',
-                        ai_enabled INTEGER NOT NULL
-                            DEFAULT 1,
-                        handled_by_ai INTEGER NOT NULL
-                            DEFAULT 1,
-                        priority TEXT NOT NULL
-                            DEFAULT 'normal',
-                        department TEXT
-                            DEFAULT 'Unassigned',
-                        assigned_user_id INTEGER,
-                        needs_human INTEGER NOT NULL
-                            DEFAULT 0,
-                        unread_count INTEGER NOT NULL
-                            DEFAULT 0,
-                        takeover_expires_at TEXT,
-                        human_last_reply_at TEXT,
-                        last_message_at TEXT,
-                        branch_id INTEGER,
-                        channel_account_id INTEGER,
-                        customer_alias TEXT,
-                        official_customer_name TEXT,
-                        customer_profile_picture TEXT,
-                        folder TEXT NOT NULL DEFAULT 'inbox',
-                        is_starred INTEGER NOT NULL DEFAULT 0,
-                        is_pinned INTEGER NOT NULL DEFAULT 0,
-                        tags_json TEXT NOT NULL DEFAULT '[]',
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL
-                    )
-                    """
-                )
-
-            self._add_missing_columns(
-                conn,
-                "conversations",
-                {
-                    "handled_by_ai":
-                        "INTEGER NOT NULL DEFAULT 1",
-                    "workflow_state":
-                        "TEXT NOT NULL DEFAULT 'ai_active'",
-                    "priority":
-                        "TEXT NOT NULL DEFAULT 'normal'",
-                    "department":
-                        "TEXT DEFAULT 'Unassigned'",
-                    "assigned_user_id":
-                        "INTEGER",
-                    "needs_human":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "unread_count":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "takeover_expires_at":
-                        "TEXT",
-                    "human_last_reply_at":
-                        "TEXT",
-                    "last_message_at":
-                        "TEXT",
-                    "branch_id":
-                        "INTEGER",
-                    "channel_account_id":
-                        "INTEGER",
-                    "customer_alias":
-                        "TEXT",
-                    "official_customer_name":
-                        "TEXT",
-                    "customer_profile_picture":
-                        "TEXT",
-                    "folder":
-                        "TEXT NOT NULL DEFAULT 'inbox'",
-                    "is_starred":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "is_pinned":
-                        "INTEGER NOT NULL DEFAULT 0",
-                    "tags_json":
-                        "TEXT NOT NULL DEFAULT '[]'",
-                },
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS
-                conversation_events (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    company_id INTEGER NOT NULL,
-                    actor_user_id INTEGER,
-                    event_type TEXT NOT NULL,
-                    event_data_json TEXT,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(conversation_id)
-                        REFERENCES conversations(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(actor_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS
-                conversation_notes (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    conversation_id INTEGER NOT NULL,
-                    company_id INTEGER NOT NULL,
-                    author_user_id INTEGER,
-                    note TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(conversation_id)
-                        REFERENCES conversations(id)
-                        ON DELETE CASCADE,
-                    FOREIGN KEY(author_user_id)
-                        REFERENCES users(id)
-                        ON DELETE SET NULL
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS branches (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    status TEXT NOT NULL
-                        DEFAULT 'active',
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id)
-                        REFERENCES companies(id)
-                        ON DELETE CASCADE
-                )
-                """
-            )
-
-            if not self._table_exists(
-                conn,
-                "channel_accounts",
-            ):
-                conn.execute(
-                    """
-                    CREATE TABLE channel_accounts (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        company_id INTEGER NOT NULL,
-                        branch_id INTEGER,
-                        channel_type TEXT NOT NULL,
-                        display_name TEXT NOT NULL,
-                        external_account_id TEXT,
-                        phone_number TEXT,
-                        status TEXT NOT NULL
-                            DEFAULT 'active',
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        FOREIGN KEY(company_id)
-                            REFERENCES companies(id)
-                            ON DELETE CASCADE,
-                        FOREIGN KEY(branch_id)
-                            REFERENCES branches(id)
-                            ON DELETE SET NULL
-                    )
-                    """
-                )
-            else:
-                self._add_missing_columns(
-                    conn,
-                    "channel_accounts",
-                    {
-                        "company_id":
-                            "INTEGER",
-                        "branch_id":
-                            "INTEGER",
-                        "channel_type":
-                            "TEXT",
-                        "display_name":
-                            "TEXT",
-                        "external_account_id":
-                            "TEXT",
-                        "phone_number":
-                            "TEXT",
-                        "status":
-                            "TEXT DEFAULT 'active'",
-                        "created_at":
-                            "TEXT",
-                        "updated_at":
-                            "TEXT",
-                    },
-                )
-
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS conversation_tags (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    normalized_name TEXT NOT NULL,
-                    color TEXT,
-                    status TEXT NOT NULL DEFAULT 'active',
-                    created_by_user_id INTEGER,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    UNIQUE(company_id, normalized_name),
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
-                    FOREIGN KEY(created_by_user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS
-                idx_conversations_control_lookup
-                ON conversations (
-                    company_id,
-                    channel,
-                    external_user_id
-                )
-                """
-            )
-
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS
-                idx_conversation_events_lookup
-                ON conversation_events (
-                    conversation_id,
-                    id DESC
-                )
-                """
-            )
-
-            channel_account_columns = (
-                self._table_columns(
-                    conn,
-                    "channel_accounts",
-                )
-            )
-
-            if {
-                "company_id",
-                "status",
-                "channel_type",
-            }.issubset(
-                channel_account_columns
-            ):
-                conn.execute(
-                    """
-                    CREATE INDEX IF NOT EXISTS
-                    idx_channel_accounts_company
-                    ON channel_accounts (
-                        company_id,
-                        status,
-                        channel_type
-                    )
-                    """
-                )
-
-            conn.commit()
-
-    def resolve_default_company_id(
-        self,
-    ) -> int:
-        with db.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT id
-                FROM companies
-                WHERE status = 'active'
-                ORDER BY id
-                LIMIT 1
-                """
-            ).fetchone()
-
-            if row:
-                return int(row["id"])
-
-            row = conn.execute(
-                """
-                SELECT id
-                FROM companies
-                ORDER BY id
-                LIMIT 1
-                """
-            ).fetchone()
-
-            if row:
-                return int(row["id"])
-
-        return 1
-
     @staticmethod
     def row_to_dict(
         row,
@@ -527,7 +225,22 @@ class ConversationControlService:
         company_id: int,
         channel: str,
         external_user_id: str,
+        channel_account_id: int | None = None,
     ) -> dict[str, Any]:
+        """The conversation for this customer on this channel, created if new.
+
+        ``channel_account_id`` is the account the message actually arrived on.
+        It is stored on the row because "which company" is not specific enough:
+        a company may run three Instagram accounts pointed at three different
+        sections, and without the account the chain company → channel account →
+        department → employee is broken at its second link.
+
+        A new conversation starts in the department that account feeds, when it
+        feeds one. That is the second-most-specific rule in the order the owner
+        described — only the customer's own choice from the menu outranks it —
+        and it is applied at creation so the very first message is already in
+        the right queue rather than waiting for the model to guess.
+        """
         normalized_channel = (
             channel.strip().lower()
         )
@@ -536,7 +249,13 @@ class ConversationControlService:
             external_user_id.strip()
         )
 
-        with db.connect() as conn:
+        account_id = (
+            int(channel_account_id)
+            if channel_account_id is not None
+            else None
+        )
+
+        with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 """
                 SELECT *
@@ -555,11 +274,36 @@ class ConversationControlService:
             ).fetchone()
 
             if row:
+                # An existing conversation predating this column, or one created
+                # before the account was known, is filled in rather than left
+                # blank — but never re-pointed, because a conversation belongs
+                # to the account it started on.
+                if account_id is not None and row["channel_account_id"] is None:
+                    conn.execute(
+                        """
+                        UPDATE conversations
+                        SET channel_account_id = ?, updated_at = ?
+                        WHERE id = ? AND company_id = ?
+                        """,
+                        (account_id, utc_now_iso(), row["id"], company_id),
+                    )
+                    conn.commit()
+
+                    row = conn.execute(
+                        "SELECT * FROM conversations WHERE id = ?",
+                        (row["id"],),
+                    ).fetchone()
+
                 return self.row_to_dict(
                     row
                 )
 
             now = utc_now_iso()
+
+            default_department = business_department_service.for_channel_account(
+                company_id=company_id,
+                channel_account_id=account_id,
+            )
 
             cursor = conn.execute(
                 """
@@ -567,12 +311,14 @@ class ConversationControlService:
                     company_id,
                     channel,
                     external_user_id,
+                    channel_account_id,
                     status,
                     workflow_state,
                     ai_enabled,
                     handled_by_ai,
                     priority,
                     department,
+                    department_id,
                     needs_human,
                     unread_count,
                     last_message_at,
@@ -583,12 +329,14 @@ class ConversationControlService:
                     ?,
                     ?,
                     ?,
+                    ?,
                     'ai_handling',
                     'ai_active',
                     1,
                     1,
                     'normal',
-                    'Unassigned',
+                    ?,
+                    ?,
                     0,
                     0,
                     ?,
@@ -600,6 +348,13 @@ class ConversationControlService:
                     company_id,
                     normalized_channel,
                     normalized_user_id,
+                    account_id,
+                    (
+                        default_department["code"]
+                        if default_department
+                        else UNASSIGNED_DEPARTMENT
+                    ),
+                    default_department["id"] if default_department else None,
                     now,
                     now,
                     now,
@@ -680,84 +435,94 @@ class ConversationControlService:
 
     def expire_overdue_takeovers(
         self,
+        company_id: int,
     ) -> int:
+        """Hand conversations back to the assistant once a takeover lapses.
+
+        The UPDATE re-checks the exact expiry it read. Without that guard, an
+        employee who takes the conversation over in the moment between the read
+        and the write has it silently taken away from them again — a race that
+        was reachable because this ran on nearly every read.
+        """
         current_time = utc_now()
         expired_count = 0
 
-        with db.connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT *
-                FROM conversations
-                WHERE handled_by_ai = 0
-                  AND takeover_expires_at IS NOT NULL
-                """
-            ).fetchall()
+        with database_manager.tenant(company_id) as conn:
+            conn.execute("BEGIN IMMEDIATE")
 
-            for row in rows:
-                state = self.row_to_dict(
-                    row
-                )
-
-                expiry = parse_datetime(
-                    state.get(
-                        "takeover_expires_at"
-                    )
-                )
-
-                if (
-                    expiry is None
-                    or current_time < expiry
-                ):
-                    continue
-
-                conn.execute(
+            try:
+                rows = conn.execute(
                     """
-                    UPDATE conversations
-                    SET
-                        handled_by_ai = 1,
-                        ai_enabled = 1,
-                        status = 'ai_handling',
-                        workflow_state =
-                            CASE
-                                WHEN unread_count > 0 THEN 'waiting_ai'
-                                ELSE 'ai_active'
-                            END,
-                        needs_human = 0,
-                        takeover_expires_at = NULL,
-                        assigned_user_id = NULL,
-                        updated_at = ?
-                    WHERE id = ?
+                    SELECT *
+                    FROM conversations
+                    WHERE company_id = ?
+                      AND handled_by_ai = 0
+                      AND takeover_expires_at IS NOT NULL
                     """,
-                    (
-                        utc_now_iso(),
-                        state["id"],
-                    ),
-                )
+                    (company_id,),
+                ).fetchall()
 
-                self.insert_event(
-                    conn=conn,
-                    conversation_id=(
-                        state["id"]
-                    ),
-                    company_id=(
-                        state["company_id"]
-                    ),
-                    actor_user_id=None,
-                    event_type=(
-                        "automatically_returned_to_ai"
-                    ),
-                    data={
-                        "reason":
-                            "employee_response_timeout",
-                        "timeout_minutes":
-                            _takeover_timeout_minutes(int(state["company_id"])),
-                    },
-                )
+                for row in rows:
+                    state = self.row_to_dict(row)
+                    stored_expiry = state.get("takeover_expires_at")
+                    expiry = parse_datetime(stored_expiry)
 
-                expired_count += 1
+                    if expiry is None or current_time < expiry:
+                        continue
 
-            conn.commit()
+                    cursor = conn.execute(
+                        """
+                        UPDATE conversations
+                        SET
+                            handled_by_ai = 1,
+                            ai_enabled = 1,
+                            status = 'ai_handling',
+                            workflow_state =
+                                CASE
+                                    WHEN unread_count > 0 THEN 'waiting_ai'
+                                    ELSE 'ai_active'
+                                END,
+                            needs_human = 0,
+                            takeover_expires_at = NULL,
+                            assigned_user_id = NULL,
+                            updated_at = ?
+                        WHERE id = ?
+                          AND company_id = ?
+                          AND handled_by_ai = 0
+                          AND takeover_expires_at = ?
+                        """,
+                        (
+                            utc_now_iso(),
+                            state["id"],
+                            company_id,
+                            stored_expiry,
+                        ),
+                    )
+
+                    if cursor.rowcount != 1:
+                        # Someone changed this conversation first. Their change
+                        # wins; expiring it now would undo a live takeover.
+                        continue
+
+                    self.insert_event(
+                        conn=conn,
+                        conversation_id=state["id"],
+                        company_id=company_id,
+                        actor_user_id=None,
+                        event_type="automatically_returned_to_ai",
+                        data={
+                            "reason": "employee_response_timeout",
+                            "timeout_minutes": _takeover_timeout_minutes(company_id),
+                        },
+                    )
+
+                    expired_count += 1
+
+                conn.commit()
+
+            except Exception:
+                conn.rollback()
+                raise
 
         return expired_count
 
@@ -767,8 +532,9 @@ class ConversationControlService:
         channel: str,
         external_user_id: str,
     ) -> dict[str, Any]:
-        self.expire_overdue_takeovers()
-
+        # Expiry is handled by the background worker. Running a full sweep on
+        # every read made a single inbox page issue one table scan per
+        # conversation shown.
         return self.get_or_create(
             company_id=company_id,
             channel=channel,
@@ -824,7 +590,7 @@ class ConversationControlService:
                 + timedelta(minutes=_takeover_timeout_minutes(company_id))
             ).isoformat()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             current = conn.execute(
                 """
@@ -918,7 +684,7 @@ class ConversationControlService:
                 conversation_id=int(state["id"]),
                 company_id=company_id,
                 actor_user_id=actor_user_id,
-                event_type="returned_to_ai" if handled_by_ai else "human_takeover",
+                event_type=EVENT_RETURNED_TO_AI if handled_by_ai else EVENT_HUMAN_TAKEOVER,
                 data={
                     "from": old_status,
                     "to": new_status,
@@ -927,11 +693,67 @@ class ConversationControlService:
             )
             conn.commit()
 
+        # Handing a conversation back to the assistant clears the deadline
+        # instead of setting one, and the stale entry is cleared by the sweep
+        # that next opens this company.
+        if not handled_by_ai:
+            _note_takeover_deadline(company_id, expires_at)
+            self._notify_takeover(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=external_user_id,
+                conversation_id=int(state["id"]),
+                actor_user_id=actor_user_id,
+            )
+
         return self.get_state(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
         )
+
+    @staticmethod
+    def _notify_takeover(
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        conversation_id: int,
+        actor_user_id: int,
+    ) -> None:
+        """Tell the team a colleague has taken a conversation off the assistant.
+
+        `notify_on_handover` has been stored in every company's database since
+        the settings shipped, and no notification of that kind has ever existed
+        — the preference offered to switch off something nothing raised. The
+        takeover itself was recorded as a conversation event, which is the
+        history of one conversation rather than something anybody is told.
+
+        Raised after the commit, so a takeover that lost its race for the
+        conversation does not announce itself. Never raises: a bell entry must
+        not be able to undo a handover that already happened.
+        """
+        try:
+            notification_service.create(
+                company_id=company_id,
+                notification_type="handover",
+                title="A conversation was taken over",
+                body=None,
+                channel=channel,
+                external_user_id=external_user_id,
+                conversation_id=conversation_id,
+                actor_user_id=actor_user_id,
+                severity="info",
+                # One entry per takeover of this conversation by this person.
+                # Toggling back and forth should not ring the bell twice for
+                # what the team already knows.
+                dedupe_key=f"handover:{conversation_id}:{actor_user_id}",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not raise a handover notification for company %s",
+                company_id,
+            )
 
     def record_opened(
         self,
@@ -953,7 +775,7 @@ class ConversationControlService:
         if state.get("assigned_user_id") != actor_user_id:
             return state
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
                 """
@@ -1036,7 +858,7 @@ class ConversationControlService:
             external_user_id=external_user_id,
         )
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
 
             fresh = conn.execute(
@@ -1097,6 +919,11 @@ class ConversationControlService:
 
             conn.commit()
 
+        # A renewal only ever pushes the deadline out, so this is normally a
+        # no-op. It is here for the case where the entry was lost: a renewed
+        # takeover is still a takeover somebody has to expire.
+        _note_takeover_deadline(company_id, expires_at)
+
         return self.get_state(
             company_id=company_id,
             channel=channel,
@@ -1124,7 +951,7 @@ class ConversationControlService:
         release_expiry = (
             utc_now() + timedelta(minutes=_takeover_timeout_minutes(company_id))
         ).isoformat()
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             if force:
                 cursor = conn.execute(
@@ -1185,6 +1012,12 @@ class ConversationControlService:
                 data={"from_user_id": actor_user_id},
             )
             conn.commit()
+
+        # A released conversation is still human-held: it waits for another
+        # employee and returns to the assistant on the same timer, so it has to
+        # stay in the sweep's list.
+        _note_takeover_deadline(company_id, release_expiry)
+
         return self.get_state(company_id, channel, external_user_id)
 
     def record_employee_reply(
@@ -1202,7 +1035,7 @@ class ConversationControlService:
             utc_now() + timedelta(minutes=_takeover_timeout_minutes(company_id))
         ).isoformat()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute("BEGIN IMMEDIATE")
             cursor = conn.execute(
                 """
@@ -1245,6 +1078,9 @@ class ConversationControlService:
                 },
             )
             conn.commit()
+
+        _note_takeover_deadline(company_id, next_expiry)
+
         return self.get_state(company_id, channel, external_user_id)
 
     def seconds_until_ai_return(
@@ -1276,7 +1112,7 @@ class ConversationControlService:
             channel=channel,
             external_user_id=external_user_id,
         )
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1309,7 +1145,7 @@ class ConversationControlService:
             channel=channel,
             external_user_id=external_user_id,
         )
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1352,7 +1188,7 @@ class ConversationControlService:
             channel=channel,
             external_user_id=external_user_id,
         )
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1370,6 +1206,165 @@ class ConversationControlService:
             )
             conn.commit()
         return self.get_or_create(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+        )
+
+    def resolve_department(
+        self,
+        company_id: int,
+        code: Any,
+    ) -> dict[str, Any] | None:
+        """The company's own department carrying this code, or ``None``.
+
+        The one vocabulary is ``business_departments.code``. Everything that
+        names a department — the model's answer, a menu press, an inbox
+        ``PATCH`` — is resolved through here, so a code this company never
+        defined resolves to nothing instead of being written to the row.
+        """
+        if not company_id or not code:
+            return None
+
+        text = str(code).strip()
+
+        if not text or text == UNASSIGNED_DEPARTMENT:
+            return None
+
+        try:
+            return business_department_service.find_by_code(
+                company_id=int(company_id),
+                code=text,
+            )
+        except Exception:  # noqa: BLE001
+            # Runs on the customer reply path: a department table that will not
+            # open costs the conversation its routing, never its answer.
+            return None
+
+    def find_state(
+        self,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+    ) -> dict[str, Any] | None:
+        """This conversation, or ``None`` — never created.
+
+        ``get_state`` creates on miss, which is right on the inbound path and
+        wrong everywhere else. The reply engine must be able to record a routing
+        decision without conjuring a conversation, so that the assistant preview
+        — which runs the real engine under a synthetic customer id — still
+        writes nothing to the company's database.
+        """
+        with database_manager.tenant(int(company_id)) as conn:
+            row = conn.execute(
+                """
+                SELECT *
+                FROM conversations
+                WHERE company_id = ?
+                  AND channel = ?
+                  AND external_user_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (
+                    int(company_id),
+                    str(channel).strip().lower(),
+                    str(external_user_id).strip(),
+                ),
+            ).fetchone()
+
+        return self.row_to_dict(row) if row else None
+
+    def assign_department(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        code: Any,
+        source: str,
+        actor_user_id: int | None = None,
+        only_if_unassigned: bool = False,
+    ) -> dict[str, Any] | None:
+        """Persist which of this company's sections a conversation belongs to.
+
+        This is the step that was missing. The assistant classified into
+        ``core/session.py``, which is in-process and gone on the next restart,
+        while the column an employee reads was written only by hand — so the
+        customer who picked "Bookings" from the menu was in no department at
+        all as far as anything durable was concerned.
+
+        ``only_if_unassigned`` expresses the order the owner asked for. The
+        customer's own choice and an employee's transfer are written
+        unconditionally; the model's classification is written only when nothing
+        more specific has claimed the conversation, so a guess can never
+        displace a choice.
+
+        A code this company did not define is ignored rather than stored: it
+        would be a department nothing can route to and nobody can filter on.
+
+        A conversation that does not exist is left alone rather than created.
+        By the time a reply is being composed, the inbound path has already
+        recorded the conversation; anything reaching here without one is not a
+        real customer — the assistant preview runs the whole engine under a
+        synthetic id — and must not leave a row behind.
+        """
+        state = self.find_state(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+        )
+
+        if state is None:
+            return None
+
+        if only_if_unassigned and state.get("department_id") is not None:
+            return state
+
+        department = self.resolve_department(company_id, code)
+
+        if not department:
+            return state
+
+        if state.get("department_id") == department["id"]:
+            return state
+
+        with database_manager.tenant(company_id) as conn:
+            conn.execute(
+                """
+                UPDATE conversations
+                SET department_id = ?,
+                    department = ?,
+                    updated_at = ?
+                WHERE id = ? AND company_id = ?
+                """,
+                (
+                    department["id"],
+                    department["code"],
+                    utc_now_iso(),
+                    state["id"],
+                    company_id,
+                ),
+            )
+
+            self.insert_event(
+                conn=conn,
+                conversation_id=state["id"],
+                company_id=company_id,
+                actor_user_id=actor_user_id,
+                event_type="department_changed",
+                data={
+                    "field": "department",
+                    "from": state.get("department"),
+                    "to": department["code"],
+                    "department_id": department["id"],
+                    "source": source if source in DEPARTMENT_SOURCES else "unknown",
+                },
+            )
+
+            conn.commit()
+
+        return self.find_state(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
@@ -1412,6 +1407,22 @@ class ConversationControlService:
             raise ValueError(
                 "Invalid conversation priority."
             )
+
+        # The backend is authoritative about the vocabulary too. The inbox
+        # checks this as well, so the employee gets a field-level message rather
+        # than a 500; checking it again here is what stops any other caller from
+        # writing a department the company never defined.
+        chosen_department = None
+
+        if department is not None and department != UNASSIGNED_DEPARTMENT:
+            chosen_department = self.resolve_department(company_id, department)
+
+            if not chosen_department:
+                raise ValueError(
+                    "That department does not belong to this company."
+                )
+
+            department = chosen_department["code"]
 
         requested_changes = {
             "status": status,
@@ -1461,7 +1472,7 @@ class ConversationControlService:
                 "assignment_changed",
         }
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             # SECURITY FIX (Patch 9.1): all writes to this conversation row
             # now happen inside a single BEGIN IMMEDIATE transaction, same
             # locking discipline as set_ai_mode()/take_over(), so a second
@@ -1508,6 +1519,11 @@ class ConversationControlService:
                 # instead of looking like a silent/normal reassignment.
                 admin_override = is_admin and is_reassign_away_from_someone_else
 
+            # Assigning a conversation to an employee is a takeover, and starts
+            # the same return-to-assistant timer. Kept here so it can be
+            # registered with the work index after the commit below.
+            takeover_expiry: str | None = None
+
             for (
                 field_name,
                 _,
@@ -1518,6 +1534,7 @@ class ConversationControlService:
                         utc_now()
                         + timedelta(minutes=_takeover_timeout_minutes(company_id))
                     ).isoformat()
+                    takeover_expiry = expires_at
                     conn.execute(
                         """
                         UPDATE conversations
@@ -1535,6 +1552,33 @@ class ConversationControlService:
                         (
                             new_value,
                             expires_at,
+                            utc_now_iso(),
+                            state["id"],
+                            company_id,
+                        ),
+                    )
+                elif field_name == "department":
+                    # Both columns move together. The text column is what the
+                    # inbox filter and every export already read; the id is the
+                    # link the rest of the chain routes on. Letting them drift
+                    # would mean a conversation that reads as transferred on
+                    # the screen and unassigned to the engine.
+                    conn.execute(
+                        """
+                        UPDATE conversations
+                        SET department = ?,
+                            department_id = ?,
+                            updated_at = ?
+                        WHERE id = ?
+                          AND company_id = ?
+                        """,
+                        (
+                            new_value,
+                            (
+                                chosen_department["id"]
+                                if chosen_department
+                                else None
+                            ),
                             utc_now_iso(),
                             state["id"],
                             company_id,
@@ -1586,6 +1630,8 @@ class ConversationControlService:
                 )
 
             conn.commit()
+
+        _note_takeover_deadline(company_id, takeover_expiry)
 
         return self.get_state(
             company_id=company_id,
@@ -1704,7 +1750,7 @@ class ConversationControlService:
         if not updates:
             return state
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             for field_name, old_value, new_value, event_type in updates:
                 stored_value = new_value
                 if field_name in {"is_starred", "is_pinned"}:
@@ -1760,18 +1806,20 @@ class ConversationControlService:
         external_user_id: str,
         official_customer_name: str | None = None,
         customer_profile_picture: str | None = None,
+        channel_account_id: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_or_create(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
+            channel_account_id=channel_account_id,
         )
 
         old_folder = state.get("folder", "inbox")
         old_unread = int(state.get("unread_count", 0) or 0)
         now = utc_now_iso()
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 UPDATE conversations
@@ -1812,6 +1860,45 @@ class ConversationControlService:
             external_user_id=external_user_id,
         )
 
+    @staticmethod
+    def _employees_of(company_id: int) -> list[int]:
+        """The ids of this company's active employees, from the control plane.
+
+        The single answer to "may this note name that person?". A mentioned id
+        arrives in a request body, and an id in a request body is a global
+        number that says nothing about who owns it — so it is checked here
+        against the company the caller actually belongs to, before it is
+        stored and before anyone is told about it.
+        """
+        from backend.services.auth_service import auth_service
+
+        try:
+            employees = auth_service.company_employees(int(company_id))
+        except Exception:  # noqa: BLE001
+            # A directory that will not load is a reason to name nobody, not a
+            # reason to trust the list that arrived.
+            logger.exception(
+                "Could not read the employee directory of company %s", company_id
+            )
+            return []
+
+        return [int(employee["id"]) for employee in employees]
+
+    @staticmethod
+    def _decode_note(row: Any) -> dict[str, Any]:
+        note = dict(row)
+
+        try:
+            note["mentioned_user_ids"] = json.loads(
+                note.get("mentioned_user_ids_json") or "[]"
+            )
+        except (TypeError, ValueError):
+            note["mentioned_user_ids"] = []
+
+        note.pop("mentioned_user_ids_json", None)
+
+        return note
+
     def add_note(
         self,
         company_id: int,
@@ -1819,6 +1906,7 @@ class ConversationControlService:
         external_user_id: str,
         author_user_id: int,
         note: str,
+        mentioned_user_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         clean_note = note.strip()
 
@@ -1835,7 +1923,29 @@ class ConversationControlService:
             ),
         )
 
-        with db.connect() as conn:
+        # Resolved before the tenant connection opens: this reads the control
+        # database, and a control read issued from inside an open tenant write
+        # is the stall `DatabaseManager.after_release` documents.
+        #
+        # An id the picker never offered — one belonging to another company's
+        # employee, or to somebody whose account has been disabled — is dropped
+        # rather than refused, exactly as a mention typed at a name nobody
+        # answers to is dropped. It is not stored and nobody is notified, so a
+        # forged id reaches neither the note nor a stranger's bell.
+        valid_mentions: list[int] = []
+
+        if mentioned_user_ids:
+            allowed = set(self._employees_of(company_id))
+            for value in mentioned_user_ids:
+                try:
+                    candidate = int(value)
+                except (TypeError, ValueError):
+                    continue
+
+                if candidate in allowed and candidate not in valid_mentions:
+                    valid_mentions.append(candidate)
+
+        with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO conversation_notes (
@@ -1843,15 +1953,17 @@ class ConversationControlService:
                     company_id,
                     author_user_id,
                     note,
+                    mentioned_user_ids_json,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     state["id"],
                     company_id,
                     author_user_id,
                     clean_note,
+                    json.dumps(valid_mentions),
                     utc_now_iso(),
                 ),
             )
@@ -1878,27 +1990,134 @@ class ConversationControlService:
             conn.commit()
 
             row = conn.execute(
-                """
-                SELECT
-                    conversation_notes.*,
-                    COALESCE(
-                        users.full_name,
-                        users.email,
-                        'Unknown user'
-                    ) AS author_name
-                FROM conversation_notes
-                LEFT JOIN users
-                    ON users.id =
-                       conversation_notes.author_user_id
-                WHERE conversation_notes.id = ?
-                """,
+                "SELECT * FROM conversation_notes WHERE id = ?",
                 (note_id,),
             ).fetchone()
 
-        return dict(row)
+        # The author's name comes from the control database, in a second
+        # query. It cannot come from a join: `users` is not in this file.
+        # SQLite does not return an empty result for an unknown table, it
+        # raises `no such table: users` — so `LEFT JOIN users` here did not
+        # quietly resolve to nothing, it made adding a note to a conversation
+        # fail outright, every time, for every company.
+        note = self._decode_note(row)
+        note["author_name"] = self._author_names(
+            company_id, [note.get("author_user_id")]
+        ).get(note.get("author_user_id"), "Unknown user")
+
+        self._notify_note_mentions(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+            conversation_id=int(state["id"]),
+            note_id=int(note_id),
+            note_text=clean_note,
+            author_user_id=author_user_id,
+            author_name=note.get("author_name"),
+            mentioned_user_ids=valid_mentions,
+        )
+
+        return note
+
+    @staticmethod
+    def _notify_note_mentions(
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        conversation_id: int,
+        note_id: int,
+        note_text: str,
+        author_user_id: int | None,
+        author_name: str | None,
+        mentioned_user_ids: list[int],
+    ) -> int:
+        """Tell each named colleague, and never the person who named them.
+
+        Writing your own name in your own note is not a message to yourself,
+        so the author is skipped — the same rule team chat's `_notify_mentions`
+        already applies to a channel message.
+
+        A notification that fails must not lose the note. It is already
+        committed by the time this runs, and an employee is better served by a
+        note that saved with one bell missing than by an error on a note that
+        did save.
+        """
+        sent = 0
+        label = author_name or "A colleague"
+
+        for user_id in mentioned_user_ids:
+            if author_user_id is not None and int(user_id) == int(author_user_id):
+                continue
+
+            try:
+                notification_service.create(
+                    company_id=int(company_id),
+                    notification_type="conversation_mention",
+                    title=f"{label} mentioned you in a note",
+                    body=note_text[:500],
+                    recipient_user_id=int(user_id),
+                    channel=channel,
+                    external_user_id=external_user_id,
+                    conversation_id=conversation_id,
+                    actor_user_id=author_user_id,
+                    severity="info",
+                    data={"note_id": note_id},
+                    dedupe_key=(
+                        f"conversation_mention:{company_id}:{note_id}:{user_id}"
+                    ),
+                )
+                sent += 1
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Mention notification failed company id=%s note id=%s user id=%s",
+                    company_id,
+                    note_id,
+                    user_id,
+                )
+
+        return sent
+
+    @staticmethod
+    def _author_names(company_id: int, user_ids) -> dict[int, str]:
+        """Resolve employee names from the control database, in one query.
+
+        Conversations live in the company's own encrypted file and `users` does
+        not, so a name cannot be joined — it has to be looked up. This is the
+        pattern `auth_service.user_display_names` exists for, and the same one
+        the inbox already uses to label a page of conversations.
+
+        Three queries in this file did it with `LEFT JOIN users` instead. That
+        is not a join that quietly returns nothing: SQLite raises
+        `no such table: users`, so the conversation timeline, the export and
+        adding an internal note all failed outright — for every company, on
+        every call, since they were written. Nothing noticed, because nothing
+        called them in a test.
+
+        Names are resolved company-scoped, so an id belonging to another
+        company resolves to nothing rather than to a stranger's name.
+        """
+        from backend.services.auth_service import auth_service
+
+        wanted = [int(value) for value in user_ids if value]
+
+        if not wanted:
+            return {}
+
+        try:
+            return auth_service.user_display_names(int(company_id), wanted)
+        except Exception:  # noqa: BLE001
+            # A timeline that cannot name an actor is still a timeline worth
+            # showing. Failing here would take the whole conversation panel
+            # away over a control-plane hiccup.
+            logger.exception(
+                "Could not resolve employee names for company %s", company_id
+            )
+
+            return {}
 
     def list_tags(self, company_id: int) -> list[dict[str, Any]]:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             rows = conn.execute(
                 """
                 SELECT id, name, color, status, created_at, updated_at
@@ -1922,7 +2141,7 @@ class ConversationControlService:
             raise ValueError("Tag name is required.")
         normalized = clean.casefold()
         now = utc_now_iso()
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """
                 INSERT INTO conversation_tags (
@@ -1949,7 +2168,7 @@ class ConversationControlService:
         clean = str(name or "").strip()[:50]
         if not clean:
             raise ValueError("Tag name is required.")
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             conn.execute(
                 """UPDATE conversation_tags
                    SET name = ?, normalized_name = ?, color = ?, updated_at = ?
@@ -1999,29 +2218,31 @@ class ConversationControlService:
         company_id: int,
         channel: str,
         external_user_id: str,
-    ) -> dict[str, Any]:
-        state = self.get_state(
+    ) -> dict[str, Any] | None:
+        # `find_state`, not `get_state`. `get_state` is `get_or_create`, which
+        # is right on the inbound path — a customer's first message has to be
+        # able to start a conversation — and wrong on a read. Opening the
+        # control panel for a conversation that does not exist created one, so
+        # any employee holding `conversations.view` could add a row to the
+        # company's database by putting arbitrary text in a URL, as often as
+        # they cared to reload. A GET that writes is also a GET that a crawler,
+        # a link preview or a retried request performs with nobody deciding to.
+        state = self.find_state(
             company_id=company_id,
             channel=channel,
-            external_user_id=(
-                external_user_id
-            ),
+            external_user_id=external_user_id,
         )
 
-        with db.connect() as conn:
+        if state is None:
+            # A conversation that does not exist has no timeline. Returning
+            # `None` rather than raising leaves the HTTP layer to decide the
+            # status, which is where that decision belongs.
+            return None
+
+        with database_manager.tenant(company_id) as conn:
             event_rows = conn.execute(
                 """
-                SELECT
-                    conversation_events.*,
-                    COALESCE(
-                        users.full_name,
-                        users.email,
-                        'System'
-                    ) AS actor_name
-                FROM conversation_events
-                LEFT JOIN users
-                    ON users.id =
-                       conversation_events.actor_user_id
+                SELECT * FROM conversation_events
                 WHERE conversation_id = ?
                   AND conversation_events.company_id = ?
                 ORDER BY conversation_events.id DESC
@@ -2035,17 +2256,7 @@ class ConversationControlService:
 
             note_rows = conn.execute(
                 """
-                SELECT
-                    conversation_notes.*,
-                    COALESCE(
-                        users.full_name,
-                        users.email,
-                        'Unknown user'
-                    ) AS author_name
-                FROM conversation_notes
-                LEFT JOIN users
-                    ON users.id =
-                       conversation_notes.author_user_id
+                SELECT * FROM conversation_notes
                 WHERE conversation_id = ?
                   AND conversation_notes.company_id = ?
                 ORDER BY conversation_notes.id DESC
@@ -2066,6 +2277,11 @@ class ConversationControlService:
             "folder_changed",
             "conversation_starred",
             "conversation_unstarred",
+            # Written by `set_pinned` and absent from this list, so pinning a
+            # conversation recorded an event the timeline then filtered out.
+            # The row was there; nobody could ever see it.
+            "conversation_pinned",
+            "conversation_unpinned",
             "tags_changed",
             "human_takeover",
             "conversation_released",
@@ -2080,12 +2296,25 @@ class ConversationControlService:
             "admin_override_assignment",
         }
 
+        # Every name on this page in one control-plane query rather than one
+        # per row — the same reason the inbox resolves a whole page of names at
+        # once, and the reason a join here was never an option.
+        names = self._author_names(
+            company_id,
+            [row["actor_user_id"] for row in event_rows]
+            + [row["author_user_id"] for row in note_rows],
+        )
+
         events: list[dict[str, Any]] = []
         previous_fingerprint: tuple[str, str] | None = None
         previous_created_at: datetime | None = None
 
         for row in event_rows:
             event = self.serialize_event(row)
+            actor_id = event.get("actor_user_id")
+
+            if actor_id:
+                event["actor_name"] = names.get(int(actor_id)) or "System"
             event_type = str(event.get("event_type") or "")
             data = event.get("data", {})
 
@@ -2116,10 +2345,20 @@ class ConversationControlService:
             previous_fingerprint = fingerprint
             previous_created_at = created_at
 
+        notes = []
+
+        for row in note_rows:
+            note = self._decode_note(row)
+            author_id = note.get("author_user_id")
+            note["author_name"] = (
+                names.get(int(author_id)) if author_id else None
+            ) or "Unknown user"
+            notes.append(note)
+
         return {
             "conversation": state,
             "events": events,
-            "notes": [dict(row) for row in note_rows],
+            "notes": notes,
         }
 
 

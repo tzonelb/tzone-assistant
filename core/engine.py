@@ -1,5 +1,4 @@
 import logging
-import traceback
 
 from core.session import session
 from core.response import Response
@@ -10,12 +9,15 @@ from core.intent_transition import intent_transition_manager
 from core.ai_router import ai_router
 from core.automation_policy import automation_policy
 from core.conversation_memory import conversation_memory
-from core.knowledge_manager import knowledge_manager
 from core.ai_knowledge_matcher import ai_knowledge_matcher
 from core.response_policy import response_policy
 from core.business_connectors import business_connectors
 from core.business_modules import business_modules
-from database.database import db
+from core import reply_decision
+from backend.services.conversation_control_service import conversation_control_service
+from backend.services.knowledge_service import knowledge_service
+from backend.services.module_gate import module_gate
+from backend.services.ticket_service import ticket_service
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +103,6 @@ class Engine:
 
     def handle(self, request):
         try:
-            db.create_tables()
             user_session = session.create(request.user_id)
 
             if self.is_reset_message(request.message):
@@ -110,7 +111,14 @@ class Engine:
                 language = self.detect_language(request.message)
                 session.set_language(request.user_id, language)
 
-                return self.build_main_menu_response(language)
+                return self.build_main_menu_response(
+                    language,
+                    company_id=request.company_id,
+                    channel=request.channel,
+                    channel_account_id=getattr(
+                        request, "channel_account_id", None
+                    ),
+                )
 
             explicit_language = self.get_explicit_language(request.message)
 
@@ -123,9 +131,12 @@ class Engine:
                 return self.build_language_changed_response(
                     user_id=request.user_id,
                     language=explicit_language,
+                    company_id=request.company_id,
                 )
 
-            message_language = self.detect_language(request.message)
+            message_language = self.resolve_language(
+                request.message, request.company_id
+            )
 
             session.set_language(
                 request.user_id,
@@ -140,7 +151,14 @@ class Engine:
                     request.channel,
                 )
 
-                return self.build_main_menu_response(language)
+                return self.build_main_menu_response(
+                    language,
+                    company_id=request.company_id,
+                    channel=request.channel,
+                    channel_account_id=getattr(
+                        request, "channel_account_id", None
+                    ),
+                )
 
             if request.message == "start":
                 return self.handle_start(
@@ -159,12 +177,17 @@ class Engine:
                 or "telegram_iptv_start"
             )
 
+            # The session first because it is the cheapest, then the
+            # conversation row — which is where the department actually lives.
+            # A restart empties the session, and a customer whose choice was
+            # only ever in memory would silently fall back to unrouted.
             current_department = user_session.get(
                 "current_department"
-            )
+            ) or self.stored_department(request)
 
             state_data = flow_loader.get_state(
-                current_state
+                current_state,
+                company_id=request.company_id,
             )
 
             self.log_request(
@@ -184,26 +207,29 @@ class Engine:
                     return ai_response
 
             if not state_data:
-                logger.error(
-                    "State not found: %s",
+                # Not an error. A company with no scripted flow of its own is
+                # the normal case, and the menu below is built from that
+                # company's own departments.
+                #
+                # Telegram used to be special-cased here into
+                # `telegram_iptv_start` — T-ZONE's IPTV language picker — which
+                # is how every company's Telegram customers were greeted by
+                # somebody else's business.
+                logger.debug(
+                    "No scripted state %s for company %s; answering from the "
+                    "company's own sections",
                     current_state,
+                    request.company_id,
                 )
 
-                if request.channel == "telegram":
-                    session.update(
-                        request.user_id,
-                        "state",
-                        "telegram_iptv_start",
-                    )
-
-                    return self.render(
-                        "telegram_iptv_start",
-                        language,
-                        request.user_id,
-                        request.channel,
-                    )
-
-                return self.build_main_menu_response(language)
+                return self.build_main_menu_response(
+                    language,
+                    company_id=request.company_id,
+                    channel=request.channel,
+                    channel_account_id=getattr(
+                        request, "channel_account_id", None
+                    ),
+                )
 
             if request.message in self.BACK_BUTTONS:
                 previous_state = session.go_back(
@@ -215,6 +241,7 @@ class Engine:
                     language,
                     request.user_id,
                     request.channel,
+                    company_id=request.company_id,
                 )
 
             matched_response = self.handle_button_state(
@@ -246,18 +273,39 @@ class Engine:
                 language,
                 request.user_id,
                 request.channel,
+                company_id=request.company_id,
             )
 
-        except Exception as error:
-            traceback.print_exc()
+        except Exception:
+            # `logger.exception` records the class, the message and the
+            # traceback, which is everything an operator needs. It goes to the
+            # log, where only the operator can read it.
             logger.exception("Engine error")
 
+            # What the *customer* gets is an apology, in the same words the two
+            # other error paths in this class already use.
+            #
+            # It used to be the exception itself: "ENGINE ERROR", the class
+            # name, and `str(error)`, sent over Messenger to whoever happened to
+            # be typing. That is a stranger to this platform reading its
+            # internals — and `str(error)` is not always harmless. A
+            # `DatabaseError` from `_open` names the company's database file, an
+            # `IntegrityError` names tables and columns, a `KeyError` names an
+            # internal key. It was also simply a bad reply: somebody asked a
+            # shop a question and got a stack trace.
+            #
+            # `language` is resolved defensively because this handler catches
+            # everything, including failures from before the language was
+            # worked out.
+            spoken = "ar"
+
+            try:
+                spoken = self.detect_language(getattr(request, "message", "")) or "ar"
+            except Exception:  # noqa: BLE001 - never fail while failing
+                pass
+
             return Response(
-                (
-                    f"ENGINE ERROR:\n\n"
-                    f"{type(error).__name__}\n\n"
-                    f"{str(error)}"
-                ),
+                self.ERROR_TEXT.get(spoken, self.ERROR_TEXT["ar"]),
                 [],
             )
 
@@ -313,6 +361,55 @@ class Engine:
             for item in self.GREETING_MESSAGES
         ]
 
+    def resolve_language(self, message, company_id):
+        """Which language to answer in, before the customer has asked for one.
+
+        `ai_behavior.reply_language` was stored in every company's database and
+        consulted by nothing: a company chose a language, watched it save, and
+        the reply came back in whatever the customer happened to write in.
+
+        `auto`, the default, is detection — the behaviour every company has
+        today. A company that names a language gets that language instead,
+        which is what a business whose staff read only one of them is asking
+        for when it sets this.
+
+        It replaces *detection*, not the customer's own choice. A customer who
+        explicitly asks to switch is handled before this is reached, and still
+        wins: the platform has a feature for that, and silently ignoring it
+        would make that feature lie about what it did.
+
+        Never raises. A settings read that will not complete falls back to
+        detection, which is the behaviour this replaced.
+        """
+        detected = self.detect_language(message)
+
+        if company_id is None:
+            return detected
+
+        try:
+            from backend.services.company_settings_service import (
+                company_settings_service,
+            )
+
+            preference = company_settings_service.get_section(
+                int(company_id), "ai_behavior"
+            )["values"].get("reply_language")
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the reply language of company %s", company_id
+            )
+            return detected
+
+        chosen = str(preference or "auto").strip().lower()
+
+        # An unrecognised value is a typo, not an instruction. Treating it as a
+        # language would answer every customer in a language that does not
+        # exist; treating it as `auto` costs nothing.
+        if chosen not in ("ar", "en"):
+            return detected
+
+        return chosen
+
     def detect_language(self, text):
         if not text:
             return "ar"
@@ -324,48 +421,49 @@ class Engine:
         return "en"
 
     def should_ai_take_priority(self, request):
+        # The company, not just the channel. Without it this read a shared file
+        # that shipped WhatsApp and Telegram as non-AI channels for everybody,
+        # so every company's customers on those two fell through to a scripted
+        # flow that was T-ZONE's own.
         return automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            company_id=getattr(request, "company_id", None),
         )
 
     def handle_start(self, request, language):
         if automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            company_id=getattr(request, "company_id", None),
         ):
-            return self.build_main_menu_response(language)
-
-        if request.channel == "telegram":
-            session.update(
-                request.user_id,
-                "state",
-                "telegram_iptv_start",
-            )
-
-            session.update(
-                request.user_id,
-                "current_department",
-                "iptv",
-            )
-
-            return self.render(
-                "telegram_iptv_start",
+            return self.build_main_menu_response(
                 language,
-                request.user_id,
-                request.channel,
+                company_id=request.company_id,
+                channel=request.channel,
+                channel_account_id=getattr(request, "channel_account_id", None),
             )
 
+        # Telegram used to be branched here into `telegram_iptv_start` with the
+        # department forced to `iptv` — T-ZONE's own support script and T-ZONE's
+        # own section, applied to every company on the platform. A channel is
+        # not a business, and nothing about Telegram implies IPTV.
         session.update(
             request.user_id,
             "state",
             "main_menu",
         )
 
-        return self.build_main_menu_response(language)
+        return self.build_main_menu_response(
+            language,
+            company_id=request.company_id,
+            channel=request.channel,
+            channel_account_id=getattr(request, "channel_account_id", None),
+        )
 
     def build_language_changed_response(
         self,
         user_id,
         language,
+        company_id=None,
     ):
         user_session = session.get(user_id) or {}
 
@@ -385,12 +483,18 @@ class Engine:
                     "en",
                 )
             else:
-                text = (
-                    "Language changed to English ✅\n\n"
-                    + business_modules.overview_text("en")
+                text = self.join_lines(
+                    "Language changed to English ✅",
+                    business_modules.overview_text(
+                        company_id,
+                        "en",
+                    ),
                 )
 
-                buttons = business_modules.buttons("en")
+                buttons = business_modules.buttons(
+                    company_id,
+                    "en",
+                )
 
             if "🏠 Main Menu" not in buttons:
                 buttons.append("🏠 Main Menu")
@@ -408,43 +512,257 @@ class Engine:
                 "ar",
             )
         else:
-            text = (
-                "تم تغيير اللغة إلى العربية ✅\n\n"
-                + business_modules.overview_text("ar")
+            text = self.join_lines(
+                "تم تغيير اللغة إلى العربية ✅",
+                business_modules.overview_text(
+                    company_id,
+                    "ar",
+                ),
             )
 
-            buttons = business_modules.buttons("ar")
+            buttons = business_modules.buttons(
+                company_id,
+                "ar",
+            )
 
         if "🏠 القائمة الرئيسية" not in buttons:
             buttons.append("🏠 القائمة الرئيسية")
 
         return Response(text, buttons)
 
-    def build_main_menu_response(self, language):
-        if language == "en":
-            text = (
-                "Welcome to T-ZONE 💙\n\n"
-                + business_modules.overview_text("en")
-            )
+    # The menu is assembled entirely from what the asking company has actually
+    # written down. It used to open with "Welcome to T-ZONE 💙" and list
+    # T-ZONE's departments, hardcoded here, so every business on the platform
+    # greeted its customers as another business and offered them another
+    # business's sections.
+    #
+    # Both halves are now optional and independently omitted:
+    #
+    # * The greeting is the company's own welcome message from its assistant
+    #   profile. A company that wrote none is not given one.
+    # * The sections sentence and its buttons appear only if the company has
+    #   defined departments. With none, the menu carries neither rather than a
+    #   fabricated list.
+    #
+    # If a company has written neither, the reply still has to say *something* —
+    # an empty message cannot be delivered — so it falls back to a question that
+    # makes no claim about the business and names nobody.
+    NEUTRAL_MENU_PROMPT = {
+        "en": "How can we help you today?",
+        "ar": "كيف فينا نساعدك اليوم؟",
+    }
 
-            buttons = business_modules.buttons("en")
+    SUPPORT_BUTTON = {
+        "en": "Contact support",
+        "ar": "التواصل مع الدعم",
+    }
 
-            if "Contact support" not in buttons:
-                buttons.append("Contact support")
+    def build_main_menu_response(
+        self,
+        language,
+        company_id=None,
+        channel="messenger",
+        channel_account_id=None,
+    ):
+        """The company's menu, greeted in the way that channel is configured.
 
-            return Response(text, buttons)
+        `channel` defaults to messenger for the preview and the tests, and every
+        live caller passes the real one. They did not: four call sites here had
+        `request.channel` in scope and left it out, so a company that wrote a
+        different welcome for WhatsApp — or turned the greeting off for one
+        channel — got the messenger answer on all of them. The switch saved, the
+        screen showed it, and the customer never saw it.
+        """
+        language = "en" if language == "en" else "ar"
 
-        text = (
-            "أهلاً وسهلاً بك في T-ZONE 💙\n\n"
-            + business_modules.overview_text("ar")
+        greeting = response_policy.get_welcome_message(
+            channel,
+            language,
+            company_id=company_id,
+            channel_account_id=channel_account_id,
         )
 
-        buttons = business_modules.buttons("ar")
+        overview = business_modules.overview_text(
+            company_id,
+            language,
+        )
 
-        if "التواصل مع الدعم" not in buttons:
-            buttons.append("التواصل مع الدعم")
+        buttons = business_modules.buttons(
+            company_id,
+            language,
+        )
+
+        text = self.join_lines(greeting, overview)
+
+        if not text:
+            text = self.NEUTRAL_MENU_PROMPT[language]
+
+        support_label = self.SUPPORT_BUTTON[language]
+
+        if support_label not in buttons:
+            buttons.append(support_label)
 
         return Response(text, buttons)
+
+    @staticmethod
+    def join_lines(*parts):
+        """Join the parts that exist, with a blank line between them.
+
+        Concatenating unconditionally left a trailing blank paragraph whenever a
+        company had no sections to list.
+        """
+        return "\n\n".join(
+            part.strip()
+            for part in parts
+            if part and part.strip()
+        )
+
+    # ------------------------------------------------------------------
+    # Where a conversation belongs
+    # ------------------------------------------------------------------
+    #
+    # The department a conversation is in has to outlive the process. It used to
+    # live only in `core/session.py`, which is an in-memory dictionary with a
+    # six-hour eviction: a customer who chose "Bookings" from the menu was in
+    # Bookings until the next deploy, and in nothing afterwards. Meanwhile the
+    # column an employee reads in the inbox was written only by an employee, so
+    # the assistant's routing and the team's view of it never met.
+    #
+    # Both are now written, in the order the owner specified — the customer's
+    # own choice first, then the account's default, then the model's
+    # classification. The account's default is applied when the conversation is
+    # created (`conversation_control_service.get_or_create`); the other two are
+    # applied here.
+    #
+    # Nothing on this path may create a conversation or fail a reply:
+    # `assign_department` updates an existing row or does nothing, and every
+    # call is wrapped, because a routing decision is never worth a customer's
+    # answer.
+
+    def remember_department(
+        self,
+        request,
+        code,
+        source,
+        only_if_unassigned=False,
+    ):
+        if not code:
+            return
+
+        applied = code
+
+        if getattr(request, "company_id", None):
+            try:
+                state = conversation_control_service.assign_department(
+                    company_id=request.company_id,
+                    channel=request.channel,
+                    external_user_id=request.user_id,
+                    code=code,
+                    source=source,
+                    only_if_unassigned=only_if_unassigned,
+                )
+
+                # The session follows the row, never the other way round. A
+                # model guess that was correctly refused because the customer
+                # had already chosen must not win in memory instead.
+                if state and state.get("department_id"):
+                    applied = state.get("department") or code
+            except Exception:
+                logger.exception(
+                    "Could not record department %s for company %s",
+                    code,
+                    request.company_id,
+                )
+
+        session.update(
+            request.user_id,
+            "current_department",
+            applied,
+        )
+
+    def stored_department(self, request):
+        """The department already on the conversation row, if any.
+
+        Read when the session has none, which is the ordinary case after a
+        restart. Without this the durable choice would be invisible to the very
+        engine that has to honour it, and the customer would be asked to choose
+        again.
+        """
+        if not getattr(request, "company_id", None):
+            return None
+
+        try:
+            state = conversation_control_service.find_state(
+                company_id=request.company_id,
+                channel=request.channel,
+                external_user_id=request.user_id,
+            )
+        except Exception:
+            logger.exception(
+                "Could not read the department of a conversation for company %s",
+                request.company_id,
+            )
+
+            return None
+
+        if not state or not state.get("department_id"):
+            return None
+
+        return state.get("department")
+
+    def load_company_knowledge(
+        self,
+        request,
+        department=None,
+    ):
+        """Load the knowledge of the company this message belongs to.
+
+        The assistant used to read two shared JSON files, so every company on
+        the platform answered its customers out of one company's knowledge.
+        Items now come from ``knowledge_items`` inside the owning company's own
+        encrypted database.
+
+        Two failure modes are handled here rather than left to explode. A
+        request with no company cannot be answered from anyone's knowledge, and
+        guessing a company is exactly the leak this replaces. And a knowledge
+        database that will not open must not take the reply path down with it:
+        with no knowledge the router's guardrails already escalate to a human.
+        """
+        company_id = getattr(
+            request,
+            "company_id",
+            None,
+        )
+
+        if not company_id:
+            logger.warning(
+                "Message on channel %s has no company; "
+                "the assistant runs with no knowledge.",
+                getattr(request, "channel", "unknown"),
+            )
+
+            return []
+
+        # A company that switched Knowledge off gets an assistant that does not
+        # have one. The switch used to hide the screen from the team while the
+        # assistant went on answering out of the base behind it, which made the
+        # owner's decision cosmetic. No knowledge is a supported state already:
+        # the router's guardrails escalate to a human rather than invent facts.
+        if not module_gate.enabled(company_id, "knowledge"):
+            return []
+
+        try:
+            return knowledge_service.for_assistant(
+                company_id,
+                department,
+            )
+        except Exception:
+            logger.exception(
+                "Could not load knowledge for company %s",
+                company_id,
+            )
+
+            return []
 
     def handle_ai(
         self,
@@ -454,7 +772,8 @@ class Engine:
         current_department,
     ):
         if not automation_policy.should_auto_reply_with_ai(
-            request.channel
+            request.channel,
+            company_id=getattr(request, "company_id", None),
         ):
             return None
 
@@ -463,6 +782,7 @@ class Engine:
         ) or {}
 
         module = business_modules.get_module_by_button(
+            request.company_id,
             request.message,
             language,
         )
@@ -470,10 +790,13 @@ class Engine:
         if module:
             module_id = module.get("id")
 
-            session.update(
-                request.user_id,
-                "current_department",
+            # The customer chose this from the menu the company defined. It is
+            # the most specific signal there is, so it overwrites whatever the
+            # account defaulted to and whatever the model previously guessed.
+            self.remember_department(
+                request,
                 module_id,
+                source="customer_choice",
             )
 
             session.update(
@@ -489,7 +812,8 @@ class Engine:
 
         if self.is_greeting_only(request.message):
             greeting_result = self.build_greeting_result(
-                language
+                language,
+                company_id=request.company_id,
             )
 
             return self.finalize_ai_response(
@@ -498,17 +822,23 @@ class Engine:
                 ai_result=greeting_result,
             )
 
+        # Matched against this company's own sections and nothing else. This
+        # used to consult a hardcoded Arabic keyword table describing one
+        # company's products, applied to every company's customers.
         detected_department = (
             intent_transition_manager.detect_department(
-                request.message
+                request.message,
+                company_id=request.company_id,
             )
         )
 
         if detected_department:
-            session.update(
-                request.user_id,
-                "current_department",
+            # Typing the name of a section is the customer choosing it, the
+            # same as pressing its button.
+            self.remember_department(
+                request,
                 detected_department,
+                source="customer_choice",
             )
 
             current_department = detected_department
@@ -517,14 +847,19 @@ class Engine:
             user_session
         )
 
+        # This company's own reply mechanism, resolved for this channel: the
+        # platform's shipped defaults, then whatever this company chose. The
+        # company is passed explicitly, like it is to ``ai_router.route`` and
+        # ``collect_connector_results`` below.
         channel_policy = (
             response_policy.get_channel_policy(
-                request.channel
+                request.channel,
+                company_id=request.company_id,
             )
         )
 
-        knowledge_items = knowledge_manager.list_for_ai(
-            None
+        knowledge_items = self.load_company_knowledge(
+            request
         )
 
         try:
@@ -557,6 +892,40 @@ class Engine:
             )
         )
 
+        # This company's five remaining switches, applied. Until now
+        # `reply_mode`, `grounded_ai_enabled`, `allow_ai_free_reply`,
+        # `minimum_match_confidence` and `fallback_to_human` were resolved,
+        # merged and serialised into the model payload without anything
+        # consulting them: an owner could set "keep it to what you taught it",
+        # watch it save, and get an assistant that answered whatever it liked.
+        decision = reply_decision.decide(
+            channel_policy,
+            match_result,
+            has_knowledge=bool(knowledge_items),
+        )
+
+        if not decision.use_knowledge:
+            selected_knowledge = []
+
+        if decision.blocked:
+            # No model call at all. Nothing here has cost the platform a model
+            # charge yet, which is the other half of honouring the switch.
+            return self.finalize_ai_response(
+                request=request,
+                user_session=user_session,
+                ai_result=self.build_safe_result(
+                    language=language,
+                    current_department=(
+                        match_result.get("department")
+                        if match_result.get("department") != "unknown"
+                        else current_department
+                    ),
+                    escalate=decision.escalate,
+                    reason=decision.reason,
+                    opening=self.opening_status(request.company_id),
+                ),
+            )
+
         connector_results = self.collect_connector_results(
             message=request.message,
             language=language,
@@ -565,6 +934,7 @@ class Engine:
                 if match_result.get("department") != "unknown"
                 else current_department
             ),
+            company_id=request.company_id,
         )
 
         ai_result = ai_router.route(
@@ -576,8 +946,18 @@ class Engine:
             context=memory_context,
             knowledge=selected_knowledge,
             connector_results=connector_results,
-            response_policy=channel_policy,
+            # The resolved decision rather than the raw switches. The model is
+            # told what it may actually do on this message: a policy saying
+            # `allow_ai_free_reply: true` alongside a decision that refused one
+            # is an instruction to do the thing the owner just forbade.
+            response_policy={
+                **channel_policy,
+                "allow_ai_free_reply": decision.allow_free_reply,
+                "grounded_ai_enabled": decision.use_knowledge,
+            },
             match_result=match_result,
+            company_id=request.company_id,
+            channel_account_id=getattr(request, "channel_account_id", None),
         )
 
         if not ai_result:
@@ -588,6 +968,9 @@ class Engine:
                     if match_result.get("department") != "unknown"
                     else current_department
                 ),
+                escalate=reply_decision.fallback_to_human(channel_policy),
+                reason="model_returned_nothing",
+                opening=self.opening_status(request.company_id),
             )
 
             return self.finalize_ai_response(
@@ -607,7 +990,15 @@ class Engine:
         message,
         language,
         department,
+        company_id=None,
     ):
+        """Gather verified facts the assistant is allowed to state.
+
+        The company must be threaded through: a product lookup answers with real
+        prices, and without knowing whose catalogue to read the connector
+        refuses rather than guessing — a guess here would quote one company's
+        price to another company's customer.
+        """
         results = []
         lowered = message.lower()
 
@@ -683,7 +1074,8 @@ class Engine:
         if asks_product:
             result = (
                 business_connectors.get_product_info(
-                    message
+                    message,
+                    company_id=company_id,
                 )
             )
 
@@ -710,9 +1102,17 @@ class Engine:
         module_id = module.get("id")
 
         if language == "en":
+            # A company may name a section in one language only; printing the
+            # literal "None" back at the customer is worse than the other name.
+            name = (
+                module.get("name_en")
+                or module.get("name_ar")
+                or module_id
+            )
+
             text = (
                 f"You selected "
-                f"{module.get('name_en')}.\n"
+                f"{name}.\n"
                 "Tell us what you need exactly."
             )
 
@@ -726,9 +1126,15 @@ class Engine:
 
             return Response(text, buttons)
 
+        arabic_name = (
+            module.get("name_ar")
+            or module.get("name_en")
+            or module_id
+        )
+
         text = (
             f"اخترت قسم "
-            f"{module.get('name_ar')}.\n"
+            f"{arabic_name}.\n"
             "خبرنا شو بدك تحديداً لنساعدك."
         )
 
@@ -742,7 +1148,16 @@ class Engine:
 
         return Response(text, buttons)
 
-    def build_greeting_result(self, language):
+    def build_greeting_result(self, language, company_id=None):
+        # "hello" is answered with what this company actually offers. A company
+        # that has defined no sections has nothing to list, so the reply falls
+        # back to asking what the customer needs rather than reciting another
+        # company's departments.
+        overview = business_modules.overview_text(
+            company_id,
+            "en" if language == "en" else "ar",
+        )
+
         if language == "en":
             return {
                 "department": "information",
@@ -751,10 +1166,14 @@ class Engine:
                 "language": "en",
                 "confidence": 1.0,
                 "reply": (
-                    business_modules.overview_text("en")
+                    overview
+                    or self.NEUTRAL_MENU_PROMPT["en"]
                 ),
                 "buttons": (
-                    business_modules.buttons("en")
+                    business_modules.buttons(
+                        company_id,
+                        "en",
+                    )
                 ),
                 "needs_human": False,
                 "missing_information": [],
@@ -772,10 +1191,14 @@ class Engine:
             "language": "ar",
             "confidence": 1.0,
             "reply": (
-                business_modules.overview_text("ar")
+                overview
+                or self.NEUTRAL_MENU_PROMPT["ar"]
             ),
             "buttons": (
-                business_modules.buttons("ar")
+                business_modules.buttons(
+                    company_id,
+                    "ar",
+                )
             ),
             "needs_human": False,
             "missing_information": [],
@@ -786,16 +1209,103 @@ class Engine:
             ),
         }
 
+    @staticmethod
+    def opening_status(company_id):
+        """Whether this company is open right now, for the escalation wording.
+
+        Read here rather than inside `build_safe_result` because that method is
+        a pure formatter and this needs the company's database. Never raises:
+        hours that cannot be read leave the reply exactly as it was before this
+        existed.
+        """
+        from core import working_hours
+
+        if company_id is None:
+            return working_hours.OpeningStatus(open=True)
+
+        try:
+            from backend.services.company_settings_service import (
+                company_settings_service,
+            )
+
+            section = company_settings_service.get_section(
+                int(company_id), "working_hours"
+            )["values"]
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the working hours of company %s", company_id
+            )
+            return working_hours.OpeningStatus(open=True)
+
+        return working_hours.status(section)
+
+    @staticmethod
+    def _closed_note(language, opening):
+        """The sentence appended when the team is not there to take it.
+
+        Empty whenever the company is open, has not switched hours on, or has
+        hours that could not be read — so this can only ever add a sentence,
+        never change the one that was already being sent.
+        """
+        if opening is None or getattr(opening, "open", True):
+            return ""
+
+        opens_at = getattr(opening, "opens_at", None)
+
+        if opens_at is None:
+            # Open on no day at all. Naming a time here would invent one.
+            return (
+                " Our team is currently outside working hours and will reply "
+                "as soon as they are back."
+                if language == "en"
+                else " الفريق حالياً خارج أوقات الدوام ورح يرد عليك أول ما يرجع."
+            )
+
+        when = opens_at.strftime("%A %H:%M")
+
+        return (
+            f" Our team is currently outside working hours and will reply from "
+            f"{when}."
+            if language == "en"
+            else f" الفريق حالياً خارج أوقات الدوام ورح يرد عليك من {when}."
+        )
+
     def build_safe_result(
         self,
         language,
         current_department,
+        escalate=True,
+        reason=None,
+        opening=None,
     ):
+        """The reply for a message the company's rules leave no answer for.
+
+        ``escalate`` is the company's ``fallback_to_human`` switch. On, this
+        hands the conversation to a human and offers the support button. Off,
+        the customer is told plainly that the information is not confirmed and
+        the conversation stays where it is — which is what "answers anyway
+        instead of escalating" means for a message that has no answer.
+
+        The wording does not change between the two. A company that switched
+        escalation off did not ask its assistant to start guessing; it asked it
+        to stop handing conversations over.
+
+        ``opening`` is this company's working hours, applied only to the
+        escalating branch. The conversation is still handed over — it still
+        needs a person — but a customer told "our team can check it for you" at
+        three in the morning is being told somebody is coming when nobody is
+        until the shop opens. The hand-over is unchanged; the sentence after it
+        says when.
+
+        A company with hours switched off, or hours that could not be read,
+        gets exactly the reply it got before any of this existed.
+        """
+        closing_note = self._closed_note(language, opening) if escalate else ""
         if language == "en":
-            return {
+            result = {
                 "department": (
                     current_department
-                    or "human_support"
+                    or ("human_support" if escalate else "unknown")
                 ),
                 "intent": "safe_fallback",
                 "topic": (
@@ -808,12 +1318,41 @@ class Engine:
                     "I do not have enough confirmed "
                     "information to answer that accurately. "
                     "Please send more detail, or our team "
-                    "can check it for you."
+                    "can check it for you." + closing_note
                 ),
-                "buttons": [
-                    "Contact support"
+                "buttons": (
+                    ["Contact support"] if escalate else []
+                ),
+                "needs_human": bool(escalate),
+                "missing_information": [
+                    "verified business information"
                 ],
-                "needs_human": True,
+                "used_knowledge_ids": [],
+                "notes": "Safe fallback.",
+            }
+        else:
+            result = {
+                "department": (
+                    current_department
+                    or ("human_support" if escalate else "unknown")
+                ),
+                "intent": "safe_fallback",
+                "topic": (
+                    current_department
+                    or "unknown"
+                ),
+                "language": "ar",
+                "confidence": 1.0,
+                "reply": (
+                    "ما عندي معلومات مؤكدة كافية "
+                    "حتى جاوبك بدقة. ابعتلنا تفاصيل "
+                    "أكتر، أو فينا نحولك للفريق "
+                    "ليتأكدلك." + closing_note
+                ),
+                "buttons": (
+                    ["التواصل مع الدعم"] if escalate else []
+                ),
+                "needs_human": bool(escalate),
                 "missing_information": [
                     "verified business information"
                 ],
@@ -821,34 +1360,13 @@ class Engine:
                 "notes": "Safe fallback.",
             }
 
-        return {
-            "department": (
-                current_department
-                or "human_support"
-            ),
-            "intent": "safe_fallback",
-            "topic": (
-                current_department
-                or "unknown"
-            ),
-            "language": "ar",
-            "confidence": 1.0,
-            "reply": (
-                "ما عندي معلومات مؤكدة كافية "
-                "حتى جاوبك بدقة. ابعتلنا تفاصيل "
-                "أكتر، أو فينا نحولك للفريق "
-                "ليتأكدلك."
-            ),
-            "buttons": [
-                "التواصل مع الدعم"
-            ],
-            "needs_human": True,
-            "missing_information": [
-                "verified business information"
-            ],
-            "used_knowledge_ids": [],
-            "notes": "Safe fallback.",
-        }
+        if reason:
+            # Which switch produced the silence. Without it an owner who
+            # tightened `minimum_match_confidence` too far sees an assistant
+            # that stopped answering and nothing that says why.
+            result["notes"] = f"Safe fallback ({reason})."
+
+        return result
 
     def get_buttons_for_department(
         self,
@@ -1007,10 +1525,15 @@ class Engine:
         )
 
         if ai_result.get("department"):
-            session.update(
-                request.user_id,
-                "current_department",
+            # Least specific of the three, so it is written only when nothing
+            # more specific has claimed the conversation: a model guess must
+            # never displace the customer's own choice or the department the
+            # receiving account feeds.
+            self.remember_department(
+                request,
                 ai_result.get("department"),
+                source="ai_classification",
+                only_if_unassigned=True,
             )
 
             session.update(
@@ -1026,6 +1549,12 @@ class Engine:
             channel=request.channel,
             user_session=user_session,
             ai_result=ai_result,
+            company_id=request.company_id,
+            channel_account_id=getattr(
+                request,
+                "channel_account_id",
+                None,
+            ),
         )
 
         conversation_memory.append(
@@ -1111,6 +1640,7 @@ class Engine:
             language,
             request.user_id,
             request.channel,
+            company_id=request.company_id,
         )
 
     def handle_input_state(
@@ -1142,6 +1672,7 @@ class Engine:
             language,
             request.user_id,
             request.channel,
+            company_id=request.company_id,
         )
 
     def handle_button_state(
@@ -1194,6 +1725,7 @@ class Engine:
                 new_language,
                 request.user_id,
                 request.channel,
+                company_id=request.company_id,
             )
 
         return None
@@ -1204,12 +1736,14 @@ class Engine:
         language,
         user_id,
         channel,
+        company_id=None,
     ):
         response = self.render(
             current_state,
             language,
             user_id,
             channel,
+            company_id=company_id,
         )
 
         warning = self.INVALID_CHOICE_TEXT.get(
@@ -1225,12 +1759,31 @@ class Engine:
         return response
 
     def create_ticket(self, request):
+        # Tasks off means no ticket is opened. A company that switched the
+        # module off cannot see, assign or close a ticket, so writing one would
+        # bury the customer's problem in a table nobody on that team can open —
+        # worse than not recording it, because the flow tells the customer a
+        # ticket exists.
+        if not module_gate.enabled(
+            getattr(request, "company_id", None),
+            "tasks",
+        ):
+            logger.info(
+                "Tasks is off for company %s; no ticket was opened for %s.",
+                getattr(request, "company_id", None),
+                request.user_id,
+            )
+
+            return
+
         user_session = (
             session.get(request.user_id)
             or {}
         )
 
-        ticket_id = db.create_ticket({
+        ticket_id = ticket_service.create(
+            company_id=request.company_id,
+            data={
             "platform": request.channel,
             "user_id": request.user_id,
             "language": user_session.get(
@@ -1247,7 +1800,8 @@ class Engine:
             "problem": user_session.get(
                 "problem"
             ),
-        })
+            },
+        )
 
         session.update(
             request.user_id,
@@ -1261,7 +1815,15 @@ class Engine:
         language,
         user_id,
         channel,
+        company_id=None,
     ):
+        """Draw one scripted state.
+
+        ``company_id`` decides whether there is a script to draw at all. The
+        shipped `features/` flows are T-ZONE's own, and without this every
+        company's customers were rendered T-ZONE's IPTV menu on the two
+        channels that fall through to the flow path.
+        """
         if not state_name:
             return Response(
                 self.ERROR_TEXT.get(
@@ -1272,7 +1834,8 @@ class Engine:
             )
 
         state_data = flow_loader.get_state(
-            state_name
+            state_name,
+            company_id=company_id,
         )
 
         if not state_data:
@@ -1458,12 +2021,12 @@ class Engine:
         logger.info(
             (
                 "channel=%s user=%s "
-                "state=%s message=%s"
+                "state=%s message_length=%s"
             ),
             request.channel,
             request.user_id,
             current_state,
-            request.message,
+            len(request.message or ""),
         )
 
 

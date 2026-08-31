@@ -2,9 +2,9 @@ import { DoneAllOutlined, ExpandLessOutlined, ExpandMoreOutlined, NotificationsN
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "../../contexts/NotificationContext";
+import { SUPPORTED_CHANNELS as CHANNELS } from "../../utils/channels";
 import { formatPlatformDateTime, platformTimestamp } from "../../utils/dateTime";
 
-const CHANNELS = ["messenger", "whatsapp", "instagram", "telegram", "website"];
 function isUnread(item) { return !item?.is_read && !item?.read_at; }
 function humanize(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 

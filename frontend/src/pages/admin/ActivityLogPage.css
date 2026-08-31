@@ -1,0 +1,60 @@
+.tzv2-activity-log {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.tzv2-activity-log-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  max-width: 70ch;
+}
+
+.tzv2-activity-log-filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tzv2-activity-log-filters .input {
+  width: auto;
+  min-width: 200px;
+}
+
+.tzv2-activity-log-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tzv2-activity-log-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.tzv2-activity-log-row-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.tzv2-activity-log-row-main strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.tzv2-activity-log-row-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  white-space: nowrap;
+}

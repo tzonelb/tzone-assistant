@@ -29,8 +29,8 @@ class NotificationSummaryResponse(BaseModel):
 
 
 class NotificationReadStateRequest(BaseModel):
-    notification_ids: list[int] = Field(default_factory=list)
+    notification_ids: list[int] = Field(default_factory=list, max_length=1000)
 
 
 class NotificationClearRequest(BaseModel):
-    notification_ids: list[int] = Field(default_factory=list)
+    notification_ids: list[int] = Field(default_factory=list, max_length=1000)

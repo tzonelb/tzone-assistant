@@ -20,6 +20,10 @@ import {
 
 import Sidebar from "../components/layout/Sidebar";
 import Topbar from "../components/layout/Topbar";
+import SidebarV2 from "../components/layout/SidebarV2";
+import TopbarV2 from "../components/layout/TopbarV2";
+import { isUiV2Enabled } from "../config/featureFlags";
+import "./AppLayoutV2.css";
 import { useAuth } from "../contexts/AuthContext";
 import { readNotificationPreferences } from "../utils/notificationPreferences";
 
@@ -34,14 +38,17 @@ const pageTitles = {
   "/conversations": "Conversations",
   "/comments": "Comments",
   "/customers": "Customers",
-  "/catalogue": "Master Catalogue",
-  "/ai-teaching": "AI Teaching",
-  "/tasks": "Tasks",
-  "/scheduler": "Scheduler",
+  "/broadcast": "Broadcast",
   "/appointments": "Appointments",
-  "/analytics": "Analytics",
+  "/tasks": "Tasks",
+  "/catalogue": "Catalogue",
+  "/scheduler": "Scheduler",
   "/team-chat": "Team Chat",
-  "/settings": "Settings",
+  "/knowledge": "Knowledge Base",
+  "/ai-teaching": "AI Teaching",
+  "/analytics": "Analytics",
+  "/channels": "Channels",
+  "/settings": "Preferences",
   "/company-settings": "Company Settings",
   "/roles": "Roles & Permissions",
 };
@@ -52,6 +59,7 @@ function resolvePageTitle(
 ) {
   if (pathname.startsWith("/conversations")) return "Conversations";
   if (pathname.startsWith("/company-settings")) return "Company Settings";
+  if (pathname.startsWith("/broadcast")) return "Broadcast";
 
   return (
     pageTitles[pathname]
@@ -167,6 +175,26 @@ function formatChannel(
 
 
 export default function AppLayout() {
+  // Which shell to render. The redesigned one is the default; a user who turned
+  // it off for their own browser keeps the previous layout. The custom event is
+  // what makes the switch take effect in the tab that made it -- localStorage's
+  // own "storage" event only fires in other tabs.
+  const [uiV2, setUiV2] = useState(isUiV2Enabled);
+
+  useEffect(() => {
+    function handleFlagChange() {
+      setUiV2(isUiV2Enabled());
+    }
+
+    window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
+    window.addEventListener("storage", handleFlagChange);
+
+    return () => {
+      window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
+      window.removeEventListener("storage", handleFlagChange);
+    };
+  }, []);
+
   useEffect(() => {
     const applyAppearance = () => {
       const font = localStorage.getItem("tzone_ui_font");
@@ -583,30 +611,35 @@ export default function AppLayout() {
   const companySettingsMode = location.pathname.startsWith("/company-settings");
   const standaloneSettingsMode = companySettingsMode || location.pathname === "/settings";
 
+  const SidebarComponent = uiV2 ? SidebarV2 : Sidebar;
+  const TopbarComponent = uiV2 ? TopbarV2 : Topbar;
+
   return (
     <div
       className={
-        `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
+        uiV2
+          ? "tzv2 app-layout-v2"
+          : `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
           sidebarCollapsed
             ? "app-layout-sidebar-collapsed"
             : ""
         }`
       }
     >
-      {!standaloneSettingsMode ? <Sidebar
+      {!standaloneSettingsMode ? <SidebarComponent
         open={sidebarOpen}
         collapsed={sidebarCollapsed}
         companyName={companyName}
         onClose={() =>
           setSidebarOpen(false)
         }
-        onToggleCollapsed={
-          toggleSidebarCollapsed
-        }
+        // SidebarV2 renders its own collapse control and calls this. Without
+        // it the button is drawn and does nothing.
+        onToggleCollapsed={toggleSidebarCollapsed}
       /> : null}
 
-      <div className="app-main">
-        {!standaloneSettingsMode ? <Topbar
+      <div className={uiV2 ? "app-main-v2" : "app-main"}>
+        {!standaloneSettingsMode ? <TopbarComponent
           title={pageTitle}
           sidebarCollapsed={
             sidebarCollapsed
@@ -795,7 +828,10 @@ export default function AppLayout() {
           </div>
         ) : null}
 
-        <main className={`app-content ${location.pathname.startsWith("/conversations") || location.pathname.startsWith("/comments") ? "app-content-workspace" : "app-content-scroll"}`}>
+        <main className={uiV2
+          ? `app-content-v2 ${location.pathname.startsWith("/conversations") ? "app-content-workspace-v2" : ""}`
+          : `app-content ${location.pathname.startsWith("/conversations") ? "app-content-workspace" : "app-content-scroll"}`
+        }>
           <Outlet />
         </main>
       </div>

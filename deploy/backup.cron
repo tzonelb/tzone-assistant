@@ -1,0 +1,28 @@
+# T-ZONE Platform — daily encrypted-database backup
+#
+# Install as /etc/cron.d/tzone-backup, owned by root, mode 0644:
+#   sudo install -o root -g root -m 644 deploy/backup.cron /etc/cron.d/tzone-backup
+#
+# A file in /etc/cron.d takes a user field (the sixth column). It runs as the
+# tzone service account, which is the account that can read the encrypted
+# database files and the environment file holding the master key.
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=ops@example.com
+
+# 03:15 every day, in the server's local timezone. Chosen for a quiet hour:
+# the backup checkpoints each database's write-ahead log, which briefly
+# competes with live writes.
+15 3 * * * tzone set -a; . /etc/tzone/tzone.env; set +a; cd /opt/tzone && /opt/tzone/venv/bin/python -m tools.manage_platform backup --output /var/backups/tzone >> /opt/tzone/logs/backup.log 2>&1
+
+# Retention: delete backup folders older than 30 days. Runs after the backup
+# above so a failed backup never causes the last good copy to be deleted on
+# the same night.
+45 3 * * * tzone find /var/backups/tzone -maxdepth 1 -type d -name 'tzone-backup-*' -mtime +30 -exec rm -rf {} + >> /opt/tzone/logs/backup.log 2>&1
+
+# Weekly reminder in the log that the backups above are useless on their own.
+# The master key lives in /etc/tzone/tzone.env, which is NOT part of these
+# backups on purpose: key and ciphertext must not share one storage location.
+# Keep an offline copy of TZONE_MASTER_KEY somewhere else entirely.
+0 4 * * 1 tzone echo "$(date -Is) REMINDER: backups in /var/backups/tzone are encrypted. They can only be restored with the TZONE_MASTER_KEY they were created under. Verify your offline copy of that key exists." >> /opt/tzone/logs/backup.log 2>&1

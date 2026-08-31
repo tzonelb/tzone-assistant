@@ -1,0 +1,387 @@
+.community-inbox {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--color-text);
+}
+
+.community-inbox-head {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.community-inbox-channel-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.community-inbox-channel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  background: var(--color-surface);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.community-inbox-channel-chip:hover {
+  border-color: color-mix(in srgb, var(--color-text) 45%, transparent);
+  color: var(--color-text);
+}
+
+.community-inbox-channel-chip.is-active {
+  color: var(--color-accent-700);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.community-inbox-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.community-inbox-title h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.community-inbox-badge {
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent-700) 14%, transparent);
+  color: var(--color-accent-700);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.community-inbox-body {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.community-inbox-posts {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-divider);
+}
+
+.community-inbox-posts-head {
+  padding: 12px 14px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.community-inbox-post {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--color-divider);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.community-inbox-post:hover {
+  background: color-mix(in srgb, var(--color-accent) 4%, transparent);
+}
+
+.community-inbox-post.is-active {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+  box-shadow: inset 2px 0 var(--color-accent);
+}
+
+.community-inbox-post-thumb {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.community-inbox-post-thumb-empty {
+  display: grid;
+  place-items: center;
+  background: var(--color-surface);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.community-inbox-post-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.community-inbox-post-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.community-inbox-post-caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.community-inbox-count {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.community-inbox-count.is-unanswered {
+  background: color-mix(in srgb, var(--color-accent-700) 14%, transparent);
+  color: var(--color-accent-700);
+}
+
+.community-inbox-thread {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-5);
+}
+
+.community-inbox-post-preview {
+  display: flex;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.community-inbox-post-preview img {
+  width: 88px;
+  height: 88px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  object-fit: cover;
+}
+
+.community-inbox-post-preview strong {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.community-inbox-post-preview p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: var(--color-text);
+}
+
+.community-inbox-post-preview span {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.community-inbox-comments {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+}
+
+.community-inbox-comment {
+  display: flex;
+  gap: 10px;
+}
+
+.community-inbox-comment-avatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.community-inbox-comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.community-inbox-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.community-inbox-comment-meta strong {
+  font-family: var(--font-heading);
+  font-weight: 600;
+}
+
+.community-inbox-comment-meta time {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 10.5px;
+}
+
+.community-inbox-comment-meta .is-answered {
+  padding: 1px 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  color: var(--color-accent-700);
+  font-size: 10px;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.community-inbox-comment-body > p {
+  margin: 3px 0 6px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.community-inbox-reply {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 0 12px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--color-divider);
+  font-size: 12px;
+}
+
+.community-inbox-reply.is-business {
+  border-left-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.community-inbox-reply strong {
+  font-size: 12px;
+}
+
+.community-inbox-reply-trigger {
+  border: 0;
+  background: transparent;
+  color: var(--color-accent-700);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+}
+
+.community-inbox-reply-box {
+  margin-top: 8px;
+}
+
+.community-inbox-reply-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.community-inbox-reply-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: 6px;
+}
+
+.community-inbox-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 40px 18px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  text-align: center;
+}
+
+.community-inbox-empty p {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.community-inbox-empty span {
+  font-size: 12px;
+  line-height: 1.55;
+  max-width: 320px;
+}
+
+.community-inbox-empty-center {
+  margin: auto;
+}
+
+.community-inbox-hint {
+  padding: 16px 4px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 13px;
+}
+
+.community-inbox-sync-note {
+  color: color-mix(in srgb, var(--color-text) 60%, transparent);
+  font-size: 13px;
+}
+
+.community-inbox-error {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent-700) 12%, transparent);
+  color: var(--color-accent-700);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .community-inbox-body {
+    grid-template-columns: 1fr;
+  }
+}

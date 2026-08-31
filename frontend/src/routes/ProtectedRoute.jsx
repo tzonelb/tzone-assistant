@@ -1,10 +1,11 @@
 import { Navigate, useLocation } from "react-router-dom";
 
 import { useAuth } from "../contexts/AuthContext";
+import ForcePasswordChangePage from "../pages/auth/ForcePasswordChangePage";
 
 
-export default function ProtectedRoute({ children }) {
-  const { authenticated, loading } = useAuth();
+export default function ProtectedRoute({ children, requireSuperAdmin = false }) {
+  const { authenticated, loading, user } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -26,6 +27,20 @@ export default function ProtectedRoute({ children }) {
         }}
       />
     );
+  }
+
+  // Ahead of every protected screen rather than on one route of its own: the
+  // API refuses all of them until the password is changed, so anything else
+  // rendered here would be a page of failed requests.
+  if (user?.must_change_password) {
+    return <ForcePasswordChangePage />;
+  }
+
+  // Every action on these routes is already refused server-side for anybody
+  // else. Landing them on a fully drawn, clickable operator console first and
+  // failing one request at a time is the confusing version of the same answer.
+  if (requireSuperAdmin && !user?.is_super_admin) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

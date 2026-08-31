@@ -1,0 +1,321 @@
+.analytics-page {
+  display: grid;
+  gap: var(--tz-space-5);
+  padding: var(--tz-space-5);
+}
+
+.analytics-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tz-space-2);
+}
+
+.analytics-range-button {
+  padding: 8px 16px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-surface);
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color var(--tz-transition-fast),
+    color var(--tz-transition-fast);
+}
+
+.analytics-range-button:hover {
+  border-color: var(--tz-primary);
+  color: var(--tz-text-primary);
+}
+
+.analytics-range-button.is-active {
+  border-color: var(--tz-primary);
+  background: var(--tz-primary-soft);
+  color: var(--tz-primary-dark);
+}
+
+.analytics-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--tz-space-3);
+}
+
+.analytics-tile {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  min-width: 0;
+}
+
+.analytics-tile span {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.analytics-tile strong {
+  color: var(--tz-text-primary);
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.analytics-tile small {
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+}
+
+.analytics-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tz-space-3);
+  margin-bottom: var(--tz-space-4);
+}
+
+.analytics-section-head h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.analytics-section-head p {
+  margin: 4px 0 0;
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+}
+
+.analytics-chart-card,
+.analytics-channels-card {
+  min-width: 0;
+}
+
+.analytics-chart {
+  width: 100%;
+  min-width: 0;
+}
+
+/*
+ * Recharts paints its legend text with the series colour by default, which
+ * would put a low-contrast tint on wording that has to stay readable.
+ */
+.analytics-chart .recharts-legend-item-text,
+.analytics-chart .recharts-cartesian-axis-tick-value {
+  color: var(--tz-text-secondary) !important;
+  fill: var(--tz-text-muted);
+}
+
+.analytics-chart .recharts-legend-item-text {
+  font-weight: 700;
+}
+
+.analytics-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--tz-space-5);
+  align-items: start;
+}
+
+.analytics-channel-list {
+  display: grid;
+  gap: var(--tz-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analytics-channel-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--tz-space-2);
+  margin-bottom: 6px;
+}
+
+.analytics-channel-line strong {
+  font-size: 14px;
+}
+
+.analytics-channel-line span {
+  color: var(--tz-text-secondary);
+  font-size: 12px;
+}
+
+.analytics-channel-meter {
+  height: 8px;
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-surface-secondary);
+  overflow: hidden;
+}
+
+.analytics-channel-meter div {
+  height: 100%;
+  min-width: 4px;
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-primary);
+}
+
+.analytics-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--tz-space-3);
+}
+
+.analytics-facts > div {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface-secondary);
+  min-width: 0;
+}
+
+.analytics-facts > div.is-bad {
+  border-color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+}
+
+.analytics-facts > div.is-bad strong {
+  color: var(--tz-danger);
+}
+
+.analytics-facts span {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.analytics-facts strong {
+  font-size: 20px;
+}
+
+.analytics-facts small {
+  color: var(--tz-text-secondary);
+  font-size: 11px;
+}
+
+.analytics-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tz-space-2);
+}
+
+/* The bands and the percentiles read together: the chart says how the waits
+   are spread, the tiles beside it say where the tail begins. */
+.analytics-wait-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--tz-space-5);
+  align-items: start;
+}
+
+.analytics-facts-narrow {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analytics-waits {
+  margin-top: var(--tz-space-5);
+  padding-top: var(--tz-space-4);
+  border-top: 1px solid var(--tz-border);
+}
+
+.analytics-waits h4 {
+  margin: 0 0 var(--tz-space-3);
+  font-size: 13px;
+}
+
+.analytics-wait-list {
+  display: grid;
+  gap: var(--tz-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analytics-wait-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tz-space-3);
+  padding: 10px var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface-secondary);
+}
+
+.analytics-wait-list li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.analytics-wait-list strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-wait-list span {
+  color: var(--tz-text-muted);
+  font-size: 11px;
+}
+
+.analytics-wait-list b {
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+/* An unanswered customer is not a slow one. The list is coloured as a problem
+   because that is what it is, and it must never be mistaken for the list of
+   long-but-eventually-answered waits beside it. */
+.analytics-wait-list.is-bad li {
+  border-color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+}
+
+.analytics-wait-list.is-bad b {
+  color: var(--tz-danger);
+  font-weight: 800;
+}
+
+.analytics-note {
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.analytics-alert {
+  color: var(--tz-danger);
+}
+
+@media (max-width: 1200px) {
+  .analytics-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-split,
+  .analytics-wait-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 700px) {
+  .analytics-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analytics-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .analytics-section-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

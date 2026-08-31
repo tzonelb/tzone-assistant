@@ -770,24 +770,10 @@
 }
 .conversation-composer-single-row {
   display: grid !important;
-  grid-template-columns: 36px 36px 36px minmax(0, 1fr) 40px !important;
+  grid-template-columns: minmax(0, 1fr) 40px !important;
   align-items: end !important;
   gap: 7px !important;
 }
-.composer-tool-button {
-  width: 36px;
-  height: 36px;
-  display: grid;
-  place-items: center;
-  margin: 0;
-  padding: 0;
-  border: 1px solid #d9e3ee;
-  border-radius: 50%;
-  color: #53657a;
-  background: #fff;
-  cursor: pointer;
-}
-.composer-tool-button svg { font-size: 19px; }
 .conversation-composer-single-row textarea {
   width: 100%;
   min-height: 38px !important;
@@ -850,9 +836,8 @@
 .conversation-chat-column { display:flex; flex-direction:column; overflow:hidden; }
 .conversation-messages { flex:1 1 auto; min-height:0; }
 .conversation-composer { flex:0 0 auto; padding:8px 10px; }
-.conversation-composer-single-row { display:grid!important; grid-template-columns:38px 38px 38px minmax(0,1fr) 42px!important; align-items:end; gap:6px; }
+.conversation-composer-single-row { display:grid!important; grid-template-columns:minmax(0,1fr) 42px!important; align-items:end; gap:6px; }
 .conversation-composer-single-row textarea { min-height:42px!important; max-height:110px!important; resize:none; padding:10px 12px!important; }
-.composer-tool-button { width:38px!important; height:38px!important; border-radius:50%!important; }
 .composer-send-circle { width:42px!important; height:42px!important; border-radius:50%!important; }
 .customer-profile-card { padding:12px; }
 .customer-profile-head { display:flex; align-items:center; gap:10px; }

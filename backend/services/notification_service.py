@@ -1,10 +1,36 @@
+"""In-app notifications for one company's employees.
+
+Notifications live in the company's own encrypted database. `recipient_user_id`
+and `actor_user_id` reference users in the control-plane database and are stored
+as plain integers; a name, when one is needed, is resolved with
+`auth_service.user_display_names` rather than a join that cannot cross two files.
+
+Table creation belongs to `database/schema_tenant.py` alone.
+"""
+
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, datetime, timezone
 from typing import Any
 
-from database.database import db
+from database.manager import database_manager
+
+# At module scope, unlike the two gates below it, and that is deliberate. This
+# module has no import cycle with it — it reads `database.manager` and nothing
+# else — and importing it lazily was a real defect rather than a style choice:
+# the first delivery to a named recipient would import it, binding whatever
+# `database_manager` happened to be current at that moment for the life of the
+# process. In tests, that moment is inside another test's monkeypatched window,
+# so the module kept a manager pointing at a temporary directory that no longer
+# existed and nothing could rebind it afterwards.
+from backend.services.notification_preference_service import (
+    notification_preference_service,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 def utc_now_iso() -> str:
@@ -12,51 +38,6 @@ def utc_now_iso() -> str:
 
 
 class NotificationService:
-    def __init__(self) -> None:
-        self.ensure_schema()
-
-    def ensure_schema(self) -> None:
-        with db.connect() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    company_id INTEGER NOT NULL,
-                    recipient_user_id INTEGER,
-                    notification_type TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    body TEXT,
-                    channel TEXT,
-                    external_user_id TEXT,
-                    conversation_id INTEGER,
-                    actor_user_id INTEGER,
-                    severity TEXT NOT NULL DEFAULT 'info',
-                    data_json TEXT NOT NULL DEFAULT '{}',
-                    dedupe_key TEXT,
-                    is_read INTEGER NOT NULL DEFAULT 0,
-                    read_at TEXT,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
-                    FOREIGN KEY(recipient_user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY(actor_user_id) REFERENCES users(id) ON DELETE SET NULL
-                )
-                """
-            )
-            conn.execute(
-                """
-                CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedupe
-                ON notifications(company_id, dedupe_key)
-                WHERE dedupe_key IS NOT NULL
-                """
-            )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_notifications_inbox
-                ON notifications(company_id, recipient_user_id, is_read, created_at DESC)
-                """
-            )
-            conn.commit()
-
     @staticmethod
     def _row_to_dict(row: Any) -> dict[str, Any]:
         result = dict(row)
@@ -67,6 +48,89 @@ class NotificationService:
             result.pop("data_json", None)
         result["is_read"] = bool(result.get("is_read"))
         return result
+
+    # Which stored preference decides whether a notification of each type is
+    # raised. Checked here rather than at each call site for the same reason the
+    # module gate is: a gate that has to be remembered is a gate that is
+    # eventually forgotten, and the way this one fails is silent — a company
+    # turns a bell off and the entries keep piling up, or turns one on and
+    # nothing arrives.
+    #
+    # `team_mention` is deliberately absent. A colleague typed somebody's name
+    # to get their attention; that is addressed to a person, not a category of
+    # event, and there is no preference offering to suppress it.
+    PREFERENCE_FOR: dict[str, str] = {
+        "customer_message": "new_customer_message",
+        "handover": "handover",
+        "ai_error": "ai_error",
+    }
+
+    def _wanted(self, company_id: int, notification_type: str) -> bool:
+        """Whether this company asked to be told about this kind of event.
+
+        Two questions, in order. The operator's module switch comes first: a
+        company whose Notifications module is off cannot open the screen these
+        rows appear on, so writing them accumulates a pile nobody can clear.
+        Then the company's own preference for this kind of event.
+
+        Both fail open. A read that will not complete is a reason to raise the
+        notification anyway — the alternative is a company that silently stops
+        being told its assistant is failing because a database was busy.
+        """
+        from backend.services.module_gate import module_gate
+
+        try:
+            if not module_gate.enabled(int(company_id), "notifications"):
+                return False
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the module state of company %s", company_id
+            )
+
+        preference = self.PREFERENCE_FOR.get(notification_type)
+
+        if not preference:
+            return True
+
+        try:
+            from backend.services.company_settings_service import (
+                company_settings_service,
+            )
+
+            values = company_settings_service.get_section(
+                int(company_id), "notifications"
+            )["values"]
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the notification preferences of company %s",
+                company_id,
+            )
+            return True
+
+        return bool(values.get(preference, True))
+
+    def _wanted_by(
+        self, company_id: int, user_id: int, notification_type: str
+    ) -> bool:
+        """Whether the employee this row is addressed to asked for it.
+
+        Fails open for the same reason `_wanted` does, and the check itself
+        lives in `notification_preference_service` so the categories a
+        preference governs are declared in one place rather than restated here.
+        """
+        try:
+            return notification_preference_service.wants(
+                company_id=int(company_id),
+                user_id=int(user_id),
+                notification_type=notification_type,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the notification preferences of user %s in company %s",
+                user_id,
+                company_id,
+            )
+            return True
 
     def create(
         self,
@@ -84,10 +148,30 @@ class NotificationService:
         data: dict[str, Any] | None = None,
         dedupe_key: str | None = None,
     ) -> dict[str, Any]:
+        company_id = int(company_id)
+
+        # Before anything is written, and before the dedupe read. A company that
+        # switched this kind of notification off should cost nothing at all,
+        # not a row it cannot see or a query it did not ask for.
+        if not self._wanted(company_id, notification_type.strip()):
+            return {}
+
+        # And then the recipient's own choice, when there is one recipient. A
+        # company-wide notification has nobody to ask, so it is not asked.
+        #
+        # Second, not instead: the company gate above decides whether the event
+        # is worth recording at all; this decides whether the person it is
+        # addressed to wants it. Collapsing the two would have made one
+        # employee muting their task reminders mute them for everybody.
+        if recipient_user_id is not None and not self._wanted_by(
+            company_id, int(recipient_user_id), notification_type.strip()
+        ):
+            return {}
+
         created_at = utc_now_iso()
         payload = json.dumps(data or {}, ensure_ascii=False)
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             if dedupe_key:
                 existing = conn.execute(
                     "SELECT * FROM notifications WHERE company_id = ? AND dedupe_key = ? LIMIT 1",
@@ -113,7 +197,16 @@ class NotificationService:
             )
             conn.commit()
             row = conn.execute("SELECT * FROM notifications WHERE id = ?", (cursor.lastrowid,)).fetchone()
-            return self._row_to_dict(row)
+
+        # Identifiers only: the title and body carry customer text.
+        logger.info(
+            "Notification created id=%s company id=%s type=%s recipient id=%s",
+            cursor.lastrowid,
+            company_id,
+            notification_type.strip(),
+            recipient_user_id,
+        )
+        return self._row_to_dict(row)
 
     def list_for_user(
         self,
@@ -147,7 +240,7 @@ class NotificationService:
             conditions.append("substr(created_at, 1, 10) = ?")
             params.append(notification_date.isoformat())
 
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             rows = conn.execute(
                 f"""
                 SELECT * FROM notifications
@@ -201,7 +294,7 @@ class NotificationService:
         return grouped[start:end]
 
     def summary(self, *, company_id: int, user_id: int) -> dict[str, int]:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 """
                 SELECT COUNT(*) AS total,
@@ -232,7 +325,7 @@ class NotificationService:
         return [int(row["id"]) for row in rows]
 
     def set_read_state(self, *, notification_ids: list[int], company_id: int, user_id: int, is_read: bool) -> int:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             ids = self._visible_ids(conn, notification_ids, company_id, user_id)
             if not ids:
                 return 0
@@ -244,6 +337,60 @@ class NotificationService:
             conn.commit()
             return int(cursor.rowcount)
 
+    # How long a notification is worth keeping, in days, by whether it was
+    # read. Both are far longer than anyone would scroll and short enough that
+    # the table stops growing for ever.
+    #
+    # This table costs one row per customer message — measured, not guessed —
+    # and nothing removed one. A company handling a thousand messages a month
+    # accumulated a thousand rows a month, permanently, for a bell that shows
+    # what is new.
+    #
+    # Deleting these loses nothing that is not kept elsewhere. A notification
+    # is derived: it points at a message that stays in `messages` and at a
+    # conversation that stays in `conversations`. What is dropped is the marker
+    # saying "this was new once", which after three months is true of nothing
+    # anybody will act on.
+    #
+    # Unread ones are kept far longer, because unread is the state that still
+    # means something — somebody was away. A ceiling still exists, or a company
+    # that never opens the bell grows without bound, which is the case this was
+    # written for.
+    RETENTION_DAYS = {"read": 90, "unread": 365}
+
+    def prune(self, company_id: int) -> int:
+        """Drop notifications past their retention. Returns rows removed.
+
+        Never raises. Housekeeping that can fail a request is worse than
+        housekeeping that is late, and this runs from a sweep whose other
+        companies must not be affected by this one.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        removed = 0
+
+        try:
+            with database_manager.tenant(int(company_id)) as conn:
+                for state, days in self.RETENTION_DAYS.items():
+                    cutoff = (
+                        datetime.now(timezone.utc) - timedelta(days=int(days))
+                    ).isoformat()
+
+                    cursor = conn.execute(
+                        "DELETE FROM notifications"
+                        " WHERE created_at < ? AND is_read = ?",
+                        (cutoff, 1 if state == "read" else 0),
+                    )
+                    removed += int(cursor.rowcount or 0)
+
+                conn.commit()
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not prune notifications for company %s", company_id
+            )
+
+        return removed
+
     def mark_read(self, *, notification_id: int, company_id: int, user_id: int, group_ids: list[int] | None = None) -> bool:
         ids = group_ids or [notification_id]
         return self.set_read_state(notification_ids=ids, company_id=company_id, user_id=user_id, is_read=True) > 0
@@ -253,7 +400,7 @@ class NotificationService:
         return self.set_read_state(notification_ids=ids, company_id=company_id, user_id=user_id, is_read=False) > 0
 
     def mark_all_read(self, *, company_id: int, user_id: int) -> int:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
                 """
                 UPDATE notifications SET is_read = 1, read_at = ?
@@ -274,7 +421,7 @@ class NotificationService:
         company_id: int,
         user_id: int,
     ) -> int:
-        with db.connect() as conn:
+        with database_manager.tenant(company_id) as conn:
             ids = self._visible_ids(conn, notification_ids, company_id, user_id)
             if not ids:
                 return 0
