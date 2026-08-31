@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
 import LoginPage from "./pages/auth/LoginPage";
@@ -10,15 +10,11 @@ import RequireAccess from "./routes/RequireAccess";
 
 // Loaded eagerly: the login screen is the first thing an unauthenticated
 // visitor needs, and the dashboard and inbox are where employees spend the day.
-import DashboardPage from "./pages/dashboard/DashboardPage";
 import DashboardPageV2 from "./pages/dashboard/DashboardPageV2";
 import ConversationsPageV2 from "./pages/conversations/ConversationsPageV2";
 import TasksPageV2 from "./pages/tasks/TasksPageV2";
 import AppointmentsPageV2 from "./pages/appointments/AppointmentsPageV2";
 import NotificationsPageV2 from "./pages/notifications/NotificationsPageV2";
-import { isUiV2Enabled } from "./config/featureFlags";
-import ConversationsPage from "./pages/conversations/ConversationsPage";
-import ConversationDetailPage from "./pages/conversations/ConversationDetailPage";
 import ConversationDetailPageV2 from "./pages/conversations/ConversationDetailPageV2";
 
 // Everything else is split per route. Bundling all seventeen screens into one
@@ -26,23 +22,17 @@ import ConversationDetailPageV2 from "./pages/conversations/ConversationDetailPa
 // pays for on every first load even though they open two or three screens.
 const AiTeachingPage = lazy(() => import("./pages/ai-teaching/AiTeachingPage"));
 const AnalyticsPage = lazy(() => import("./pages/analytics/AnalyticsPage"));
-const BroadcastPage = lazy(() => import("./pages/broadcast/BroadcastPage"));
 const BroadcastPageV2 = lazy(() => import("./pages/broadcast/BroadcastPageV2"));
-const BroadcastDetailPage = lazy(() => import("./pages/broadcast/BroadcastDetailPage"));
 const BroadcastDetailPageV2 = lazy(() => import("./pages/broadcast/BroadcastDetailPageV2"));
-const AppointmentsPage = lazy(() => import("./pages/appointments/AppointmentsPage"));
 const CallsPage = lazy(() => import("./pages/calls/CallsPage"));
 const CataloguePage = lazy(() => import("./pages/catalogue/CataloguePage"));
 const ChannelsPage = lazy(() => import("./pages/channels/ChannelsPage"));
 const CommentsPage = lazy(() => import("./pages/comments/CommentsPage"));
 const CompanySettingsPage = lazy(() => import("./pages/company/CompanySettingsPage"));
-const CustomersPage = lazy(() => import("./pages/customers/CustomersPage"));
 const CustomersPageV2 = lazy(() => import("./pages/customers/CustomersPageV2"));
-const CustomerDetailPage = lazy(() => import("./pages/customers/CustomerDetailPage"));
 const CustomerDetailPageV2 = lazy(() => import("./pages/customers/CustomerDetailPageV2"));
 const DialerPage = lazy(() => import("./pages/dialer/DialerPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
-const NotificationsPage = lazy(() => import("./pages/notifications/NotificationsPage"));
 const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
 const ActivityLogPage = lazy(() => import("./pages/admin/ActivityLogPage"));
@@ -50,8 +40,6 @@ const PlatformAdminPage = lazy(() => import("./pages/admin/PlatformAdminPage"));
 const ThemeStudioPage = lazy(() => import("./pages/admin/ThemeStudioPage"));
 const SavedRepliesPage = lazy(() => import("./pages/saved-replies/SavedRepliesPage"));
 const SchedulerPage = lazy(() => import("./pages/scheduler/SchedulerPage"));
-const TasksPage = lazy(() => import("./pages/tasks/TasksPage"));
-const TeamChatPage = lazy(() => import("./pages/team-chat/TeamChatPage"));
 const TeamChatPageV2 = lazy(() => import("./pages/team-chat/TeamChatPageV2"));
 const TrainAndTestPage = lazy(() => import("./pages/ai-teaching/TrainAndTestPage"));
 const UISettingsPage = lazy(() => import("./pages/dashboard/UISettingsPage"));
@@ -68,50 +56,23 @@ function RouteFallback() {
   );
 }
 
-// Renders the redesigned screen when the UI v2 flag is on and the previous one
-// otherwise — the same switch AppLayout uses for the shell, so a user who turns
-// the new interface off gets the old shell AND the old screens, not a mix.
-function v2Route(V1Component, V2Component) {
-  return function V2Route(props) {
-    const [uiV2, setUiV2] = useState(isUiV2Enabled);
-
-    useEffect(() => {
-      function handleFlagChange() {
-        setUiV2(isUiV2Enabled());
-      }
-
-      window.addEventListener("tzone:ui-v2-changed", handleFlagChange);
-      window.addEventListener("storage", handleFlagChange);
-
-      return () => {
-        window.removeEventListener("tzone:ui-v2-changed", handleFlagChange);
-        window.removeEventListener("storage", handleFlagChange);
-      };
-    }, []);
-
-    const Component = uiV2 ? V2Component : V1Component;
-
-    return <Component {...props} />;
-  };
-}
-
-const DashboardScreen = v2Route(DashboardPage, DashboardPageV2);
-const ConversationsScreen = v2Route(ConversationsPage, ConversationsPageV2);
-const TasksScreen = v2Route(TasksPage, TasksPageV2);
-const AppointmentsScreen = v2Route(AppointmentsPage, AppointmentsPageV2);
-const NotificationsScreen = v2Route(NotificationsPage, NotificationsPageV2);
-const BroadcastScreen = v2Route(BroadcastPage, BroadcastPageV2);
-const BroadcastDetailScreen = v2Route(BroadcastDetailPage, BroadcastDetailPageV2);
+const DashboardScreen = DashboardPageV2;
+const ConversationsScreen = ConversationsPageV2;
+const TasksScreen = TasksPageV2;
+const AppointmentsScreen = AppointmentsPageV2;
+const NotificationsScreen = NotificationsPageV2;
+const BroadcastScreen = BroadcastPageV2;
+const BroadcastDetailScreen = BroadcastDetailPageV2;
 // The standalone full-page chat ("Open chat in new tab"). v2Route forwards
 // props, so `standalone` reaches whichever component the flag selects —
 // both versions accept it and drop their embedded chrome accordingly.
-const ConversationDetailScreen = v2Route(ConversationDetailPage, ConversationDetailPageV2);
+const ConversationDetailScreen = ConversationDetailPageV2;
 // Both halves are lazy here, and v2Route picks between them at render time —
 // so a user on the old interface never downloads the redesigned screen, and
 // turning the flag off puts the previous one back without a reload.
-const TeamChatScreen = v2Route(TeamChatPage, TeamChatPageV2);
-const CustomersScreen = v2Route(CustomersPage, CustomersPageV2);
-const CustomerDetailScreen = v2Route(CustomerDetailPage, CustomerDetailPageV2);
+const TeamChatScreen = TeamChatPageV2;
+const CustomersScreen = CustomersPageV2;
+const CustomerDetailScreen = CustomerDetailPageV2;
 
 
 export default function App() {
