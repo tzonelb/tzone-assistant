@@ -41,6 +41,7 @@ from database.manager import database_manager, utc_now_iso
 logger = logging.getLogger(__name__)
 
 
+
 def _minutes_ago(minutes: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
 
@@ -208,7 +209,7 @@ class DemoSeedService:
 
                 if message_id:
                     written.setdefault("messages", []).append(int(message_id))
-                    self._backdate("messages", int(message_id), minutes, company_id)
+                    self._backdate_message(int(message_id), minutes, company_id)
 
             self._record_conversation(company_id, channel, external_id, written)
 
@@ -255,10 +256,18 @@ class DemoSeedService:
 
     # ----------------------------------------------------------- bookkeeping
 
-    def _backdate(self, table: str, row_id: int, minutes: int, company_id: int) -> None:
+    def _backdate_message(self, row_id: int, minutes: int, company_id: int) -> None:
+        """Move one seeded message's `created_at` into the past.
+
+        Only messages are backdated -- the demonstration reads as a history,
+        and the reporting screens need the spread of times to have anything to
+        plot. The table is a literal in the statement rather than an argument
+        written into it: an identifier cannot be a bound `?`, so the safe form
+        is not to interpolate a name at all.
+        """
         with database_manager.tenant(company_id) as conn:
             conn.execute(
-                f"UPDATE {table} SET created_at = ? WHERE id = ? AND company_id = ?",
+                "UPDATE messages SET created_at = ? WHERE id = ? AND company_id = ?",
                 (_minutes_ago(minutes), row_id, company_id),
             )
             conn.commit()
