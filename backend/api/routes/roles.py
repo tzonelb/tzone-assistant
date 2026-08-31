@@ -27,6 +27,8 @@ from database.manager import database_manager, utc_now_iso
 
 logger = logging.getLogger(__name__)
 
+from backend.services import permission_catalogue
+
 router = APIRouter(prefix="/api/admin/access", tags=["Roles and Permissions"])
 
 
@@ -261,7 +263,12 @@ def overview(current_user: dict = Depends(get_current_user)):
 
     return {
         "company": dict(company) if company else None,
-        "permissions": permissions,
+        # Annotated with their group and sorted into the order the Roles screen
+        # reads, so the grouping lives on the server and cannot drift from a
+        # second copy in the page. `permission_groups` carries the labels and
+        # which groups are web-only (task #77).
+        "permissions": permission_catalogue.annotate(permissions),
+        "permission_groups": permission_catalogue.group_summaries(),
         "roles": roles,
         "users": users,
         "branches": branches,

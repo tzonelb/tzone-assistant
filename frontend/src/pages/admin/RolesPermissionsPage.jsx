@@ -11,6 +11,35 @@ import {
 } from "../../api/client";
 
 
+// The server hands back the permissions already annotated with their group and
+// in group order, plus `permission_groups` (label, description, web_only). This
+// turns those two into what the screen renders: the groups in order, each
+// carrying only its own permissions, and any empty group dropped. A server that
+// predates the grouping (no `permission_groups`) falls back to one unnamed
+// group, so the screen still works rather than showing nothing.
+function buildPermissionGroups(data) {
+  const groups = data?.permission_groups || [];
+  const permissions = data?.permissions || [];
+
+  if (!groups.length) {
+    return [
+      { key: "all", label: "", description: "", web_only: false, permissions },
+    ];
+  }
+
+  return groups
+    .slice()
+    .sort((first, second) => (first.order ?? 0) - (second.order ?? 0))
+    .map((group) => ({
+      ...group,
+      permissions: permissions.filter(
+        (permission) => permission.group === group.key,
+      ),
+    }))
+    .filter((group) => group.permissions.length);
+}
+
+
 // Both actions reach into somebody else's account, so both are described in
 // full and named to the person they land on before they fire.
 const ACCOUNT_ACTIONS = {
@@ -456,23 +485,50 @@ export default function RolesPermissionsPage() {
               intentionally hidden.
             </div>
           ) : (
-            <div className="permission-grid">
-              {data?.permissions?.map((permission) => (
-                <label key={permission.code} className="permission-row">
-                  <div>
-                    <strong>{permission.name}</strong>
-                    <span>{permission.code}</span>
-                  </div>
+            <div className="permission-groups">
+              {buildPermissionGroups(data).map((group) => (
+                <div key={group.key} className="permission-group">
+                  {group.label ? (
+                    <div className="permission-group-header">
+                      <div>
+                        <strong>{group.label}</strong>
+                        {group.description ? (
+                          <span>{group.description}</span>
+                        ) : null}
+                      </div>
+                      {group.web_only ? (
+                        <span
+                          className="web-only-badge"
+                          title="These screens open on the web app, not on the phone."
+                        >
+                          Web only
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
 
-                  <input
-                    type="checkbox"
-                    checked={Boolean(
-                      selectedRole?.permission_codes?.includes(permission.code),
-                    )}
-                    disabled={saving}
-                    onChange={() => changePermission(permission.code)}
-                  />
-                </label>
+                  <div className="permission-grid">
+                    {group.permissions.map((permission) => (
+                      <label key={permission.code} className="permission-row">
+                        <div>
+                          <strong>{permission.name}</strong>
+                          <span>{permission.code}</span>
+                        </div>
+
+                        <input
+                          type="checkbox"
+                          checked={Boolean(
+                            selectedRole?.permission_codes?.includes(
+                              permission.code,
+                            ),
+                          )}
+                          disabled={saving}
+                          onChange={() => changePermission(permission.code)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -665,20 +721,33 @@ export default function RolesPermissionsPage() {
                   />
                 </label>
 
-                <div className="permission-mini-list">
-                  {data.permissions.map((permission) => (
-                    <label key={permission.code}>
-                      <input
-                        type="checkbox"
-                        checked={newRole.permission_codes.includes(
-                          permission.code,
-                        )}
-                        onChange={() => toggle(permission.code)}
-                      />
-                      <span>{permission.name}</span>
-                    </label>
-                  ))}
-                </div>
+                {buildPermissionGroups(data).map((group) => (
+                  <div key={group.key} className="permission-mini-group">
+                    {group.label ? (
+                      <div className="permission-mini-heading">
+                        <span>{group.label}</span>
+                        {group.web_only ? (
+                          <span className="web-only-badge">Web only</span>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    <div className="permission-mini-list">
+                      {group.permissions.map((permission) => (
+                        <label key={permission.code}>
+                          <input
+                            type="checkbox"
+                            checked={newRole.permission_codes.includes(
+                              permission.code,
+                            )}
+                            onChange={() => toggle(permission.code)}
+                          />
+                          <span>{permission.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </>
             )}
 
