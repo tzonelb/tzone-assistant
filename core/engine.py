@@ -103,13 +103,13 @@ class Engine:
 
     def handle(self, request):
         try:
-            user_session = session.create(request.user_id)
+            user_session = session.create(request.session_key)
 
             if self.is_reset_message(request.message):
-                session.reset(request.user_id)
+                session.reset(request.session_key)
 
                 language = self.detect_language(request.message)
-                session.set_language(request.user_id, language)
+                session.set_language(request.session_key, language)
 
                 return self.build_main_menu_response(
                     language,
@@ -124,12 +124,12 @@ class Engine:
 
             if explicit_language:
                 session.set_language(
-                    request.user_id,
+                    request.session_key,
                     explicit_language,
                 )
 
                 return self.build_language_changed_response(
-                    user_id=request.user_id,
+                    user_id=request.session_key,
                     language=explicit_language,
                     company_id=request.company_id,
                 )
@@ -139,7 +139,7 @@ class Engine:
             )
 
             session.set_language(
-                request.user_id,
+                request.session_key,
                 message_language,
             )
 
@@ -147,7 +147,7 @@ class Engine:
 
             if request.message in self.HOME_BUTTONS:
                 session.go_home(
-                    request.user_id,
+                    request.session_key,
                     request.channel,
                 )
 
@@ -233,13 +233,13 @@ class Engine:
 
             if request.message in self.BACK_BUTTONS:
                 previous_state = session.go_back(
-                    request.user_id
+                    request.session_key
                 )
 
                 return self.render(
                     previous_state,
                     language,
-                    request.user_id,
+                    request.session_key,
                     request.channel,
                     company_id=request.company_id,
                 )
@@ -271,7 +271,7 @@ class Engine:
             return self.invalid_choice(
                 current_state,
                 language,
-                request.user_id,
+                request.session_key,
                 request.channel,
                 company_id=request.company_id,
             )
@@ -447,7 +447,7 @@ class Engine:
         # own section, applied to every company on the platform. A channel is
         # not a business, and nothing about Telegram implies IPTV.
         session.update(
-            request.user_id,
+            request.session_key,
             "state",
             "main_menu",
         )
@@ -675,7 +675,7 @@ class Engine:
                 )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "current_department",
             applied,
         )
@@ -778,7 +778,7 @@ class Engine:
             return None
 
         user_session = session.get(
-            request.user_id
+            request.session_key
         ) or {}
 
         module = business_modules.get_module_by_button(
@@ -800,7 +800,7 @@ class Engine:
             )
 
             session.update(
-                request.user_id,
+                request.session_key,
                 "conversation_topic",
                 module_id,
             )
@@ -1460,54 +1460,54 @@ class Engine:
         )
 
         session.set_language(
-            request.user_id,
+            request.session_key,
             result_language,
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_user_message",
             request.message,
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_ai_department",
             ai_result.get("department"),
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_ai_intent",
             ai_result.get("intent"),
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_ai_confidence",
             ai_result.get("confidence"),
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_ai_needs_human",
             ai_result.get("needs_human"),
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_ai_reply",
             ai_result.get("reply"),
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "conversation_topic",
             ai_result.get("topic"),
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_missing_information",
             ai_result.get(
                 "missing_information",
@@ -1516,7 +1516,7 @@ class Engine:
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_used_knowledge_ids",
             ai_result.get(
                 "used_knowledge_ids",
@@ -1537,7 +1537,7 @@ class Engine:
             )
 
             session.update(
-                request.user_id,
+                request.session_key,
                 "state",
                 (
                     f"{ai_result.get('department')}"
@@ -1613,32 +1613,32 @@ class Engine:
             return None
 
         session.update(
-            request.user_id,
+            request.session_key,
             "last_intent",
             intent,
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "state",
             next_state,
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "current_department",
             "iptv",
         )
 
         session.push_state(
-            request.user_id,
+            request.session_key,
             next_state,
         )
 
         return self.render(
             next_state,
             language,
-            request.user_id,
+            request.session_key,
             request.channel,
             company_id=request.company_id,
         )
@@ -1652,7 +1652,7 @@ class Engine:
         input_data = state_data["input"]
 
         session.update(
-            request.user_id,
+            request.session_key,
             input_data["key"],
             request.message,
         )
@@ -1660,7 +1660,7 @@ class Engine:
         next_state = input_data.get("next")
 
         session.push_state(
-            request.user_id,
+            request.session_key,
             next_state,
         )
 
@@ -1670,7 +1670,7 @@ class Engine:
         return self.render(
             next_state,
             language,
-            request.user_id,
+            request.session_key,
             request.channel,
             company_id=request.company_id,
         )
@@ -1695,7 +1695,7 @@ class Engine:
                 {},
             ).items():
                 session.update(
-                    request.user_id,
+                    request.session_key,
                     key,
                     value,
                 )
@@ -1706,12 +1706,12 @@ class Engine:
                 return None
 
             session.push_state(
-                request.user_id,
+                request.session_key,
                 next_state,
             )
 
             user_session = (
-                session.get(request.user_id)
+                session.get(request.session_key)
                 or {}
             )
 
@@ -1723,7 +1723,7 @@ class Engine:
             return self.render(
                 next_state,
                 new_language,
-                request.user_id,
+                request.session_key,
                 request.channel,
                 company_id=request.company_id,
             )
@@ -1771,13 +1771,13 @@ class Engine:
             logger.info(
                 "Tasks is off for company %s; no ticket was opened for %s.",
                 getattr(request, "company_id", None),
-                request.user_id,
+                request.session_key,
             )
 
             return
 
         user_session = (
-            session.get(request.user_id)
+            session.get(request.session_key)
             or {}
         )
 
@@ -1804,7 +1804,7 @@ class Engine:
         )
 
         session.update(
-            request.user_id,
+            request.session_key,
             "ticket_id",
             ticket_id,
         )

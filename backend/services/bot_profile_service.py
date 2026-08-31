@@ -524,7 +524,9 @@ class BotProfileService:
                     language=language or None,
                 )
         finally:
-            self._drop_preview_session(session_store, preview_user_id)
+            self._drop_preview_session(
+                session_store, preview_user_id, channel=channel, company_id=company_id
+            )
 
         # After the call, not before: a preview that failed cost nothing and
         # should not be billed. Same reasoning as the live path, which counts
@@ -593,12 +595,29 @@ class BotProfileService:
             )
 
     @staticmethod
-    def _drop_preview_session(session_store: Any, preview_user_id: str) -> None:
-        """Remove the throwaway session, whatever happened during the run."""
+    def _drop_preview_session(
+        session_store: Any,
+        preview_user_id: str,
+        *,
+        channel: str = "",
+        company_id: int | None = None,
+    ) -> None:
+        """Remove the throwaway session, whatever happened during the run.
+
+        The engine keys the session by company, channel and user together, so
+        the throwaway is stored under that composite key -- not the bare
+        `preview_user_id`. Popping the bare id would leave the preview's state
+        behind, which is the one thing this method exists to prevent. The bare
+        id is popped as well, harmlessly, so an older stored shape is still
+        cleaned up.
+        """
+        composite = session_store.key(preview_user_id, channel or "", company_id)
+
         try:
             with session_store._lock:  # noqa: SLF001 - no public delete exists
-                session_store.sessions.pop(preview_user_id, None)
-                session_store._touched.pop(preview_user_id, None)  # noqa: SLF001
+                for candidate in (composite, preview_user_id):
+                    session_store.sessions.pop(candidate, None)
+                    session_store._touched.pop(candidate, None)  # noqa: SLF001
         except Exception:
             logger.exception("Could not clear the dry-run session")
 
