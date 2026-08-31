@@ -20,7 +20,12 @@ import pytest
 
 # Before any fixture patches `database.manager.database_manager`; a module
 # first imported inside that window binds the test manager permanently.
+import backend.services.catalogue_service  # noqa: E402,F401
+import backend.services.customer_service  # noqa: E402,F401
+import backend.services.demo_seed_service  # noqa: E402,F401
+import backend.services.knowledge_service  # noqa: E402,F401
 import backend.services.mailer  # noqa: E402,F401
+import backend.services.message_service  # noqa: E402,F401
 import backend.services.platform_service  # noqa: E402,F401
 import backend.services.signup_service  # noqa: E402,F401
 
@@ -62,6 +67,22 @@ def posted(monkeypatch):
     )
 
     return sent
+
+
+def _a_minute_passes() -> None:
+    """Age the send-log so the resend cooldown no longer applies.
+
+    The cooldown is real and tested on its own below; a test about *what a code
+    does* should not have to sleep through it, so it moves the clock instead of
+    waiting on it.
+    """
+    from database.manager import database_manager
+
+    with database_manager.control() as conn:
+        conn.execute(
+            "UPDATE signup_code_sends SET created_at = '2000-01-01T00:00:00+00:00'"
+        )
+        conn.commit()
 
 
 def _code_from(sent: list[dict]) -> str:
@@ -118,6 +139,7 @@ def test_asking_again_replaces_the_code_rather_than_adding_one(wired, posted):
     signup_service.send_code(email="owner@example.com")
     first = _code_from(posted)
 
+    _a_minute_passes()
     signup_service.send_code(email="owner@example.com")
     second = _code_from(posted)
 
@@ -241,6 +263,7 @@ def test_one_address_cannot_create_workspaces_without_end(wired, posted):
     )
 
     for index in range(MAX_WORKSPACES_PER_EMAIL):
+        _a_minute_passes()
         signup_service.send_code(email="owner@example.com")
         signup_service.create_demo_workspace(
             company_name=f"Cedar {index}",
@@ -250,6 +273,7 @@ def test_one_address_cannot_create_workspaces_without_end(wired, posted):
             email_code=_code_from(posted),
         )
 
+    _a_minute_passes()
     signup_service.send_code(email="owner@example.com")
 
     with pytest.raises(SignupError) as refusal:
@@ -279,7 +303,78 @@ def test_asking_for_a_code_says_the_same_thing_for_a_known_address(wired, posted
         email_code=_code_from(posted),
     )
 
+    _a_minute_passes()
     known = signup_service.send_code(email="owner@example.com")
 
     assert set(fresh) == set(known)
     assert fresh["sent"] == known["sent"] is True
+
+
+# ---------------------------------------------------------- send throttling
+
+
+def test_hammering_the_send_endpoint_does_not_email_a_victim_repeatedly(wired, posted):
+    """`send_code` emails on every call, so without a cooldown a loop against a
+    victim's address is an email-bombing tool that also drains the send quota."""
+    from backend.services.signup_service import SignupError, signup_service
+
+    signup_service.send_code(email="victim@example.com", ip_address="203.0.113.9")
+
+    assert len(posted) == 1
+
+    for _ in range(20):
+        with pytest.raises(SignupError):
+            signup_service.send_code(
+                email="victim@example.com", ip_address="203.0.113.9"
+            )
+
+    # Twenty more attempts, one email. The cooldown held.
+    assert len(posted) == 1
+
+
+def test_one_source_cannot_email_a_whole_list_of_victims(wired, posted):
+    """The per-address cooldown must not be side-stepped by walking a list."""
+    from backend.services.signup_service import (
+        MAX_SENDS_PER_IP_PER_HOUR,
+        SignupError,
+        signup_service,
+    )
+
+    # Each address is new, so the per-address cooldown never fires -- only the
+    # per-source cap can stop this.
+    sent = 0
+
+    for i in range(MAX_SENDS_PER_IP_PER_HOUR + 5):
+        try:
+            signup_service.send_code(
+                email=f"target{i}@example.com", ip_address="198.51.100.4"
+            )
+            sent += 1
+        except SignupError:
+            break
+
+    assert sent <= MAX_SENDS_PER_IP_PER_HOUR, sent
+
+
+def test_a_different_source_is_not_punished_for_the_first_ones_flood(wired, posted):
+    """The cap is per source, so one abuser does not lock out everyone else."""
+    from backend.services.signup_service import (
+        MAX_SENDS_PER_IP_PER_HOUR,
+        SignupError,
+        signup_service,
+    )
+
+    for i in range(MAX_SENDS_PER_IP_PER_HOUR + 2):
+        try:
+            signup_service.send_code(
+                email=f"a{i}@example.com", ip_address="198.51.100.4"
+            )
+        except SignupError:
+            pass
+
+    # A genuine new customer, from a different address, still gets a code.
+    result = signup_service.send_code(
+        email="genuine@example.com", ip_address="203.0.113.50"
+    )
+
+    assert result["sent"] is True

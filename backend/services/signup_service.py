@@ -60,6 +60,18 @@ MAX_ATTEMPTS = 5
 # between "somebody made a few" and "somebody made four thousand".
 MAX_WORKSPACES_PER_EMAIL = 3
 
+# The shortest gap between two codes sent to the same address. Each call
+# sends a real email, so without this a loop against a victim's address is
+# an email-bombing tool that also drains the platform's send quota and
+# reputation. A minute is invisible to a person who mistyped and re-sent,
+# and turns a flood into one message a minute.
+RESEND_COOLDOWN_SECONDS = 60
+
+# And a ceiling on how many addresses one source may trigger a send to in
+# an hour, so the cooldown above -- which is per address -- cannot be side-
+# stepped by walking through a list of victims.
+MAX_SENDS_PER_IP_PER_HOUR = 20
+
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -96,6 +108,8 @@ class SignupService:
                 "whoever runs it to configure email delivery."
             )
 
+        self._refuse_a_flood(address, ip_address)
+
         code = "".join(secrets.choice("0123456789") for _ in range(CODE_DIGITS))
         expires_at = _in_minutes(CODE_TTL_MINUTES)
 
@@ -127,7 +141,79 @@ class SignupService:
             ),
         )
 
+        self._log_send(address, ip_address)
+
         return {"sent": True, "expires_at": expires_at}
+
+    def _refuse_a_flood(self, address: str, ip_address: str | None) -> None:
+        """Refuse a send that is too soon after the last, or too many from one
+        source. Every accepted send is logged, so the two windows are counted
+        from the record rather than trusted from the caller.
+
+        The refusal is deliberately quiet about which limit was hit and does
+        not distinguish a known address from an unknown one, for the same
+        reason the rest of this flow does not: it must not become a way to probe
+        the platform.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        now = datetime.now(timezone.utc)
+        recently = (now - timedelta(seconds=RESEND_COOLDOWN_SECONDS)).isoformat()
+        last_hour = (now - timedelta(hours=1)).isoformat()
+        refusal = SignupError(
+            "A code was just sent. Wait a moment and check your email before "
+            "asking for another."
+        )
+
+        with database_manager.control() as conn:
+            since = conn.execute(
+                "SELECT COUNT(*) AS n FROM signup_code_sends "
+                "WHERE email = ? AND created_at >= ?",
+                (address, recently),
+            ).fetchone()["n"]
+
+            if since:
+                raise refusal
+
+            if ip_address:
+                from_ip = conn.execute(
+                    "SELECT COUNT(*) AS n FROM signup_code_sends "
+                    "WHERE ip_address = ? AND created_at >= ?",
+                    (ip_address, last_hour),
+                ).fetchone()["n"]
+
+                if from_ip >= MAX_SENDS_PER_IP_PER_HOUR:
+                    raise refusal
+
+    def _log_send(self, address: str, ip_address: str | None) -> None:
+        with database_manager.control() as conn:
+            conn.execute(
+                "INSERT INTO signup_code_sends (email, ip_address, created_at) "
+                "VALUES (?, ?, ?)",
+                (address, ip_address, utc_now_iso()),
+            )
+            conn.commit()
+
+    def prune_send_log(self, retention_hours: int = 24) -> int:
+        """Drop send-log rows older than any window that reads them.
+
+        The cooldown is a minute and the per-IP cap is an hour, so a day of
+        retention is generous. Called by the maintenance worker beside the
+        other short-lived-table prunes.
+        """
+        from datetime import datetime, timedelta, timezone
+
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(hours=retention_hours)
+        ).isoformat()
+
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                "DELETE FROM signup_code_sends WHERE created_at < ?", (cutoff,)
+            )
+            conn.commit()
+
+            return cursor.rowcount
 
     def _consume_code(self, *, email: str, code: str) -> None:
         """Spend the code, or raise. Never says which part was wrong."""

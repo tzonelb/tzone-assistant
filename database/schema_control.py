@@ -431,6 +431,21 @@ CONTROL_TABLES: tuple[str, ...] = (
         FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
     )
     """,
+    # One row per verification email actually sent, so the resend cooldown and
+    # the per-source hourly cap in `signup_service` are counted from what
+    # happened rather than trusted from the caller. Without them, `send_code`
+    # emailed on every call: an email-bombing tool aimed at a victim's address
+    # that also drained the platform's send quota. Pruned like the other
+    # short-lived tables; a stale row only makes a refusal slightly more
+    # generous, never less.
+    """
+    CREATE TABLE IF NOT EXISTS signup_code_sends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        ip_address TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
     # A verification code sent to an email address during self-service
     # sign-up. Not an identity check -- it proves somebody reached that mailbox
     # once, which is enough to make creating workspaces in bulk tedious and is
