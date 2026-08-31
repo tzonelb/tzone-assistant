@@ -232,5 +232,61 @@ class ActivationService:
             "plan_id": plan_id,
         }
 
+    # ------------------------------------------------------------------ list
+
+    def list_codes(self, *, limit: int = 200) -> list[dict[str, Any]]:
+        """Every code the operator has issued, newest first, without any code.
+
+        The plaintext code leaves the process exactly once, at `mint`. It is
+        stored only as a hash, so there is nothing here to reveal even to the
+        operator: this answers "which codes exist, and which are spent", not
+        "what are they". A console that showed the code again would be a second
+        copy to steal.
+
+        `status` is derived rather than stored, so a code that has quietly
+        passed its expiry reads as `expired` without a sweep having to touch
+        the row first.
+        """
+        now = utc_now_iso()
+
+        with database_manager.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    activation_codes.id,
+                    activation_codes.plan_id,
+                    plans.name AS plan_name,
+                    activation_codes.note,
+                    activation_codes.created_at,
+                    activation_codes.expires_at,
+                    activation_codes.used_at,
+                    activation_codes.used_by_company_id,
+                    companies.name AS used_by_company_name
+                FROM activation_codes
+                LEFT JOIN plans ON plans.id = activation_codes.plan_id
+                LEFT JOIN companies
+                    ON companies.id = activation_codes.used_by_company_id
+                ORDER BY activation_codes.id DESC
+                LIMIT ?
+                """,
+                (int(limit),),
+            ).fetchall()
+
+        issued = []
+
+        for row in rows:
+            data = dict(row)
+
+            if data["used_at"]:
+                data["status"] = "used"
+            elif data["expires_at"] and data["expires_at"] <= now:
+                data["status"] = "expired"
+            else:
+                data["status"] = "available"
+
+            issued.append(data)
+
+        return issued
+
 
 activation_service = ActivationService()

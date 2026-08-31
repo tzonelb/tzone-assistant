@@ -313,3 +313,60 @@ def test_redeeming_on_an_already_live_workspace_does_not_burn_the_code(
 
     # The code still works where it was meant to go.
     activation_service.redeem(company_id=beta["id"], code=minted["code"])
+
+
+# --------------------------------------------------------- the issued register
+
+
+def test_the_register_lists_codes_without_ever_reprinting_one(wired, alpha):
+    """The console's list is a register, not a second copy of the codes.
+
+    The plaintext leaves the process once, at minting. `list_codes` must not
+    undo that by carrying a readable code back -- there is nothing to carry,
+    only a hash was kept, and this proves the projection never reaches for it.
+    """
+    from backend.services.activation_service import activation_service
+
+    a = activation_service.mint(note="one")
+    b = activation_service.mint(note="two")
+
+    listed = activation_service.list_codes()
+
+    assert {row["note"] for row in listed} >= {"one", "two"}
+
+    blob = repr(listed)
+    for minted in (a, b):
+        assert minted["code"] not in blob, "list_codes carried a readable code"
+        # Nor the hash, which is a usable secret too: redeem hashes the input
+        # and compares, so a leaked hash is a code that skips the hashing step.
+        assert "code_hash" not in blob
+
+
+def test_a_codes_status_follows_its_life(wired, alpha):
+    """Newly minted reads `available`; once redeemed it reads `used`.
+
+    Derived, not stored, so a code that quietly lapsed reads `expired` without
+    a sweep having had to touch it first.
+    """
+    from backend.services.activation_service import activation_service
+
+    minted = activation_service.mint()
+
+    before = activation_service.list_codes()[0]
+    assert before["status"] == "available"
+    assert before["used_at"] is None
+
+    _demo(alpha["id"])
+    activation_service.redeem(company_id=alpha["id"], code=minted["code"])
+
+    after = activation_service.list_codes()[0]
+    assert after["status"] == "used"
+    assert after["used_by_company_id"] == alpha["id"]
+
+
+def test_an_expired_code_reads_expired_without_a_sweep(wired):
+    from backend.services.activation_service import activation_service
+
+    activation_service.mint(expires_at="2000-01-01T00:00:00+00:00")
+
+    assert activation_service.list_codes()[0]["status"] == "expired"

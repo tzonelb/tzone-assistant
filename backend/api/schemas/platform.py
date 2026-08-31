@@ -95,6 +95,19 @@ class PlanAssignRequest(BaseModel):
     expires_at: str | None = Field(default=None, max_length=40)
 
 
+class ActivationCodeMintRequest(BaseModel):
+    """Ask the platform to mint one activation code.
+
+    Every field is optional. A code with no plan lifts the demonstration and
+    leaves the plan to be chosen later -- what a code handed out at a trade
+    show does. `expires_at` is an ISO timestamp; empty means it never lapses.
+    """
+
+    plan_id: int | None = None
+    note: str | None = Field(default=None, max_length=200)
+    expires_at: str | None = Field(default=None, max_length=40)
+
+
 class PlatformConfigUpdate(BaseModel):
     """A partial edit. An omitted section is left exactly as it was.
 
