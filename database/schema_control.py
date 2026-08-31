@@ -644,16 +644,24 @@ DEFAULT_PERMISSIONS: tuple[tuple[str, str, str], ...] = (
     ("settings.view", "View Settings", "Open company settings."),
     ("settings.manage", "Manage Settings", "Change company settings, including assistant behaviour."),
     ("subscriptions.view", "View Subscription", "See the current plan and billing status."),
-    # `subscriptions.manage` was here, described as "Change the plan and billing
-    # details", and no endpoint has ever checked it. There is nothing for it to
-    # guard: a company cannot change its own plan, by design — plans and
-    # per-company overrides are set from the operator console. So the Roles
-    # screen offered an owner a switch that granted a capability the platform
-    # does not have, and taking it away restricted nothing.
+    # Back, and only because there is finally something for it to guard.
     #
-    # Retired rather than left in place. A permission that decides nothing is
-    # the same defect as a setting that saves and decides nothing, except that
-    # this one tells an owner they have limited what somebody can do.
+    # It was retired for the right reason: it described "change the plan and
+    # billing details", no endpoint checked it, and a company could not change
+    # its own plan by design — so the Roles screen offered an owner a switch
+    # that restricted nothing. A permission that decides nothing is the same
+    # defect as a setting that saves and decides nothing, and worse, because it
+    # tells an owner they have limited somebody.
+    #
+    # `POST /api/activation/redeem` is that endpoint. Redeeming a code takes a
+    # workspace out of demonstration and puts it on a plan, which is exactly
+    # what this permission always claimed to cover.
+    #
+    # Granted to no default role. The owner holds everything in code, and
+    # whether a manager may spend the company's activation code is a decision
+    # for the owner to take on the Roles screen rather than one this file
+    # should take for every company.
+    ("subscriptions.manage", "Manage Subscription", "Redeem an activation code and change the plan."),
     ("tasks.view", "View Tasks", "See the team's tasks and follow-ups."),
     ("tasks.manage", "Manage Tasks", "Create, assign, edit and close tasks."),
     ("catalogue.view", "View Catalogue", "Browse the product catalogue."),

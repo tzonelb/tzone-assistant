@@ -29,6 +29,27 @@ ROUTES_DIR = ROOT / "backend" / "api" / "routes"
 # Reachable with no credentials, deliberately.
 PUBLIC_ROUTES: dict[str, str] = {
     "auth.py:POST:/login": "A sign-in cannot require being signed in.",
+    "signup.py:GET:/plans": (
+        "The plans a prospective customer is choosing between, before they "
+        "have an account to authenticate with. The projection is explicit in "
+        "the route rather than passed through from "
+        "`platform_service.list_plans`, which does SELECT * — right for the "
+        "operator's console, wrong for a page anybody can open."
+    ),
+    "signup.py:POST:/code": (
+        "Sending the email verification code cannot require being signed in; "
+        "it is the first step of getting an account. It answers identically "
+        "whether or not the address already has one, so it cannot be used to "
+        "test a list of addresses, and it refuses outright when the mailer is "
+        "not configured rather than reporting a send that cannot happen."
+    ),
+    "signup.py:POST:": (
+        "Creating the account. What it produces is a demonstration workspace "
+        "that cannot connect a channel (see backend/services/demo_gate.py), "
+        "and what stands in front of it is the emailed code plus a ceiling on "
+        "workspaces per address — because every one of them costs an "
+        "encrypted database file."
+    ),
     "auth.py:POST:/password/forgot": (
         "Asking for a reset link cannot require being signed in; the endpoint "
         "answers identically whether or not the address exists."

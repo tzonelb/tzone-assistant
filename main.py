@@ -49,6 +49,7 @@ from backend.api.routes import (
     platform_ui,
     roles,
     scheduler,
+    signup,
     support_tickets,
     team_chat,
     tickets,
@@ -242,6 +243,17 @@ app.add_middleware(
 # plane, and the customer app asking which modules it may draw.
 app.include_router(health.router)
 app.include_router(auth.router)
+# Neither carries a module gate or a subscription gate, and both absences are
+# deliberate.
+#
+# `/api/signup/**` is how somebody with no account gets one, so there is no
+# company yet whose modules or bill could be consulted. `/api/activation/redeem`
+# is how a workspace stops being a demonstration -- gating it behind a
+# subscription would mean a company had to pay before it could become the kind
+# of company that can be billed, and gating it behind a module would let an
+# operator switch off the only route out of the demo.
+app.include_router(signup.router)
+app.include_router(signup.activation_router)
 app.include_router(platform.router)
 app.include_router(platform_ui.router)
 

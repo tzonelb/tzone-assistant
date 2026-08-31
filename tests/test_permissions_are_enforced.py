@@ -142,15 +142,38 @@ def test_the_exception_list_has_no_stale_entries():
     )
 
 
-def test_subscriptions_manage_is_gone():
-    """Kept as its own line so a failure names the specific one, and so
-    re-adding it has to be deliberate.
+def test_subscriptions_manage_guards_something():
+    """This was `test_subscriptions_manage_is_gone`, and its own docstring said
+    what would bring it back: "the permission has to guard the endpoint that
+    makes it possible — not be seeded ahead of it."
 
-    A company cannot change its own plan. If that ever becomes possible, this
-    test is the reminder that the permission has to guard the endpoint that
-    makes it possible — not be seeded ahead of it.
+    That endpoint now exists. `POST /api/activation/redeem` takes a workspace
+    out of demonstration and puts it on a plan, which is precisely what this
+    permission always claimed to cover, so it is seeded again -- and the test
+    inverts rather than disappearing, because the condition it was protecting
+    has not changed. A permission that decides nothing is still the defect;
+    what changed is that this one decides something.
+
+    It is granted to no default role. The owner holds everything in code, and
+    whether a manager may spend the company's activation code is the owner's
+    call on the Roles screen.
     """
-    assert "subscriptions.manage" not in _seeded()
+    assert "subscriptions.manage" in _seeded()
+
+    guarded = set()
+
+    for root in SEARCH_ROOTS:
+        for path in (ROOT / root).rglob("*.py"):
+            guarded |= set(
+                re.findall(
+                    r'require_permission\(\s*"([^"]+)"', path.read_text()
+                )
+            )
+
+    assert "subscriptions.manage" in guarded, (
+        "subscriptions.manage is seeded again but no endpoint checks it, "
+        "which is the state it was retired from."
+    )
 
 
 def test_a_retired_permission_is_removed_from_an_existing_database(tmp_path):
