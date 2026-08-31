@@ -185,6 +185,18 @@ class AppConfig:
         os.getenv("WEBHOOK_MAX_BODY_BYTES", str(5 * 1024 * 1024))
     )
 
+    # The same reasoning as the webhook cap above, for every other route. The
+    # webhook path has always had `read_capped_body` "so a deployment that
+    # never sees nginx is still bounded" -- and the JSON API had nothing,
+    # meaning a proxy-less deployment (which the hosting notes describe as a
+    # real scenario) would buffer and parse an arbitrarily large body on every
+    # route, unauthenticated ones included. 2 MB is far above any real JSON
+    # payload the API accepts and far below anything that pressures memory;
+    # file uploads go through the media route, which nginx caps separately.
+    API_MAX_BODY_BYTES: int = int(
+        os.getenv("API_MAX_BODY_BYTES", str(2 * 1024 * 1024))
+    )
+
     # Meta batches deliveries in tens. A single signed body was otherwise free
     # to carry hundreds of thousands of events, each costing seven database
     # writes and possibly an outbound Graph call.

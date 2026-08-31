@@ -55,6 +55,7 @@ from backend.api.routes import (
     tickets,
 )
 from backend.api.middleware import (
+    BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
     SessionCookieMiddleware,
 )
@@ -215,6 +216,11 @@ install_error_handlers(app)
 # application carries the headers, including CORS preflights and error
 # responses raised inside the stack.
 app.add_middleware(SecurityHeadersMiddleware)
+# Inside the header middleware so a refusal still carries the headers, and
+# before the routes so an oversized body is abandoned rather than parsed. The
+# webhook routes are skipped inside the middleware -- they keep their own,
+# larger cap in `read_capped_body`.
+app.add_middleware(BodySizeLimitMiddleware)
 
 # Added after CORS so it ends up *inside* it: a preflight must be answered by
 # CORS before this ever sees a request, and a browser that is refused at the

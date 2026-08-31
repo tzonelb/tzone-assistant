@@ -51,6 +51,97 @@ CONTENT_SECURITY_POLICY = (
 _DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
 
 
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Refuse a request body larger than the app-level cap.
+
+    The webhook path has always had `channels.webhook_limits.read_capped_body`
+    "so a deployment that never sees nginx is still bounded". Every other route
+    had nothing, so a proxy-less deployment -- which the hosting notes describe
+    as a real scenario -- would buffer and parse an arbitrarily large body on
+    every route, unauthenticated ones included. A few hundred concurrent 100 MB
+    posts to `/api/auth/login` is a memory-exhaustion outage that needs no
+    account.
+
+    The declared Content-Length is refused up front because it is the cheapest
+    possible rejection. It is only a claim, so the body is also counted as it
+    streams and abandoned the moment it crosses the cap, rather than buffered
+    in full and measured afterwards -- the difference between reading 2 MB and
+    reading 200.
+
+    The webhook routes keep their own, larger cap: this middleware skips them
+    so the two do not fight, and `read_capped_body` remains the single place a
+    signed body is sized.
+    """
+
+    # Meta, WhatsApp and Telegram deliver here, and `read_capped_body` sizes
+    # those against WEBHOOK_MAX_BODY_BYTES. Left to that check rather than
+    # capped twice at two different numbers.
+    _WEBHOOK_PREFIXES = ("/api/webhooks", "/webhooks", "/api/meta", "/api/whatsapp", "/api/telegram")
+
+    async def dispatch(self, request, call_next):
+        from config.settings import config
+
+        limit = int(config.API_MAX_BODY_BYTES)
+        path = request.url.path
+
+        if request.method in ("GET", "HEAD", "OPTIONS") or path.startswith(
+            self._WEBHOOK_PREFIXES
+        ):
+            return await call_next(request)
+
+        declared = request.headers.get("content-length")
+
+        if declared is not None:
+            try:
+                if int(declared) > limit:
+                    return self._refused(limit)
+            except ValueError:
+                return self._refused(limit)
+
+        # Count the real bytes, so a lying or absent Content-Length cannot get
+        # a large body past the check above. The wrapped receive replaces the
+        # request's stream; `call_next` reads through it.
+        received = 0
+        too_large = False
+
+        async def capped_receive():
+            nonlocal received, too_large
+
+            message = await request.receive()
+
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+
+                if received > limit:
+                    too_large = True
+
+            return message
+
+        request._receive = capped_receive  # noqa: SLF001
+
+        response = await call_next(request)
+
+        if too_large:
+            return self._refused(limit)
+
+        return response
+
+    @staticmethod
+    def _refused(limit: int):
+        from fastapi.responses import JSONResponse
+        from fastapi import status
+
+        return JSONResponse(
+            status_code=413,
+            content={
+                "detail": (
+                    "The request body is too large. The maximum is "
+                    f"{limit // (1024 * 1024)} MB."
+                )
+            },
+        )
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, *, hsts: bool = True) -> None:
         super().__init__(app)
