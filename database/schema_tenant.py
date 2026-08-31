@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 6
+TENANT_SCHEMA_VERSION = 7
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -839,6 +839,26 @@ TENANT_TABLES: tuple[str, ...] = (
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         UNIQUE(company_id, user_id)
+    )
+    """,
+    # What the demonstration seeded, so activation can take exactly it away.
+    #
+    # A workspace that stops being a demonstration must not keep six invented
+    # customers among its real ones -- an owner who cannot tell which of their
+    # conversations happened has a reporting screen that lies to them. And
+    # "delete everything older than the activation" is not the rule either,
+    # because they will have added real things while trying the platform out.
+    #
+    # So the seeder records every row it wrote, by table and id, and activation
+    # deletes that list and nothing else. Explicit enough to audit by reading.
+    """
+    CREATE TABLE IF NOT EXISTS demo_seeded_rows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        table_name TEXT NOT NULL,
+        row_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(company_id, table_name, row_id)
     )
     """,
 )

@@ -244,10 +244,19 @@ class SignupService:
             conn.commit()
 
         from backend.services.demo_gate import demo_gate
+        from backend.services.demo_seed_service import demo_seed_service
 
         demo_gate.invalidate(company_id)
 
-        logger.info("Demo workspace %s created by sign-up", company_id)
+        # After the flag, never before: a half-seeded workspace that is not yet
+        # marked as a demonstration is one that could connect a channel.
+        seeded = demo_seed_service.seed(
+            company_id=company_id, owner_user_id=int(created["owner_user_id"])
+        )
+
+        logger.info(
+            "Demo workspace %s created by sign-up, seeded %s", company_id, seeded
+        )
 
         return {
             "company_id": company_id,

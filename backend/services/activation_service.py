@@ -199,6 +199,25 @@ class ActivationService:
         # what makes the next request able to connect a channel.
         demo_gate.invalidate(company_id)
 
+        # And the invented customers go with the demonstration. A workspace
+        # that is now real must not carry six people who never wrote to it --
+        # an owner who cannot tell which of their conversations happened has a
+        # reporting screen that lies to them. Only the recorded rows, so
+        # anything they added while trying the platform out stays.
+        from backend.services.demo_seed_service import demo_seed_service
+
+        try:
+            demo_seed_service.remove(company_id=company_id)
+        except Exception:  # noqa: BLE001
+            # The activation itself is committed. Failing here would tell the
+            # owner their code did not work while it plainly did, and would
+            # invite them to spend a second one.
+            logger.exception(
+                "Activated company %s but could not remove its demonstration "
+                "data; it will still show the sample conversations",
+                company_id,
+            )
+
         plan_id = row["plan_id"] if row is not None else None
 
         logger.info(
