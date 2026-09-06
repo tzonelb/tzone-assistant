@@ -40,12 +40,14 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   addConversationNoteRequest,
+  blockCustomerRequest,
   clearConversationReminderRequest,
   createQuoteRequest,
   createTaskRequest,
   downloadConversationExport,
   getConversationControlRequest,
   getConversationMessagesRequest,
+  getCustomerRequest,
   listSavedRepliesRequest,
   releaseConversationRequest,
   returnConversationToAiRequest,
@@ -53,6 +55,7 @@ import {
   sendConversationReplyRequest,
   setConversationReminderRequest,
   takeOverConversationRequest,
+  unblockCustomerRequest,
   updateConversationControlRequest,
   uploadMediaRequest,
   uploadVoiceNoteRequest,
@@ -324,6 +327,8 @@ export default function ConversationDetailPageV2({
   const [quoteTitle, setQuoteTitle] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteSaving, setQuoteSaving] = useState(false);
+  const [customerBlocked, setCustomerBlocked] = useState(null);
+  const [moderationBusy, setModerationBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [noteMentionedUserIds, setNoteMentionedUserIds] = useState([]);
@@ -544,6 +549,15 @@ export default function ConversationDetailPageV2({
       behavior: "smooth",
     });
   }, [messages]);
+
+  useEffect(() => {
+    if (!control?.customer_id) return undefined;
+    let cancelled = false;
+    getCustomerRequest(control.customer_id)
+      .then((result) => { if (!cancelled) setCustomerBlocked(Boolean(result?.is_blocked)); })
+      .catch(() => { if (!cancelled) setCustomerBlocked(null); });
+    return () => { cancelled = true; };
+  }, [control?.customer_id]);
 
 
   useEffect(() => {
@@ -1064,6 +1078,32 @@ export default function ConversationDetailPageV2({
       setActionError(requestError.message || "Could not create a quote from this conversation.");
     } finally {
       setQuoteSaving(false);
+    }
+  }
+
+  async function toggleSpam() {
+    await handleControlUpdate(
+      { is_spam: !control?.is_spam },
+      control?.is_spam ? "Unmarked as spam." : "Marked as spam.",
+    );
+  }
+
+  async function toggleBlockCustomer() {
+    if (!control?.customer_id) return;
+    setModerationBusy(true);
+    setActionError("");
+    try {
+      const nextBlocked = !customerBlocked;
+      const customer = nextBlocked
+        ? await blockCustomerRequest(control.customer_id)
+        : await unblockCustomerRequest(control.customer_id);
+      setCustomerBlocked(Boolean(customer?.is_blocked));
+      setActionSuccess(nextBlocked ? "Customer blocked." : "Customer unblocked.");
+      window.setTimeout(() => setActionSuccess(""), 4000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not update this customer's block status.");
+    } finally {
+      setModerationBusy(false);
     }
   }
 
@@ -1999,14 +2039,22 @@ export default function ConversationDetailPageV2({
                 onToggle={() => setModerationPanelOpen((current) => !current)}
               >
                 <div className="tzv2-cd-create-grid">
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
-                    <ReportOutlined fontSize="small" /> Mark as spam
+                  <button type="button" className="btn btn-secondary btn-block" disabled={saving} onClick={toggleSpam}>
+                    <ReportOutlined fontSize="small" /> {control?.is_spam ? "Unmark as spam" : "Mark as spam"}
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
-                    <BlockOutlined fontSize="small" /> Block customer
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-block"
+                    disabled={moderationBusy || !control?.customer_id}
+                    onClick={toggleBlockCustomer}
+                  >
+                    <BlockOutlined fontSize="small" /> {control?.customer_id && customerBlocked ? "Unblock customer" : "Block customer"}
                   </button>
                 </div>
-                <small className="tzv2-cd-muted">Spam and block controls aren&rsquo;t available in this build yet.</small>
+                <small className="tzv2-cd-muted">
+                  {control?.is_spam ? "This conversation is marked as spam — the assistant will not reply to it." : "Marking as spam stops the assistant answering this conversation."}
+                  {control?.customer_id && customerBlocked ? " This customer is blocked — their messages are not received." : null}
+                </small>
               </AccordionCard>
             </div>
           </aside>

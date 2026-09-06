@@ -1656,6 +1656,7 @@ class ConversationControlService:
         tags: list[str] | None = None,
         clear_assignment: bool = False,
         is_unread: bool | None = None,
+        is_spam: bool | None = None,
     ) -> dict[str, Any]:
         state = self.get_state(
             company_id=company_id,
@@ -1747,13 +1748,33 @@ class ConversationControlService:
                 "assignment_changed",
             ))
 
+        if is_spam is not None and bool(is_spam) != bool(state.get("is_spam")):
+            updates.append((
+                "is_spam",
+                bool(state.get("is_spam")),
+                bool(is_spam),
+                "conversation_marked_spam" if is_spam else "conversation_unmarked_spam",
+            ))
+            # Marking spam also stops the AI answering it -- a report of spam
+            # that the assistant keeps replying to is not moderation, it is a
+            # label nobody acts on. Un-marking does not resume AI handling on
+            # its own: a person decided to look at it, and the same "return to
+            # AI" action every human takeover already uses is how it resumes.
+            if is_spam and bool(state.get("handled_by_ai", True)):
+                updates.append((
+                    "handled_by_ai",
+                    True,
+                    False,
+                    "human_takeover",
+                ))
+
         if not updates:
             return state
 
         with database_manager.tenant(company_id) as conn:
             for field_name, old_value, new_value, event_type in updates:
                 stored_value = new_value
-                if field_name in {"is_starred", "is_pinned"}:
+                if field_name in {"is_starred", "is_pinned", "is_spam", "handled_by_ai"}:
                     stored_value = 1 if new_value else 0
                 elif field_name == "tags_json":
                     stored_value = json.dumps(

@@ -79,6 +79,7 @@ class ConversationControlUpdate(BaseModel):
     tags: list[str] | None = None
     clear_assignment: bool | None = None
     is_unread: bool | None = None
+    is_spam: bool | None = None
 
 
 class ConversationReminderRequest(BaseModel):
@@ -754,6 +755,7 @@ def update_control(
         tags=payload.tags,
         clear_assignment=payload.clear_assignment,
         is_unread=payload.is_unread,
+        is_spam=payload.is_spam,
     )
 
     assigned_user_id = conversation.get("assigned_user_id")

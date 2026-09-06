@@ -712,6 +712,55 @@ class CustomerService:
         )
         return self.get_customer(company_id=company_id, customer_id=customer_id)
 
+    def set_blocked(
+        self,
+        *,
+        company_id: int,
+        customer_id: int,
+        blocked: bool,
+        actor_user_id: int | None,
+    ) -> dict[str, Any]:
+        """Block or unblock a customer.
+
+        This is the flag `channels/inbound.py` checks before a message from
+        this person is stored, notified on, or answered at all -- "Block
+        customer" is enforcement, not a label the inbox happens to show.
+        """
+        company_id = int(company_id)
+        now = utc_now_iso()
+
+        with database_manager.tenant(company_id) as conn:
+            cursor = conn.execute(
+                """
+                UPDATE customers
+                SET is_blocked = ?,
+                    blocked_at = ?,
+                    blocked_by_user_id = ?,
+                    updated_at = ?
+                WHERE id = ? AND company_id = ?
+                """,
+                (
+                    1 if blocked else 0,
+                    now if blocked else None,
+                    int(actor_user_id) if blocked and actor_user_id else None,
+                    now,
+                    int(customer_id),
+                    company_id,
+                ),
+            )
+            conn.commit()
+            if cursor.rowcount != 1:
+                raise KeyError("Customer not found")
+
+        logger.info(
+            "%s customer id=%s company id=%s actor id=%s",
+            "Blocked" if blocked else "Unblocked",
+            customer_id,
+            company_id,
+            actor_user_id,
+        )
+        return self.get_customer(company_id=company_id, customer_id=customer_id)
+
     # ------------------------------------------------------------------
     # Segments — a saved combination of the Contacts filters (search,
     # lifecycle stage, tag, channel, owner), so a list somebody rebuilds

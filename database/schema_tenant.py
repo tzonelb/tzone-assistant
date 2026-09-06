@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 10
+TENANT_SCHEMA_VERSION = 11
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -939,6 +939,12 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "department_id": (
             "INTEGER REFERENCES business_departments(id) ON DELETE SET NULL"
         ),
+        # "Mark as spam" from the chat panel. Spam is a conversation's own
+        # lifecycle, independent of status/handled_by_ai: marking it also stops
+        # the AI answering (the reply path checks this before routing) and hides
+        # the conversation from the default inbox list, without deleting
+        # anything a person may want to review later.
+        "is_spam": "INTEGER NOT NULL DEFAULT 0",
     },
     # Added after the tag feature shipped without it. Existing companies have a
     # `conversation_tags` table with no `status`, so the column has to arrive
@@ -1004,6 +1010,14 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "assigned_user_id": "INTEGER",
         "custom_fields_json": "TEXT NOT NULL DEFAULT '{}'",
         "documents_json": "TEXT NOT NULL DEFAULT '[]'",
+        # "Block customer" from the chat panel. Enforced on the one path that
+        # matters -- `channels/inbound.py` drops a blocked customer's message
+        # before it is stored, notified on, or answered -- not merely a label
+        # the inbox happens to show. `blocked_by_user_id` carries no REFERENCES
+        # clause: `users` lives in the control-plane database.
+        "is_blocked": "INTEGER NOT NULL DEFAULT 0",
+        "blocked_at": "TEXT",
+        "blocked_by_user_id": "INTEGER",
     },
 }
 

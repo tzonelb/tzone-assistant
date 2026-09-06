@@ -1589,6 +1589,18 @@ export async function updateCustomerRequest(customerId, values) {
   );
 }
 
+export async function blockCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${encodeURIComponent(customerId)}/block`, {
+    method: "POST",
+  });
+}
+
+export async function unblockCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${encodeURIComponent(customerId)}/unblock`, {
+    method: "POST",
+  });
+}
+
 export async function bulkUpdateCustomersRequest(payload) {
   return apiRequest("/api/customers/bulk-update", {
     method: "POST",
