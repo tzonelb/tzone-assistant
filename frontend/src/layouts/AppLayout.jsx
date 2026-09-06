@@ -18,8 +18,9 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import Sidebar from "../components/layout/Sidebar";
-import Topbar from "../components/layout/Topbar";
+import SidebarV2 from "../components/layout/SidebarV2";
+import TopbarV2 from "../components/layout/TopbarV2";
+import "./AppLayoutV2.css";
 import { useAuth } from "../contexts/AuthContext";
 import { readNotificationPreferences } from "../utils/notificationPreferences";
 
@@ -34,6 +35,7 @@ const pageTitles = {
   "/conversations": "Conversations",
   "/comments": "Comments",
   "/customers": "Customers",
+  "/broadcast": "Broadcast",
   "/appointments": "Appointments",
   "/tasks": "Tasks",
   "/catalogue": "Catalogue",
@@ -54,6 +56,7 @@ function resolvePageTitle(
 ) {
   if (pathname.startsWith("/conversations")) return "Conversations";
   if (pathname.startsWith("/company-settings")) return "Company Settings";
+  if (pathname.startsWith("/broadcast")) return "Broadcast";
 
   return (
     pageTitles[pathname]
@@ -169,6 +172,7 @@ function formatChannel(
 
 
 export default function AppLayout() {
+  // The redesigned interface is the only one; there is no flag and no old shell.
   useEffect(() => {
     const applyAppearance = () => {
       const font = localStorage.getItem("tzone_ui_font");
@@ -585,27 +589,27 @@ export default function AppLayout() {
   const companySettingsMode = location.pathname.startsWith("/company-settings");
   const standaloneSettingsMode = companySettingsMode || location.pathname === "/settings";
 
+  const SidebarComponent = SidebarV2;
+  const TopbarComponent = TopbarV2;
+
   return (
     <div
-      className={
-        `app-layout ${standaloneSettingsMode ? "company-settings-mode" : ""} ${
-          sidebarCollapsed
-            ? "app-layout-sidebar-collapsed"
-            : ""
-        }`
-      }
+      className="tzv2 app-layout-v2"
     >
-      {!standaloneSettingsMode ? <Sidebar
+      {!standaloneSettingsMode ? <SidebarComponent
         open={sidebarOpen}
         collapsed={sidebarCollapsed}
         companyName={companyName}
         onClose={() =>
           setSidebarOpen(false)
         }
+        // SidebarV2 renders its own collapse control and calls this. Without
+        // it the button is drawn and does nothing.
+        onToggleCollapsed={toggleSidebarCollapsed}
       /> : null}
 
-      <div className="app-main">
-        {!standaloneSettingsMode ? <Topbar
+      <div className="app-main-v2">
+        {!standaloneSettingsMode ? <TopbarComponent
           title={pageTitle}
           sidebarCollapsed={
             sidebarCollapsed
@@ -794,7 +798,7 @@ export default function AppLayout() {
           </div>
         ) : null}
 
-        <main className={`app-content ${location.pathname.startsWith("/conversations") ? "app-content-workspace" : "app-content-scroll"}`}>
+        <main className={`app-content-v2 ${location.pathname.startsWith("/conversations") ? "app-content-workspace-v2" : ""}`}>
           <Outlet />
         </main>
       </div>

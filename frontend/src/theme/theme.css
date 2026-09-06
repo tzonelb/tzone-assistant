@@ -1,0 +1,671 @@
+/* T-ZONE component layer.
+   Every public class is prefixed .tz- so the package cannot collide with an
+   existing project's CSS. No colour, size, font or radius literal appears here —
+   everything reads a token from tokens.css.
+
+   Load order is mandatory:
+     import './tzone-theme/tokens.css';
+     import './tzone-theme/theme.css';
+
+   Bidirectional by construction: logical properties (padding-inline,
+   border-inline-start, text-align: start) do the work, and the [dir="rtl"]
+   block at the bottom handles the few things logical properties cannot.        */
+
+/* ============================================================
+   1. Base
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+.tz-root {
+  margin: 0;
+  font-family: var(--tz-font-body);
+  font-size: var(--tz-base-size);
+  line-height: var(--tz-line-height);
+  letter-spacing: var(--tz-letter-spacing);
+  font-weight: 400;
+  color: var(--tz-color-text);
+  background: var(--tz-color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+.tz-root h1, .tz-root h2, .tz-root h3,
+.tz-root h4, .tz-root h5, .tz-root h6 {
+  font-family: var(--tz-font-heading);
+  font-weight: var(--tz-font-heading-weight);
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 var(--tz-space-2);
+  zoom: var(--tz-heading-scale);
+}
+
+.tz-root h1 { font-size: 42px; }
+.tz-root h2 { font-size: 32px; }
+.tz-root h3 { font-size: 25px; }
+.tz-root h4 { font-size: 20px; }
+.tz-root h5 { font-size: 16px; }
+.tz-root h6 { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+.tz-root p { margin: 0 0 var(--tz-space-3); text-wrap: pretty; }
+
+.tz-root a { color: var(--tz-color-accent-700); text-underline-offset: 3px; }
+.tz-root a:hover { color: var(--tz-color-accent-800); }
+
+.tz-root :focus-visible {
+  outline: var(--tz-focus) solid var(--tz-color-accent);
+  outline-offset: 2px;
+}
+
+.tz-root button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+/* ============================================================
+   2. Type helpers
+   ============================================================ */
+
+.tz-kick {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: var(--tz-kick-case);
+  font-feature-settings: var(--tz-tnum);
+}
+
+.tz-fig {
+  font-family: var(--tz-font-heading);
+  font-weight: 400;
+  font-feature-settings: var(--tz-tnum);
+  letter-spacing: -0.02em;
+}
+
+.tz-num { font-feature-settings: var(--tz-tnum); }
+
+.tz-text-muted { color: color-mix(in srgb, var(--tz-color-text) 60%, transparent); }
+
+.tz-hr {
+  height: 1px;
+  margin: var(--tz-space-4) 0;
+  border: 0;
+  background: var(--tz-color-divider);
+}
+
+/* ============================================================
+   3. Buttons
+   ============================================================ */
+
+.tz-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--tz-font-heading);
+  font-weight: var(--tz-font-heading-weight);
+  font-size: var(--tz-btn-size);
+  line-height: 1.2;
+  color: var(--tz-color-text);
+  background: transparent;
+  border: var(--tz-line) solid transparent;
+  border-radius: var(--tz-radius-md);
+  padding-block: var(--tz-space-2);
+  padding-inline: calc(var(--tz-space-3) * 1.2);
+  transition: background var(--tz-speed) ease, color var(--tz-speed) ease;
+}
+
+.tz-btn svg { display: block; }
+.tz-btn:active { opacity: 0.85; }
+.tz-btn:disabled { opacity: 0.45; pointer-events: none; }
+
+.tz-btn-primary {
+  background: var(--tz-btn-bg);
+  color: var(--tz-btn-fg);
+  border-color: var(--tz-color-accent);
+}
+.tz-btn-primary:hover { filter: brightness(1.06); }
+
+.tz-btn-secondary { border-color: var(--tz-color-divider); }
+.tz-btn-secondary:hover { background: color-mix(in srgb, var(--tz-color-text) 7%, transparent); }
+.tz-btn-secondary:active { background: color-mix(in srgb, var(--tz-color-text) 14%, transparent); }
+
+.tz-btn-ghost {
+  color: var(--tz-color-accent);
+  padding-inline: var(--tz-space-1);
+}
+.tz-btn-ghost:hover { background: color-mix(in srgb, var(--tz-color-accent) 10%, transparent); }
+.tz-btn-ghost:active { background: color-mix(in srgb, var(--tz-color-accent) 18%, transparent); }
+
+.tz-btn-icon { width: 36px; height: 36px; padding: 0; }
+
+.tz-btn-block { width: 100%; margin-top: var(--tz-space-2); }
+
+/* ============================================================
+   4. Forms
+   ============================================================ */
+
+.tz-field > label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 5px;
+  color: color-mix(in srgb, var(--tz-color-text) 70%, transparent);
+}
+
+.tz-input {
+  width: 100%;
+  min-height: 36px;
+  padding-block: 6px;
+  padding-inline: 10px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--tz-color-text);
+  caret-color: var(--tz-color-accent);
+  background: transparent;
+  border: var(--tz-input-border) solid var(--tz-color-divider);
+  border-radius: var(--tz-input-radius);
+  text-align: start;
+}
+
+.tz-input:hover { border-color: color-mix(in srgb, var(--tz-color-text) 45%, transparent); }
+.tz-input:focus-visible { border-color: var(--tz-color-accent); outline-offset: 0; }
+textarea.tz-input { min-height: 90px; resize: vertical; }
+
+.tz-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.tz-radio input, .tz-seg-opt input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.tz-radio .tz-dot {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--tz-color-divider);
+}
+.tz-radio input:checked + .tz-dot {
+  border-color: var(--tz-color-accent);
+  background:
+    radial-gradient(circle at center, var(--tz-color-accent) 0 4px, transparent 4px);
+}
+
+.tz-seg {
+  display: inline-flex;
+  overflow: hidden;
+  border: var(--tz-line) solid var(--tz-color-divider);
+  border-radius: var(--tz-radius-md);
+}
+.tz-seg-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color var(--tz-speed) ease, box-shadow var(--tz-speed) ease;
+}
+.tz-seg-opt + .tz-seg-opt { border-inline-start: var(--tz-line) solid var(--tz-color-divider); }
+.tz-seg-opt-on {
+  color: var(--tz-color-accent);
+  box-shadow: inset 0 0 0 1px var(--tz-color-accent);
+}
+
+/* ============================================================
+   5. Cards
+   ============================================================ */
+
+.tz-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tz-space-2);
+  padding: var(--tz-space-3);
+  border-radius: var(--tz-radius-md);
+  background: var(--tz-card-bg);
+  border: var(--tz-line) solid var(--tz-color-divider);
+}
+
+.tz-card-kicker {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: var(--tz-kick-case);
+  color: var(--tz-color-accent);
+}
+
+.tz-card-title {
+  font-family: var(--tz-font-heading);
+  font-weight: var(--tz-font-heading-weight);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.tz-card-body { margin: 0; font-size: 13px; opacity: 0.8; flex: 1; }
+
+.tz-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--tz-color-text) 50%, transparent);
+}
+
+/* ============================================================
+   6. Tags
+   ============================================================ */
+
+.tz-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 3px 10px;
+  border-radius: calc(var(--tz-radius-md) * 0.75);
+  white-space: nowrap;
+  flex: none;
+}
+.tz-tag-neutral {
+  background: color-mix(in srgb, var(--tz-color-text) 6%, transparent);
+  color: color-mix(in srgb, var(--tz-color-text) 75%, transparent);
+}
+.tz-tag-outline { border: var(--tz-line) solid var(--tz-color-divider); }
+.tz-tag-accent { background: var(--tz-color-accent-100); color: var(--tz-color-accent-800); }
+.tz-tag-accent-2 { background: var(--tz-color-accent-2-100); color: var(--tz-color-accent-2-800); }
+
+/* ============================================================
+   7. Nav
+   ============================================================ */
+
+.tz-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--tz-space-4);
+  padding: var(--tz-space-3) var(--tz-space-4);
+  border-bottom: var(--tz-line) solid var(--tz-color-divider);
+}
+.tz-nav-brand {
+  font-family: var(--tz-font-heading);
+  font-weight: var(--tz-font-heading-weight);
+  font-size: 18px;
+  margin-inline-end: auto;
+}
+.tz-nav a { color: inherit; text-decoration: none; font-size: 14px; }
+.tz-nav a:hover, .tz-nav a[aria-current='page'] { color: var(--tz-color-accent); }
+
+/* ============================================================
+   8. Tables
+   ============================================================ */
+
+.tz-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tz-table th {
+  text-align: start;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--tz-color-text) 60%, transparent);
+  padding: var(--tz-space-2);
+  border-bottom: var(--tz-line) solid var(--tz-color-divider);
+}
+.tz-table td {
+  padding: var(--tz-space-2);
+  border-bottom: var(--tz-line) solid var(--tz-color-divider);
+}
+.tz-tablewrap { overflow-x: auto; border-radius: var(--tz-radius-md); }
+
+/* ============================================================
+   9. Dialog
+   ============================================================ */
+
+.tz-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--tz-space-4);
+  background: color-mix(in srgb, var(--tz-color-neutral-900) 50%, transparent);
+  z-index: 40;
+}
+.tz-dialog {
+  width: min(440px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tz-space-3);
+  padding: var(--tz-space-4);
+  border-radius: var(--tz-radius-lg);
+  background: var(--tz-color-surface);
+  box-shadow: var(--tz-shadow-lg);
+  border: var(--tz-line) solid var(--tz-color-divider);
+}
+.tz-dialog-title {
+  font-family: var(--tz-font-heading);
+  font-weight: var(--tz-font-heading-weight);
+  font-size: 20px;
+}
+.tz-dialog-body { font-size: 14px; opacity: 0.85; }
+.tz-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--tz-space-2);
+  margin-top: var(--tz-space-2);
+}
+
+/* ============================================================
+   10. Elevation + plate
+   ============================================================ */
+
+.tz-elev-sm { box-shadow: var(--tz-shadow-sm); }
+.tz-elev-md { box-shadow: var(--tz-shadow-md); }
+.tz-elev-lg { box-shadow: var(--tz-shadow-lg); }
+
+.tz-plate {
+  filter: sepia(0.22) saturate(0.82) contrast(1.05);
+  box-sizing: border-box;
+  border: var(--tz-line) solid var(--tz-color-divider);
+  border-radius: var(--tz-radius-sm);
+  object-fit: cover;
+  display: block;
+  width: 100%;
+}
+
+/* ============================================================
+   11. Side rail
+   ============================================================ */
+
+.tz-aside {
+  flex: none;
+  width: var(--tz-rail-width);
+  transition: width var(--tz-speed) ease;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--tz-color-rail);
+  color: var(--tz-color-rail-text);
+}
+.tz-aside.tz-min { width: 58px; }
+.tz-aside.tz-min:hover { width: var(--tz-rail-width); }
+.tz-aside.tz-min .tz-rail-link span { opacity: 0; }
+.tz-aside.tz-min:hover .tz-rail-link span { opacity: 1; }
+.tz-aside.tz-min .tz-kick, .tz-aside.tz-min .tz-hide { display: none; }
+.tz-aside.tz-min:hover .tz-kick, .tz-aside.tz-min:hover .tz-hide { display: block; }
+.tz-aside .tz-hide, .tz-aside .tz-kick { transition: opacity var(--tz-speed) ease; }
+
+.tz-rail-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding-block: 7px;
+  padding-inline: 16px 14px;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--tz-color-rail-text) 82%, transparent);
+  font-family: var(--tz-font-body);
+  font-size: 13px;
+  text-align: start;
+  cursor: pointer;
+  transition: background var(--tz-speed) ease, color var(--tz-speed) ease;
+}
+.tz-rail-link:hover {
+  color: var(--tz-color-rail-text);
+  background: color-mix(in srgb, var(--tz-color-rail-text) 6%, transparent);
+}
+.tz-rail-link svg { flex: none; opacity: 0.8; }
+.tz-rail-link span { white-space: nowrap; transition: opacity var(--tz-speed) ease; }
+.tz-rail-link:has(.tz-mark) { color: var(--tz-color-rail-text); }
+
+.tz-mark {
+  position: absolute;
+  inset: 0;
+  border-inline-start: 2px solid currentColor;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  pointer-events: none;
+}
+
+/* ============================================================
+   12. Rows, chips, stats, screen
+   ============================================================ */
+
+.tz-row { transition: background var(--tz-speed) ease, color var(--tz-speed) ease; }
+.tz-row:hover { background: color-mix(in srgb, var(--tz-color-text) 4%, transparent); }
+
+.tz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: var(--tz-line) solid var(--tz-color-divider);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tz-chip:hover { background: color-mix(in srgb, var(--tz-color-text) 5%, transparent); }
+.tz-chip-on {
+  border-color: var(--tz-color-accent);
+  color: var(--tz-color-accent-700);
+  background: color-mix(in srgb, var(--tz-color-accent) 8%, transparent);
+}
+
+.tz-stat { box-shadow: inset 1px 0 var(--tz-color-divider), inset 0 1px var(--tz-color-divider); }
+
+.tz-screen { min-width: 0; max-width: var(--tz-max, none); margin: 0 auto; }
+.tz-screen table.tz-table { min-width: 760px; }
+
+.tz-hidden { display: none !important; }
+
+/* ============================================================
+   13. Avatar
+   ============================================================ */
+
+.tz-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  overflow: hidden;
+  border: var(--tz-line) solid var(--tz-color-divider);
+  border-radius: var(--tz-avatar);
+  font-family: var(--tz-font-heading);
+  font-weight: var(--tz-font-heading-weight);
+  color: var(--tz-color-text);
+  background: transparent;
+  user-select: none;
+}
+.tz-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tz-avatar-sm { width: 26px; height: 26px; font-size: 11px; }
+.tz-avatar-md { width: 36px; height: 36px; font-size: 15px; }
+.tz-avatar-lg { width: 52px; height: 52px; font-size: 21px; }
+.tz-avatar-accent { border-color: var(--tz-color-accent); color: var(--tz-color-accent-700); }
+
+/* ============================================================
+   14. Drawer
+   ============================================================ */
+
+.tz-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--tz-color-neutral-900) 35%, transparent);
+  animation: tz-fade var(--tz-speed) ease;
+}
+
+.tz-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 51;
+  width: var(--tz-drawer-width);
+  max-width: 88vw;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--tz-color-bg);
+  color: var(--tz-color-text);
+  border-inline-start: var(--tz-line) solid var(--tz-color-divider);
+  box-shadow: var(--tz-shadow-lg);
+  animation: tz-slide-in-end var(--tz-speed) ease;
+}
+.tz-drawer-start {
+  inset-inline-end: auto;
+  inset-inline-start: 0;
+  border-inline-start: 0;
+  border-inline-end: var(--tz-line) solid var(--tz-color-divider);
+  animation-name: tz-slide-in-start;
+}
+
+.tz-drawer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--tz-space-2);
+  padding: var(--tz-space-3);
+  border-bottom: var(--tz-line) solid var(--tz-color-divider);
+}
+.tz-drawer-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--tz-space-3); }
+.tz-drawer-foot {
+  flex: none;
+  padding: var(--tz-space-2) var(--tz-space-3);
+  border-top: var(--tz-line) solid var(--tz-color-divider);
+}
+
+@keyframes tz-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tz-slide-in-end { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes tz-slide-in-start { from { transform: translateX(-100%); } to { transform: none; } }
+
+/* ============================================================
+   15. Empty state
+   ============================================================ */
+
+.tz-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tz-space-2);
+  max-width: 34ch;
+  margin: 0 auto;
+  padding: var(--tz-space-8) var(--tz-space-4);
+  text-align: center;
+}
+.tz-empty-icon { color: var(--tz-color-accent); opacity: 0.7; }
+.tz-empty-title {
+  font-family: var(--tz-font-heading);
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.2;
+  margin: 0;
+}
+.tz-empty-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--tz-color-text) 62%, transparent);
+}
+
+/* ============================================================
+   16. Skeleton
+   ============================================================ */
+
+.tz-skeleton {
+  display: block;
+  background: color-mix(in srgb, var(--tz-color-neutral-300) 55%, transparent);
+  border-radius: var(--tz-radius-sm);
+  animation: tz-pulse 1.4s ease-in-out infinite;
+}
+.tz-skeleton-text { height: 0.75em; }
+.tz-skeleton-circle { border-radius: 50%; }
+.tz-skeleton-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--tz-space-3);
+  align-items: center;
+  padding: var(--tz-space-3) var(--tz-space-2);
+  border-bottom: var(--tz-line) solid var(--tz-color-divider);
+}
+
+@keyframes tz-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tz-skeleton, .tz-drawer, .tz-drawer-backdrop, .tz-toast { animation: none; }
+}
+
+/* ============================================================
+   17. Toast
+   ============================================================ */
+
+.tz-toast-stack {
+  position: fixed;
+  inset-block-end: var(--tz-space-4);
+  inset-inline: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tz-space-2);
+  pointer-events: none;
+}
+.tz-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--tz-space-3);
+  max-width: min(440px, 92vw);
+  padding: var(--tz-space-2) var(--tz-space-3);
+  font-size: 13px;
+  background: var(--tz-color-surface);
+  color: var(--tz-color-text);
+  border: var(--tz-line) solid var(--tz-color-divider);
+  border-radius: var(--tz-radius-md);
+  box-shadow: var(--tz-shadow-md);
+  animation: tz-toast-in var(--tz-speed) ease;
+}
+.tz-toast-accent { border-color: var(--tz-color-accent); }
+.tz-toast-success { border-color: var(--tz-color-accent-2-500); }
+.tz-toast-text { flex: 1; min-width: 0; text-align: start; }
+
+@keyframes tz-toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ============================================================
+   18. Responsive
+   ============================================================ */
+
+@media (max-width: 940px) { .tz-conv-list { display: none !important; } }
+@media (max-width: 1100px) { .tz-pane-aux { display: none !important; } }
+
+/* ============================================================
+   19. RTL — only what logical properties cannot express
+   ============================================================ */
+
+[dir='rtl'] .tz-drawer { animation-name: tz-slide-in-start-rtl; }
+[dir='rtl'] .tz-drawer-start { animation-name: tz-slide-in-end-rtl; }
+
+@keyframes tz-slide-in-start-rtl { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes tz-slide-in-end-rtl { from { transform: translateX(100%); } to { transform: none; } }
+
+[dir='rtl'] .tz-drawer { box-shadow: var(--tz-shadow-lg); }
+
+/* Headings tighten differently in Naskh — Arabic needs the leading back. */
+[dir='rtl'] .tz-root h1, [dir='rtl'] .tz-root h2, [dir='rtl'] .tz-root h3,
+[dir='rtl'] .tz-root h4, [dir='rtl'] .tz-root h5, [dir='rtl'] .tz-root h6,
+[lang='ar'] h1, [lang='ar'] h2, [lang='ar'] h3, [lang='ar'] h4 {
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+/* Kickers must not letter-space Arabic — it breaks the joins. */
+[dir='rtl'] .tz-kick, [lang='ar'] .tz-kick {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Latin numerals stay LTR inside Arabic text. */
+[dir='rtl'] .tz-num, [dir='rtl'] .tz-fig { direction: ltr; unicode-bidi: embed; }
+
+/* Chevrons and directional glyphs flip. */
+[dir='rtl'] .tz-flip { transform: scaleX(-1); }
+
+/* Mixed-language lists: each string decides its own direction. */
+.tz-auto { text-align: start; }

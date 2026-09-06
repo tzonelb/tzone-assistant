@@ -14,11 +14,17 @@ survive a restart belongs in the company's database.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 
 MAX_SESSIONS = 10_000
 SESSION_TTL_SECONDS = 6 * 60 * 60
+
+# A namespaced key begins with the company id and a colon: "5:telegram:12345".
+# A bare external id -- a WhatsApp number, a Telegram chat id, a Messenger PSID
+# -- never does. This is how the store refuses to be keyed on the person alone.
+_NAMESPACED = re.compile(r"^\d+:")
 
 
 class SessionManager:
@@ -30,6 +36,28 @@ class SessionManager:
     @staticmethod
     def key(user_id, channel: str = "", company_id: int | None = None) -> str:
         return f"{company_id or 0}:{str(channel).lower()}:{user_id}"
+
+    @classmethod
+    def _keyed(cls, identity) -> str:
+        """The storage key, refusing a bare external id.
+
+        Every entry point must pass a `key()`-shaped identity -- in practice
+        `request.session_key`. A raw id (which begins with the id itself, not a
+        company number and a colon) is refused rather than quietly bucketed
+        under company `0`, because that quiet bucketing is exactly the
+        cross-company bleed this store exists to prevent. Fail closed: a missed
+        call site raises here instead of leaking one customer's flow into
+        another company's.
+        """
+        key = str(identity)
+
+        if not _NAMESPACED.match(key):
+            raise ValueError(
+                "conversation session must be keyed by company; pass "
+                f"request.session_key, not the bare user id {key!r}"
+            )
+
+        return key
 
     def default_session(self) -> dict:
         return {
@@ -79,7 +107,7 @@ class SessionManager:
             self._touched.pop(key, None)
 
     def create(self, user_id) -> dict:
-        key = str(user_id)
+        key = self._keyed(user_id)
 
         with self._lock:
             if key not in self.sessions:
@@ -90,11 +118,13 @@ class SessionManager:
             return self.sessions[key]
 
     def get(self, user_id) -> dict | None:
+        key = self._keyed(user_id)
+
         with self._lock:
-            session = self.sessions.get(str(user_id))
+            session = self.sessions.get(key)
 
             if session is not None:
-                self._touched[str(user_id)] = time.monotonic()
+                self._touched[key] = time.monotonic()
 
             return session
 
@@ -103,10 +133,12 @@ class SessionManager:
             self.create(user_id)[key] = value
 
     def reset(self, user_id) -> dict:
+        key = self._keyed(user_id)
+
         with self._lock:
-            self.sessions[str(user_id)] = self.default_session()
-            self._touched[str(user_id)] = time.monotonic()
-            return self.sessions[str(user_id)]
+            self.sessions[key] = self.default_session()
+            self._touched[key] = time.monotonic()
+            return self.sessions[key]
 
     def set_language(self, user_id, language):
         with self._lock:

@@ -119,6 +119,89 @@ def send_meta_text(
     )
 
 
+# Meta names four attachment kinds. Taken from the design branch's sender
+# (`_META_ATTACHMENT_TYPE` there) so a file sends exactly as it did in the
+# interface this design came from: anything this platform stores as a document
+# goes as "file".
+_META_ATTACHMENT_TYPE = {
+    "image": "image",
+    "video": "video",
+    "audio": "audio",
+    "document": "file",
+}
+
+
+def send_meta_media(
+    recipient_id: str,
+    media_url: str,
+    media_type: str,
+    company_id: int,
+    channel: str = "messenger",
+    caption: str | None = None,
+) -> dict[str, Any]:
+    """Send a stored file by URL.
+
+    Meta fetches the URL itself rather than accepting bytes, which is why the
+    media read route is served without a session. The URL has to be one the
+    public internet can reach: a link to 127.0.0.1 is accepted by Meta and
+    silently delivers nothing, so an absolute URL is required rather than
+    guessed at here.
+
+    The caption is a second message, not a field. Messenger's attachment payload
+    carries no text, so folding a caption into it would drop it -- the design
+    branch sends it afterwards for the same reason, and sending it after means a
+    failed caption never costs the attachment.
+    """
+    if is_fake_meta_id(recipient_id):
+        return _skip_fake(recipient_id, channel)
+
+    attachment_type = _META_ATTACHMENT_TYPE.get(media_type)
+
+    if not attachment_type:
+        return {
+            "ok": False,
+            "channel": channel,
+            "recipient_id": recipient_id,
+            "error": f"Meta cannot carry a {media_type or 'file'} attachment.",
+        }
+
+    if not str(media_url or "").lower().startswith(("http://", "https://")):
+        return {
+            "ok": False,
+            "channel": channel,
+            "recipient_id": recipient_id,
+            "error": (
+                "An attachment needs a URL the channel can fetch. Set "
+                "APP_PUBLIC_URL to this platform's public address."
+            ),
+        }
+
+    try:
+        credentials = resolve(company_id, channel)
+    except MissingChannelCredentials as exc:
+        return _no_credentials(exc, recipient_id, channel)
+
+    result = _post(
+        access_token=credentials["access_token"],
+        payload={
+            "recipient": {"id": recipient_id},
+            "message": {
+                "attachment": {
+                    "type": attachment_type,
+                    "payload": {"url": media_url, "is_reusable": True},
+                }
+            },
+        },
+        recipient_id=recipient_id,
+        channel=channel,
+    )
+
+    if result.get("ok") and caption:
+        send_meta_text(recipient_id, caption, company_id, channel=channel)
+
+    return result
+
+
 def send_meta_buttons(
     recipient_id: str,
     text: str,

@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from reportlab.lib.pagesizes import A4
@@ -34,6 +34,10 @@ except ImportError:  # Optional Arabic PDF shaping.
     get_display = None
 
 from backend.services.activity_service import Action, activity_service
+from backend.services.conversation_reminder_service import (
+    ReminderError,
+    conversation_reminder_service,
+)
 from backend.services.auth_service import (
     auth_service,
     client_ip,
@@ -77,8 +81,28 @@ class ConversationControlUpdate(BaseModel):
     is_unread: bool | None = None
 
 
+class ConversationReminderRequest(BaseModel):
+    """A follow-up on one conversation.
+
+    `message_text` is only meaningful with `auto_send`; the service refuses the
+    combination that promises to send something and carries nothing to send.
+    """
+
+    reminder_at: str = Field(min_length=4, max_length=64)
+    note: str | None = Field(default=None, max_length=500)
+    auto_send: bool = False
+    message_text: str | None = Field(default=None, max_length=4000)
+
+
 class ConversationNoteCreate(BaseModel):
     note: str = Field(min_length=1, max_length=4000)
+    # Who the note is for. The picker in the composer sends the ids of the
+    # colleagues it offered; the service checks every one of them against this
+    # company's own directory before it stores or notifies anything, so an id
+    # from another company that was typed into the payload by hand names
+    # nobody. Bounded so a payload cannot ask for an unbounded fan-out of
+    # notifications.
+    mentioned_user_ids: list[int] = Field(default_factory=list, max_length=100)
 
 
 # ----------------------------------------------------------------------
@@ -460,6 +484,10 @@ def read_conversation(
     user_id: str,
     request: Request,
     limit: int = Query(default=50, ge=1, le=500),
+    # An open screen re-reads this route every few seconds to stay current. That
+    # refresh is not somebody opening the conversation, and treating it as one
+    # made "mark as unread" impossible: the next poll marked it read again.
+    mark_read: bool = Query(default=True),
     current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
 ):
     company_id = auth_service.resolve_company_id(current_user)
@@ -474,12 +502,13 @@ def read_conversation(
     if not messages:
         raise HTTPException(status_code=404, detail="Conversation not found.")
 
-    conversation_control_service.record_opened(
-        company_id=company_id,
-        channel=channel,
-        external_user_id=user_id,
-        actor_user_id=int(current_user["id"]),
-    )
+    if mark_read:
+        conversation_control_service.record_opened(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            actor_user_id=int(current_user["id"]),
+        )
 
     # Reading is recorded, not only writing. A customer's conversation holds
     # what they told this company in confidence, and who read it is a fact the
@@ -738,6 +767,69 @@ def update_control(
     return {"status": "ok", "conversation": conversation}
 
 
+@router.post("/{channel}/{user_id}/reminder")
+def set_conversation_reminder(
+    channel: str,
+    user_id: str,
+    payload: ConversationReminderRequest,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.reply")),
+):
+    """Come back to this conversation at a time, optionally sending a message.
+
+    Takes `conversations.reply` rather than `conversations.view`: a reminder can
+    carry a message the platform sends to the customer on the employee's behalf,
+    which is a reply scheduled rather than typed.
+    """
+    company_id = auth_service.resolve_company_id(current_user)
+
+    _assert_can_control(
+        current_user=current_user,
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    )
+
+    try:
+        reminder = conversation_reminder_service.set(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            remind_at=payload.reminder_at,
+            note=payload.note,
+            auto_send=payload.auto_send,
+            message_text=payload.message_text,
+            created_by_user_id=int(current_user["id"]),
+        )
+    except ReminderError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+    return reminder
+
+
+@router.delete("/{channel}/{user_id}/reminder")
+def clear_conversation_reminder(
+    channel: str,
+    user_id: str,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.reply")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    _assert_can_control(
+        current_user=current_user,
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+    )
+
+    cleared = conversation_reminder_service.clear(
+        company_id=company_id, channel=channel, external_user_id=user_id
+    )
+
+    return {"success": True, "cleared": cleared}
+
+
 @router.post("/{channel}/{user_id}/notes")
 def add_note(
     channel: str,
@@ -761,6 +853,7 @@ def add_note(
             external_user_id=user_id,
             author_user_id=int(current_user["id"]),
             note=payload.note,
+            mentioned_user_ids=payload.mentioned_user_ids,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

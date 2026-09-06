@@ -91,6 +91,12 @@ class _Request:
         self.message = "how much is the blue one"
         self.channel_account_id = None
 
+    @property
+    def session_key(self):
+        from core.session import SessionManager
+
+        return SessionManager.key(self.user_id, self.channel, self.company_id)
+
 
 # --------------------------------------------------------------------- gate
 

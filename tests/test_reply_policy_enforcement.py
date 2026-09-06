@@ -55,6 +55,12 @@ class _Request:
         self.message = message
         self.channel_account_id = None
 
+    @property
+    def session_key(self):
+        from core.session import SessionManager
+
+        return SessionManager.key(self.user_id, self.channel, self.company_id)
+
 
 @pytest.fixture()
 def model_calls(monkeypatch):
@@ -98,7 +104,7 @@ def _reply(company, message: str = "do you deliver?") -> dict:
     from core.session import session
 
     request = _Request(company["id"], message)
-    session.reset(request.user_id) if hasattr(session, "reset") else None
+    session.reset(request.session_key) if hasattr(session, "reset") else None
 
     return Engine().handle_ai(
         request=request,

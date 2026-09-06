@@ -19,6 +19,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from backend.api.schemas.platform import (
+    ActivationCodeMintRequest,
     CompanyCreateRequest,
     CompanyStatusRequest,
     PlanAssignRequest,
@@ -50,6 +51,7 @@ from backend.services.platform_service import (
     PlatformNotFound,
     platform_service,
 )
+from backend.services.activation_service import activation_service
 
 
 logger = logging.getLogger(__name__)
@@ -876,3 +878,47 @@ def list_audit(
         limit=limit,
         offset=offset,
     )
+
+
+# --------------------------------------------------------- activation codes
+#
+# Minting lives here, in the platform scope, and nowhere a company can reach:
+# a code is what turns a demonstration into a paying workspace, so a company
+# able to mint its own would be a company able to activate itself for free.
+# `redeem` is the company end of this, and it is the only activation route a
+# company token may call.
+
+
+@router.post("/activation-codes", status_code=status.HTTP_201_CREATED)
+def mint_activation_code(
+    payload: ActivationCodeMintRequest,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Create one activation code and return it, this once.
+
+    The plaintext is in this response and never again: only its hash is
+    stored, so the operator copies it now or mints another. `created_by` is
+    the admin doing it, so the audit answers who issued a code as well as who
+    spent it.
+    """
+    minted = activation_service.mint(
+        plan_id=payload.plan_id,
+        note=payload.note,
+        created_by_user_id=_actor(current_user),
+        expires_at=(payload.expires_at or None),
+    )
+
+    return minted
+
+
+@router.get("/activation-codes")
+def list_activation_codes(
+    limit: int = Query(default=200, ge=1, le=500),
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    """Which codes exist and which are spent -- never the codes themselves.
+
+    There is nothing to reveal here: the plaintext was shown once at minting
+    and only a hash was kept. This is the register, not a second copy.
+    """
+    return {"codes": activation_service.list_codes(limit=limit)}

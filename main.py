@@ -25,27 +25,37 @@ from backend.api.routes import (
     analytics,
     appointments,
     auth,
+    billing,
+    broadcasts,
+    calls,
     catalogue,
     channels,
     comments,
     company_settings,
     conversation_tags,
+    media_uploads,
+    saved_replies,
     conversations,
     customers,
     dashboard,
     developer_center,
+    dialer,
     health,
     knowledge,
     manual_messages,
+    notification_preferences,
     notifications,
     platform,
     platform_ui,
     roles,
     scheduler,
+    signup,
+    support_tickets,
     team_chat,
     tickets,
 )
 from backend.api.middleware import (
+    BodySizeLimitMiddleware,
     SecurityHeadersMiddleware,
     SessionCookieMiddleware,
 )
@@ -206,6 +216,11 @@ install_error_handlers(app)
 # application carries the headers, including CORS preflights and error
 # responses raised inside the stack.
 app.add_middleware(SecurityHeadersMiddleware)
+# Inside the header middleware so a refusal still carries the headers, and
+# before the routes so an oversized body is abandoned rather than parsed. The
+# webhook routes are skipped inside the middleware -- they keep their own,
+# larger cap in `read_capped_body`.
+app.add_middleware(BodySizeLimitMiddleware)
 
 # Added after CORS so it ends up *inside* it: a preflight must be answered by
 # CORS before this ever sees a request, and a browser that is refused at the
@@ -234,6 +249,17 @@ app.add_middleware(
 # plane, and the customer app asking which modules it may draw.
 app.include_router(health.router)
 app.include_router(auth.router)
+# Neither carries a module gate or a subscription gate, and both absences are
+# deliberate.
+#
+# `/api/signup/**` is how somebody with no account gets one, so there is no
+# company yet whose modules or bill could be consulted. `/api/activation/redeem`
+# is how a workspace stops being a demonstration -- gating it behind a
+# subscription would mean a company had to pay before it could become the kind
+# of company that can be billed, and gating it behind a module would let an
+# operator switch off the only route out of the demo.
+app.include_router(signup.router)
+app.include_router(signup.activation_router)
 app.include_router(platform.router)
 app.include_router(platform_ui.router)
 
@@ -281,22 +307,70 @@ app.include_router(ai_teaching.router, dependencies=_module("ai_teaching"))
 app.include_router(conversations.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
+app.include_router(saved_replies.router, dependencies=_module("conversations"))
+app.include_router(media_uploads.router, dependencies=_module("conversations"))
+# Ungated on purpose: the channel fetching a delivered attachment has no
+# session. The 128-bit stored name is what stands in for one.
+app.include_router(media_uploads.public_router)
 app.include_router(company_settings.router, dependencies=_module("company_settings"))
 # The activity log rides with company_settings: it is read by the same
 # people, from the same screen area, under the same permission.
 app.include_router(activity.router, dependencies=_module("company_settings"))
 app.include_router(customers.router, dependencies=_module("customers"))
+# Saved Contacts filters. Its own prefix, the same module gate: a company
+# without Customers has no contacts to segment.
+app.include_router(customers.segments_router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))
+# Broadcast is a channels feature: it speaks to customers over the same
+# connected accounts, under the same `channels.view` / `channels.manage`
+# permissions. It gets its own module switch because an operator can sell
+# the inbox without selling campaigns.
+app.include_router(broadcasts.router, dependencies=_module("broadcast"))
 app.include_router(catalogue.router, dependencies=_module("catalogue"))
 app.include_router(comments.router, dependencies=_module("comments"))
 app.include_router(scheduler.router, dependencies=_module("scheduler"))
 app.include_router(appointments.router, dependencies=_module("appointments"))
 app.include_router(team_chat.router, dependencies=_module("team_chat"))
+app.include_router(calls.router, dependencies=_module("calls"))
+app.include_router(dialer.router, dependencies=_module("dialer"))
+# Ungated on purpose: the telephony provider posting back about a call it is
+# carrying has no session, so the module gate — which resolves a company from
+# one — would reject every callback about a call the company itself placed.
+# Twilio's request signature stands in for the session and is checked on every
+# one of these before their body is read.
+app.include_router(dialer.webhooks_router)
 app.include_router(notifications.router, dependencies=_module("notifications"))
+# `preferences`, not `notifications` — this is the one router the personal
+# Settings screen owns, and until it existed `preferences` was a module switch
+# the operator could turn off with no effect on the API at all. It was exempt
+# on the grounds that its screen made no request, which
+# `tests/test_every_module_is_gated.py` checked rather than took on trust; the
+# moment that screen started saving anything, the exemption stopped being true.
+#
+# Gating it on `notifications` instead would have left `preferences` still
+# switching nothing. The bell's own rows stay behind `notifications`, and a
+# company with notifications switched off writes none in the first place —
+# `notification_service._wanted` refuses before anything is stored — so a
+# preference read here with the bell off is answered and decides nothing.
+app.include_router(
+    notification_preferences.router, dependencies=_module("preferences")
+)
 app.include_router(roles.router, dependencies=_module("roles"))
 app.include_router(tickets.router, dependencies=_module("tasks"))
 app.include_router(tickets.tasks_router, dependencies=_module("tasks"))
+# Both ride with `company_settings`: they are two sections of that one screen,
+# and they are reached from nowhere else.
+#
+# The full gate, not `_module_unpaid_too`, even though Billing is where a plan
+# is renewed. Exempting it would buy nothing — the page it is a section of is
+# already behind `_module("company_settings")`, so a lapsed company cannot open
+# the screen to reach the exempt section anyway. The door that stays open for a
+# lapsed company is `/api/dashboard/subscription`, which is the one the
+# dashboard's own exemption exists for. Making a second, half-reachable one
+# would read as a renewal path and not be one.
+app.include_router(billing.router, dependencies=_module("company_settings"))
+app.include_router(support_tickets.router, dependencies=_module("company_settings"))
 
 app.include_router(developer_center.router)
 

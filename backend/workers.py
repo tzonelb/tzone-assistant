@@ -252,6 +252,15 @@ async def maintenance_worker() -> None:
         except Exception:
             logger.exception("Password reset pruning failed")
 
+        try:
+            from backend.services.signup_service import signup_service
+
+            removed = await asyncio.to_thread(signup_service.prune_send_log)
+            if removed:
+                logger.info("Pruned %s expired sign-up send-log rows", removed)
+        except Exception:
+            logger.exception("Sign-up send-log pruning failed")
+
         # The one place that still opens every company's database on a timer,
         # and the reason the sweeps can stop doing it. It rebuilds the work
         # index from the tenant queues, so an entry lost to a crash between a

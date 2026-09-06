@@ -1460,6 +1460,42 @@ def cmd_unlock_user(args: argparse.Namespace) -> int:
 
 
 
+def cmd_mint_activation_code(args: argparse.Namespace) -> int:
+    """Mint one activation code from the server.
+
+    The console mints these too, but a platform administrator has nobody above
+    them: on a fresh install, before the first super admin can even sign in,
+    this is the only way to produce the code that turns the first
+    demonstration into a real workspace. The plaintext prints once here and is
+    stored only as a hash -- copy it now.
+    """
+    keyring = load_keyring()
+    require_master_key(keyring)
+
+    load_manager()
+
+    from backend.services.activation_service import activation_service
+
+    minted = activation_service.mint(
+        plan_id=args.plan_id,
+        note=(args.note or None),
+        created_by_user_id=None,
+        expires_at=(args.expires_at or None),
+    )
+
+    banner("ACTIVATION CODE MINTED")
+    out()
+    out(f"  Code    : {minted['code']}")
+    out(f"  Plan    : {minted['plan_id'] if minted['plan_id'] else '(none — plan chosen at redemption)'}")
+    out(f"  Expires : {minted['expires_at'] if minted['expires_at'] else '(never)'}")
+    out()
+    out("  This is the only time the code is shown. Only its hash was stored,")
+    out("  so if you lose it you must mint another.")
+    out()
+
+    return 0
+
+
 def cmd_add_branch(args: argparse.Namespace) -> int:
     """Create a branch for one company from the server.
 
@@ -1809,6 +1845,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to write the timestamped backup folder into.",
     )
     backup.set_defaults(handler=cmd_backup)
+
+    mint_code = subparsers.add_parser(
+        "mint-activation-code",
+        help="Mint one activation code. The plaintext prints once.",
+    )
+    mint_code.add_argument(
+        "--plan-id",
+        type=int,
+        default=None,
+        dest="plan_id",
+        help="Plan this code grants. Omit to leave the plan chosen at redemption.",
+    )
+    mint_code.add_argument("--note", default=None, help="A note stored beside the code.")
+    mint_code.add_argument(
+        "--expires-at",
+        default=None,
+        dest="expires_at",
+        help="ISO timestamp after which the code is dead. Omit for no expiry.",
+    )
+    mint_code.set_defaults(handler=cmd_mint_activation_code)
 
     add_branch = subparsers.add_parser(
         "add-branch",

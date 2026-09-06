@@ -437,6 +437,36 @@ def update_task(
     return with_display_names(company_id, [task])[0]
 
 
+@tasks_router.delete("/{task_id}")
+def delete_task(
+    task_id: int,
+    request: Request,
+    context: tuple[dict[str, Any], int] = Depends(task_manage_context),
+):
+    """Remove a task.
+
+    Takes the same permission as editing one. The row is gone rather than
+    flagged: a task is the team's own note to itself, not a customer record,
+    so there is nothing here a company is later required to produce.
+    """
+    current_user, company_id = context
+
+    try:
+        task = ticket_service.delete_task(company_id=company_id, task_id=task_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Task not found.") from exc
+
+    _record_task_change(
+        current_user,
+        request,
+        company_id=company_id,
+        task=task,
+        summary=f"Deleted the task {task.get('title')}",
+    )
+
+    return {"success": True}
+
+
 @tasks_router.patch("/{task_id}/status")
 def change_task_status(
     task_id: int,

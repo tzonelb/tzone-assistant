@@ -58,6 +58,20 @@ RETIRED_SETTINGS: dict[str, frozenset[str]] = {
             # Duplicated `collect_message_delay_seconds` two keys above it,
             # which is the buffer that waits for a customer to stop typing.
             "reply_only_when_customer_stops_typing",
+            # Never decided anything. "Only the assigned employee clears the
+            # unread count" is not a mode this platform can be put into — it is
+            # the rule, enforced unconditionally in
+            # `conversation_control_service.record_opened`, which returns
+            # without clearing when the opener is not the owner.
+            #
+            # It read as implemented because the old settings screen drew a
+            # `<select>` for it — disabled, with one option, echoing the same
+            # constant straight back on every save. A control that can only
+            # send the value it was given is not a reader of the setting, and
+            # the moment that screen was replaced the key had no mention left
+            # anywhere. `tests/test_settings_are_implemented.py` is what said
+            # so.
+            "auto_read_mode",
         }
     ),
     # Browser preferences that the browser already keeps per user, in

@@ -1,0 +1,123 @@
+.reply-flows-page {
+  display: grid;
+  gap: var(--tz-space-4);
+}
+
+.reply-flows-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tz-space-3);
+  flex-wrap: wrap;
+}
+
+/* Embedded inside Company Settings: no local title/description anymore
+   (see ReplyFlowsListPage.jsx), so the header is just the action button,
+   right-aligned same as before. */
+.reply-flows-header-embedded {
+  justify-content: flex-end;
+}
+
+.reply-flows-header h2 {
+  margin: 0 0 4px;
+}
+
+.reply-flows-header p {
+  margin: 0;
+  max-width: 520px;
+  color: var(--tz-text-muted);
+  font-size: 13px;
+}
+
+.reply-flows-empty {
+  text-align: center;
+  color: var(--tz-text-muted);
+}
+
+.reply-flows-empty p {
+  margin: 0 0 4px;
+  color: var(--tz-text-primary);
+  font-weight: 700;
+}
+
+.reply-flows-name-link {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.reply-flows-name-link strong {
+  color: var(--tz-primary);
+  font-size: 13px;
+}
+
+.reply-flows-name-link span {
+  font-size: 11px;
+  color: var(--tz-text-muted);
+}
+
+.reply-flows-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.reply-flows-row-actions button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--tz-border);
+  border-radius: 8px;
+  color: var(--tz-text-secondary);
+  background: var(--tz-surface);
+}
+
+.reply-flows-row-actions button:hover {
+  color: var(--tz-primary);
+  border-color: var(--tz-primary);
+}
+
+.reply-flow-build-mode-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.reply-flow-build-mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1.5px solid var(--tz-border);
+  border-radius: 10px;
+  background: var(--tz-surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.reply-flow-build-mode-card strong {
+  font-size: 13px;
+  color: var(--tz-text-primary);
+}
+
+.reply-flow-build-mode-card span {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--tz-text-muted);
+}
+
+.reply-flow-build-mode-card.is-selected {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 12%);
+}
+
+.reply-flow-build-mode-card:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

@@ -588,6 +588,15 @@
     flex-direction: column;
   }
 
+  /* The toolbar's `flex: 1 1 240px` sizes the search along the main axis, and
+     the main axis is now vertical -- so the search box grew to 240px *tall*,
+     leaving the 44px input at the top of an empty column with its magnifier,
+     absolutely positioned at 50%, floating alone in the middle of the gap.
+     On one axis the basis is a width, on the other it is a height. */
+  .catalogue-toolbar .tz-search {
+    flex: 0 0 auto;
+  }
+
   .catalogue-view-toggle {
     align-self: flex-start;
   }

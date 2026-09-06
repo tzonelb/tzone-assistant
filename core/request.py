@@ -1,5 +1,7 @@
 from typing import Any
 
+from core.session import SessionManager
+
 
 class Request:
     def __init__(
@@ -44,6 +46,20 @@ class Request:
         self.reply_to = reply_to
         self.metadata = metadata or {}
         self.timestamp = timestamp
+
+    @property
+    def session_key(self) -> str:
+        """The identity the in-memory flow session is keyed by.
+
+        Never the bare external id. A WhatsApp number and a Telegram chat id are
+        the *person*, the same across every business they message, so keying the
+        flow session on the id alone let one customer's language, department and
+        half-finished flow bleed between two companies they both contacted. The
+        session belongs to (this company, this channel, this person) together.
+        """
+        return SessionManager.key(
+            self.user_id, self.channel or "", self.company_id
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {

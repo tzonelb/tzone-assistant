@@ -24,6 +24,7 @@ from backend.services.bot_profile_service import (
     MAX_TONE,
     MAX_WELCOME,
 )
+from backend.services.ai_teaching_chat_service import MAX_TEACHING_MESSAGE
 from backend.services.business_department_service import (
     MAX_BUTTON,
     MAX_CODE,
@@ -99,6 +100,17 @@ class DryRunRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_TEST_MESSAGE)
     channel: PreviewChannel = "messenger"
     language: Language | None = None
+
+
+class TeachingMessageCreate(BaseModel):
+    """One thing a manager says to the assistant in the training chat.
+
+    Bounded for the same reason every field above is: whatever the model
+    extracts from this is appended to the system prompt and then travels with
+    every customer message for as long as it is stored.
+    """
+
+    text: str = Field(min_length=1, max_length=MAX_TEACHING_MESSAGE)
 
 
 # ----------------------------------------------------------------------

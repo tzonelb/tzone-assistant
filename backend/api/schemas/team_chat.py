@@ -40,6 +40,42 @@ class MessageEditRequest(BaseModel):
     body: str = Field(min_length=1, max_length=MAX_BODY)
 
 
+class StreamMessageCreateRequest(BaseModel):
+    """A message written in the composer, with whatever it carries.
+
+    ``text`` may be empty when a file is attached — a photo with no caption is
+    a message. ``mentioned_user_ids`` are the colleagues the composer's picker
+    resolved as they were chosen; they are checked against this company's own
+    directory before anything is stored or anybody is notified, so an id typed
+    into the payload by hand names nobody.
+
+    ``attachment_url`` must be a file this workspace already uploaded through
+    ``/api/media/upload``. The router checks the prefix names this company, the
+    same check ``manual_messages`` makes, so an employee cannot point a message
+    at another company's upload path or at an arbitrary address.
+    """
+
+    text: str = Field(default="", max_length=MAX_BODY)
+    mentioned_user_ids: list[int] = Field(
+        default_factory=list, max_length=MAX_CHANNEL_MEMBERS
+    )
+    attachment_url: str | None = Field(default=None, max_length=500)
+    attachment_type: str | None = Field(default=None, max_length=40)
+    attachment_filename: str | None = Field(default=None, max_length=255)
+
+
+class CreateDmRequest(BaseModel):
+    user_id: int = Field(ge=1)
+
+
+class CreateGroupRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=MAX_CHANNEL_NAME)
+    member_user_ids: list[int] = Field(
+        default_factory=list, max_length=MAX_CHANNEL_MEMBERS
+    )
+    department: str | None = Field(default=None, max_length=60)
+
+
 class ChannelResponse(BaseModel):
     id: int
     company_id: int

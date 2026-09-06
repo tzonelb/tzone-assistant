@@ -1,0 +1,300 @@
+.channels-verify-inline {
+  border-color: var(--tz-primary);
+  background: var(--tz-primary-soft);
+}
+
+.channels-verify-actions {
+  display: flex;
+  gap: var(--tz-space-2);
+  margin-top: var(--tz-space-3);
+}
+
+.channels-verify-code-form {
+  display: flex;
+  align-items: center;
+  gap: var(--tz-space-3);
+  margin-top: var(--tz-space-3);
+  flex-wrap: wrap;
+}
+
+.channels-code-input {
+  width: 100px;
+}
+
+.channels-oauth-message {
+  margin: 0 0 var(--tz-space-4);
+  font-weight: 700;
+}
+
+.channels-oauth-message.is-success {
+  color: var(--tz-success);
+}
+
+.channels-oauth-message.is-error {
+  color: var(--tz-danger);
+}
+
+.channels-error-text {
+  margin: 0 0 var(--tz-space-4);
+  color: var(--tz-danger);
+}
+
+.channels-changes-list {
+  margin: 0;
+  padding-left: var(--tz-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--tz-space-2);
+}
+
+.channels-change-time {
+  font-size: 12px;
+  color: var(--tz-text-muted);
+}
+
+.channels-changes-empty {
+  color: var(--tz-text-muted);
+}
+
+.channels-facebook-block {
+  margin-top: var(--tz-space-6);
+}
+
+/* Facebook's own brand blue, used only for this one-click "Connect with
+   Facebook" OAuth button — matches Facebook's official button guidelines.
+   Built on `.btn` (outlined base) rather than a raw hex inline style. */
+.channels-facebook-connect {
+  margin-bottom: var(--tz-space-6);
+  background: var(--tz-channel-facebook);
+  border-color: var(--tz-channel-facebook);
+  color: var(--tz-text-on-dark);
+}
+
+.channels-facebook-connect:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tz-channel-facebook) 88%, black);
+  border-color: color-mix(in srgb, var(--tz-channel-facebook) 88%, black);
+}
+
+.channels-connect-form {
+  display: flex;
+  gap: var(--tz-space-3);
+  padding: 0 0 var(--tz-space-5);
+  flex-wrap: wrap;
+}
+
+.channels-connect-form .input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.channels-plan-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--tz-space-5);
+  flex-wrap: wrap;
+  padding: var(--tz-space-4) var(--tz-space-5);
+  margin-bottom: var(--tz-space-6);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  background: var(--tz-surface);
+}
+
+.channels-plan-banner-main strong {
+  font-size: 15px;
+}
+
+.channels-plan-banner-main span {
+  display: block;
+  color: var(--tz-text-muted);
+  font-size: 12px;
+}
+
+.channels-plan-usage {
+  min-width: 180px;
+}
+
+.channels-plan-usage-bar {
+  height: 8px;
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-surface-secondary);
+  overflow: hidden;
+}
+
+.channels-plan-usage-fill {
+  height: 100%;
+  border-radius: var(--tz-radius-round);
+  background: linear-gradient(135deg, var(--tz-primary), var(--tz-secondary));
+}
+
+.channels-plan-usage-fill.is-full {
+  background: var(--tz-danger);
+}
+
+.channels-plan-usage-label {
+  margin-top: var(--tz-space-1);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tz-text-secondary);
+  text-align: right;
+}
+
+.channels-directory-category {
+  margin-top: var(--tz-space-7);
+}
+
+.channels-directory-category h4 {
+  margin: 0 0 var(--tz-space-3);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--tz-text-secondary);
+}
+
+.channels-directory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--tz-space-3);
+  align-items: stretch;
+}
+
+.channels-directory-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  height: 178px;
+  padding: var(--tz-space-4);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  background: var(--tz-surface);
+}
+
+.channels-directory-card-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--tz-radius-sm);
+  margin-bottom: var(--tz-space-2);
+}
+
+.channels-directory-card-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.channels-directory-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tz-space-1);
+  min-height: 0;
+}
+
+.channels-directory-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tz-space-2);
+  flex-wrap: wrap;
+}
+
+.channels-directory-card-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.channels-directory-card-connect {
+  margin-top: var(--tz-space-3);
+  min-height: 32px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-round);
+  background: var(--tz-surface);
+  color: var(--tz-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.channels-directory-card-connect:not(:disabled):hover {
+  background: var(--tz-primary-soft);
+}
+
+.channels-directory-card-connect:disabled {
+  color: var(--tz-text-muted);
+  cursor: not-allowed;
+}
+
+.channels-directory-badge {
+  padding: 2px var(--tz-space-2);
+  border-radius: var(--tz-radius-round);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.channels-directory-badge.is-connected {
+  background: var(--tz-success-soft);
+  color: var(--tz-success);
+}
+
+.channels-directory-badge.is-available {
+  background: var(--tz-primary-soft);
+  color: var(--tz-primary);
+}
+
+.channels-directory-badge.is-soon {
+  background: var(--tz-surface-secondary);
+  color: var(--tz-text-muted);
+}
+
+.channels-directory-card-note {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--tz-text-muted);
+  line-height: 1.45;
+}
+
+.channels-directory-card-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tz-primary);
+}
+
+.channels-connected-list {
+  display: grid;
+  gap: var(--tz-space-2);
+  margin-top: var(--tz-space-3);
+}
+
+.channels-connected-row {
+  display: flex;
+  align-items: center;
+  gap: var(--tz-space-3);
+  padding: var(--tz-space-3) var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+}
+
+.channels-connected-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.channels-connected-row-main strong {
+  font-size: 13px;
+}
+
+.channels-connected-row-main span {
+  display: block;
+  font-size: 11px;
+  color: var(--tz-text-muted);
+}
+
+.channels-connected-status {
+  padding: 2px var(--tz-space-2);
+  border-radius: var(--tz-radius-round);
+  font-size: 10px;
+  font-weight: 800;
+  background: var(--tz-success-soft);
+  color: var(--tz-success);
+}

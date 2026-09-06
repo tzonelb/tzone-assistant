@@ -1,0 +1,101 @@
+/* T-ZONE design tokens — GENERATED from tokens.js. Do not edit by hand.
+   Regenerate with:  node tzone-theme/build.js
+   Every colour, font, space, radius and shadow in the product comes from here. */
+
+:root {
+  /* — ground — */
+  --tz-color-bg: #f4f5f7;
+  --tz-color-surface: #e9ebef;
+  --tz-color-text: #18202a;
+  --tz-color-divider: color-mix(in srgb, #18202a 15%, transparent);
+  --tz-color-rail: #111922;
+  --tz-color-rail-text: #f3f5f7;
+
+  /* — brand — */
+  --tz-color-accent: #1b9be0;
+  --tz-color-accent-2: #3fb552;
+
+  /* — accent ramp (generated from --tz-color-accent) — */
+  --tz-color-accent-100: #e8f5fc;
+  --tz-color-accent-200: #c8e7f8;
+  --tz-color-accent-300: #98d2f1;
+  --tz-color-accent-400: #5bb7e9;
+  --tz-color-accent-500: #1b9be0;
+  --tz-color-accent-600: #167db5;
+  --tz-color-accent-700: #12628d;
+  --tz-color-accent-800: #0e496a;
+  --tz-color-accent-900: #0b354c;
+
+  /* — accent-2 ramp (generated from --tz-color-accent-2) — */
+  --tz-color-accent-2-100: #ecf8ee;
+  --tz-color-accent-2-200: #d1edd5;
+  --tz-color-accent-2-300: #a9deb1;
+  --tz-color-accent-2-400: #75ca82;
+  --tz-color-accent-2-500: #3fb552;
+  --tz-color-accent-2-600: #329146;
+  --tz-color-accent-2-700: #27713b;
+  --tz-color-accent-2-800: #1d5431;
+  --tz-color-accent-2-900: #143c29;
+
+  /* — neutrals — */
+  --tz-color-neutral-100: #f6f7f9;
+  --tz-color-neutral-200: #e8eaee;
+  --tz-color-neutral-300: #d5d9df;
+  --tz-color-neutral-400: #b8bec8;
+  --tz-color-neutral-500: #99a1ad;
+  --tz-color-neutral-600: #7b8492;
+  --tz-color-neutral-700: #5f6875;
+  --tz-color-neutral-800: #434b56;
+  --tz-color-neutral-900: #2b323b;
+
+  /* — channel tints — */
+  --tz-ch-whatsapp: #3fb552;
+  --tz-ch-messenger: #1b9be0;
+  --tz-ch-instagram: #b06ab3;
+  --tz-ch-telegram: #2ca7e6;
+
+  /* — type — Latin faces first, Noto Naskh Arabic carries Arabic in the same
+     Naskh/serif register. Cormorant Garamond and Lora have no Arabic coverage. */
+  --tz-font-heading: "Cormorant Garamond", "Noto Naskh Arabic", system-ui, serif;
+  --tz-font-body: "Lora", "Noto Naskh Arabic", system-ui, serif;
+  --tz-font-heading-weight: 600;
+
+  /* — spacing — */
+  --tz-space-1: 4.6px;
+  --tz-space-2: 9.2px;
+  --tz-space-3: 13.8px;
+  --tz-space-4: 18.4px;
+  --tz-space-6: 27.6px;
+  --tz-space-8: 36.8px;
+
+  /* — radii — */
+  --tz-radius-sm: 2px;
+  --tz-radius-md: 4px;
+  --tz-radius-lg: 7px;
+
+  /* — elevation — */
+  --tz-shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --tz-shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
+  --tz-shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+
+  /* — runtime knobs (Theme Studio writes these per tenant) — */
+  --tz-base-size: 15px;
+  --tz-line-height: 1.55;
+  --tz-letter-spacing: 0;
+  --tz-heading-scale: 1;
+  --tz-kick-case: uppercase;
+  --tz-tnum: "tnum";
+  --tz-btn-size: 14px;
+  --tz-line: 1px;
+  --tz-btn-bg: transparent;
+  --tz-btn-fg: var(--tz-color-accent);
+  --tz-card-bg: transparent;
+  --tz-input-border: 1px;
+  --tz-input-radius: 4px;
+  --tz-focus: 2px;
+  --tz-speed: 140ms;
+  --tz-avatar: 50%;
+  --tz-rail-width: 222px;
+  --tz-topbar: 54px;
+  --tz-drawer-width: 320px;
+}

@@ -1,0 +1,27 @@
+/* v2 app shell — a real flex row (SidebarV2 is a normal flex child, not
+   position:fixed like v1's .sidebar), so it composes correctly with
+   "one screen, no page scroll" (CLAUDE_CODE_UI_IMPLEMENTATION.md §3):
+   only .app-content-v2 scrolls, the shell itself fills the viewport. */
+.app-layout-v2 {
+  height: 100vh;
+  display: flex;
+  overflow: hidden;
+}
+
+.app-main-v2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-content-v2 {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.app-content-v2.app-content-workspace-v2 {
+  overflow: hidden;
+}

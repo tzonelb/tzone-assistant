@@ -312,6 +312,26 @@ class TicketService:
             conn.commit()
             return cursor.rowcount > 0
 
+    def delete_task(self, *, company_id: int, task_id: int) -> dict[str, Any]:
+        """Remove a task, returning what was removed.
+
+        The row is read first so the caller can name it in the audit entry: a
+        log line saying only "task 41 deleted" is unreadable a week later.
+        """
+        with database_manager.tenant(int(company_id)) as conn:
+            row = conn.execute(
+                "SELECT * FROM tickets WHERE id = ? LIMIT 1", (int(task_id),)
+            ).fetchone()
+
+            if not row:
+                raise KeyError(f"No task with id {task_id}.")
+
+            task = self._decorate(row)
+            conn.execute("DELETE FROM tickets WHERE id = ?", (int(task_id),))
+            conn.commit()
+
+        return task
+
     def count_by_status(self, company_id: int) -> dict[str, int]:
         with database_manager.tenant(int(company_id)) as conn:
             rows = conn.execute(

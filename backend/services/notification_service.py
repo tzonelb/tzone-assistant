@@ -17,6 +17,18 @@ from typing import Any
 
 from database.manager import database_manager
 
+# At module scope, unlike the two gates below it, and that is deliberate. This
+# module has no import cycle with it — it reads `database.manager` and nothing
+# else — and importing it lazily was a real defect rather than a style choice:
+# the first delivery to a named recipient would import it, binding whatever
+# `database_manager` happened to be current at that moment for the life of the
+# process. In tests, that moment is inside another test's monkeypatched window,
+# so the module kept a manager pointing at a temporary directory that no longer
+# existed and nothing could rebind it afterwards.
+from backend.services.notification_preference_service import (
+    notification_preference_service,
+)
+
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +109,29 @@ class NotificationService:
 
         return bool(values.get(preference, True))
 
+    def _wanted_by(
+        self, company_id: int, user_id: int, notification_type: str
+    ) -> bool:
+        """Whether the employee this row is addressed to asked for it.
+
+        Fails open for the same reason `_wanted` does, and the check itself
+        lives in `notification_preference_service` so the categories a
+        preference governs are declared in one place rather than restated here.
+        """
+        try:
+            return notification_preference_service.wants(
+                company_id=int(company_id),
+                user_id=int(user_id),
+                notification_type=notification_type,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the notification preferences of user %s in company %s",
+                user_id,
+                company_id,
+            )
+            return True
+
     def create(
         self,
         *,
@@ -119,6 +154,18 @@ class NotificationService:
         # switched this kind of notification off should cost nothing at all,
         # not a row it cannot see or a query it did not ask for.
         if not self._wanted(company_id, notification_type.strip()):
+            return {}
+
+        # And then the recipient's own choice, when there is one recipient. A
+        # company-wide notification has nobody to ask, so it is not asked.
+        #
+        # Second, not instead: the company gate above decides whether the event
+        # is worth recording at all; this decides whether the person it is
+        # addressed to wants it. Collapsing the two would have made one
+        # employee muting their task reminders mute them for everybody.
+        if recipient_user_id is not None and not self._wanted_by(
+            company_id, int(recipient_user_id), notification_type.strip()
+        ):
             return {}
 
         created_at = utc_now_iso()

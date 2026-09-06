@@ -185,6 +185,18 @@ class AppConfig:
         os.getenv("WEBHOOK_MAX_BODY_BYTES", str(5 * 1024 * 1024))
     )
 
+    # The same reasoning as the webhook cap above, for every other route. The
+    # webhook path has always had `read_capped_body` "so a deployment that
+    # never sees nginx is still bounded" -- and the JSON API had nothing,
+    # meaning a proxy-less deployment (which the hosting notes describe as a
+    # real scenario) would buffer and parse an arbitrarily large body on every
+    # route, unauthenticated ones included. 2 MB is far above any real JSON
+    # payload the API accepts and far below anything that pressures memory;
+    # file uploads go through the media route, which nginx caps separately.
+    API_MAX_BODY_BYTES: int = int(
+        os.getenv("API_MAX_BODY_BYTES", str(2 * 1024 * 1024))
+    )
+
     # Meta batches deliveries in tens. A single signed body was otherwise free
     # to carry hundreds of thousands of events, each costing seven database
     # writes and possibly an outbound Graph call.
@@ -279,6 +291,25 @@ class AppConfig:
 
     FACEBOOK_PAGE_ID: str = os.getenv("FACEBOOK_PAGE_ID", "")
     INSTAGRAM_BUSINESS_ID: str = os.getenv("INSTAGRAM_BUSINESS_ID", "")
+
+    # ------------------------------------------------------------------
+    # Telephony (Dialer)
+    # ------------------------------------------------------------------
+    # Credentials for the phone line the Dialer places and answers calls on.
+    # All four are required together: with any of them missing the Dialer runs
+    # on its null provider, every call operation is refused with a clear
+    # message, and the screen shows a setup notice instead of a dial pad.
+    # Nothing else in the platform depends on them.
+    TWILIO_ACCOUNT_SID: str = os.getenv("TWILIO_ACCOUNT_SID", "")
+    TWILIO_AUTH_TOKEN: str = os.getenv("TWILIO_AUTH_TOKEN", "")
+    TWILIO_PHONE_NUMBER: str = os.getenv("TWILIO_PHONE_NUMBER", "")
+
+    # The public https address of this backend. The provider fetches call
+    # instructions from it and posts status back to it, so a call placed
+    # without it would connect to nothing; it is also the URL the webhook
+    # signature is computed over, which is why the value has to be the address
+    # the provider was actually given rather than whatever a proxy forwarded.
+    PUBLIC_BASE_URL: str = os.getenv("PUBLIC_BASE_URL", "")
 
     # ------------------------------------------------------------------
     # Assistant

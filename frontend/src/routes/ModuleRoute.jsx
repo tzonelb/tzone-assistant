@@ -1,4 +1,5 @@
 import { useWorkspaceConfig } from "../contexts/WorkspaceConfigContext";
+import { isNativeApp, isWebOnlyModule } from "../utils/platformSurface";
 
 
 /**
@@ -29,6 +30,19 @@ export default function ModuleRoute({ module, children }) {
       <main className="full-screen-state">
         <strong>This module is not enabled for your company.</strong>
         <p>Ask your platform administrator to switch it on.</p>
+      </main>
+    );
+  }
+
+  // Desk-only screens (the publisher, broadcast, company settings) are not
+  // carried by the phone app -- task #77. The nav does not link them there, but
+  // a deep link or a bookmark could still land here, so it says why rather than
+  // rendering a screen the app is not meant to run.
+  if (isNativeApp() && isWebOnlyModule(module)) {
+    return (
+      <main className="full-screen-state">
+        <strong>This screen is available on the web app.</strong>
+        <p>Open it from a computer — the phone app is for the inbox and live conversations.</p>
       </main>
     );
   }

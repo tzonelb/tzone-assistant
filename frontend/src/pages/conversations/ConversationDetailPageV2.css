@@ -1,0 +1,659 @@
+/* Conversation detail v2 — re-skin of ConversationDetailPage.jsx's real,
+   live logic (attachments, voice notes, takeover, transfer) per
+   CLAUDE_CODE_UI_IMPLEMENTATION.md §3. No hex colors: everything below
+   reads from the shared --color-*, --space-*, --radius-* tokens
+   (classical-styles.css, tzone-theme.css) that every tzv2-* screen uses. */
+
+.tzv2-cd-loading-shell {
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.tzv2-cd-shell {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+/* — header — */
+.tzv2-cd-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+  flex-wrap: wrap;
+}
+
+.tzv2-cd-person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+.tzv2-cd-avatar {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  font-family: var(--font-heading);
+  font-size: 14px;
+}
+
+.tzv2-cd-person-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tzv2-cd-person-info strong {
+  font-family: var(--font-heading);
+  font-size: 15.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tzv2-cd-meta {
+  font-size: 11.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tzv2-cd-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+/* — AI-state banner — */
+.tzv2-cd-banner {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  font-size: 12.5px;
+}
+
+.tzv2-cd-alert {
+  flex: none;
+  padding: var(--space-2) var(--space-4);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tzv2-cd-alert-error {
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+  color: var(--color-accent-700);
+}
+
+.tzv2-cd-alert-success {
+  background: color-mix(in srgb, var(--color-accent-2) 12%, transparent);
+  color: var(--color-accent-2-700);
+}
+
+/* — body layout: chat column + overlay drawer — */
+.tzv2-cd-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.tzv2-cd-chat {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tzv2-cd-messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tzv2-cd-day-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tzv2-cd-day-sep {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: var(--space-3) 0;
+}
+
+.tzv2-cd-day-sep span {
+  padding: 2px var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tzv2-cd-msg-row {
+  display: flex;
+  margin-bottom: var(--space-2);
+}
+
+.tzv2-cd-msg-in { justify-content: flex-start; }
+.tzv2-cd-msg-out { justify-content: flex-end; }
+
+.tzv2-cd-bubble {
+  max-width: min(560px, 78%);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.tzv2-cd-msg-out .tzv2-cd-bubble {
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-surface));
+  border-color: color-mix(in srgb, var(--color-accent) 25%, var(--color-divider));
+}
+
+.tzv2-cd-msg-label {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--color-accent-700);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tzv2-cd-bubble p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tzv2-cd-msg-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.tzv2-cd-msg-footer time {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 10.5px;
+}
+
+.tzv2-cd-receipt {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.tzv2-cd-receipt-read { color: var(--color-accent); }
+.tzv2-cd-receipt-failed { color: var(--color-accent-700); font-weight: 800; }
+
+.tzv2-cd-media-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 6px;
+}
+
+.tzv2-cd-media-video,
+.tzv2-cd-media-audio {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  margin-bottom: 6px;
+}
+
+.tzv2-cd-media-file {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  margin-bottom: 6px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.tzv2-cd-media-file span {
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* — ownership notice — */
+.tzv2-cd-ownership-notice {
+  flex: none;
+  margin: 0 var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--color-divider);
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  font-size: 12px;
+}
+
+.tzv2-cd-ownership-notice.is-locked {
+  border-style: solid;
+  color: var(--color-accent-700);
+}
+
+/* — composer — */
+.tzv2-cd-composer-wrap {
+  position: relative;
+  flex: none;
+  padding: var(--space-2) var(--space-4) var(--space-4);
+}
+
+.tzv2-cd-composer-alert {
+  margin-bottom: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.tzv2-cd-composer-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tzv2-cd-composer-status-spacer { flex: 1 1 auto; }
+
+.tzv2-cd-rec-dot { color: var(--color-accent-700); }
+
+.tzv2-cd-pending-thumb {
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.tzv2-cd-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.tzv2-cd-composer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 34px;
+  max-height: 140px;
+  padding: 7px var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13.5px;
+  resize: none;
+}
+
+.tzv2-cd-composer-input:focus { outline: none; }
+
+.tzv2-cd-send { flex: none; }
+
+.is-recording { color: var(--color-accent-700); }
+
+.tzv2-cd-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: var(--space-4);
+  right: var(--space-4);
+  z-index: 30;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.tzv2-cd-saved-reply {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  cursor: pointer;
+}
+
+.tzv2-cd-saved-reply:hover {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+}
+
+.tzv2-cd-saved-reply p {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tzv2-cd-saved-reply span {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+}
+
+.tzv2-cd-saved-replies-empty {
+  display: block;
+  padding: var(--space-3);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 12.5px;
+}
+
+/* — details drawer: 320px overlay — */
+.tzv2-cd-drawer {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 20;
+  width: 320px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid var(--color-divider);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.tzv2-cd-drawer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.tzv2-cd-drawer-head strong {
+  font-family: var(--font-heading);
+  font-size: 15px;
+}
+
+.tzv2-cd-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* — accordion cards — */
+.tzv2-cd-acc {
+  padding: 0;
+  overflow: hidden;
+  /* The drawer body is a flex column, where a child's default is to shrink
+     rather than overflow its parent. With `overflow: hidden` here that does
+     not clip to a scrollbar -- it clips *inside the card*, so six cards in a
+     short drawer each lose the bottom of their own subtitle and the stack
+     reads as cards printed on top of one another. The body already scrolls
+     (`overflow-y: auto`); it just never got the chance, because nothing ever
+     grew past it. Keeping natural height is what lets it. */
+  flex: none;
+}
+
+.tzv2-cd-acc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tzv2-cd-acc-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--color-accent);
+}
+
+.tzv2-cd-acc-heading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.tzv2-cd-acc-heading strong {
+  font-size: 13px;
+}
+
+.tzv2-cd-acc-heading small {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 11px;
+}
+
+.tzv2-cd-acc-body {
+  padding: 0 var(--space-3) var(--space-3);
+  border-top: 1px solid var(--color-divider);
+  padding-top: var(--space-3);
+}
+
+.tzv2-cd-muted {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 12px;
+}
+
+.tzv2-cd-customer-grid,
+.tzv2-cd-control-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tzv2-cd-customer-grid span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tzv2-cd-customer-grid small {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tzv2-cd-customer-grid strong {
+  font-size: 13px;
+}
+
+.tzv2-cd-field-action {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tzv2-cd-field-action .input { flex: 1 1 auto; }
+
+.tzv2-cd-tags-editor {
+  display: grid;
+  gap: var(--space-2);
+  font-size: 12px;
+}
+
+.tzv2-cd-tag-manager-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.tzv2-cd-tag-manager-row .input { flex: 1 1 120px; }
+
+.tzv2-cd-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tzv2-cd-tag-list button.tag {
+  border: 1px solid var(--color-divider);
+  cursor: pointer;
+}
+
+.tzv2-cd-inline-link {
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tzv2-cd-reminder-armed {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.tzv2-cd-reminder-note { margin-top: var(--space-2); }
+
+.tzv2-cd-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: 12.5px;
+}
+
+.tzv2-cd-create-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.tzv2-cd-note-form {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.tzv2-cd-mention-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 160px;
+  overflow-y: auto;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+}
+
+.tzv2-cd-mention-menu button {
+  display: block;
+  width: 100%;
+  padding: 6px var(--space-2);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tzv2-cd-mention-menu button:hover {
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+
+.tzv2-cd-note-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tzv2-cd-note-list article {
+  padding: var(--space-2);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+}
+
+.tzv2-cd-note-list article p {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.tzv2-cd-note-list article span {
+  display: inline-block;
+  margin-right: var(--space-2);
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tzv2-cd-note-list article time {
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 10.5px;
+}
+
+.tzv2-cd-mention {
+  color: var(--color-accent);
+}
+
+.tzv2-cd-export-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* — narrow widths: drawer covers the whole column — */
+@media (max-width: 640px) {
+  .tzv2-cd-drawer { width: 100%; max-width: none; }
+  .tzv2-cd-bubble { max-width: 90%; }
+}

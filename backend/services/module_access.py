@@ -22,6 +22,7 @@ from typing import Any, Callable
 from fastapi import Depends, HTTPException, status
 
 from backend.services.auth_service import auth_service, get_current_user
+from backend.services.demo_gate import demo_gate
 from backend.services.module_gate import UnknownModule, module_gate
 from backend.services.subscription_gate import subscription_gate
 from backend.services.platform_service import PLATFORM_MODULES
@@ -39,6 +40,7 @@ __all__ = [
     "module_enabled",
     "require_module",
     "require_active_subscription",
+    "refuse_a_demonstration",
 ]
 
 
@@ -79,6 +81,43 @@ def require_active_subscription(
                 "Renew it to bring the screens and the assistant back. Nothing "
                 "has been deleted, and messages from customers are still "
                 "arriving and being saved."
+            ),
+        )
+
+    return current_user
+
+
+def refuse_a_demonstration(
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Refuse a demo workspace the one thing it must not do: connect a channel.
+
+    `403 Forbidden`, not the `402` above it. A lapsed company is allowed and
+    has not paid; a demonstration has not been shown to be a business at all,
+    and money is not what is missing -- an activation code is.
+
+    Applied at `include_router` in `main.py`, beside the module gate and for
+    the same reason: a dependency that lives at the registration cannot be
+    forgotten by a route added to that router later.
+
+    Why connection and not sending, because the choice is the whole design:
+    every outbound path resolves the company's channel credentials first and
+    refuses without them, so a workspace that cannot connect cannot send by any
+    route -- including one written next year by somebody who never read this
+    file. Gating each sender instead is six checks to remember and a seventh
+    that ships without one.
+    """
+    company_id = auth_service.resolve_company_id(current_user)
+
+    if demo_gate.is_demo(company_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This is a demonstration workspace, so it cannot connect a "
+                "real channel yet — everything else here works, and the "
+                "conversations you can see are samples. Enter your activation "
+                "code under Company Settings to turn this into a live "
+                "workspace and connect your own accounts."
             ),
         )
 

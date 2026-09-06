@@ -30,8 +30,23 @@ def _single_company_fallback(company_id: int) -> bool:
     Only when this deployment serves exactly one company, and it is this one.
     ``default_company_id`` returns ``None`` as soon as a second company exists,
     which is what stops a shared token from leaking across tenants.
+
+    And never for a demonstration workspace. A self-service demo can be the
+    only company a fresh install has yet, and ``default_company_id`` would then
+    name it -- which would let it send through the platform's own environment
+    token, reaching real customers without ever connecting a channel. That is
+    the one thing ``demo_gate`` exists to prevent, and the whole reason the
+    demo line is drawn at *connecting* rather than at each sender is the promise
+    that a workspace which cannot connect cannot resolve credentials by any
+    route. This fallback was the exception to that promise. ``is_demo`` fails
+    closed, so an unreadable flag denies the fallback rather than granting it.
     """
+    from backend.services.demo_gate import demo_gate
+
     try:
+        if demo_gate.is_demo(company_id):
+            return False
+
         return database_manager.default_company_id() == int(company_id)
     except Exception:  # noqa: BLE001
         logger.exception("Could not determine whether this is a single-company install")

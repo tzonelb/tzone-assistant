@@ -29,6 +29,27 @@ ROUTES_DIR = ROOT / "backend" / "api" / "routes"
 # Reachable with no credentials, deliberately.
 PUBLIC_ROUTES: dict[str, str] = {
     "auth.py:POST:/login": "A sign-in cannot require being signed in.",
+    "signup.py:GET:/plans": (
+        "The plans a prospective customer is choosing between, before they "
+        "have an account to authenticate with. The projection is explicit in "
+        "the route rather than passed through from "
+        "`platform_service.list_plans`, which does SELECT * — right for the "
+        "operator's console, wrong for a page anybody can open."
+    ),
+    "signup.py:POST:/code": (
+        "Sending the email verification code cannot require being signed in; "
+        "it is the first step of getting an account. It answers identically "
+        "whether or not the address already has one, so it cannot be used to "
+        "test a list of addresses, and it refuses outright when the mailer is "
+        "not configured rather than reporting a send that cannot happen."
+    ),
+    "signup.py:POST:": (
+        "Creating the account. What it produces is a demonstration workspace "
+        "that cannot connect a channel (see backend/services/demo_gate.py), "
+        "and what stands in front of it is the emailed code plus a ceiling on "
+        "workspaces per address — because every one of them costs an "
+        "encrypted database file."
+    ),
     "auth.py:POST:/password/forgot": (
         "Asking for a reset link cannot require being signed in; the endpoint "
         "answers identically whether or not the address exists."
@@ -38,10 +59,31 @@ PUBLIC_ROUTES: dict[str, str] = {
         "and stored only as a hash — the same shape as a session token."
     ),
     "platform.py:POST:/auth/login": "The console sign-in, same reason.",
+    "media_uploads.py:GET:/{company_id}/{stored_name}": (
+        "An attachment an employee sent to a customer. The channel — Meta, "
+        "WhatsApp, Telegram — fetches this URL from its own servers with no "
+        "session of ours, so a dependency here would stop every attachment "
+        "from being delivered. The unguessable name is the credential: 32 hex "
+        "characters from secrets.token_hex(16), checked against a strict "
+        "pattern before the filesystem is touched, under a directory keyed by "
+        "an integer company id."
+    ),
     "health.py:GET:/": (
         "A liveness probe. It returns a constant and reads nothing, so there "
         "is nothing behind it to protect."
     ),
+    # The telephony provider reporting on a call it is carrying. It holds no
+    # session of ours, so a dependency here would stop every callback about
+    # every call the platform placed. What stands in for the session is
+    # Twilio's X-Twilio-Signature — an HMAC over the URL and every posted
+    # field, keyed by TWILIO_AUTH_TOKEN — checked by `_verified_form` before
+    # any field of the body is read, and answering 403 when it does not match.
+    # With no token configured nothing can be verified, so nothing is: all four
+    # reject everything.
+    "dialer.py:POST:/voice": "A signed Twilio callback. See dialer.py.",
+    "dialer.py:POST:/inbound": "A signed Twilio callback. See dialer.py.",
+    "dialer.py:POST:/status": "A signed Twilio callback. See dialer.py.",
+    "dialer.py:POST:/recording": "A signed Twilio callback. See dialer.py.",
 }
 
 
@@ -80,6 +122,42 @@ IDENTITY_ONLY_ROUTES: dict[str, str] = {
         "Your own second factor, and a current code is required to remove it — "
         "otherwise anybody at an unlocked screen could strip it in one click."
     ),
+    # Two constant lists — the directions and outcomes the "log a call" form is
+    # built from. They describe the software, not the company, and the screen
+    # needs them to draw its dropdowns before it knows whether this employee
+    # may read a single call.
+    "calls.py:GET:/options": "Two constant lists; no company data.",
+    # The Dialer's own state and its recent calls, both resolved from the
+    # session's company and never from a parameter — the same shape as the
+    # notification bell above. `/status` reports whether this deployment has a
+    # phone line at all, which is a property of the server. Making a phone ring
+    # is the part that is guarded: every write on this router takes
+    # `dialer.use`. Both routers are also behind `require_module("dialer")` in
+    # `main.py`, which this per-file scan cannot see.
+    "dialer.py:GET:/status": "Whether this deployment has a phone line.",
+    "dialer.py:GET:/calls": "Your own company's dialer history.",
+    # Which kinds of notification one employee wants delivered to them. Keyed
+    # on (company from the session, user from the session) — the same shape as
+    # the notification bell above, and for the same reason: a permission here
+    # would let an administrator silence a colleague's notifications, which is
+    # a different feature from tuning your own and one nobody asked for. No
+    # `user_id` is taken from a parameter anywhere on this router. It is also
+    # behind `require_module("notifications")` in `main.py`, which this
+    # per-file scan cannot see.
+    "notification_preferences.py:GET:": "Your own notification choices.",
+    "notification_preferences.py:PUT:": "Your own notification choices.",
+    # Reporting that the platform itself is broken, to the operator. Anybody
+    # who can hit a bug can report it — gating this behind an administrator's
+    # permission would mean the person who actually saw the failure has to find
+    # somebody else to describe it, which is how a report stops being filed.
+    #
+    # It is not a hole in the tenant boundary: the company is resolved from the
+    # session, so a ticket can only ever be filed against, or read from, the
+    # filer's own company. Nothing a company owns is in these rows — no
+    # customer, no conversation, only what an employee typed about T-ZONE. The
+    # router is behind `require_module("company_settings")` in `main.py`.
+    "support_tickets.py:GET:": "Your own company's tickets to T-ZONE.",
+    "support_tickets.py:POST:": "Reporting a platform fault you just hit.",
 }
 
 
@@ -95,6 +173,12 @@ GUARDS = (
     "get_platform_admin_enrolling",
     "get_user_changing_password",
     "_require_access_admin",
+    # Theme Studio's scope check. A `platform` theme reaches every workspace, so
+    # writing one requires a super admin; the only scope anybody else may write
+    # is their own company's, and only its owner may. It is called in the body
+    # rather than depended on, because which scope is being written is only
+    # known after the theme row is read.
+    "_check_scope_permission",
     "has_permission",
     # The Developer Center gates on the flag itself rather than on a named
     # permission: its contents are platform diagnostics, not a company feature

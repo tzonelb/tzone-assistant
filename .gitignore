@@ -125,3 +125,7 @@ collect_patch9_debug.py
 gather_project.py
 
 *_DEBUG.zip
+
+# Claude Code local session state (agent worktrees, etc.)
+.claude/
+frontend/dist-demo/

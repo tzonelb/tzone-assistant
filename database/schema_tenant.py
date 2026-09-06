@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 3
+TENANT_SCHEMA_VERSION = 7
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -149,6 +149,11 @@ TENANT_TABLES: tuple[str, ...] = (
         country TEXT,
         timezone TEXT,
         notes TEXT,
+        lifecycle_stage TEXT NOT NULL DEFAULT 'lead',
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        assigned_user_id INTEGER,
+        custom_fields_json TEXT NOT NULL DEFAULT '{}',
+        documents_json TEXT NOT NULL DEFAULT '[]',
         first_seen_at TEXT NOT NULL,
         last_seen_at TEXT NOT NULL,
         created_at TEXT NOT NULL,
@@ -181,6 +186,18 @@ TENANT_TABLES: tuple[str, ...] = (
         data_json TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS customer_segments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        filters_json TEXT NOT NULL DEFAULT '{}',
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(company_id, name)
     )
     """,
     """
@@ -407,6 +424,27 @@ TENANT_TABLES: tuple[str, ...] = (
         UNIQUE(company_id, code)
     )
     """,
+    # The manager's private training chat with the assistant. It is not a
+    # customer conversation and must never be mixed into `messages`: nothing
+    # here was said to or by a customer, and an export or a retention sweep
+    # that treated it as one would be wrong in both directions.
+    #
+    # `instruction_saved` records that this turn changed the assistant's
+    # standing instructions, so the transcript still explains why the bot's
+    # behaviour changed after the fact — the instruction itself lives in the
+    # profile's `system_prompt`, which is what the prompt builder reads.
+    """
+    CREATE TABLE IF NOT EXISTS ai_teaching_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        role TEXT NOT NULL,
+        text TEXT NOT NULL,
+        instruction_saved INTEGER NOT NULL DEFAULT 0,
+        instruction_text TEXT,
+        actor_user_id INTEGER,
+        created_at TEXT NOT NULL
+    )
+    """,
     # --- Post comments --------------------------------------------------
     """
     CREATE TABLE IF NOT EXISTS post_comments (
@@ -603,6 +641,226 @@ TENANT_TABLES: tuple[str, ...] = (
         created_at TEXT NOT NULL
     )
     """,
+    """
+    -- Canned replies an employee can drop into a conversation.
+    --
+    -- Company-owned text, so it lives in the company's own encrypted database
+    -- rather than the control plane, and needs no company_id filter to be safe:
+    -- the file is the tenant. `company_id` is carried anyway for the same
+    -- reason every other tenant table carries it -- it makes an exported row
+    -- self-describing and a restore into the wrong file obvious.
+    --
+    -- `department` is a plain string, empty for a reply that suits every
+    -- section, because a reply written for one section is noise in another.
+    CREATE TABLE IF NOT EXISTS saved_replies (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        department TEXT NOT NULL DEFAULT '',
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    -- A follow-up an employee set on one conversation: come back to this at a
+    -- time, optionally sending a message when it arrives.
+    --
+    -- One live reminder per conversation, enforced by the unique key rather
+    -- than by the caller: setting a second one replaces the first, which is
+    -- what "remind me at" means to the person clicking it.
+    CREATE TABLE IF NOT EXISTS conversation_reminders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        remind_at TEXT NOT NULL,
+        note TEXT,
+        auto_send INTEGER NOT NULL DEFAULT 0,
+        message_text TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(channel, external_user_id)
+    )
+    """,
+    """
+    -- A one-to-many campaign: one message, sent once, to every contact the
+    -- targeting resolves to. Ported from the design branch's `broadcasts`
+    -- table (backend/services/broadcast_service.py::ensure_schema there),
+    -- minus the foreign keys it declared onto `companies`, `users` and
+    -- `customer_segments` -- the first two live in the control-plane database
+    -- and SQLite cannot enforce a key across files, and this platform has no
+    -- customer segments (see `segment_id` below).
+    --
+    -- `recipient_count` is a snapshot taken when the draft is created. The
+    -- send always re-resolves recipients, so the two can disagree while a
+    -- draft sits; `/recipient-count` recomputes it for display.
+    --
+    -- `send_lock_acquired_at` is the mutual-exclusion claim that stops two
+    -- overlapping sends of the same broadcast. It is cleared when the send
+    -- finishes, and a lock older than ten minutes is assumed abandoned by a
+    -- crashed request.
+    CREATE TABLE IF NOT EXISTS broadcasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        message_text TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        -- The three targeting columns the design branch's API carries. This
+        -- platform's contacts have no segment, no lifecycle stage and no
+        -- tags, so a broadcast that names one is refused rather than
+        -- silently widened to everybody -- see `broadcast_service`. The
+        -- columns stay so the stored row keeps saying what was asked for if
+        -- those dimensions ever arrive.
+        segment_id INTEGER,
+        lifecycle_stage TEXT,
+        tag TEXT,
+        status TEXT NOT NULL DEFAULT 'draft',
+        recipient_count INTEGER NOT NULL DEFAULT 0,
+        sent_count INTEGER NOT NULL DEFAULT 0,
+        failed_count INTEGER NOT NULL DEFAULT 0,
+        -- A pasted number list, stored as the normalized numbers it resolved
+        -- to. Present exactly when this broadcast targets numbers rather
+        -- than contacts.
+        raw_numbers_json TEXT,
+        media_url TEXT,
+        media_type TEXT,
+        send_lock_acquired_at TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        sent_at TEXT
+    )
+    """,
+    """
+    -- One row per contact a broadcast was actually sent to, written as each
+    -- send returns so an interrupted run can be resumed without sending the
+    -- same person the same campaign twice.
+    CREATE TABLE IF NOT EXISTS broadcast_recipients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        broadcast_id INTEGER NOT NULL,
+        customer_id INTEGER,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        provider_message_id TEXT,
+        send_status TEXT NOT NULL DEFAULT 'pending',
+        error TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(broadcast_id) REFERENCES broadcasts(id) ON DELETE CASCADE
+    )
+    """,
+    """
+    -- The call history of record: one row per phone call the company had with
+    -- a contact, however it happened. A call typed in by hand after a walk-in
+    -- and a call the Dialer placed through Twilio land in the same table, so
+    -- there is one place to read "have we spoken to this customer" from.
+    --
+    -- `customer_id` is nullable on purpose: a number that belongs to nobody in
+    -- the contact list is still a call that happened, and refusing to record
+    -- it would push employees back to a notebook.
+    CREATE TABLE IF NOT EXISTS call_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        customer_id INTEGER,
+        direction TEXT NOT NULL,
+        phone_number TEXT,
+        duration_seconds INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'completed',
+        notes TEXT,
+        called_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    )
+    """,
+    """
+    -- A call the platform itself placed or answered through a telephony
+    -- provider, while it is happening and after it ends.
+    --
+    -- Separate from `call_logs` because the two answer different questions.
+    -- This one carries provider bookkeeping -- the provider's own call id, the
+    -- live status the provider reports, the recording it produced -- and is
+    -- what the Dialer screen watches. When the provider says the call is over,
+    -- `telephony_service` writes the finished call into `call_logs`, which is
+    -- what the Calls screen reads. Keeping the provider's vocabulary out of the
+    -- history table is what lets a second provider be added without rewriting
+    -- what the company has already recorded.
+    --
+    -- `provider_call_id` is unique inside the company file: a status callback
+    -- and a recording callback both arrive naming it, and each must update one
+    -- row rather than several.
+    CREATE TABLE IF NOT EXISTS telephony_calls (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        provider_call_id TEXT,
+        direction TEXT NOT NULL DEFAULT 'outbound',
+        to_number TEXT,
+        from_number TEXT,
+        customer_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'queued',
+        transferred_to_user_id INTEGER,
+        ai_answered INTEGER NOT NULL DEFAULT 0,
+        recording_url TEXT,
+        duration_seconds INTEGER,
+        error_detail TEXT,
+        started_at TEXT,
+        ended_at TEXT,
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    )
+    """,
+    # Which kinds of notification one employee wants delivered to them.
+    #
+    # Deliberately *not* the same thing as the `notifications` settings section,
+    # which is the company deciding whether a row is written at all. This is one
+    # person deciding whether the row that was written is delivered to them —
+    # the company gate runs first, this one second, and neither can substitute
+    # for the other: an owner silencing task reminders for themselves must not
+    # silence them for the whole team, which is exactly what putting this in the
+    # company section would have done.
+    #
+    # `user_id` points at a control-plane user and carries no foreign key, for
+    # the reason given at the top of this file. One row per user per company:
+    # somebody who belongs to two companies tunes each separately, because the
+    # volume and the job are different in each.
+    """
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        notify_new_message TEXT NOT NULL DEFAULT 'all',
+        notify_ai_escalation INTEGER NOT NULL DEFAULT 1,
+        notify_mentions INTEGER NOT NULL DEFAULT 1,
+        notify_tasks INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(company_id, user_id)
+    )
+    """,
+    # What the demonstration seeded, so activation can take exactly it away.
+    #
+    # A workspace that stops being a demonstration must not keep six invented
+    # customers among its real ones -- an owner who cannot tell which of their
+    # conversations happened has a reporting screen that lies to them. And
+    # "delete everything older than the activation" is not the rule either,
+    # because they will have added real things while trying the platform out.
+    #
+    # So the seeder records every row it wrote, by table and id, and activation
+    # deletes that list and nothing else. Explicit enough to audit by reading.
+    """
+    CREATE TABLE IF NOT EXISTS demo_seeded_rows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        table_name TEXT NOT NULL,
+        row_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(company_id, table_name, row_id)
+    )
+    """,
 )
 
 
@@ -635,10 +893,65 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "created_by_user_id": "INTEGER",
         "closed_at": "TEXT",
     },
+    # An internal note can name the colleagues it is for. The ids are this
+    # company's own employees, checked against the control plane before they
+    # are written (`conversation_control_service.add_note`), so a note can
+    # never carry an id belonging to somebody else's company.
+    #
+    # A JSON list rather than a join table: it is only ever read with the note
+    # that holds it and never queried across notes, and the default is the
+    # empty list, so every note written before this column existed reads back
+    # correctly the moment it arrives.
+    "conversation_notes": {
+        "mentioned_user_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+    },
+    # A team channel is one of three things now. `channel` is the named,
+    # joinable discussion team chat has always had; `dm` is a two-person
+    # conversation and `group` a private one with a member list. All three are
+    # the same row under the same membership and privacy rules — the kind only
+    # decides how a client titles it, which is why this is a column and not a
+    # second set of tables.
+    #
+    # `display_name` keeps the name as a person typed it. `name` is normalised
+    # for the uniqueness constraint (lowercased, spaces to hyphens), which is
+    # the right key and the wrong label.
+    "team_channels": {
+        "kind": "TEXT NOT NULL DEFAULT 'channel'",
+        "display_name": "TEXT",
+    },
+    # One file per message, uploaded through `/api/media/upload` exactly as the
+    # customer composer uploads one. The URL names a file this workspace has
+    # already stored; nothing here accepts an arbitrary address.
+    "team_messages": {
+        "attachment_url": "TEXT",
+        "attachment_type": "TEXT",
+        "attachment_filename": "TEXT",
+    },
+    # The CRM fields the Contacts screen edits: a lifecycle stage, free-form
+    # tags, an owning employee, and the two free-form stores (custom fields and
+    # documents) a contact file needs. A company provisioned before this
+    # release has a `customers` table without them, so they arrive here rather
+    # than through CREATE TABLE.
+    #
+    # `assigned_user_id` carries no REFERENCES clause: `users` lives in the
+    # control-plane database and SQLite cannot key across files. It is resolved
+    # through `auth_service.user_display_names`, the same way every other
+    # user id in a tenant table is.
+    "customers": {
+        "lifecycle_stage": "TEXT NOT NULL DEFAULT 'lead'",
+        "tags_json": "TEXT NOT NULL DEFAULT '[]'",
+        "assigned_user_id": "INTEGER",
+        "custom_fields_json": "TEXT NOT NULL DEFAULT '{}'",
+        "documents_json": "TEXT NOT NULL DEFAULT '[]'",
+    },
 }
 
 
 TENANT_INDEXES: tuple[str, ...] = (
+    # Saved replies are listed for the whole company or filtered to one
+    # section, and reminders are swept by the time they come due.
+    "CREATE INDEX IF NOT EXISTS idx_saved_replies_department ON saved_replies(department, title)",
+    "CREATE INDEX IF NOT EXISTS idx_reminders_due ON conversation_reminders(remind_at)",
     # The log is read newest-first, filtered by category or by actor, and swept
     # by kind for retention. Each index matches one of those three readings.
     "CREATE INDEX IF NOT EXISTS idx_activity_recent ON activity_log(created_at DESC)",
@@ -690,6 +1003,21 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_availability_staff ON availability_rules(staff_user_id, weekday)",
     "CREATE INDEX IF NOT EXISTS idx_team_messages ON team_messages(channel_id, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_team_members ON team_channel_members(user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_team_channels_kind ON team_channels(kind, updated_at DESC)",
+    # The campaign list is read newest-first, and a report reads one campaign's
+    # recipients in insertion order.
+    "CREATE INDEX IF NOT EXISTS idx_broadcasts_recent ON broadcasts(created_at DESC, id DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_broadcast_recipients ON broadcast_recipients(broadcast_id, id)",
+    # The Calls screen reads newest-first, and a contact's card reads that one
+    # contact's history. Both readings are the same index used two ways.
+    "CREATE INDEX IF NOT EXISTS idx_call_logs_recent ON call_logs(created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_call_logs_customer ON call_logs(customer_id, created_at DESC)",
+    # A provider callback arrives naming only the provider's call id, and it is
+    # the only way back to the row. Unique because two rows answering to the
+    # same provider call would each take half the updates.
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_telephony_provider_call"
+    " ON telephony_calls(provider_call_id)",
+    "CREATE INDEX IF NOT EXISTS idx_telephony_status ON telephony_calls(status, id DESC)",
 )
 
 
@@ -741,7 +1069,6 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "collect_message_delay_seconds": 20,
         "return_to_ai_timeout_minutes": 5,
         "reply_access_mode": "take_required",
-        "auto_read_mode": "assigned_owner_only",
         "auto_release_to_ai": True,
         # Which language to answer in before the customer has asked for one.
         # `auto` detects from the message, which is what every company had.

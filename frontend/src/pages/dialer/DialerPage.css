@@ -1,0 +1,194 @@
+.dialer-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+}
+
+.dialer-layout {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.dialer-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  color: var(--tz-text-primary);
+}
+
+.dialer-setup-notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  color: var(--tz-text-primary);
+}
+
+.dialer-setup-notice svg {
+  color: var(--tz-warning, #b45309);
+  margin-top: 2px;
+}
+
+.dialer-setup-notice p {
+  margin: 4px 0 0;
+  color: var(--tz-text-muted);
+  font-size: 0.88rem;
+}
+
+.dialer-pad-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialer-field {
+  display: grid;
+  gap: 6px;
+}
+
+.dialer-field > span {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--tz-text-primary);
+}
+
+.dialer-field select,
+.dialer-number-row input {
+  min-height: 42px;
+  padding: 9px 11px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font: inherit;
+}
+
+.dialer-number-row {
+  display: flex;
+  gap: 8px;
+}
+
+.dialer-number-row input {
+  flex: 1;
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+}
+
+.dialer-backspace {
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface);
+  color: var(--tz-text-muted);
+  padding: 0 12px;
+  cursor: pointer;
+}
+
+.dialer-backspace:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dialer-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.dialer-keypad button {
+  min-height: 48px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dialer-keypad button:hover:not(:disabled) {
+  background: var(--tz-primary-soft);
+}
+
+.dialer-keypad button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dialer-inline-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface-secondary, var(--tz-surface));
+  color: var(--tz-text-muted);
+  font-size: 0.83rem;
+  margin: 0;
+}
+
+.dialer-error {
+  padding: 10px 12px;
+  border-radius: var(--tz-radius-md, 10px);
+  color: var(--tz-danger);
+  background: var(--tz-danger-soft);
+  font-size: 13px;
+  margin: 0;
+}
+
+.dialer-log-link {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--tz-text-muted);
+}
+
+.dialer-log-link a {
+  color: var(--tz-primary);
+}
+
+.dialer-call-cell {
+  display: grid;
+  gap: 2px;
+}
+
+.dialer-call-cell strong {
+  color: var(--tz-text-primary);
+}
+
+.dialer-call-cell span {
+  font-size: 0.76rem;
+  color: var(--tz-text-muted);
+}
+
+.dialer-recording-link {
+  color: var(--tz-primary);
+  font-size: 0.85rem;
+}
+
+.dialer-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.dialer-row-actions select {
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md, 10px);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .dialer-layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1860,6 +1860,45 @@ class ConversationControlService:
             external_user_id=external_user_id,
         )
 
+    @staticmethod
+    def _employees_of(company_id: int) -> list[int]:
+        """The ids of this company's active employees, from the control plane.
+
+        The single answer to "may this note name that person?". A mentioned id
+        arrives in a request body, and an id in a request body is a global
+        number that says nothing about who owns it — so it is checked here
+        against the company the caller actually belongs to, before it is
+        stored and before anyone is told about it.
+        """
+        from backend.services.auth_service import auth_service
+
+        try:
+            employees = auth_service.company_employees(int(company_id))
+        except Exception:  # noqa: BLE001
+            # A directory that will not load is a reason to name nobody, not a
+            # reason to trust the list that arrived.
+            logger.exception(
+                "Could not read the employee directory of company %s", company_id
+            )
+            return []
+
+        return [int(employee["id"]) for employee in employees]
+
+    @staticmethod
+    def _decode_note(row: Any) -> dict[str, Any]:
+        note = dict(row)
+
+        try:
+            note["mentioned_user_ids"] = json.loads(
+                note.get("mentioned_user_ids_json") or "[]"
+            )
+        except (TypeError, ValueError):
+            note["mentioned_user_ids"] = []
+
+        note.pop("mentioned_user_ids_json", None)
+
+        return note
+
     def add_note(
         self,
         company_id: int,
@@ -1867,6 +1906,7 @@ class ConversationControlService:
         external_user_id: str,
         author_user_id: int,
         note: str,
+        mentioned_user_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         clean_note = note.strip()
 
@@ -1883,6 +1923,28 @@ class ConversationControlService:
             ),
         )
 
+        # Resolved before the tenant connection opens: this reads the control
+        # database, and a control read issued from inside an open tenant write
+        # is the stall `DatabaseManager.after_release` documents.
+        #
+        # An id the picker never offered — one belonging to another company's
+        # employee, or to somebody whose account has been disabled — is dropped
+        # rather than refused, exactly as a mention typed at a name nobody
+        # answers to is dropped. It is not stored and nobody is notified, so a
+        # forged id reaches neither the note nor a stranger's bell.
+        valid_mentions: list[int] = []
+
+        if mentioned_user_ids:
+            allowed = set(self._employees_of(company_id))
+            for value in mentioned_user_ids:
+                try:
+                    candidate = int(value)
+                except (TypeError, ValueError):
+                    continue
+
+                if candidate in allowed and candidate not in valid_mentions:
+                    valid_mentions.append(candidate)
+
         with database_manager.tenant(company_id) as conn:
             cursor = conn.execute(
                 """
@@ -1891,15 +1953,17 @@ class ConversationControlService:
                     company_id,
                     author_user_id,
                     note,
+                    mentioned_user_ids_json,
                     created_at
                 )
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 (
                     state["id"],
                     company_id,
                     author_user_id,
                     clean_note,
+                    json.dumps(valid_mentions),
                     utc_now_iso(),
                 ),
             )
@@ -1936,12 +2000,83 @@ class ConversationControlService:
         # raises `no such table: users` — so `LEFT JOIN users` here did not
         # quietly resolve to nothing, it made adding a note to a conversation
         # fail outright, every time, for every company.
-        note = dict(row)
+        note = self._decode_note(row)
         note["author_name"] = self._author_names(
             company_id, [note.get("author_user_id")]
         ).get(note.get("author_user_id"), "Unknown user")
 
+        self._notify_note_mentions(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+            conversation_id=int(state["id"]),
+            note_id=int(note_id),
+            note_text=clean_note,
+            author_user_id=author_user_id,
+            author_name=note.get("author_name"),
+            mentioned_user_ids=valid_mentions,
+        )
+
         return note
+
+    @staticmethod
+    def _notify_note_mentions(
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        conversation_id: int,
+        note_id: int,
+        note_text: str,
+        author_user_id: int | None,
+        author_name: str | None,
+        mentioned_user_ids: list[int],
+    ) -> int:
+        """Tell each named colleague, and never the person who named them.
+
+        Writing your own name in your own note is not a message to yourself,
+        so the author is skipped — the same rule team chat's `_notify_mentions`
+        already applies to a channel message.
+
+        A notification that fails must not lose the note. It is already
+        committed by the time this runs, and an employee is better served by a
+        note that saved with one bell missing than by an error on a note that
+        did save.
+        """
+        sent = 0
+        label = author_name or "A colleague"
+
+        for user_id in mentioned_user_ids:
+            if author_user_id is not None and int(user_id) == int(author_user_id):
+                continue
+
+            try:
+                notification_service.create(
+                    company_id=int(company_id),
+                    notification_type="conversation_mention",
+                    title=f"{label} mentioned you in a note",
+                    body=note_text[:500],
+                    recipient_user_id=int(user_id),
+                    channel=channel,
+                    external_user_id=external_user_id,
+                    conversation_id=conversation_id,
+                    actor_user_id=author_user_id,
+                    severity="info",
+                    data={"note_id": note_id},
+                    dedupe_key=(
+                        f"conversation_mention:{company_id}:{note_id}:{user_id}"
+                    ),
+                )
+                sent += 1
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Mention notification failed company id=%s note id=%s user id=%s",
+                    company_id,
+                    note_id,
+                    user_id,
+                )
+
+        return sent
 
     @staticmethod
     def _author_names(company_id: int, user_ids) -> dict[int, str]:
@@ -2213,7 +2348,7 @@ class ConversationControlService:
         notes = []
 
         for row in note_rows:
-            note = dict(row)
+            note = self._decode_note(row)
             author_id = note.get("author_user_id")
             note["author_name"] = (
                 names.get(int(author_id)) if author_id else None

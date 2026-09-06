@@ -1,0 +1,439 @@
+/* Conversations v2 — thread list + filter row rebuilt per
+   CLAUDE_CODE_UI_IMPLEMENTATION.md §3. .btn/.tag/.card come from the
+   global classical-styles.css + tzone-theme.css (loaded once in
+   main.jsx) — every v2 screen shares that one system instead of each
+   page re-declaring its own. */
+.tzv2-conv-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tzv2-conv-filterbar {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.tzv2-conv-filterbar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tzv2-select {
+  flex: none;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
+.tzv2-new-conv {
+  flex: none;
+  margin-left: auto;
+}
+
+.tzv2-channel-filter {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tzv2-channel-filter .tzv2-channel-chip {
+  flex: none;
+}
+
+.tzv2-channel-chip {
+  --channel-color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  background: var(--color-surface);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.tzv2-channel-chip svg {
+  font-size: 16px;
+  color: var(--channel-color);
+}
+
+.tzv2-channel-chip:hover:not(:disabled) {
+  border-color: var(--channel-color);
+  color: var(--color-text);
+}
+
+.tzv2-channel-chip.is-active {
+  border-color: var(--channel-color);
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--channel-color) 12%, transparent);
+}
+
+.tzv2-channel-chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tzv2-channel-chip-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+.tzv2-channel-chip.is-active .tzv2-channel-chip-count {
+  background: color-mix(in srgb, var(--channel-color) 65%, var(--color-surface));
+  color: var(--color-surface);
+}
+
+.tzv2-conv-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+.tzv2-conv-list {
+  flex: 0 1 330px;
+  min-width: 230px;
+  max-width: 330px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--color-divider);
+}
+
+@media (max-width: 940px) {
+  .tzv2-conv-list {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    max-width: none;
+    background: var(--color-surface);
+  }
+}
+
+.tzv2-conv-list-head {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.tzv2-conv-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  min-height: 32px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-sm);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.tzv2-conv-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 12.5px;
+}
+
+.tzv2-conv-search input:focus {
+  outline: none;
+}
+
+.tzv2-status-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tzv2-conv-rows {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.tzv2-conv-empty {
+  padding: 24px 16px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 13px;
+  text-align: center;
+}
+
+.tzv2-conv-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-divider);
+  cursor: pointer;
+}
+
+.tzv2-conv-row:hover {
+  background: color-mix(in srgb, var(--color-accent) 4%, transparent);
+}
+
+.tzv2-conv-row.is-selected {
+  background: color-mix(in srgb, var(--color-accent) 7%, transparent);
+  box-shadow: inset 2px 0 var(--color-accent);
+}
+
+.tzv2-conv-avatar {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 1px solid var(--color-divider);
+  border-radius: 999px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+}
+
+.tzv2-conv-main {
+  min-width: 0;
+}
+
+.tzv2-conv-topline {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.tzv2-conv-topline strong {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tzv2-unread-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.tzv2-conv-time {
+  flex: none;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.tzv2-conv-preview {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.tzv2-conv-metaline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 7px;
+  min-width: 0;
+}
+
+.tzv2-channel-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.tzv2-channel-whatsapp { background: var(--color-channel-whatsapp); }
+.tzv2-channel-messenger { background: var(--color-channel-messenger); }
+.tzv2-channel-telegram { background: var(--color-channel-telegram); }
+.tzv2-channel-instagram { background: var(--color-channel-instagram); }
+.tzv2-channel-website { background: var(--color-channel-website); }
+
+.tzv2-conv-channel,
+.tzv2-conv-owner {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.tzv2-conv-sep {
+  width: 1px;
+  height: 10px;
+  flex: none;
+  background: var(--color-divider);
+}
+
+.tzv2-conv-sla {
+  margin-left: auto;
+  flex: none;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-accent);
+  white-space: nowrap;
+}
+
+.tzv2-conv-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tzv2-conv-row-actions button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.tzv2-conv-row-actions button:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.tzv2-list-toggle {
+  position: absolute;
+  top: 10px;
+  left: 0;
+  z-index: 4;
+  width: 22px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-divider);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  background: var(--color-surface);
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+  cursor: pointer;
+}
+
+/* Deliberately after the rule above rather than inside the earlier media block:
+   at equal specificity the later declaration wins, so an override written above
+   the base rule is simply ignored.
+
+   Going back to the list is the primary move on a phone, so the sliver that
+   works as a hover affordance on a wide screen becomes a real touch target.
+   44px is the smallest square a finger hits reliably. */
+@media (max-width: 940px) {
+  .tzv2-list-toggle {
+    top: 8px;
+    width: 44px;
+    height: 44px;
+    border-radius: 0 12px 12px 0;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  }
+}
+
+.tzv2-conv-detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tzv2-conv-empty-state {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  text-align: center;
+  color: color-mix(in srgb, var(--color-text) 55%, transparent);
+}
+
+.tzv2-conv-empty-state h3 {
+  margin: 0 0 6px;
+  color: var(--color-text);
+}
+
+.tzv2-conv-empty-state p {
+  max-width: 34ch;
+  margin: 0 auto;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+/* ConversationDetailPageV2 (ConversationDetailPageV2.jsx/.css) renders its
+   own fully tzv2-scoped markup here — no old ConversationInbox.css classes
+   left to reskin via descendant selectors. */
+.tzv2-conv-detail .tzv2-cd-shell {
+  height: 100%;
+}
+
+/* — phone: the channel filter needs a line of its own —
+   The filter bar puts the folder select, the channel chips and the New
+   conversation button on one row. The select and the button are both
+   `flex: none`, so the chips are the only thing that can give -- and on a
+   390px screen they gave everything: the scroller measured 5px wide against
+   640px of chips. It was still technically scrollable, which is why nothing
+   overflowed the page and why a sweep for overflow found the row innocent;
+   what it actually looked like was a 5px sliver of the first chip wedged
+   between two controls, and there was no way to reach any channel.
+
+   Wrapping puts the chips on their own full-width line, where the horizontal
+   scroll they were built for finally has somewhere to happen. */
+@media (max-width: 700px) {
+  .tzv2-conv-filterbar-row {
+    flex-wrap: wrap;
+  }
+
+  .tzv2-channel-filter {
+    order: 1;
+    flex: 1 0 100%;
+    padding-bottom: 2px;
+  }
+}

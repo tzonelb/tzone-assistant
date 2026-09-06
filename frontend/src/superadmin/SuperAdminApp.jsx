@@ -14,6 +14,7 @@ const PlatformEnrolTotpPage = lazy(() => import("./pages/PlatformEnrolTotpPage")
 const CompaniesPage = lazy(() => import("./pages/CompaniesPage"));
 const CompanyDetailPage = lazy(() => import("./pages/CompanyDetailPage"));
 const NewCompanyPage = lazy(() => import("./pages/NewCompanyPage"));
+const PlansPage = lazy(() => import("./pages/PlansPage"));
 const PlatformAdminsPage = lazy(() => import("./pages/PlatformAdminsPage"));
 const AuditLogPage = lazy(() => import("./pages/AuditLogPage"));
 const HealthPage = lazy(() => import("./pages/HealthPage"));
@@ -47,6 +48,7 @@ export default function SuperAdminApp() {
               <Route path="companies" element={<CompaniesPage />} />
               <Route path="companies/new" element={<NewCompanyPage />} />
               <Route path="companies/:companyId" element={<CompanyDetailPage />} />
+              <Route path="plans" element={<PlansPage />} />
               <Route path="admins" element={<PlatformAdminsPage />} />
               <Route path="audit" element={<AuditLogPage />} />
               <Route path="health" element={<HealthPage />} />

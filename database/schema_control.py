@@ -348,6 +348,151 @@ CONTROL_TABLES: tuple[str, ...] = (
         UNIQUE(company_id, period, metric, channel, department_id)
     )
     """,
+    # Theme Studio's versioned design tokens.
+    #
+    # A row is one *patch*, not a snapshot: it holds only the tokens its author
+    # actually changed, so the layers below can be merged key by key at read
+    # time. Storing a full snapshot instead meant every new draft silently
+    # reset each token it did not touch back to the bundled default rather than
+    # inheriting the layer beneath it.
+    #
+    # Scoped rather than per-company, because that is the decision this table
+    # records: `platform` reaches every workspace, `plan` reaches the companies
+    # on one plan, `company` is one workspace's own override. `scope_id` is the
+    # plan code or the company id, and NULL for the platform layer.
+    #
+    # Control plane and not a tenant database, for two reasons: the platform
+    # layer belongs to no company and could not be stored in one, and the read
+    # path resolves a workspace's appearance before its encrypted database is
+    # ever opened. Nothing customer-owned goes in here — a design token is a
+    # colour, a font name and a number of pixels.
+    """
+    CREATE TABLE IF NOT EXISTS ui_themes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        scope_type TEXT NOT NULL,
+        scope_id TEXT,
+        version INTEGER NOT NULL DEFAULT 0,
+        tokens_json TEXT NOT NULL,
+        modules_json TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        created_by INTEGER,
+        created_at TEXT NOT NULL,
+        published_at TEXT
+    )
+    """,
+    # A company asking to move onto a different plan, or to renew the one it is
+    # on. Control-plane rather than tenant, and for the same reason the
+    # subscription itself is: the operator reviews these across every company
+    # from the console, and a table inside one company's encrypted file cannot
+    # be read from a screen that lists all of them.
+    #
+    # Nothing a company owns is here — a plan id, a status and a short note the
+    # employee typed about how they paid. No customer, no conversation.
+    #
+    # `note` is the company's own words (a transfer reference, usually), so it
+    # is bounded at the route rather than trusted at whatever length it arrives.
+    """
+    CREATE TABLE IF NOT EXISTS subscription_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        plan_id INTEGER NOT NULL,
+        requested_by_user_id INTEGER,
+        note TEXT,
+        -- 'pending' until an operator acts on it, then 'approved' or
+        -- 'rejected'. No `reviewed_by`/`reviewed_at` columns: the console side
+        -- that would set them is not built yet, and columns nothing writes are
+        -- how a table comes to hold fields that look answered and are not.
+        -- They belong in the release that adds the review screen.
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE RESTRICT
+    )
+    """,
+    # A company reporting a problem with the platform itself to the T-ZONE team.
+    #
+    # Distinct from `tickets` in the tenant schema, which is a company's own
+    # end-customers' cases and belongs inside that company's file. This one is
+    # addressed *to the operator*, so it lives where the operator can read it
+    # without opening a company's encrypted database — the same reasoning as
+    # `subscription_requests` above.
+    """
+    CREATE TABLE IF NOT EXISTS support_tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        created_by_user_id INTEGER,
+        subject TEXT NOT NULL,
+        description TEXT NOT NULL,
+        priority TEXT NOT NULL DEFAULT 'normal',
+        status TEXT NOT NULL DEFAULT 'open',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+    """,
+    # One row per verification email actually sent, so the resend cooldown and
+    # the per-source hourly cap in `signup_service` are counted from what
+    # happened rather than trusted from the caller. Without them, `send_code`
+    # emailed on every call: an email-bombing tool aimed at a victim's address
+    # that also drained the platform's send quota. Pruned like the other
+    # short-lived tables; a stale row only makes a refusal slightly more
+    # generous, never less.
+    """
+    CREATE TABLE IF NOT EXISTS signup_code_sends (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        ip_address TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
+    # A verification code sent to an email address during self-service
+    # sign-up. Not an identity check -- it proves somebody reached that mailbox
+    # once, which is enough to make creating workspaces in bulk tedious and is
+    # exactly why the workspace it produces is still a demonstration.
+    #
+    # The code is stored as a hash, like every other code in this schema, and
+    # `attempts` is what keeps six digits from being guessable: past the
+    # ceiling the row is dead and a new code must be requested. One row per
+    # address, so asking again replaces the last code rather than adding a
+    # second valid one.
+    """
+    CREATE TABLE IF NOT EXISTS signup_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL UNIQUE,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        ip_address TEXT
+    )
+    """,
+    # A code the operator issues that turns a demo workspace into a real one.
+    #
+    # The code itself is never stored. `code_hash` is the same pattern as
+    # `auth_sessions.token_hash` and `password_reset_tokens`: the operator sees
+    # the code once, when it is minted, and a leaked control database yields
+    # nothing anyone can redeem. `used_at` and `used_by_company_id` are what
+    # make it single-use, and they are set in the same transaction that clears
+    # the company's demo flag so a code cannot be spent twice by two requests
+    # arriving together.
+    #
+    # `plan_id` is the plan the workspace lands on. Nullable: a code may simply
+    # lift the demo restriction and leave the plan to be chosen later.
+    """
+    CREATE TABLE IF NOT EXISTS activation_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code_hash TEXT NOT NULL UNIQUE,
+        plan_id INTEGER,
+        note TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        expires_at TEXT,
+        used_at TEXT,
+        used_by_company_id INTEGER,
+        FOREIGN KEY(plan_id) REFERENCES plans(id) ON DELETE SET NULL
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -369,6 +514,26 @@ CONTROL_TABLES: tuple[str, ...] = (
 # EXISTS never adds a column to a table that already exists, so an installation
 # from an earlier release would be missing them and fail at query time.
 CONTROL_COLUMNS: dict[str, dict[str, str]] = {
+    "companies": {
+        # A workspace anyone can create from the sign-up screen, carrying
+        # sample data so the platform has something to show, and forbidden from
+        # reaching a real customer until an activation code is redeemed.
+        #
+        # Defaulting to 0 is what keeps this additive: every company that
+        # existed before this column was added is a real one, which is true.
+        "is_demo": "INTEGER NOT NULL DEFAULT 0",
+        # When a code was redeemed. Kept after `is_demo` goes to 0 because
+        # "this workspace started as a trial on 3 March" is a fact the operator
+        # wants later and cannot reconstruct from a flag that is now false.
+        "activated_at": "TEXT",
+    },
+    # The company's design tokens (colour, type, shape, layout) for the theme
+    # the interface renders with. Additive: a company with no theme published
+    # falls back to the platform defaults, so an existing install looks exactly
+    # as it did before anyone opens Theme Studio.
+    "company_platform_config": {
+        "theme_json": "TEXT NOT NULL DEFAULT '{}'",
+    },
     "auth_sessions": {
         "scope": "TEXT NOT NULL DEFAULT 'company'",
     },
@@ -459,6 +624,13 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_usage_company_period ON usage_records(company_id, period, metric)",
     "CREATE INDEX IF NOT EXISTS idx_usage_period ON usage_records(period, metric)",
     "CREATE INDEX IF NOT EXISTS idx_audit_log_company ON audit_log(company_id, created_at)",
+    # The read path asks one question -- "the published theme for this scope" --
+    # on every workspace configuration request, so the index carries the whole
+    # of it rather than the scope alone.
+    """
+    CREATE INDEX IF NOT EXISTS idx_ui_themes_scope
+    ON ui_themes(scope_type, scope_id, status, version)
+    """,
     """
     CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_external_account
     ON channel_accounts(channel, external_account_id)
@@ -487,16 +659,24 @@ DEFAULT_PERMISSIONS: tuple[tuple[str, str, str], ...] = (
     ("settings.view", "View Settings", "Open company settings."),
     ("settings.manage", "Manage Settings", "Change company settings, including assistant behaviour."),
     ("subscriptions.view", "View Subscription", "See the current plan and billing status."),
-    # `subscriptions.manage` was here, described as "Change the plan and billing
-    # details", and no endpoint has ever checked it. There is nothing for it to
-    # guard: a company cannot change its own plan, by design — plans and
-    # per-company overrides are set from the operator console. So the Roles
-    # screen offered an owner a switch that granted a capability the platform
-    # does not have, and taking it away restricted nothing.
+    # Back, and only because there is finally something for it to guard.
     #
-    # Retired rather than left in place. A permission that decides nothing is
-    # the same defect as a setting that saves and decides nothing, except that
-    # this one tells an owner they have limited what somebody can do.
+    # It was retired for the right reason: it described "change the plan and
+    # billing details", no endpoint checked it, and a company could not change
+    # its own plan by design — so the Roles screen offered an owner a switch
+    # that restricted nothing. A permission that decides nothing is the same
+    # defect as a setting that saves and decides nothing, and worse, because it
+    # tells an owner they have limited somebody.
+    #
+    # `POST /api/activation/redeem` is that endpoint. Redeeming a code takes a
+    # workspace out of demonstration and puts it on a plan, which is exactly
+    # what this permission always claimed to cover.
+    #
+    # Granted to no default role. The owner holds everything in code, and
+    # whether a manager may spend the company's activation code is a decision
+    # for the owner to take on the Roles screen rather than one this file
+    # should take for every company.
+    ("subscriptions.manage", "Manage Subscription", "Redeem an activation code and change the plan."),
     ("tasks.view", "View Tasks", "See the team's tasks and follow-ups."),
     ("tasks.manage", "Manage Tasks", "Create, assign, edit and close tasks."),
     ("catalogue.view", "View Catalogue", "Browse the product catalogue."),
@@ -508,6 +688,12 @@ DEFAULT_PERMISSIONS: tuple[tuple[str, str, str], ...] = (
     ("appointments.view", "View Appointments", "See the appointment calendar."),
     ("appointments.manage", "Manage Appointments", "Book, reschedule and cancel appointments."),
     ("team_chat.use", "Use Team Chat", "Read and post in internal team channels."),
+    # Reading the call history rides on `conversations.view`/`conversations.reply`
+    # — logging a call is answering a customer by another route. This one is
+    # only for the live line, because making the company's number ring a
+    # customer spends money and speaks in the company's name, which is a
+    # narrower thing to hand out than the inbox.
+    ("dialer.use", "Use the Dialer", "Place, transfer and end live phone calls."),
 )
 
 

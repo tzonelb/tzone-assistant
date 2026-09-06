@@ -886,44 +886,54 @@ class AuthService:
         return token
 
     def consume_password_reset(self, *, token: str, new_password: str) -> bool:
-        """Spend a reset token and set the new password. One attempt, one use."""
+        """Spend a reset token and set the new password. One attempt, one use.
+
+        The claim is a single ``UPDATE ... WHERE used_at IS NULL`` whose
+        rowcount is the whole decision, not a ``SELECT`` of ``used_at`` followed
+        by a separate write. A read-then-write leaves a window exactly as wide
+        as the database call between the two in which a second request carrying
+        the same token also reads it as unused -- and this token is a
+        password-reset link, so "used twice" is two set-password calls off one
+        link, the last writer's password winning. `activation_service.redeem`
+        was written this way for the same reason; this had drifted from it.
+
+        Marked spent before the password is written, deliberately: if
+        ``set_password`` then fails the link is already dead and the
+        administrator issues another, where the opposite order would leave a
+        usable link alive after a partial failure.
+        """
         token_hash = self.hash_token(token)
         now = utc_now()
 
         with database_manager.control() as conn:
-            row = conn.execute(
+            claimed = conn.execute(
                 """
-                SELECT id, user_id, expires_at, used_at
-                FROM password_reset_tokens
+                UPDATE password_reset_tokens
+                SET used_at = ?
                 WHERE token_hash = ?
-                LIMIT 1
+                  AND used_at IS NULL
+                  AND expires_at > ?
                 """,
+                (now.isoformat(), token_hash, now.isoformat()),
+            )
+
+            # Never minted, already spent, or expired -- one answer. Only the
+            # request that flipped the row from unused proceeds; a second racing
+            # request finds rowcount 0 and stops here.
+            if claimed.rowcount != 1:
+                conn.commit()
+                return False
+
+            row = conn.execute(
+                "SELECT user_id FROM password_reset_tokens WHERE token_hash = ? "
+                "LIMIT 1",
                 (token_hash,),
             ).fetchone()
 
-            if not row or row["used_at"]:
-                return False
-
-            try:
-                expires_at = datetime.fromisoformat(row["expires_at"])
-            except (TypeError, ValueError):
-                return False
-
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-
-            if expires_at <= now:
-                return False
-
-            # Marked spent before the password is written. If setting the
-            # password then fails, the link is dead and the administrator sends
-            # another — the opposite order would leave a usable link after a
-            # partial failure.
-            conn.execute(
-                "UPDATE password_reset_tokens SET used_at = ? WHERE id = ?",
-                (now.isoformat(), int(row["id"])),
-            )
             conn.commit()
+
+            if row is None:
+                return False
 
             user_id = int(row["user_id"])
 

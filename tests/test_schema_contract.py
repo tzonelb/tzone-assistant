@@ -83,6 +83,14 @@ REVIEWED_OR_IGNORE: dict[tuple[str, str], str] = {
         "team_channel_members",
     ): "Joining a channel somebody is already in.",
     (
+        "tools/capture_demo_fixtures.py",
+        "roles",
+    ): "Seeding a throwaway company's default roles, which provision may have created.",
+    (
+        "tools/capture_demo_fixtures.py",
+        "role_permissions",
+    ): "Granting a permission the seeded role already holds.",
+    (
         "backend/services/platform_service.py",
         "role_permissions",
     ): "Granting a permission a role already holds.",

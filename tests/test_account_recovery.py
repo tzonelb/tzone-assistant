@@ -298,6 +298,79 @@ def test_a_reset_token_works_exactly_once(client, service, alpha):
     assert second.status_code == 400, second.text
 
 
+def test_spending_a_reset_token_is_one_statement_not_a_read_then_a_write():
+    """Two requests handed the same unused reset link: only one may spend it.
+
+    Asserted against the source, not by racing two requests, for the reason
+    `test_an_activation_code_is_spent_once.py` sets out in full: two sequential
+    calls cannot interleave -- the first commits before the second reads -- so
+    a read-then-write passes the sequential "works exactly once" test above
+    exactly as a correct one does, and threads only test SQLite's locking. What
+    is required is that the check and the claim are the same statement, so the
+    database decides. This link resets a password, so "spent twice" is two
+    set-password calls off one link.
+    """
+    import ast
+    import inspect
+    import textwrap
+
+    from backend.services import auth_service as module
+
+    source = textwrap.dedent(
+        inspect.getsource(module.AuthService.consume_password_reset)
+    )
+    tree = ast.parse(source)
+
+    statements = [
+        node.args[0].value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "execute"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and isinstance(node.args[0].value, str)
+    ]
+
+    touching = [
+        " ".join(sql.split())
+        for sql in statements
+        if "password_reset_tokens" in sql
+    ]
+
+    claiming = [
+        sql
+        for sql in touching
+        if sql.upper().startswith("UPDATE") and "USED_AT = ?" in sql.upper()
+    ]
+
+    assert len(claiming) == 1, (
+        "Expected exactly one statement to claim a reset token, found "
+        f"{len(claiming)}: {claiming}"
+    )
+
+    claim = claiming[0].upper()
+
+    assert "USED_AT IS NULL" in claim, (
+        "The claiming UPDATE does not carry `used_at IS NULL`, so something "
+        "read that first -- and between the read and this write a second "
+        "request carrying the same token reads it as unused too, and both set "
+        "a password off one link."
+    )
+    assert "EXPIRES_AT >" in claim, (
+        "Expiry is decided outside the claiming statement, the same window in "
+        "a different disguise."
+    )
+
+    reads = [sql for sql in touching if sql.upper().startswith("SELECT")]
+
+    for sql in reads:
+        assert "USED_AT IS NULL" not in sql.upper(), (
+            "A SELECT filters on `used_at IS NULL`, moving the decision back "
+            "before the write: " + sql
+        )
+
+
 def test_issuing_a_new_token_spends_the_previous_one(client, service, alpha):
     """Two live links for one account is a second key nobody is tracking."""
     user_id = _employee(service, alpha, "twice@alpha.example.com")

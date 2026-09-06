@@ -193,6 +193,15 @@ def dashboard_summary(
                 "knowledge_items": (
                     "SELECT COUNT(*) AS total FROM knowledge_items WHERE status = 'active'"
                 ),
+                # The screen has always drawn a "Products" tile reading
+                # `counts.products`, and nothing here ever answered it -- so
+                # `counts[key] ?? 0` rendered a confident 0 on the first screen
+                # after login, for every company, however full its catalogue.
+                # Counted the same way as knowledge: what the owner would call
+                # their catalogue is the products they have not archived.
+                "products": (
+                    "SELECT COUNT(*) AS total FROM products WHERE status != 'archived'"
+                ),
                 "tickets": "SELECT COUNT(*) AS total FROM tickets",
                 "open_tickets": (
                     "SELECT COUNT(*) AS total FROM tickets WHERE status = 'open'"
@@ -202,12 +211,13 @@ def dashboard_summary(
                 counts[key] = int(conn.execute(query).fetchone()["total"])
 
             recent_conversations = [
-                dict(row)
+                _recent_conversation(row)
                 for row in conn.execute(
                     """
                     SELECT
                         id, channel, external_user_id, language, department,
-                        topic, status, needs_human, last_message_at, created_at
+                        topic, status, needs_human, last_message_at, created_at,
+                        official_customer_name, customer_alias
                     FROM conversations
                     ORDER BY COALESCE(last_message_at, created_at) DESC
                     LIMIT 10
@@ -231,6 +241,26 @@ def dashboard_summary(
         "channels": [dict(row) for row in channel_rows],
         "recent_conversations": recent_conversations,
     }
+
+
+def _recent_conversation(row: Any) -> dict[str, Any]:
+    """One row of the dashboard's recent list, named the way the inbox names it.
+
+    The query used to select `external_user_id` and no name at all, so the
+    screen fell back to showing the raw channel id -- "Customer cust-maya" on
+    the dashboard beside "مايا رزق" in the inbox, for the same person. The rule
+    here is the one `message_service._public_conversation` already applies, so
+    the two screens cannot drift apart again.
+    """
+    data = dict(row)
+
+    data["customer_name"] = (
+        data.get("official_customer_name")
+        or data.get("customer_alias")
+        or f"{str(data.get('channel') or '').title()} Customer"
+    )
+
+    return data
 
 
 @router.get("/company")
