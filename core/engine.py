@@ -958,6 +958,11 @@ class Engine:
             match_result=match_result,
             company_id=request.company_id,
             channel_account_id=getattr(request, "channel_account_id", None),
+            department=(
+                match_result.get("department")
+                if match_result.get("department") != "unknown"
+                else current_department
+            ),
         )
 
         if not ai_result:

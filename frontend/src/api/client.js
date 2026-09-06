@@ -2064,24 +2064,35 @@ export async function deleteKnowledgeEntryRequest(entryId) {
  * drawn exactly as the design draws them.
  */
 
-export function listInstructionsRequest() {
-  return notBuiltHere("AI Instructions");
+export async function listInstructionsRequest() {
+  return apiRequest("/api/ai-instructions");
 }
 
-export function createInstructionRequest() {
-  return notBuiltHere("AI Instructions");
+export async function createInstructionRequest(text, tags = []) {
+  return apiRequest("/api/ai-instructions", {
+    method: "POST",
+    body: { text, tags },
+  });
 }
 
-export function updateInstructionRequest() {
-  return notBuiltHere("AI Instructions");
+export async function updateInstructionRequest(id, text, tags = []) {
+  return apiRequest(`/api/ai-instructions/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: { text, tags },
+  });
 }
 
-export function deleteInstructionRequest() {
-  return notBuiltHere("AI Instructions");
+export async function deleteInstructionRequest(id) {
+  return apiRequest(`/api/ai-instructions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
-export function reorderInstructionsRequest() {
-  return notBuiltHere("AI Instructions");
+export async function reorderInstructionsRequest(orderedIds) {
+  return apiRequest("/api/ai-instructions/reorder", {
+    method: "POST",
+    body: { ordered_ids: orderedIds },
+  });
 }
 
 export function listReplyFlowsRequest() {

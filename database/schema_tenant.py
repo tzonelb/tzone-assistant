@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 7
+TENANT_SCHEMA_VERSION = 8
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -859,6 +859,22 @@ TENANT_TABLES: tuple[str, ...] = (
         row_id INTEGER NOT NULL,
         created_at TEXT NOT NULL,
         UNIQUE(company_id, table_name, row_id)
+    )
+    """,
+    # The company's own behaviour rules for its assistant: how to speak, what
+    # not to say, when to hand off. Ordered by `position` (earlier wins on a
+    # conflict), each optionally scoped to departments/channels via `tags_json`.
+    # These are appended to the system prompt the model is given -- the screen
+    # that edits them is Settings -> AI Instructions.
+    """
+    CREATE TABLE IF NOT EXISTS ai_instructions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
     )
     """,
 )

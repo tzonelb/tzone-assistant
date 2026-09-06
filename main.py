@@ -22,6 +22,7 @@ from backend.api.errors import install_error_handlers
 from backend.api.routes import (
     activity,
     ai_teaching,
+    ai_instructions,
     analytics,
     appointments,
     auth,
@@ -304,6 +305,7 @@ def _module_unpaid_too(key: str) -> list:
 app.include_router(dashboard.router, dependencies=_module_unpaid_too("dashboard"))
 app.include_router(analytics.router, dependencies=_module("analytics"))
 app.include_router(ai_teaching.router, dependencies=_module("ai_teaching"))
+app.include_router(ai_instructions.router, dependencies=_module("ai_teaching"))
 app.include_router(conversations.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
