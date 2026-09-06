@@ -34,6 +34,7 @@ const CustomerDetailPageV2 = lazy(() => import("./pages/customers/CustomerDetail
 const DialerPage = lazy(() => import("./pages/dialer/DialerPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
+const ReplyFlowBuilderPage = lazy(() => import("./pages/reply-flows/ReplyFlowBuilderPage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
 const ActivityLogPage = lazy(() => import("./pages/admin/ActivityLogPage"));
 const PlatformAdminPage = lazy(() => import("./pages/admin/PlatformAdminPage"));
@@ -146,6 +147,11 @@ export default function App() {
           <Route path="/channels" element={<ModuleRoute module="channels"><ChannelsPage /></ModuleRoute>} />
           <Route path="/settings" element={<ModuleRoute module="preferences"><UISettingsPage /></ModuleRoute>} />
           <Route path="/company-settings/*" element={<ModuleRoute module="company_settings"><CompanySettingsPage /></ModuleRoute>} />
+          {/* The reply-flow list lives inside Company Settings; the full-screen
+              canvas builder it opens is its own route. Gated like the rest of
+              the assistant's configuration: the ai_teaching module plus
+              settings.manage. */}
+          <Route path="/reply-flows/:id" element={<ModuleRoute module="ai_teaching"><RequireAccess permissions={["settings.manage"]}><ReplyFlowBuilderPage /></RequireAccess></ModuleRoute>} />
           <Route path="/roles" element={<ModuleRoute module="roles"><RolesPermissionsPage /></ModuleRoute>} />
           {/* Inside the shell rather than on its own: the screen is written as
               a panel with no header and no way back, because the design branch

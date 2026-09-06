@@ -7,6 +7,8 @@ from core.content_loader import content_loader
 from core.intent_detector import intent_detector
 from core.intent_transition import intent_transition_manager
 from core.ai_router import ai_router
+from core.prompt_builder import prompt_builder
+from core.reply_flow_engine import FlowDefer, reply_flow_engine
 from core.automation_policy import automation_policy
 from core.conversation_memory import conversation_memory
 from core.ai_knowledge_matcher import ai_knowledge_matcher
@@ -184,6 +186,38 @@ class Engine:
             current_department = user_session.get(
                 "current_department"
             ) or self.stored_department(request)
+
+            # A company's own scripted Reply Flow, if it has an active one that
+            # matches this channel and department, runs before the default
+            # menu/AI path. With no active flow this returns None and nothing
+            # below changes -- the feature is invisible until an owner turns a
+            # flow on.
+            flow_outcome = self.run_reply_flow(
+                request,
+                user_session,
+                language,
+                current_department,
+            )
+            if isinstance(flow_outcome, Response):
+                conversation_memory.append(
+                    user_session, "assistant", flow_outcome.text
+                )
+                return flow_outcome
+
+            flow_instructions = ""
+            if isinstance(flow_outcome, FlowDefer):
+                # The flow reached an AI step: let the normal AI reply answer,
+                # carrying the step's own instructions.
+                flow_instructions = flow_outcome.instructions
+                ai_response = self.handle_ai(
+                    request=request,
+                    language=language,
+                    current_state=current_state,
+                    current_department=current_department,
+                    flow_instructions=flow_instructions,
+                )
+                if ai_response:
+                    return ai_response
 
             state_data = flow_loader.get_state(
                 current_state,
@@ -419,6 +453,38 @@ class Engine:
                 return "ar"
 
         return "en"
+
+    def run_reply_flow(self, request, user_session, language, current_department):
+        """Ask the reply-flow engine to drive this turn, if a flow applies.
+
+        Wrapped so the engine can never break a customer reply: any failure
+        here is logged and treated as "no flow", handing the turn back to the
+        default path.
+        """
+        try:
+            company_name = prompt_builder._company_name(request.company_id) or ""
+            customer_name = (
+                user_session.get("customer_name")
+                or user_session.get("profile_name")
+                or ""
+            )
+            return reply_flow_engine.handle(
+                company_id=getattr(request, "company_id", None),
+                channel=request.channel,
+                department=current_department,
+                message=request.message,
+                user_session=user_session,
+                language=language,
+                company_name=company_name,
+                customer_name=customer_name,
+                request=request,
+            )
+        except Exception:
+            logger.exception(
+                "Reply flow engine failed for company %s",
+                getattr(request, "company_id", None),
+            )
+            return None
 
     def should_ai_take_priority(self, request):
         # The company, not just the channel. Without it this read a shared file
@@ -770,6 +836,7 @@ class Engine:
         language,
         current_state,
         current_department,
+        flow_instructions="",
     ):
         if not automation_policy.should_auto_reply_with_ai(
             request.channel,
@@ -963,6 +1030,7 @@ class Engine:
                 if match_result.get("department") != "unknown"
                 else current_department
             ),
+            flow_instructions=flow_instructions,
         )
 
         if not ai_result:

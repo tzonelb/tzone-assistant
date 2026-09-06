@@ -2045,23 +2045,12 @@ export async function deleteKnowledgeEntryRequest(entryId) {
 
 /* --------------------------------- AI Instructions and Reply Flows (v2)
  *
- * Two more sections of the design's Company Settings drawn against backends
- * this platform does not have.
- *
- * `InstructionsPage` wants /api/instructions — an ordered list of behaviour
- * rules, each scoped to a department or channel, with a reorder endpoint that
- * decides which rule wins a conflict. `ReplyFlowsListPage` wants
- * /api/reply-flows — the step-by-step conversation builder.
- *
- * Neither exists here, and neither is a rename of something that does: the
- * nearest things this platform owns are the AI profile
- * (`/api/ai-teaching/profile`) and the per-channel reply policy
- * (`/api/ai-teaching/reply-policy`), which are different models answering
- * different questions. Mapping one onto the other would produce a screen that
- * accepted rules and silently changed nothing about how the assistant replies.
- *
- * So they reject with the reason, and the sections stay in the navigation
- * drawn exactly as the design draws them.
+ * Both are real, per-company features now. `InstructionsPage` edits an ordered
+ * list of behaviour rules (`/api/ai-instructions`), each optionally scoped to a
+ * department or channel, that are appended to the assistant's system prompt.
+ * `ReplyFlowsListPage`/`ReplyFlowBuilderPage` design step-by-step scripted
+ * conversations (`/api/reply-flows`) that the reply-flow engine runs in place
+ * of the default single-shot AI reply for a matching customer.
  */
 
 export async function listInstructionsRequest() {
@@ -2096,19 +2085,45 @@ export async function reorderInstructionsRequest(orderedIds) {
 }
 
 export function listReplyFlowsRequest() {
-  return notBuiltHere("Reply Flows");
+  return apiRequest("/api/reply-flows");
 }
 
-export function createReplyFlowRequest() {
-  return notBuiltHere("Reply Flows");
+export function getReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}`);
 }
 
-export function deleteReplyFlowRequest() {
-  return notBuiltHere("Reply Flows");
+export function createReplyFlowRequest(values) {
+  return apiRequest("/api/reply-flows", { method: "POST", body: values });
 }
 
-export function duplicateReplyFlowRequest() {
-  return notBuiltHere("Reply Flows");
+export function updateReplyFlowRequest(id, values) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: values,
+  });
+}
+
+export function deleteReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function duplicateReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}/duplicate`, {
+    method: "POST",
+  });
+}
+
+export function getReplyFlowTriggerTypesRequest() {
+  return apiRequest("/api/reply-flows/trigger-types");
+}
+
+export function generateReplyFlowFromTextRequest(id, text) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}/generate`, {
+    method: "POST",
+    body: { text },
+  });
 }
 
 /* ------------------------------------------- notification preferences (v2) */

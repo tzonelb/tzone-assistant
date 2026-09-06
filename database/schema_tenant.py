@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 8
+TENANT_SCHEMA_VERSION = 9
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -873,6 +873,28 @@ TENANT_TABLES: tuple[str, ...] = (
         text TEXT NOT NULL,
         tags_json TEXT NOT NULL DEFAULT '[]',
         position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # A company's saved Reply Flows -- the step-by-step conversations designed
+    # in the visual builder (Company Settings -> Reply Flow). Each flow scopes
+    # itself to some channels/departments/reply-modes and a trigger, and its
+    # graph (the nodes and edges drawn on the canvas) is one JSON blob. Only a
+    # flow whose status is 'active' is ever run by the reply-flow engine; drafts
+    # and archived flows are stored but never reach a customer.
+    """
+    CREATE TABLE IF NOT EXISTS reply_flows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        channels_json TEXT NOT NULL DEFAULT '[]',
+        departments_json TEXT NOT NULL DEFAULT '[]',
+        reply_modes_json TEXT NOT NULL DEFAULT '[]',
+        trigger_type TEXT NOT NULL DEFAULT 'new_conversation',
+        trigger_config_json TEXT NOT NULL DEFAULT '{}',
+        graph_json TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )

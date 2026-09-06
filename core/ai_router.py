@@ -58,6 +58,7 @@ class AIRouter:
         company_id: int | None = None,
         channel_account_id: int | None = None,
         department: str | None = None,
+        flow_instructions: str = "",
     ) -> dict[str, Any] | None:
         if not config.AI_ENABLED:
             return None
@@ -90,6 +91,7 @@ class AIRouter:
                 company_id=company_id,
                 channel_account_id=channel_account_id,
                 department=department,
+                flow_instructions=flow_instructions,
             )
 
             result = self.normalize_result(raw_result, company_id=company_id)
@@ -155,6 +157,7 @@ class AIRouter:
         company_id: int | None = None,
         channel_account_id: int | None = None,
         department: str | None = None,
+        flow_instructions: str = "",
     ) -> dict[str, Any]:
         # The company's own trained profile — tone, instructions, examples.
         # Without the company this returns a neutral prompt carrying no
@@ -176,6 +179,17 @@ class AIRouter:
             department=department,
             channel=channel,
         )
+
+        # A Reply Flow step handed this turn to the AI with its own instruction
+        # ("answer only from the knowledge base", "help them book"). It applies
+        # to this one reply, so it is appended after the standing rules, closest
+        # to the task at hand.
+        flow_instructions = str(flow_instructions or "").strip()
+        if flow_instructions:
+            company_prompt = (
+                f"{company_prompt}\n\nFor this reply, follow this step's "
+                f"instruction:\n{flow_instructions}"
+            )
 
         grounded_prompt = """
 You are the customer-facing AI assistant for a business platform.
