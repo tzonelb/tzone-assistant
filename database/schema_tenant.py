@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 11
+TENANT_SCHEMA_VERSION = 12
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -1018,6 +1018,12 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "is_blocked": "INTEGER NOT NULL DEFAULT 0",
         "blocked_at": "TEXT",
         "blocked_by_user_id": "INTEGER",
+    },
+    # Free-form labels on a scheduled post -- the "Tags" button in the
+    # composer, for a company's own filing (a campaign name, a product line),
+    # never anything the channel itself sees.
+    "scheduled_posts": {
+        "tags_json": "TEXT NOT NULL DEFAULT '[]'",
     },
 }
 

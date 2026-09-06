@@ -273,3 +273,101 @@ def test_due_posts_are_claimed_only_for_their_own_company(service, alpha, beta):
     assert len(claimed) == 1
     assert claimed[0]["id"] == alpha_post["id"]
     assert claimed[0]["company_id"] == alpha["id"]
+
+
+# ----------------------------------------------------------------------
+# Tags
+# ----------------------------------------------------------------------
+
+
+def test_a_post_without_tags_has_an_empty_tags_list(service, alpha):
+    """A post created before tags existed, or with none given, must not crash
+    the reader that always expects a list."""
+    post = _create(service, alpha)
+
+    assert post["tags"] == []
+
+
+def test_tags_round_trip_through_create_and_read(service, alpha):
+    post = service.create_post(
+        company_id=alpha["id"],
+        channel="messenger",
+        body="Launch day",
+        scheduled_for=_at(-5),
+        created_by_user_id=1,
+        tags=["Launch", "Sale"],
+    )
+
+    assert post["tags"] == ["Launch", "Sale"]
+    fetched = service.get_post(company_id=alpha["id"], post_id=post["id"])
+    assert fetched["tags"] == ["Launch", "Sale"]
+    listed = service.list_posts(company_id=alpha["id"])["items"]
+    assert listed[0]["tags"] == ["Launch", "Sale"]
+
+
+def test_tags_are_deduplicated_case_insensitively_and_trimmed(service, alpha):
+    post = service.create_post(
+        company_id=alpha["id"],
+        channel="messenger",
+        body="Launch day",
+        scheduled_for=_at(-5),
+        created_by_user_id=1,
+        tags=["  Sale  ", "sale", "SALE", "New"],
+    )
+
+    assert post["tags"] == ["Sale", "New"]
+
+
+def test_tags_over_the_cap_are_dropped_not_errored(service, alpha):
+    post = service.create_post(
+        company_id=alpha["id"],
+        channel="messenger",
+        body="Launch day",
+        scheduled_for=_at(-5),
+        created_by_user_id=1,
+        tags=[f"tag{i}" for i in range(30)],
+    )
+
+    assert len(post["tags"]) == 20
+
+
+def test_a_blank_tag_is_dropped(service, alpha):
+    post = service.create_post(
+        company_id=alpha["id"],
+        channel="messenger",
+        body="Launch day",
+        scheduled_for=_at(-5),
+        created_by_user_id=1,
+        tags=["  ", "", "Real"],
+    )
+
+    assert post["tags"] == ["Real"]
+
+
+def test_updating_tags_replaces_the_previous_set(service, alpha):
+    post = _create(service, alpha)
+
+    updated = service.update_post(
+        company_id=alpha["id"], post_id=post["id"], values={"tags": ["Promo"]}
+    )
+
+    assert updated["tags"] == ["Promo"]
+    fetched = service.get_post(company_id=alpha["id"], post_id=post["id"])
+    assert fetched["tags"] == ["Promo"]
+
+
+def test_updating_without_touching_tags_leaves_them_alone(service, alpha):
+    post = service.create_post(
+        company_id=alpha["id"],
+        channel="messenger",
+        body="Launch day",
+        scheduled_for=_at(-5),
+        created_by_user_id=1,
+        tags=["Keep"],
+    )
+
+    updated = service.update_post(
+        company_id=alpha["id"], post_id=post["id"], values={"body": "Edited"}
+    )
+
+    assert updated["tags"] == ["Keep"]

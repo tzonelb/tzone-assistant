@@ -2577,6 +2577,7 @@ export async function createScheduledPostRequest(values = {}) {
         body,
         scheduled_for: scheduledFor,
         media_url: values.media_urls?.[0] || null,
+        tags: values.tags || [],
       },
     });
 
