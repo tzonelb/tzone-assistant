@@ -734,6 +734,79 @@ class AuthService:
             conn.commit()
             return cursor.rowcount
 
+    def list_user_sessions(
+        self, user_id: int, *, current_token: str | None = None
+    ) -> list[dict[str, Any]]:
+        """The user's own live sessions, for the "where am I signed in" screen.
+
+        Only live ones (not revoked, not expired), and never the token itself --
+        the row identifies a session by where and when it signed in, which is
+        what a person needs to recognise a device they do not own. The session
+        the caller is using is flagged so the screen can label it and refuse to
+        let them cut off the branch they are sitting on by accident.
+        """
+        current_hash = self.hash_token(current_token) if current_token else None
+        now = utc_now_iso()
+        with database_manager.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, token_hash, ip_address, user_agent,
+                       created_at, last_used_at, expires_at
+                FROM auth_sessions
+                WHERE user_id = ?
+                  AND revoked_at IS NULL
+                  AND expires_at > ?
+                ORDER BY last_used_at DESC
+                """,
+                (int(user_id), now),
+            ).fetchall()
+
+        sessions = []
+        for row in rows:
+            data = dict(row)
+            is_current = current_hash is not None and data["token_hash"] == current_hash
+            data.pop("token_hash", None)
+            data["current"] = is_current
+            sessions.append(data)
+        return sessions
+
+    def revoke_session(self, *, user_id: int, session_id: int) -> bool:
+        """End one session, but only if it belongs to this user.
+
+        The user id is in the WHERE clause, not just the file that was opened,
+        so a session id guessed from another account matches nothing and revokes
+        nothing rather than signing a stranger out.
+        """
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = ?
+                WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+                """,
+                (utc_now_iso(), int(session_id), int(user_id)),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def revoke_other_sessions(self, *, user_id: int, current_token: str) -> int:
+        """Sign out every device except the one making this request.
+
+        "Sign out everywhere else" after a scare, without logging yourself out.
+        """
+        current_hash = self.hash_token(current_token)
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = ?
+                WHERE user_id = ? AND revoked_at IS NULL AND token_hash != ?
+                """,
+                (utc_now_iso(), int(user_id), current_hash),
+            )
+            conn.commit()
+            return cursor.rowcount
+
     # ------------------------------------------------------------------
     # Passwords
     # ------------------------------------------------------------------

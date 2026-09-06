@@ -333,6 +333,20 @@ export async function logoutRequest() {
   });
 }
 
+export async function listSessionsRequest() {
+  return apiRequest("/api/auth/sessions");
+}
+
+export async function revokeSessionRequest(sessionId) {
+  return apiRequest(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function revokeOtherSessionsRequest() {
+  return apiRequest("/api/auth/sessions/revoke-others", { method: "POST" });
+}
+
 export async function getCurrentUserRequest() {
   const result = await apiRequest("/api/auth/me");
 
