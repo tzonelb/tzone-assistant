@@ -1945,9 +1945,15 @@ export function connectFacebookDirectRequest() {
     "Connect and disconnect accounts from the Channels screen instead.");
 }
 
+// Real, but only useful once a Meta app is configured on the server. The config
+// call says whether it is; the start call returns the Facebook login URL to send
+// the browser to. Until then the button that calls these is not shown.
+export function facebookOAuthConfigRequest() {
+  return apiRequest("/api/channels/oauth/facebook/config");
+}
+
 export function startFacebookOAuthRequest() {
-  return notBuiltHere("Connecting Facebook over OAuth",
-    "Connect and disconnect accounts from the Channels screen instead.");
+  return apiRequest("/api/channels/oauth/facebook/start", { method: "POST" });
 }
 
 export function startWhatsAppQrRequest() {

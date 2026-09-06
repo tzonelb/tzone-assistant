@@ -161,6 +161,23 @@ class AppConfig:
     )
     ALLOW_UNSIGNED_WEBHOOKS: bool = _env_bool("ALLOW_UNSIGNED_WEBHOOKS", False)
 
+    # Facebook/Instagram "Log in with Facebook" connect flow. The app id is
+    # public (it appears in the OAuth URL); the secret above is what exchanges
+    # the returned code for a token. Both, plus a Meta app that has passed App
+    # Review for the messaging permissions, are required before the flow does
+    # anything: with META_APP_ID unset the connect button is never offered and
+    # the start endpoint refuses, so nothing ever reports a false "connected".
+    META_APP_ID: str = os.getenv("META_APP_ID", "")
+    META_GRAPH_VERSION: str = os.getenv("META_GRAPH_VERSION", "v21.0")
+    # The scopes the messaging integration needs. A Page's messages need
+    # pages_messaging; listing the Pages a person manages needs pages_show_list;
+    # Instagram DMs need the instagram_* pair on a Page-linked IG account.
+    META_OAUTH_SCOPES: str = os.getenv(
+        "META_OAUTH_SCOPES",
+        "pages_show_list,pages_messaging,pages_manage_metadata,"
+        "business_management,instagram_basic,instagram_manage_messages",
+    )
+
     # The previous app secret, kept live during a rotation. Meta signs with
     # whichever secret was current when it queued the delivery, so without an
     # overlap every rotation drops the events already in flight.

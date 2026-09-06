@@ -32,6 +32,7 @@ from backend.api.routes import (
     calls,
     catalogue,
     channels,
+    channel_oauth,
     comments,
     company_settings,
     conversation_tags,
@@ -326,6 +327,11 @@ app.include_router(customers.router, dependencies=_module("customers"))
 app.include_router(customers.segments_router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))
+# Not behind the module gate: its callback is a top-level redirect from
+# facebook.com carrying no session cookie, so the gate (which resolves the
+# company from the session) cannot run there. The company is proven by the
+# signed OAuth state instead, and config/start carry their own permission deps.
+app.include_router(channel_oauth.router)
 # Broadcast is a channels feature: it speaks to customers over the same
 # connected accounts, under the same `channels.view` / `channels.manage`
 # permissions. It gets its own module switch because an operator can sell
