@@ -84,6 +84,17 @@ PUBLIC_ROUTES: dict[str, str] = {
     "dialer.py:POST:/inbound": "A signed Twilio callback. See dialer.py.",
     "dialer.py:POST:/status": "A signed Twilio callback. See dialer.py.",
     "dialer.py:POST:/recording": "A signed Twilio callback. See dialer.py.",
+    # Facebook returns the person here after they approve the connect. It is a
+    # top-level redirect from facebook.com and carries no session cookie
+    # (SameSite=Strict), so a dependency here would refuse every real callback.
+    # What stands in for the session is the `state` parameter: an HMAC over the
+    # company and user ids, keyed by a value derived from the master key,
+    # verified and de-expired by `meta_oauth_service.decode_state` before
+    # anything is created. A forged or expired state creates nothing and
+    # redirects to an error. See backend/services/meta_oauth_service.py.
+    "channel_oauth.py:GET:/facebook/callback": (
+        "A signed OAuth state stands in for the session. See channel_oauth.py."
+    ),
 }
 
 
@@ -118,6 +129,14 @@ IDENTITY_ONLY_ROUTES: dict[str, str] = {
     "auth.py:GET:/totp": "Your own second factor.",
     "auth.py:POST:/totp/begin": "Your own second factor.",
     "auth.py:POST:/totp/confirm": "Your own second factor.",
+    # "Where am I signed in." Every one of these reads or ends a session by the
+    # caller's own user id, taken from the session and never from a parameter:
+    # revoke_session and revoke_other_sessions put that id in the WHERE clause,
+    # so a session id guessed from another account matches nothing. Managing
+    # your own sessions is not something another employee's permission governs.
+    "auth.py:GET:/sessions": "Your own sessions.",
+    "auth.py:DELETE:/sessions/{session_id}": "Your own session, revoked by user id.",
+    "auth.py:POST:/sessions/revoke-others": "Your own other sessions.",
     "auth.py:DELETE:/totp": (
         "Your own second factor, and a current code is required to remove it — "
         "otherwise anybody at an unlocked screen could strip it in one click."
