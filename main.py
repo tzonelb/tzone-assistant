@@ -33,6 +33,7 @@ from backend.api.routes import (
     catalogue,
     channels,
     channel_oauth,
+    conversation_share,
     comments,
     company_settings,
     conversation_tags,
@@ -334,6 +335,10 @@ app.include_router(channels.router, dependencies=_module("channels"))
 # company from the session) cannot run there. The company is proven by the
 # signed OAuth state instead, and config/start carry their own permission deps.
 app.include_router(channel_oauth.router)
+# Not behind the module gate either: whoever opens a share link sent to them
+# has no session on this platform at all. The signed token in the path is the
+# only credential, verified by conversation_share_service.resolve.
+app.include_router(conversation_share.router)
 # Broadcast is a channels feature: it speaks to customers over the same
 # connected accounts, under the same `channels.view` / `channels.manage`
 # permissions. It gets its own module switch because an operator can sell

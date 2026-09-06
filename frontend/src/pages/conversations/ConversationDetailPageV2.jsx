@@ -42,9 +42,11 @@ import {
   addConversationNoteRequest,
   blockCustomerRequest,
   clearConversationReminderRequest,
+  createConversationShareLinkRequest,
   createQuoteRequest,
   createTaskRequest,
   downloadConversationExport,
+  emailConversationExportRequest,
   getConversationControlRequest,
   getConversationMessagesRequest,
   getCustomerRequest,
@@ -329,6 +331,10 @@ export default function ConversationDetailPageV2({
   const [quoteSaving, setQuoteSaving] = useState(false);
   const [customerBlocked, setCustomerBlocked] = useState(null);
   const [moderationBusy, setModerationBusy] = useState(false);
+  const [sharingBusy, setSharingBusy] = useState(false);
+  const [emailDraftOpen, setEmailDraftOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [noteMentionedUserIds, setNoteMentionedUserIds] = useState([]);
@@ -1078,6 +1084,44 @@ export default function ConversationDetailPageV2({
       setActionError(requestError.message || "Could not create a quote from this conversation.");
     } finally {
       setQuoteSaving(false);
+    }
+  }
+
+  async function createShareLink() {
+    setSharingBusy(true);
+    setActionError("");
+    try {
+      const result = await createConversationShareLinkRequest(channel, userId, "chat");
+      try {
+        await navigator.clipboard.writeText(result.url);
+        setActionSuccess(`Share link copied to clipboard: ${result.url}`);
+      } catch {
+        setActionSuccess(`Share link: ${result.url}`);
+      }
+      window.setTimeout(() => setActionSuccess(""), 15000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a share link.");
+    } finally {
+      setSharingBusy(false);
+    }
+  }
+
+  async function sendEmailExport(event) {
+    event.preventDefault();
+    const to = emailTo.trim();
+    if (!to) return;
+    setEmailSending(true);
+    setActionError("");
+    try {
+      await emailConversationExportRequest(channel, userId, to, "chat");
+      setActionSuccess(`Transcript emailed to ${to}.`);
+      window.setTimeout(() => setActionSuccess(""), 5000);
+      setEmailDraftOpen(false);
+      setEmailTo("");
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not send the transcript by email.");
+    } finally {
+      setEmailSending(false);
     }
   }
 
@@ -2021,13 +2065,29 @@ export default function ConversationDetailPageV2({
                   </button>
                   <small className="tzv2-cd-muted">Full report includes the chat, internal notes and conversation metadata.</small>
                   <div className="tzv2-cd-create-grid">
-                    <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
-                      <ShareOutlined fontSize="small" /> Share link
+                    <button type="button" className="btn btn-secondary btn-block" disabled={sharingBusy} onClick={createShareLink}>
+                      <ShareOutlined fontSize="small" /> {sharingBusy ? "Creating…" : "Share link"}
                     </button>
-                    <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                    <button type="button" className="btn btn-secondary btn-block" onClick={() => setEmailDraftOpen((current) => !current)}>
                       <MailOutlineOutlined fontSize="small" /> Email
                     </button>
                   </div>
+                  {emailDraftOpen ? (
+                    <form className="tzv2-cd-quote-form" onSubmit={sendEmailExport}>
+                      <input
+                        className="input"
+                        type="email"
+                        value={emailTo}
+                        onChange={(event) => setEmailTo(event.target.value)}
+                        placeholder="Send transcript to…"
+                        disabled={emailSending}
+                        required
+                      />
+                      <button type="submit" className="btn btn-primary" disabled={emailSending || !emailTo.trim()}>
+                        {emailSending ? "Sending…" : "Send"}
+                      </button>
+                    </form>
+                  ) : null}
                 </div>
               </AccordionCard>
 

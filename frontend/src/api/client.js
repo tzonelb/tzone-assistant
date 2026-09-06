@@ -1394,6 +1394,20 @@ export async function downloadConversationExport(
   URL.revokeObjectURL(url);
 }
 
+export async function createConversationShareLinkRequest(channel, userId, scope = "chat") {
+  return apiRequest(`${conversationPath(channel, userId)}/share-link`, {
+    method: "POST",
+    body: { scope },
+  });
+}
+
+export async function emailConversationExportRequest(channel, userId, to, scope = "chat") {
+  return apiRequest(`${conversationPath(channel, userId)}/email-export`, {
+    method: "POST",
+    body: { to, scope },
+  });
+}
+
 export async function subscribeConversationEvents({
   onEvent,
   onOpen,

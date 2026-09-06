@@ -95,6 +95,14 @@ PUBLIC_ROUTES: dict[str, str] = {
     "channel_oauth.py:GET:/facebook/callback": (
         "A signed OAuth state stands in for the session. See channel_oauth.py."
     ),
+    # "Share link" opened by whoever the employee sent it to -- a customer, most
+    # often -- who has no session on this platform at all. The token in the
+    # path is a bearer credential exactly like a password-reset token, resolved
+    # and de-expired by `conversation_share_service.resolve` before anything is
+    # read. See conversation_share.py.
+    "conversation_share.py:GET:/conversation/{token}": (
+        "A signed share token stands in for the session. See conversation_share.py."
+    ),
 }
 
 

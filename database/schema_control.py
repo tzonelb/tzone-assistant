@@ -507,6 +507,27 @@ CONTROL_TABLES: tuple[str, ...] = (
         created_at TEXT NOT NULL
     )
     """,
+    # A public, read-only link to one conversation's transcript -- "Share
+    # link" in the chat panel. This must be control-plane, the same reason
+    # `password_reset_tokens` is: the public endpoint that resolves the link
+    # is reached with nothing but the token, before any company is known, and
+    # a tenant database cannot be opened without knowing which one to open.
+    # The token itself is never stored, only its hash, matching every other
+    # bearer credential on this platform.
+    """
+    CREATE TABLE IF NOT EXISTS conversation_share_links (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        scope TEXT NOT NULL DEFAULT 'chat',
+        token_hash TEXT NOT NULL UNIQUE,
+        created_by_user_id INTEGER,
+        expires_at TEXT NOT NULL,
+        revoked_at TEXT,
+        created_at TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -612,6 +633,8 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_reset_tokens(token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_reset_tokens(user_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_share_links_hash ON conversation_share_links(token_hash)",
+    "CREATE INDEX IF NOT EXISTS idx_share_links_conversation ON conversation_share_links(company_id, channel, external_user_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_company ON channel_accounts(company_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_department ON channel_accounts(company_id, department_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_page ON channel_accounts(page_id)",
