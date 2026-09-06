@@ -39,6 +39,7 @@ from backend.api.routes import (
     media_uploads,
     saved_replies,
     conversations,
+    quotes,
     customers,
     dashboard,
     developer_center,
@@ -310,6 +311,7 @@ app.include_router(ai_teaching.router, dependencies=_module("ai_teaching"))
 app.include_router(ai_instructions.router, dependencies=_module("ai_teaching"))
 app.include_router(reply_flows.router, dependencies=_module("ai_teaching"))
 app.include_router(conversations.router, dependencies=_module("conversations"))
+app.include_router(quotes.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
 app.include_router(saved_replies.router, dependencies=_module("conversations"))

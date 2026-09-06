@@ -41,6 +41,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   addConversationNoteRequest,
   clearConversationReminderRequest,
+  createQuoteRequest,
   createTaskRequest,
   downloadConversationExport,
   getConversationControlRequest,
@@ -319,6 +320,10 @@ export default function ConversationDetailPageV2({
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+  const [quoteDraftOpen, setQuoteDraftOpen] = useState(false);
+  const [quoteTitle, setQuoteTitle] = useState("");
+  const [quoteAmount, setQuoteAmount] = useState("");
+  const [quoteSaving, setQuoteSaving] = useState(false);
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [noteMentionedUserIds, setNoteMentionedUserIds] = useState([]);
@@ -1001,6 +1006,64 @@ export default function ConversationDetailPageV2({
       window.setTimeout(() => setActionSuccess(""), 4000);
     } catch (requestError) {
       setActionError(requestError.message || "Could not create a task from this conversation.");
+    }
+  }
+
+  async function createRepairTicketFromConversation() {
+    setActionError("");
+    try {
+      await createTaskRequest({
+        title: `Repair: ${officialCustomerName || userId}`,
+        task_type: "maintenance",
+        conversation_id: control?.id,
+        customer_id: control?.customer_id || undefined,
+      });
+      setActionSuccess("Repair ticket created — see it on the Tasks page.");
+      window.setTimeout(() => setActionSuccess(""), 4000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a repair ticket from this conversation.");
+    }
+  }
+
+  function openAppointmentFromConversation() {
+    navigate("/appointments", {
+      state: {
+        prefillAppointment: {
+          title: `Appointment: ${officialCustomerName || userId}`,
+          customer: control?.customer_id
+            ? { id: control.customer_id, display_name: officialCustomerName || userId }
+            : null,
+          conversationId: control?.id || null,
+        },
+      },
+    });
+  }
+
+  async function createQuoteFromConversation(event) {
+    event.preventDefault();
+    const title = quoteTitle.trim();
+    const amount = Number(quoteAmount);
+    if (!title || !(amount > 0)) return;
+    setQuoteSaving(true);
+    setActionError("");
+    try {
+      const quote = await createQuoteRequest({
+        title,
+        amount,
+        conversation_id: control?.id,
+        customer_id: control?.customer_id || undefined,
+      });
+      setActionSuccess(
+        `Quote created — ${quote.currency} ${quote.total.toFixed(2)}.`,
+      );
+      window.setTimeout(() => setActionSuccess(""), 5000);
+      setQuoteDraftOpen(false);
+      setQuoteTitle("");
+      setQuoteAmount("");
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a quote from this conversation.");
+    } finally {
+      setQuoteSaving(false);
     }
   }
 
@@ -1806,17 +1869,42 @@ export default function ConversationDetailPageV2({
                   <button type="button" className="btn btn-secondary btn-block" onClick={createTaskFromConversation}>
                     <AddTaskOutlined fontSize="small" /> Create task
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                  <button type="button" className="btn btn-secondary btn-block" onClick={openAppointmentFromConversation}>
                     <EventOutlined fontSize="small" /> Create appointment
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                  <button type="button" className="btn btn-secondary btn-block" onClick={createRepairTicketFromConversation}>
                     <BuildOutlined fontSize="small" /> Create repair ticket
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                  <button type="button" className="btn btn-secondary btn-block" onClick={() => setQuoteDraftOpen((current) => !current)}>
                     <ReceiptLongOutlined fontSize="small" /> Create quote
                   </button>
                 </div>
-                <small className="tzv2-cd-muted">Appointment, repair ticket and quote creation from a chat aren&rsquo;t wired up yet — coming soon.</small>
+                {quoteDraftOpen ? (
+                  <form className="tzv2-cd-quote-form" onSubmit={createQuoteFromConversation}>
+                    <input
+                      className="input"
+                      value={quoteTitle}
+                      onChange={(event) => setQuoteTitle(event.target.value)}
+                      placeholder="What's this quote for?"
+                      disabled={quoteSaving}
+                      required
+                    />
+                    <input
+                      className="input"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={quoteAmount}
+                      onChange={(event) => setQuoteAmount(event.target.value)}
+                      placeholder="Amount"
+                      disabled={quoteSaving}
+                      required
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={quoteSaving || !quoteTitle.trim() || !(Number(quoteAmount) > 0)}>
+                      {quoteSaving ? "Saving…" : "Save quote"}
+                    </button>
+                  </form>
+                ) : null}
               </AccordionCard>
 
               <AccordionCard

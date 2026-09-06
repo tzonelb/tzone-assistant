@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   AddOutlined,
   CloseOutlined,
@@ -50,7 +51,7 @@ function formatHeaderDate() {
   return `${weekday}, ${date}`;
 }
 
-function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave }) {
+function NewAppointmentDialog({ open, employees, saving, error, initial, onCancel, onSave }) {
   const [title, setTitle] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [durationMinutes, setDurationMinutes] = useState("30");
@@ -64,7 +65,16 @@ function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave
     if (!open) {
       setTitle(""); setScheduledAt(""); setDurationMinutes("30"); setEmployeeUserId("");
       setNotes(""); setCustomerQuery(""); setCustomerResults([]); setSelectedCustomer(null);
+      return;
     }
+    // Seeded once per open, from a conversation's "Create appointment" — the
+    // customer and a reference back to the chat, not a full booking (staff and
+    // time are still the person's own choice).
+    if (initial) {
+      setTitle(initial.title || "");
+      setSelectedCustomer(initial.customer || null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   useEffect(() => {
@@ -84,13 +94,22 @@ function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave
 
   function submit(event) {
     event.preventDefault();
-    if (!title.trim() || !scheduledAt) return;
+    if (!title.trim() || !scheduledAt || !employeeUserId) return;
+    // The API's field names, not the form's — `AppointmentCreateRequest`
+    // wants `starts_at`/`ends_at`/`staff_user_id`, and a staff member is
+    // required (an appointment with nobody attached has no calendar to check
+    // for a clash against, which is what the double-booking guarantee rests
+    // on). Duration only exists on this form; the API only knows an end time.
+    const starts = new Date(scheduledAt);
+    const minutes = Number(durationMinutes) || 30;
+    const ends = new Date(starts.getTime() + minutes * 60000);
     onSave({
       title: title.trim(),
-      scheduled_at: new Date(scheduledAt).toISOString(),
-      duration_minutes: Number(durationMinutes) || 30,
-      employee_user_id: employeeUserId ? Number(employeeUserId) : null,
+      starts_at: starts.toISOString(),
+      ends_at: ends.toISOString(),
+      staff_user_id: Number(employeeUserId),
       customer_id: selectedCustomer?.id || null,
+      conversation_id: initial?.conversationId || null,
       notes: notes.trim() || null,
     });
   }
@@ -151,8 +170,13 @@ function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave
           </div>
           <div className="field">
             <label>Assigned employee</label>
-            <select className="input" value={employeeUserId} disabled={saving} onChange={(event) => setEmployeeUserId(event.target.value)}>
-              <option value="">Unassigned</option>
+            {/* Required: an appointment attached to nobody has no calendar to
+                check for a clash against, which is what stops two customers
+                being booked into the same slot. The platform refuses one with
+                no staff member -- this asks for it up front instead of after
+                a failed save. */}
+            <select className="input" value={employeeUserId} disabled={saving} onChange={(event) => setEmployeeUserId(event.target.value)} required>
+              <option value="" disabled>Choose an employee…</option>
               {employees.map((employee) => <option value={employee.id} key={employee.id}>{employee.display_name}</option>)}
             </select>
           </div>
@@ -164,7 +188,7 @@ function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave
         </div>
         <div className="dialog-actions">
           <button type="button" className="btn btn-secondary" disabled={saving} onClick={onCancel}>Cancel</button>
-          <button type="submit" className="btn btn-primary" disabled={saving || !title.trim() || !scheduledAt}>{saving ? "Saving…" : "Save"}</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !title.trim() || !scheduledAt || !employeeUserId}>{saving ? "Saving…" : "Save"}</button>
         </div>
       </form>
     </div>
@@ -173,6 +197,14 @@ function NewAppointmentDialog({ open, employees, saving, error, onCancel, onSave
 
 export default function AppointmentsPageV2() {
   const { user, companies } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  // A "Create appointment" click from a conversation arrives here with the
+  // customer and conversation to link, via router state rather than a URL
+  // param (it carries a whole customer object, not just an id). Consumed
+  // once and then cleared from history so a back-navigation or refresh does
+  // not reopen the dialog.
+  const [prefill, setPrefill] = useState(() => location.state?.prefillAppointment || null);
   // Mirrors backend appointments.py's _can_view_all: only an owner, super
   // admin, or a role granted users.manage can see appointments belonging
   // to other employees. The backend silently forces employee_user_id back
@@ -193,7 +225,7 @@ export default function AppointmentsPageV2() {
   const [error, setError] = useState("");
 
   const [savingRowId, setSavingRowId] = useState(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(() => Boolean(prefill));
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [toDelete, setToDelete] = useState(null);
@@ -217,6 +249,15 @@ export default function AppointmentsPageV2() {
   }, [statusFilter, employeeFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    // Clear the router state once read (the dialog's open state was already
+    // seeded from it above) so a refresh or Back does not reopen the dialog.
+    if (location.state?.prefillAppointment) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     appointmentOptionsRequest()
@@ -404,7 +445,8 @@ export default function AppointmentsPageV2() {
         employees={employees}
         saving={saving}
         error={saveError}
-        onCancel={() => setDialogOpen(false)}
+        initial={prefill}
+        onCancel={() => { setDialogOpen(false); setPrefill(null); }}
         onSave={saveAppointment}
       />
 

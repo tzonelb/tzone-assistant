@@ -1997,6 +1997,17 @@ export async function createSupportTicketRequest(subject, description, priority)
   });
 }
 
+/* ------------------------------------------------- Quotes (from a chat) */
+
+export async function createQuoteRequest(values) {
+  return apiRequest("/api/quotes", { method: "POST", body: values });
+}
+
+export async function listQuotesRequest(conversationId) {
+  const query = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : "";
+  return apiRequest(`/api/quotes${query}`);
+}
+
 /* ------------------------------------------------- AI Knowledge (v2)
  *
  * The design's Knowledge section keeps an entry as

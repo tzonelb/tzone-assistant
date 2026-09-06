@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 9
+TENANT_SCHEMA_VERSION = 10
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -895,6 +895,29 @@ TENANT_TABLES: tuple[str, ...] = (
         trigger_type TEXT NOT NULL DEFAULT 'new_conversation',
         trigger_config_json TEXT NOT NULL DEFAULT '{}',
         graph_json TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # A price quote raised from a conversation -- "Create quote" in the chat
+    # panel. Line items are one JSON blob (kept flexible for a future editor);
+    # `total` is stored rather than only computed, so a quote's number does not
+    # drift if the catalogue price it was based on changes later. Status is the
+    # quote's own lifecycle (draft -> sent -> accepted/declined), independent of
+    # the ticket/task status vocabulary.
+    """
+    CREATE TABLE IF NOT EXISTS quotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        conversation_id INTEGER,
+        customer_id INTEGER,
+        title TEXT NOT NULL,
+        items_json TEXT NOT NULL DEFAULT '[]',
+        currency TEXT NOT NULL DEFAULT 'USD',
+        total REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'draft',
+        notes TEXT,
+        created_by_user_id INTEGER,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
     )

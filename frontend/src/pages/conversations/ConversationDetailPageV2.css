@@ -582,6 +582,12 @@
   margin-bottom: var(--space-3);
 }
 
+.tzv2-cd-quote-form {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
 .tzv2-cd-mention-menu {
   position: absolute;
   bottom: calc(100% + 4px);
