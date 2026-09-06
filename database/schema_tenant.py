@@ -1154,6 +1154,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         # Which language to answer in before the customer has asked for one.
         # `auto` detects from the message, which is what every company had.
         "reply_language": "auto",
+        # Speak a reply instead of sending it as text, on a channel that
+        # supports voice notes. Off by default: it depends on a voice
+        # provider being configured on the server (see `tts_service`), which
+        # a fresh install has not done.
+        "voice_reply_enabled": False,
         # `welcome_immediate` and `reply_only_when_customer_stops_typing` were
         # here and read by nothing. Both already have an owner elsewhere:
         # `welcome_enabled` and `welcome_mode` in the reply policy decide the

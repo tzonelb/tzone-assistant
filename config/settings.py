@@ -340,6 +340,18 @@ class AppConfig:
     )
     OPENAI_TIMEOUT_SECONDS: int = int(os.getenv("OPENAI_TIMEOUT_SECONDS", "40"))
 
+    # Voice replies (text-to-speech). Reuses OPENAI_API_KEY above rather than a
+    # second secret — with it unset, voice replies stay off and the settings
+    # screen says so; nothing else in the platform depends on these.
+    OPENAI_TTS_MODEL: str = os.getenv("OPENAI_TTS_MODEL", "tts-1")
+    OPENAI_TTS_VOICE: str = os.getenv("OPENAI_TTS_VOICE", "alloy")
+    OPENAI_TTS_API_URL: str = os.getenv(
+        "OPENAI_TTS_API_URL", "https://api.openai.com/v1/audio/speech"
+    )
+    OPENAI_TTS_TIMEOUT_SECONDS: int = int(
+        os.getenv("OPENAI_TTS_TIMEOUT_SECONDS", "30")
+    )
+
     SUPPORTED_LANGUAGES: list[str] = field(
         default_factory=lambda: ["en", "ar"]
     )

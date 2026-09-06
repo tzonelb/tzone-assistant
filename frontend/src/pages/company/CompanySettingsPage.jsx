@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowBackOutlined, SearchOutlined } from "@mui/icons-material";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSupportTicketsRequest, createSupportTicketRequest, getCurrentUserRequest } from "../../api/client";
+import { getCompanySettingSectionRequest, updateCompanySettingSectionRequest, getVoiceReplyStatusRequest, getMySubscriptionRequest, getMyModulesRequest, getPlansCatalogRequest, requestPlanChangeRequest, getMySubscriptionRequestsRequest, listSupportTicketsRequest, createSupportTicketRequest, getCurrentUserRequest } from "../../api/client";
 import ChannelsPage from "../channels/ChannelsPage";
 import RolesPermissionsPage from "../admin/RolesPermissionsPage";
 import ActivityLogPage from "../admin/ActivityLogPage";
@@ -53,11 +53,15 @@ function WorkflowSettings() {
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(0);
+  const [voiceStatus, setVoiceStatus] = useState(null);
 
   useEffect(() => {
     getCompanySettingSectionRequest("ai_behavior")
       .then((result) => { setValues((current) => ({ ...current, ...(result?.values || {}) })); setLocked(result?.locked_keys || []); })
       .catch((error) => setStatus(error.message || "Settings could not load."));
+    getVoiceReplyStatusRequest()
+      .then((result) => setVoiceStatus(result))
+      .catch(() => setVoiceStatus({ configured: false, missing: [] }));
   }, []);
 
   async function save() {
@@ -126,15 +130,42 @@ function WorkflowSettings() {
           <label className="workflow-toggle"><input type="checkbox" checked={Boolean(values.auto_release_to_ai)} disabled={locked.includes("auto_release_to_ai")} onChange={(e) => setValues({ ...values, auto_release_to_ai: e.target.checked })}/><div><strong>Auto-release ownership and return to AI</strong><span>Clears the assigned employee when the timeout expires, completing the full cycle.</span></div></label>
         </>
       ) : null}
-      {/* The voice toggle below is disabled, and says so, because nothing on
-          the server reads `voice_reply_enabled`: no reply path synthesises
-          audio. The design's copy asserted that the assistant "sends a real
-          voice note instead of text", which is a promise the platform does not
-          keep -- worse than a dead switch, because the owner has no way to
-          discover it is untrue. Re-enable it in the same commit that makes it
-          do something. */}
+      {/* Gated on the server actually being able to speak: `voice_reply_enabled`
+          is read by `send_voice_reply_if_enabled` before every AI reply, and
+          the toggle is disabled with a reason whenever no voice provider is
+          configured, rather than letting an owner turn on a promise the
+          platform cannot keep. */}
       {current.key === "voice" ? (
-        <label className="workflow-toggle"><input type="checkbox" checked={false} disabled onChange={() => {}}/><div><strong>Reply with voice</strong><span>Not available yet — the assistant answers in text on every channel. This switch turns on when voice replies ship.</span></div></label>
+        voiceStatus && !voiceStatus.configured ? (
+          <label className="workflow-toggle">
+            <input type="checkbox" checked={false} disabled onChange={() => {}} />
+            <div>
+              <strong>Reply with voice</strong>
+              <span>
+                Not set up on this server yet — an administrator needs to configure a
+                voice provider before this can turn on. The assistant answers in text
+                until then.
+              </span>
+            </div>
+          </label>
+        ) : (
+          <label className="workflow-toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(values.voice_reply_enabled)}
+              disabled={!voiceStatus || locked.includes("voice_reply_enabled")}
+              onChange={(e) => setValues({ ...values, voice_reply_enabled: e.target.checked })}
+            />
+            <div>
+              <strong>Reply with voice</strong>
+              <span>
+                Sends a real voice note instead of text, on the channels that support
+                one. Quick-reply buttons still send as text, since a voice note cannot
+                carry them.
+              </span>
+            </div>
+          </label>
+        )
       ) : null}
     </div>
 

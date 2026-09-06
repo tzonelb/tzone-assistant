@@ -1805,6 +1805,10 @@ export async function getCompanySettingSectionRequest(section) {
   };
 }
 
+export async function getVoiceReplyStatusRequest() {
+  return apiRequest("/api/company-settings/voice/status");
+}
+
 export async function updateCompanySettingSectionRequest(section, values) {
   if (section !== "company_profile") {
     return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`, {

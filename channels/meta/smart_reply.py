@@ -23,6 +23,7 @@ from backend.services.pending_reply_service import pending_reply_service
 from backend.services.plan_service import UNLIMITED, plan_service
 from backend.services.company_gate import company_gate
 from backend.services.subscription_gate import subscription_gate
+from backend.services.tts_service import send_voice_reply_if_enabled
 from channels.meta.logger import log_meta_event
 from channels.sender import send_text
 from gateway.message_gateway import message_gateway
@@ -345,13 +346,23 @@ def _process_batch(batch: dict[str, Any]) -> bool:
         return False
 
     buttons = getattr(response, "buttons", None)
-    send_result = send_text(
+    send_result = send_voice_reply_if_enabled(
+        company_id=company_id,
         channel=channel,
         recipient_id=user_id,
-        company_id=company_id,
         text=response.text,
         buttons=buttons,
     )
+    sent_as_voice = send_result is not None
+
+    if send_result is None:
+        send_result = send_text(
+            channel=channel,
+            recipient_id=user_id,
+            company_id=company_id,
+            text=response.text,
+            buttons=buttons,
+        )
 
     if not send_result.get("ok") and not send_result.get("skipped"):
         # Keep the batch so the retry path can try again rather than dropping a
@@ -390,6 +401,14 @@ def _process_batch(batch: dict[str, Any]) -> bool:
             "buttons": buttons,
             "batched_message_count": len(messages),
             "duration_ms": duration_ms,
+            **(
+                {
+                    "media_url": send_result.get("media_url"),
+                    "media_type": send_result.get("media_type"),
+                }
+                if sent_as_voice
+                else {}
+            ),
         },
     )
 

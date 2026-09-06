@@ -10,6 +10,7 @@ from backend.services.auth_service import (
     require_permission,
 )
 from backend.services.company_settings_service import company_settings_service
+from backend.services.tts_service import tts_service
 
 
 router = APIRouter(prefix="/api/company-settings", tags=["Company Settings"])
@@ -17,6 +18,19 @@ router = APIRouter(prefix="/api/company-settings", tags=["Company Settings"])
 
 def _company_id(current_user: dict[str, Any]) -> int:
     return auth_service.resolve_company_id(current_user)
+
+
+@router.get("/voice/status")
+def get_voice_reply_status(
+    current_user: dict[str, Any] = Depends(require_permission("settings.view")),
+):
+    """Whether voice replies work here, and what is missing when they do not.
+
+    Two segments, not `/voice-status`, so this can never collide with
+    `/{section}` below — a single-segment path there would resolve to
+    `get_company_setting_section(section="voice-status")` instead.
+    """
+    return tts_service.voice_status()
 
 
 @router.get("")
