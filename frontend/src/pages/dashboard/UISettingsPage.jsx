@@ -3,8 +3,55 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { readNotificationPreferences, saveNotificationPreferences } from "../../utils/notificationPreferences";
-import { getNotificationPreferencesRequest, updateNotificationPreferencesRequest, twoFactorStatusRequest, twoFactorEnrollStartRequest, twoFactorEnrollConfirmRequest, twoFactorDisableRequest } from "../../api/client";
+import { getNotificationPreferencesRequest, updateNotificationPreferencesRequest, twoFactorStatusRequest, twoFactorEnrollStartRequest, twoFactorEnrollConfirmRequest, twoFactorDisableRequest, changeOwnPasswordRequest } from "../../api/client";
 import { SUPPORTED_CHANNELS } from "../../utils/channels";
+
+// Real password change: POST /api/auth/password exists and revokes every other
+// session on success. The old button was disabled with "contact support"; this
+// is the working form.
+function ChangePasswordForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    setStatus("");
+    if (next.length < 10) { setError("The new password must be at least 10 characters."); return; }
+    if (next !== confirm) { setError("The two new passwords do not match."); return; }
+    setBusy(true);
+    try {
+      await changeOwnPasswordRequest(current, next);
+      setStatus("Password changed. Your other sessions have been signed out.");
+      setCurrent(""); setNext(""); setConfirm("");
+    } catch (e) {
+      setError(e.message || "Could not change the password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="settings-form-grid" onSubmit={submit} style={{ gap: 10 }}>
+      <label><strong>Current password</strong>
+        <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+      </label>
+      <label><strong>New password</strong>
+        <input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} minLength={10} required />
+      </label>
+      <label><strong>Confirm new password</strong>
+        <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} minLength={10} required />
+      </label>
+      {error ? <div className="admin-access-error">{error}</div> : null}
+      {status ? <div className="admin-access-notice">{status}</div> : null}
+      <button type="submit" className="primary-action" disabled={busy}>{busy ? "Changing…" : "Change password"}</button>
+    </form>
+  );
+}
 
 // The one place this list is decided. The design writes the four channels out
 // again and ends with `website: "Website"` — a toggle for a channel this
@@ -194,7 +241,7 @@ export default function UISettingsPage() {
 
           {active === "language" ? <section className="settings-section-card"><h3>Language & region</h3><p>The selected timezone controls all conversation, notification and timeline timestamps. The dashboard's own screens (buttons, labels) stay in English regardless of this setting — only the AI's replies to customers already adapt to their language automatically.</p><div className="settings-form-grid"><label><strong>Language</strong><select value={language} onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}><option value="en">English</option><option value="ar">Arabic</option><option value="tr">Turkish</option></select></label><label><strong>Timezone</strong><select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}><option value="Asia/Beirut">Beirut</option><option value="Asia/Qatar">Qatar</option><option value="UTC">UTC</option></select></label></div></section> : null}
 
-          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => { setAutoLogout(e.target.value); setSaved(false); }}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><button type="button" className="secondary-action" disabled title="Not built yet - contact T-ZONE support to reset your password">Change password (coming soon)</button><button type="button" className="secondary-action" disabled title="Not built yet">View active sessions (coming soon)</button></div>
+          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => { setAutoLogout(e.target.value); setSaved(false); }}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><ChangePasswordForm /><button type="button" className="secondary-action" disabled title="Not built yet">View active sessions (coming soon)</button></div>
             <div className="settings-2fa" style={{ marginTop: "1.5rem", borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: "1.25rem" }}>
               <h3>Two-factor authentication</h3>
               <p>Add a one-time code from an authenticator app (Google Authenticator, Authy, 1Password) to every sign-in.</p>
