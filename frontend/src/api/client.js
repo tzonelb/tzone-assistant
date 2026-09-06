@@ -1896,99 +1896,6 @@ export async function getMySubscriptionRequestsRequest() {
   return apiRequest("/api/billing/requests");
 }
 
-/* ------------------------------------------- secure channels panel (v2)
- *
- * `SecureChannelsPanel` is the design's Channels section, and it is drawn
- * against a subsystem this platform does not have: a six-digit email code that
- * buys a 20-minute *elevated* session (/api/security/send-code ,
- * `/verify-code`, `/changes` and an `X-Elevated-Token` header on every write),
- * plus per-provider connect flows — a WhatsApp QR pairing bridge, and direct
- * Instagram/Facebook credential logins.
- *
- * None of it exists here. What this platform has is one generic channel
- * account API: `GET /api/channels`, `POST /api/channels`, and
- * `DELETE /api/channels/{id}`, all behind `channels.view`/`channels.manage`.
- *
- * So the two calls that DO have a home here are adapted below and are real,
- * which is what lets the section draw the company's connected accounts and its
- * plan usage rather than an empty shell. The rest reject with the reason. They
- * are deliberately NOT pointed at a plausible-looking endpoint: inventing a
- * destination for a credential-handling flow is how a connect form comes to
- * report success and store nothing, and an elevated-session check comes to be
- * skipped rather than implemented. The panel's own error handling shows the
- * message.
- */
-
-/* One message, one reason, for every design control whose backend this platform
- * does not have. It rejects rather than resolving empty on purpose: a screen
- * that quietly renders "no items" for a feature that was never built is
- * indistinguishable from one whose data failed to load, and both look like a
- * feature that exists and is broken. An error the section shows says which it
- * is. No request is made — there is no endpoint to make it to, and pointing one
- * at a plausible-looking path is how a form comes to report success and store
- * nothing. */
-function notBuiltHere(what, instead = "") {
-  return Promise.reject(
-    new Error(
-      `${what} is not available on this platform yet.` +
-      (instead ? ` ${instead}` : ""),
-    ),
-  );
-}
-
-export async function listMyChannelsRequest() {
-  // Real. `/api/channels` answers `items`; the panel reads `channels`.
-  const result = await apiRequest("/api/channels");
-
-  return { ...result, channels: result?.items || [] };
-}
-
-export async function disconnectChannelRequest(accountId, elevatedToken) {
-  // Real, minus the elevated token: there is no elevated session to prove, and
-  // sending a header the server does not read would look like one existed.
-  // `channels.manage` is what actually guards this.
-  void elevatedToken;
-
-  return apiRequest(`/api/channels/${encodeURIComponent(accountId)}`, {
-    method: "DELETE",
-  });
-}
-
-export function sendVerificationCodeRequest() {
-  return notBuiltHere("Email verification for channel access",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function verifyCodeRequest() {
-  return notBuiltHere("Email verification for channel access",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function getSessionChangesRequest() {
-  return notBuiltHere("The verified-session change log",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectTelegramRequest() {
-  return notBuiltHere("Connecting Telegram from this screen",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectWhatsAppRequest() {
-  return notBuiltHere("Connecting WhatsApp Cloud from this screen",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectInstagramDirectRequest() {
-  return notBuiltHere("Connecting Instagram with a username and password",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectFacebookDirectRequest() {
-  return notBuiltHere("Connecting Facebook with session cookies",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
 // Real, but only useful once a Meta app is configured on the server. The config
 // call says whether it is; the start call returns the Facebook login URL to send
 // the browser to. Until then the button that calls these is not shown.
@@ -1998,16 +1905,6 @@ export function facebookOAuthConfigRequest() {
 
 export function startFacebookOAuthRequest() {
   return apiRequest("/api/channels/oauth/facebook/start", { method: "POST" });
-}
-
-export function startWhatsAppQrRequest() {
-  return notBuiltHere("WhatsApp QR pairing",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function whatsAppQrStatusRequest() {
-  return notBuiltHere("WhatsApp QR pairing",
-    "Connect and disconnect accounts from the Channels screen instead.");
 }
 
 /* ----------------------------------------------- support tickets (v2)
