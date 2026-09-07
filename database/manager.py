@@ -52,7 +52,31 @@ from database.schema_tenant import (
 CONTROL_FILENAME = "control.db"
 TENANT_DIRNAME = "tenants"
 
-BUSY_TIMEOUT_MS = 15_000
+
+# How long a writer waits for a lock another connection holds before giving up.
+#
+# This used to be 15 seconds, and 15 seconds is what a real incident cost:
+# see tests/test_audit_write_does_not_block_its_caller.py -- one stalled write
+# held the control database's lock long enough to stall every other write on
+# the platform, on one company's plan-limit refusal with no concurrency at
+# all. The single-worker deployment (deploy/tzone-api.service) makes that
+# worse, not better: there is no second worker to answer other companies
+# while one thread waits, and every blocking database call -- reads and
+# writes alike, on any tenant -- shares the same process-wide thread pool.
+# Enough concurrent writers contending for one row can exhaust it, and once
+# it is exhausted even a request that touches no database at all (a static
+# asset) queues behind them, because serving it also needs a thread from that
+# same pool. Reproduced live: 30 concurrent writers to a single conversation
+# row froze the server for every request, including plain GET /login.
+#
+# 3 seconds is still generous for the genuine case this exists to serve --
+# two employees editing the same conversation within the same second -- and
+# it bounds how long a burst of writers can hold a thread each hostage. A
+# write that is still waiting after 3 seconds fails with a clear error
+# instead of silently freezing the platform for everyone else; nothing here
+# retries that failure gracefully today, which is the next thing to fix, not
+# a reason to leave the timeout at fifteen seconds in the meantime.
+BUSY_TIMEOUT_MS = 3_000
 
 logger = logging.getLogger(__name__)
 
