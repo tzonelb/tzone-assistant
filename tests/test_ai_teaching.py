@@ -609,3 +609,21 @@ def test_stored_examples_are_valid_json(service, platform, alpha):
     assert json.loads(raw) == [
         {"customer": "شو الأسعار؟", "reply": "منبعتلك اللائحة."}
     ]
+
+
+def test_the_first_read_lock_is_not_shared_across_companies(service, alpha, beta):
+    """A single global lock here would make one company's first-ever read
+    queue behind another's, even though their databases are separate files
+    with nothing to actually contend over. See backend/services/bot_profile_
+    service.py's `_create_lock_for` -- this is the property that fix exists
+    for, pinned so it cannot quietly regress back to one shared lock."""
+    lock_for_alpha = service._create_lock_for(alpha["id"])
+    lock_for_beta = service._create_lock_for(beta["id"])
+
+    assert lock_for_alpha is not lock_for_beta
+
+    # Calling it again for the same company must return the same lock --
+    # otherwise two requests racing for that company's first read would each
+    # get their own lock and the double-checked-locking guard would do
+    # nothing.
+    assert service._create_lock_for(alpha["id"]) is lock_for_alpha

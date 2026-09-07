@@ -130,7 +130,24 @@ class BotProfileService:
         # arriving together would otherwise both see "no default" and insert
         # one each, leaving the screen editing a row the assistant does not
         # read.
-        self._create_lock = threading.Lock()
+        #
+        # Keyed by company, not one lock for the whole service: a single
+        # shared lock held across a database read and write would make one
+        # company's slow first-open queue behind another's, on a platform
+        # where every tenant's database is its own separate encrypted file
+        # with nothing to actually contend over. `_locks_guard` only ever
+        # protects the dict lookup itself -- never I/O -- so it cannot become
+        # the same kind of bottleneck it replaces.
+        self._create_locks: dict[int, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+
+    def _create_lock_for(self, company_id: int) -> threading.Lock:
+        with self._locks_guard:
+            lock = self._create_locks.get(company_id)
+            if lock is None:
+                lock = threading.Lock()
+                self._create_locks[company_id] = lock
+            return lock
 
     # ------------------------------------------------------------------
     # Reading
@@ -145,7 +162,7 @@ class BotProfileService:
         if existing:
             return self._public(existing)
 
-        with self._create_lock:
+        with self._create_lock_for(company_id):
             # Re-check inside the lock: another request may have created it
             # while this one waited.
             existing = self._default_row(company_id)
