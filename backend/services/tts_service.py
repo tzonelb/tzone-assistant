@@ -83,11 +83,10 @@ class NullProvider(TTSProvider):
 class OpenAITTSProvider(TTSProvider):
     name = "openai"
 
-    def __init__(self, api_key: str, *, model: str, voice: str, api_url: str, timeout: int) -> None:
+    def __init__(self, api_key: str, *, model: str, voice: str, timeout: int) -> None:
         self.api_key = api_key
         self.model = model
         self.voice = voice
-        self.api_url = api_url
         self.timeout = timeout
 
     def is_configured(self) -> bool:
@@ -95,8 +94,12 @@ class OpenAITTSProvider(TTSProvider):
 
     def synthesize(self, *, text: str) -> bytes:
         try:
+            # A literal config name, not `self.<attr>`, so the outbound-host
+            # test can see this call can only ever reach the host this
+            # deployment's own settings name -- the same rule
+            # `config.OPENAI_API_URL` follows for the assistant's own calls.
             response = httpx.post(
-                self.api_url,
+                config.OPENAI_TTS_API_URL,
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={
                     "model": self.model,
@@ -130,7 +133,6 @@ def build_provider() -> TTSProvider:
             config.OPENAI_API_KEY,
             model=config.OPENAI_TTS_MODEL,
             voice=config.OPENAI_TTS_VOICE,
-            api_url=config.OPENAI_TTS_API_URL,
             timeout=config.OPENAI_TTS_TIMEOUT_SECONDS,
         )
 

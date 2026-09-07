@@ -142,10 +142,14 @@ class QuoteService:
                 raise QuoteError(f"A company can have at most {MAX_QUOTES} quotes.")
 
             cursor = conn.execute(
-                "INSERT INTO quotes (company_id, conversation_id, customer_id, "
-                "title, items_json, currency, total, status, notes, "
-                "created_by_user_id, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)",
+                """
+                INSERT INTO quotes (
+                    company_id, conversation_id, customer_id, title,
+                    items_json, currency, total, status, notes,
+                    created_by_user_id, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)
+                """,
                 (
                     int(company_id),
                     int(conversation_id) if conversation_id else None,
