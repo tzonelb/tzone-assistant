@@ -405,7 +405,7 @@ app.include_router(telegram_webhook.router)
 # browser. The API routers are all registered above, so they still answer their
 # own paths; only what they do not claim falls through to the interface.
 _API_PREFIXES = (
-    "api/", "conversations", "webhook", "health", "knowledge", "tickets",
+    "api/", "webhook", "health",
 )
 _DIST = Path(__file__).resolve().parent / "frontend" / "dist"
 
