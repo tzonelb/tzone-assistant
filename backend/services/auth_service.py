@@ -671,6 +671,7 @@ class AuthService:
                     auth_sessions.id AS session_id,
                     auth_sessions.expires_at,
                     auth_sessions.revoked_at,
+                    auth_sessions.last_used_at,
                     auth_sessions.company_id AS active_company_id,
                     auth_sessions.scope AS session_scope,
                     users.*
@@ -699,11 +700,45 @@ class AuthService:
             except (TypeError, ValueError):
                 return None
 
-            conn.execute(
-                "UPDATE auth_sessions SET last_used_at = ? WHERE id = ?",
-                (utc_now_iso(), data["session_id"]),
-            )
-            conn.commit()
+            # Every protected route depends on this call, directly or through
+            # require_permission -- so before this check, "last active" was
+            # written on every single request against every session, for
+            # every company on the platform: a poll, an SSE reconnect, a page
+            # of a list, all the same as a real action. That is a write to
+            # the control database's single-writer file on the hot path of
+            # everything, and it is where a live overload test (~330
+            # concurrent workers, most of them authenticated) traced back to:
+            # dozens of worker threads piled up waiting on this one UPDATE,
+            # and once the shared thread pool that offloads this call (see
+            # get_current_user's own comment) filled with those, unrelated
+            # routes that touch no database at all -- /health/ among them --
+            # were starved of a thread too and stopped answering.
+            #
+            # "Last active" is a courtesy line on a settings screen
+            # (`s.last_used_at` in UISettingsPage.jsx), not something anything
+            # security-relevant reads at request granularity -- revocation is
+            # its own column, checked above, not inferred from staleness here.
+            # A minute of slack is invisible there and turns "every request"
+            # into "at most once a minute per session," independent of how
+            # many requests that session makes in between.
+            last_used_at = data.get("last_used_at")
+            stale = True
+
+            if last_used_at:
+                try:
+                    parsed = datetime.fromisoformat(last_used_at)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    stale = (now - parsed) >= timedelta(minutes=1)
+                except (TypeError, ValueError):
+                    stale = True
+
+            if stale:
+                conn.execute(
+                    "UPDATE auth_sessions SET last_used_at = ? WHERE id = ?",
+                    (utc_now_iso(), data["session_id"]),
+                )
+                conn.commit()
 
             safe_user = self.sanitize_user(data)
             safe_user["session_scope"] = data.get("session_scope") or COMPANY_SCOPE

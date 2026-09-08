@@ -109,3 +109,76 @@ def test_revoke_others_keeps_the_current_one(bound):
     remaining = auth_service.list_user_sessions(uid, current_token=current["access_token"])
     assert len(remaining) == 1
     assert remaining[0]["current"] is True
+
+
+def _raw_last_used_at(manager, session_id: int) -> str:
+    with manager.control() as conn:
+        row = conn.execute(
+            "SELECT last_used_at FROM auth_sessions WHERE id = ?", (session_id,)
+        ).fetchone()
+        return row["last_used_at"]
+
+
+def test_last_used_at_is_not_rewritten_on_every_call(bound):
+    """`get_current_user` runs on every protected request -- through
+    `require_permission` on literally every route that needs one. Writing
+    `last_used_at` on every single call made that the write-heaviest thing on
+    the control database, contending with every other writer on the platform
+    for no reason a settings screen ("last active 2 minutes ago") needs at
+    request granularity. Reproduced live: under a ~330-worker load test,
+    dozens of worker threads piled up waiting on exactly this UPDATE, and once
+    the pool that serves it filled, `/health/` -- a route with no database
+    call at all -- stopped answering too, because it needs a thread from the
+    same pool.
+
+    A session created seconds ago calling this repeatedly must not move
+    `last_used_at` again until roughly a minute has passed.
+    """
+    from backend.services.auth_service import auth_service
+
+    uid = _user("throttle@example.com")
+    session = auth_service.create_session(uid)
+    token = session["access_token"]
+
+    listed = auth_service.list_user_sessions(uid, current_token=token)
+    session_id = listed[0]["id"]
+
+    first = _raw_last_used_at(bound, session_id)
+
+    for _ in range(5):
+        assert auth_service.get_user_from_token(token) is not None
+
+    assert _raw_last_used_at(bound, session_id) == first, (
+        "last_used_at moved on a call seconds after the session was created "
+        "-- the throttle in get_user_from_token is not holding."
+    )
+
+
+def test_last_used_at_does_move_once_it_is_stale(bound):
+    """The other half of the throttle: a session really does get its
+    last-active time refreshed, just not on every single request."""
+    from datetime import timedelta
+
+    from backend.services.auth_service import auth_service, utc_now
+
+    uid = _user("throttle-stale@example.com")
+    session = auth_service.create_session(uid)
+    token = session["access_token"]
+
+    listed = auth_service.list_user_sessions(uid, current_token=token)
+    session_id = listed[0]["id"]
+
+    stale = (utc_now() - timedelta(minutes=5)).isoformat()
+    with bound.control() as conn:
+        conn.execute(
+            "UPDATE auth_sessions SET last_used_at = ? WHERE id = ?",
+            (stale, session_id),
+        )
+        conn.commit()
+
+    assert auth_service.get_user_from_token(token) is not None
+
+    refreshed = _raw_last_used_at(bound, session_id)
+    assert refreshed != stale, (
+        "last_used_at never moved even though it was five minutes stale"
+    )
