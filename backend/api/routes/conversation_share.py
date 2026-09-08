@@ -31,15 +31,18 @@ max-width:640px;margin:64px auto;padding:0 16px;color:#333">
 you for a new one.</p></body></html>"""
 
 
-@router.api_route(
-    "/conversation/{token}", methods=["GET", "HEAD"], response_class=HTMLResponse
-)
+@router.get("/conversation/{token}", response_class=HTMLResponse)
+@router.head("/conversation/{token}", response_class=HTMLResponse)
 def view_shared_conversation(token: str) -> HTMLResponse:
     """Serve the shared transcript page. HEAD as well as GET -- see
     media_uploads.py's read_media for why a plain `.get(...)` route does not
     answer HEAD in this app: it falls through to the SPA catch-all as a bare
     404 instead of a 405. A link pasted into chat apps is exactly the kind of
     URL an unfurl bot HEAD-checks before fetching the page.
+
+    Two decorators, not one `api_route(methods=[...])`: see read_media's
+    docstring for why a single multi-method route trips FastAPI's
+    duplicate-operation-id warning and two single-method routes don't.
     """
     resolved = conversation_share_service.resolve(token)
     if not resolved:

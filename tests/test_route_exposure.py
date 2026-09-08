@@ -59,7 +59,7 @@ PUBLIC_ROUTES: dict[str, str] = {
         "and stored only as a hash — the same shape as a session token."
     ),
     "platform.py:POST:/auth/login": "The console sign-in, same reason.",
-    "media_uploads.py:API_ROUTE:/{company_id}/{stored_name}": (
+    "media_uploads.py:GET:/{company_id}/{stored_name}": (
         "An attachment an employee sent to a customer. The channel — Meta, "
         "WhatsApp, Telegram — fetches this URL from its own servers with no "
         "session of ours, so a dependency here would stop every attachment "
@@ -100,7 +100,7 @@ PUBLIC_ROUTES: dict[str, str] = {
     # path is a bearer credential exactly like a password-reset token, resolved
     # and de-expired by `conversation_share_service.resolve` before anything is
     # read. See conversation_share.py.
-    "conversation_share.py:API_ROUTE:/conversation/{token}": (
+    "conversation_share.py:GET:/conversation/{token}": (
         "A signed share token stands in for the session. See conversation_share.py."
     ),
 }
