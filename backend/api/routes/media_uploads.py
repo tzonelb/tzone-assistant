@@ -95,9 +95,18 @@ async def upload_voice_note(file: UploadFile, context=Depends(reply_context)):
     return stored
 
 
-@public_router.get("/{company_id}/{stored_name}")
+@public_router.api_route("/{company_id}/{stored_name}", methods=["GET", "HEAD"])
 def read_media(company_id: int, stored_name: str):
-    """Serve a stored file to whoever holds its link -- the channel, usually."""
+    """Serve a stored file to whoever holds its link -- the channel, usually.
+
+    HEAD as well as GET: this app's routes do not get HEAD for free the way
+    Starlette's static-file serving does, and a plain `.get(...)` here left a
+    HEAD request falling through every route to the SPA catch-all and coming
+    back 404 -- reproduced live. The channels this exists for (Meta, WhatsApp,
+    Telegram) fetch a delivered attachment from exactly this URL, and more
+    than one does a HEAD check first; a 404 there is indistinguishable from
+    "this attachment does not exist" to whatever is asking.
+    """
     try:
         path = media_upload_service.path_for(
             company_id=company_id, stored_name=stored_name

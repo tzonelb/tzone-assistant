@@ -59,7 +59,7 @@ PUBLIC_ROUTES: dict[str, str] = {
         "and stored only as a hash — the same shape as a session token."
     ),
     "platform.py:POST:/auth/login": "The console sign-in, same reason.",
-    "media_uploads.py:GET:/{company_id}/{stored_name}": (
+    "media_uploads.py:API_ROUTE:/{company_id}/{stored_name}": (
         "An attachment an employee sent to a customer. The channel — Meta, "
         "WhatsApp, Telegram — fetches this URL from its own servers with no "
         "session of ours, so a dependency here would stop every attachment "
