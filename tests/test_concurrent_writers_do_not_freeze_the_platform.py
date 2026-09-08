@@ -181,23 +181,38 @@ def test_connection_open_and_close_are_serialized(platform):
     under the ASGI server's own pool, not at call volume in isolation, which
     is not something this test can force either.
 
-    What it can pin is the fix: `DatabaseManager._connect_lock` makes it
+    What it can pin is the fix: `DatabaseManager._lock_for(path)` makes it
     structurally impossible for two threads to be inside `_open` or the close
-    in `_held` at the same time, whatever the exact native mechanism was.
-    This drives many threads through open-then-close as fast as they can,
-    across both `control()` and `tenant()`, and asserts the burst finishes in
-    bounded time -- not that any one native call was slow, which this
-    process's own threads can't observe from outside the C extension, but
-    that the *lock exists and every call still gets through it*.
+    in `_held` *for the same file* at the same time, whatever the exact
+    native mechanism was -- one lock per path, not one lock for the whole
+    process (a global lock was this fix's first shape, and a heavier live
+    load test found its cost: unrelated files serializing against each other
+    for no reason). This drives many threads through open-then-close as fast
+    as they can, across both `control()` and two different tenant files, and
+    asserts the burst finishes in bounded time -- not that any one native
+    call was slow, which this process's own threads can't observe from
+    outside the C extension, but that the *locks exist, are scoped per file,
+    and every call still gets through one*.
     """
     manager = platform["manager"]
     alpha_id = _alpha(platform)
     beta_id = platform["companies"]["beta"]["id"]
 
-    assert isinstance(manager._connect_lock, type(threading.Lock())), (
-        "DatabaseManager has no _connect_lock serializing connection open "
-        "and close -- see this test's docstring for the live freeze that "
-        "exists to prevent."
+    alpha_lock = manager._lock_for(manager.tenant_path(alpha_id))
+    beta_lock = manager._lock_for(manager.tenant_path(beta_id))
+    control_lock = manager._lock_for(manager._control_path)
+
+    assert isinstance(alpha_lock, type(threading.Lock())), (
+        "DatabaseManager._lock_for does not hand out a real Lock -- see this "
+        "test's docstring for the live freeze that exists to prevent."
+    )
+    assert manager._lock_for(manager.tenant_path(alpha_id)) is alpha_lock, (
+        "the same path must get the same lock every time, or two connections "
+        "to the same file could still race each other"
+    )
+    assert len({id(alpha_lock), id(beta_lock), id(control_lock)}) == 3, (
+        "different files must get different locks -- a single shared lock "
+        "here is exactly the global-lock cost this test's docstring describes"
     )
 
     WORKERS = 30

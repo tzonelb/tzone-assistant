@@ -158,7 +158,33 @@ class DatabaseManager:
         # already fast, and this makes it structurally impossible for two of
         # them to be racing each other inside the C extension at once,
         # whatever the exact mechanism turns out to be.
-        self._connect_lock = threading.Lock()
+        #
+        # One lock per *file*, not one lock for the whole process. A single
+        # global lock was the first shape of this fix, and a second live load
+        # test -- much heavier, ~390 concurrent workers, most of them
+        # authenticated -- found its cost: every request touching the control
+        # database (nearly all of them, through get_current_user) queued
+        # behind every request touching any company's tenant database too,
+        # even though they share no file and never raced each other in the
+        # first place. Company Alpha's writers, Company Beta's writers, and
+        # every request's own control-database lookup now each wait only on
+        # the lock for the one file they are actually opening or closing --
+        # the safety property (no two connections to the *same* file racing
+        # through connect/close) is unchanged, only the blast radius is.
+        self._connect_locks: dict[str, threading.Lock] = {}
+        self._connect_locks_guard = threading.Lock()
+
+    def _lock_for(self, path: Path) -> threading.Lock:
+        key = str(path)
+
+        with self._connect_locks_guard:
+            lock = self._connect_locks.get(key)
+
+            if lock is None:
+                lock = threading.Lock()
+                self._connect_locks[key] = lock
+
+            return lock
 
     # ------------------------------------------------------------------
     # Key handling
@@ -230,12 +256,13 @@ class DatabaseManager:
     # ------------------------------------------------------------------
 
     def _open(self, path: Path, key: bytes):
-        # The whole body, not just `connect()`: see `_connect_lock`'s comment
-        # in `__init__` for the live freeze this closes. Everything below is
+        # The whole body, not just `connect()`: see `_lock_for`'s comment in
+        # `__init__` for the live freeze this closes. Everything below is
         # per-connection setup, not shared query work, so holding this lock
         # here never blocks a query running on some other, already-open
-        # connection -- only another connection's own open or close.
-        with self._connect_lock:
+        # connection -- only another connection's own open or close, and
+        # only one to this same file.
+        with self._lock_for(path):
             connection = sqlcipher.connect(
                 str(path),
                 timeout=BUSY_TIMEOUT_MS / 1000,
@@ -299,7 +326,7 @@ class DatabaseManager:
             return connection
 
     @contextmanager
-    def _held(self, connection) -> Iterator[Any]:
+    def _held(self, connection, path: Path) -> Iterator[Any]:
         """Yield a connection, and run the deferred work once it is let go.
 
         The counting is what makes `after_release` possible. See that method
@@ -313,11 +340,17 @@ class DatabaseManager:
         try:
             yield connection
         finally:
-            # Locked for the same reason `_open` is locked -- see
-            # `_connect_lock`'s comment in `__init__`. Only the close itself:
-            # a deferred callback below may open its own connection on this
-            # same thread, and `_connect_lock` is not reentrant.
-            with self._connect_lock:
+            # Locked for the same reason `_open` is locked -- see `_lock_for`'s
+            # comment in `__init__`. Only the close itself, and only against
+            # this same file: a deferred callback below may open its own
+            # connection (to this file or another) on this same thread, and
+            # a lock this code already holds must never be one it also waits
+            # on -- `_lock_for` hands out a plain, non-reentrant Lock per
+            # path, so that only holds if the callback's path matches this
+            # one, which `after_release`'s own contract already forbids (see
+            # its docstring: it exists precisely because opening the same
+            # file this thread already has open deadlocks).
+            with self._lock_for(path):
                 connection.close()
 
             _open.depth = _depth() - 1
@@ -377,7 +410,7 @@ class DatabaseManager:
             _derive_control_key(self.master_key()),
         )
 
-        with self._held(connection) as conn:
+        with self._held(connection, self._control_path) as conn:
             yield conn
 
     @contextmanager
@@ -393,7 +426,7 @@ class DatabaseManager:
 
         connection = self._open(path, self.company_key(company_id))
 
-        with self._held(connection) as conn:
+        with self._held(connection, path) as conn:
             yield conn
 
     def tenant_path(self, company_id: int) -> Path:
@@ -497,7 +530,12 @@ class DatabaseManager:
 
             connection.commit()
         finally:
-            connection.close()
+            # One-time boot-time setup, gated by `_control_ready` above, so
+            # this is never actually contended -- locked anyway so "every
+            # close goes through `_lock_for`" stays true without an
+            # exception to remember.
+            with self._lock_for(self._control_path):
+                connection.close()
 
     @staticmethod
     def _create_tenant_tables(connection) -> None:

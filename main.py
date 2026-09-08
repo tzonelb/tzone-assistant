@@ -13,6 +13,7 @@ import logging
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
+import anyio.to_thread
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -99,8 +100,32 @@ from backend.workers import (  # noqa: E402
 )
 
 
+# How many blocking calls -- every sync `def` route, and every call this
+# codebase explicitly offloads with `run_in_threadpool` -- may run at once.
+# anyio's own default (40) is sized for a process that expects to run
+# several workers behind a load balancer; this one runs exactly one, by
+# design (see deploy/tzone-api.service), so it alone has to absorb whatever
+# concurrent request volume the platform receives.
+#
+# Reproduced live: a ~330-worker load test, most of it authenticated
+# requests, piled up dozens of threads waiting inside get_user_from_token
+# (see its own comment on the write that used to happen on every single
+# request) and filled the pool. Once it was full, /health/ -- a route with
+# no database call at all -- stopped answering too, because serving it also
+# needs a thread from the same exhausted pool. Throttling that write cut
+# the *rate* of blocking calls; this raises the *ceiling* on how many may
+# be in flight together, which is the complementary fix -- the rate fix
+# lowers how often the pool fills, this one raises how much load it takes
+# to fill it in the first place.
+THREAD_POOL_CAPACITY = 200
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    anyio.to_thread.current_default_thread_limiter().total_tokens = (
+        THREAD_POOL_CAPACITY
+    )
+
     try:
         database_manager.master_key()
     except KeyringError as exc:
