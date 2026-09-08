@@ -17,7 +17,19 @@ from channels.webhook_limits import event_limit, log_dropped_events
 
 
 def detect_meta_channel(payload: dict[str, Any]) -> str:
-    """Map the payload's object type to our channel name."""
+    """Map the payload's object type to our channel name.
+
+    Reproduced live: a syntactically valid but wrongly-shaped body (a bare
+    JSON array, string, number, `null`, ...) reaches here once signature
+    verification has already passed -- valid JSON is not the same claim as
+    "is an object" -- and `payload.get(...)` on anything but a dict raised an
+    unhandled AttributeError, turning a malformed delivery into a 500 instead
+    of the graceful `{"status": "ignored"}` every other malformed shape gets.
+    `parse_meta_events` already guards the same way for the same reason.
+    """
+    if not isinstance(payload, dict):
+        return "messenger"
+
     obj = payload.get("object")
 
     if obj == "instagram":

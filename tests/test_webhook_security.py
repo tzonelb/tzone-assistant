@@ -617,3 +617,36 @@ def test_instagram_events_are_labelled_instagram():
     }
 
     assert parse_meta_events(payload)[0]["channel"] == "instagram"
+
+
+# ------------------------------------------------------ malformed bodies
+#
+# Reproduced live under a ~330-worker combined load test: a syntactically
+# valid JSON body that is not an object -- a bare array, most concretely, but
+# the same is true of a string, a number, `null`, or `true` -- passes
+# `json.loads` (unlike the unparseable body above) and reaches these parsers,
+# which then called `payload.get(...)` without checking `payload` was ever a
+# dict. `parse_meta_events` already guarded against this; `detect_meta_channel`
+# and `parse_whatsapp_events` had not, and each crashed with an unhandled
+# AttributeError, turning a malformed delivery into a 500 instead of the
+# `{"status": "ignored"}` every other malformed shape gets.
+
+
+NON_DICT_PAYLOADS = [[], [1, 2, 3], "just a string", 42, None, True]
+
+
+@pytest.mark.parametrize("payload", NON_DICT_PAYLOADS)
+def test_meta_channel_detection_does_not_crash_on_a_non_dict_payload(payload):
+    from channels.meta.parser import detect_meta_channel
+
+    assert detect_meta_channel(payload) == "messenger"
+
+
+@pytest.mark.parametrize("payload", NON_DICT_PAYLOADS)
+def test_meta_events_are_empty_for_a_non_dict_payload(payload):
+    assert parse_meta_events(payload) == []
+
+
+@pytest.mark.parametrize("payload", NON_DICT_PAYLOADS)
+def test_whatsapp_events_are_empty_for_a_non_dict_payload(payload):
+    assert parse_whatsapp_events(payload) == []
