@@ -141,6 +141,33 @@ class QuoteService:
             if int(count) >= MAX_QUOTES:
                 raise QuoteError(f"A company can have at most {MAX_QUOTES} quotes.")
 
+            # customer_id and conversation_id are IDs the caller picked, not
+            # something this company's own screen looked up -- an unchecked
+            # value here would let a quote reference a row that never existed
+            # in this company's own data at all, and the id spaces are shared
+            # across every company on the platform (auto-increment on the
+            # tenant schema, not per-company), so the number is meaningful
+            # noise, not a real link, once it goes unchecked.
+            if customer_id:
+                exists = conn.execute(
+                    "SELECT 1 FROM customers WHERE id = ? AND company_id = ? LIMIT 1",
+                    (int(customer_id), int(company_id)),
+                ).fetchone()
+                if not exists:
+                    raise QuoteError(
+                        "That customer does not belong to this company."
+                    )
+
+            if conversation_id:
+                exists = conn.execute(
+                    "SELECT 1 FROM conversations WHERE id = ? AND company_id = ? LIMIT 1",
+                    (int(conversation_id), int(company_id)),
+                ).fetchone()
+                if not exists:
+                    raise QuoteError(
+                        "That conversation does not belong to this company."
+                    )
+
             cursor = conn.execute(
                 """
                 INSERT INTO quotes (

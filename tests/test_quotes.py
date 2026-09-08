@@ -18,6 +18,7 @@ import database.manager as manager_module
 
 @pytest.fixture()
 def bound(platform, monkeypatch):
+    import backend.services.conversation_control_service as control_module
     import backend.services.quote_service as quote_module
 
     original = manager_module.database_manager
@@ -27,6 +28,7 @@ def bound(platform, monkeypatch):
         if getattr(module, "database_manager", None) is original:
             monkeypatch.setattr(module, "database_manager", test_manager)
     monkeypatch.setattr(quote_module, "database_manager", test_manager)
+    monkeypatch.setattr(control_module, "database_manager", test_manager)
     return test_manager
 
 
@@ -102,11 +104,114 @@ def test_status_transitions_and_rejects_an_unknown_status(bound, alpha):
 
 
 def test_listing_filters_by_conversation(bound, alpha):
+    from backend.services.conversation_control_service import (
+        conversation_control_service,
+    )
     from backend.services.quote_service import quote_service
 
-    quote_service.create(company_id=alpha["id"], title="For convo 1", amount=5, conversation_id=1)
-    quote_service.create(company_id=alpha["id"], title="For convo 2", amount=5, conversation_id=2)
+    convo_one = conversation_control_service.get_or_create(
+        company_id=alpha["id"], channel="messenger", external_user_id="cust-1"
+    )
+    convo_two = conversation_control_service.get_or_create(
+        company_id=alpha["id"], channel="messenger", external_user_id="cust-2"
+    )
 
-    only_one = quote_service.list(alpha["id"], conversation_id=1)
+    quote_service.create(
+        company_id=alpha["id"],
+        title="For convo 1",
+        amount=5,
+        conversation_id=convo_one["id"],
+    )
+    quote_service.create(
+        company_id=alpha["id"],
+        title="For convo 2",
+        amount=5,
+        conversation_id=convo_two["id"],
+    )
+
+    only_one = quote_service.list(alpha["id"], conversation_id=convo_one["id"])
     assert len(only_one) == 1
     assert only_one[0]["title"] == "For convo 1"
+
+
+def test_a_customer_id_from_another_company_is_refused(bound, alpha, beta):
+    """Reproduced live: a company's own screen only ever offers its own
+    customers, but the endpoint took the id on trust. Nothing crossed the
+    tenant boundary -- each company's database is its own file -- but a
+    quote could still land pointing at an id that means nothing in the
+    company's own data, which is exactly the referential nonsense this
+    guards against."""
+    from backend.services.quote_service import QuoteError, quote_service
+
+    with bound.tenant(beta["id"]) as conn:
+        cursor = conn.execute(
+            "INSERT INTO customers (company_id, display_name, first_seen_at,"
+            " last_seen_at, created_at, updated_at)"
+            " VALUES (?, \"Beta's Customer\", datetime('now'), datetime('now'),"
+            "         datetime('now'), datetime('now'))",
+            (beta["id"],),
+        )
+        conn.commit()
+        foreign_customer_id = int(cursor.lastrowid)
+
+    with pytest.raises(QuoteError):
+        quote_service.create(
+            company_id=alpha["id"],
+            title="Should not save",
+            amount=10,
+            customer_id=foreign_customer_id,
+        )
+
+
+def test_a_conversation_id_from_another_company_is_refused(bound, alpha, beta):
+    from backend.services.conversation_control_service import (
+        conversation_control_service,
+    )
+    from backend.services.quote_service import QuoteError, quote_service
+
+    foreign_convo = conversation_control_service.get_or_create(
+        company_id=beta["id"], channel="messenger", external_user_id="beta-convo"
+    )
+
+    with pytest.raises(QuoteError):
+        quote_service.create(
+            company_id=alpha["id"],
+            title="Should not save",
+            amount=10,
+            conversation_id=foreign_convo["id"],
+        )
+
+
+def test_a_real_customer_and_conversation_are_accepted(bound, alpha):
+    """The guard must not refuse the ordinary path -- a quote raised from a
+    real conversation, for that conversation's real customer."""
+    from backend.services.conversation_control_service import (
+        conversation_control_service,
+    )
+    from backend.services.quote_service import quote_service
+
+    convo = conversation_control_service.get_or_create(
+        company_id=alpha["id"], channel="messenger", external_user_id="cust-real"
+    )
+
+    with bound.tenant(alpha["id"]) as conn:
+        cursor = conn.execute(
+            "INSERT INTO customers (company_id, display_name, first_seen_at,"
+            " last_seen_at, created_at, updated_at)"
+            " VALUES (?, 'Real Customer', datetime('now'), datetime('now'),"
+            "         datetime('now'), datetime('now'))",
+            (alpha["id"],),
+        )
+        conn.commit()
+        customer_id = int(cursor.lastrowid)
+
+    quote = quote_service.create(
+        company_id=alpha["id"],
+        title="Real quote",
+        amount=20,
+        conversation_id=convo["id"],
+        customer_id=customer_id,
+    )
+
+    assert quote["conversation_id"] == convo["id"]
+    assert quote["customer_id"] == customer_id
