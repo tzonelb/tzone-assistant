@@ -64,7 +64,11 @@ database/*.sqlite3
 
 data/conversations/
 data/runtime/
-data/uploads/private/
+# media_upload_service.py stores real attachments under one directory per
+# company (`data/uploads/company_<id>/`), not `data/uploads/private/` --
+# that path never matched anything a company upload actually wrote to, so a
+# git add -A on a working checkout could commit real customer files.
+data/uploads/
 
 # ============================================================
 # Logs
