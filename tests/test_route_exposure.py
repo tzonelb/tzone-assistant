@@ -100,7 +100,7 @@ PUBLIC_ROUTES: dict[str, str] = {
     # path is a bearer credential exactly like a password-reset token, resolved
     # and de-expired by `conversation_share_service.resolve` before anything is
     # read. See conversation_share.py.
-    "conversation_share.py:GET:/conversation/{token}": (
+    "conversation_share.py:API_ROUTE:/conversation/{token}": (
         "A signed share token stands in for the session. See conversation_share.py."
     ),
 }

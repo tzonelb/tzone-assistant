@@ -210,6 +210,43 @@ def test_the_public_page_refuses_a_bad_token(bound, alpha):
     assert response.status_code == 404
 
 
+def test_head_agrees_with_get_on_a_real_link(bound, alpha, monkeypatch):
+    """A plain `@router.get(...)` here would not answer HEAD -- see
+    media_uploads.py's read_media, where the identical gap was reproduced
+    live: the request falls through every route to the SPA catch-all and
+    comes back a bare 404. A link pasted into a chat app is exactly the kind
+    of URL an unfurl bot HEAD-checks before fetching it."""
+    import channels.inbound as inbound
+    from backend.services.conversation_share_service import create_link
+
+    monkeypatch.setattr(inbound, "schedule_smart_reply", lambda **kwargs: {"queued": True})
+    _seed_conversation(alpha, text="the exact words a customer sent")
+
+    link = create_link(
+        company_id=alpha["id"],
+        channel="messenger",
+        external_user_id="share-cust",
+        created_by_user_id=1,
+    )
+
+    client = _share_app()
+    url = f"/api/share/conversation/{link['token']}"
+
+    get_response = client.get(url)
+    head_response = client.head(url)
+
+    assert get_response.status_code == 200
+    assert head_response.status_code == 200, (
+        "HEAD returned "
+        f"{head_response.status_code} for a link GET can see at the same URL"
+    )
+
+
+def test_head_on_a_bad_token_is_a_clean_404(bound, alpha):
+    response = _share_app().head("/api/share/conversation/forged-or-expired")
+    assert response.status_code == 404
+
+
 def test_one_companys_link_never_shows_anothers_transcript(bound, alpha, beta, monkeypatch):
     """The isolation that matters most: a link minted for alpha's conversation
     must never resolve into beta's tenant database even if ids collide."""
