@@ -221,6 +221,35 @@ class DatabaseManager:
         try:
             connection.execute("PRAGMA foreign_keys = ON")
             connection.execute("PRAGMA journal_mode = WAL")
+
+            # Reproduced live, and worse than the write-contention freeze
+            # BUSY_TIMEOUT_MS exists for: a stress run of ~160 concurrent
+            # writers plus held-open SSE connections against these two files
+            # left the whole process permanently wedged -- not slow, dead --
+            # with zero CPU across every thread and py-spy showing the event
+            # loop itself (get_current_user -> get_user_from_token ->
+            # control()) parked forever inside connection.close(), while
+            # other threads spun on the GIL futex trying and failing to make
+            # any progress at all. Only a kill -9 recovered it.
+            #
+            # Every call here opens a brand-new connection and closes it
+            # again -- there is no pool. In WAL mode, SQLite's default
+            # (wal_autocheckpoint = 1000 pages) means a commit or a close can
+            # itself try to run a checkpoint, which needs to briefly become
+            # the only reader/writer of the file. With this many short-lived
+            # connections opening and closing at once against one file, that
+            # checkpoint attempt is where the pile-up happens: a close is not
+            # supposed to be able to out-wait BUSY_TIMEOUT_MS the way a write
+            # is, so this is the one place that guarantee did not hold.
+            #
+            # Turning automatic checkpointing off here does not stop the WAL
+            # from being checkpointed -- it moves the job to one explicit,
+            # infrequent PASSIVE checkpoint in the maintenance worker (see
+            # backend/workers.py), run one connection at a time instead of by
+            # whichever of a hundred concurrent connections happens to cross
+            # the page threshold first.
+            connection.execute("PRAGMA wal_autocheckpoint = 0")
+
             connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
 
             # Forces SQLCipher to decrypt a page. A wrong key is only detected

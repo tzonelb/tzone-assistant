@@ -34,6 +34,42 @@ def _alpha(platform):
     return platform["companies"]["alpha"]["id"]
 
 
+def test_automatic_wal_checkpointing_is_disabled_on_every_connection(platform):
+    """A second, worse freeze than the one this file's own name describes.
+
+    Reproduced live against a real single-worker server: roughly 160
+    concurrent writers plus held-open SSE connections against these two
+    files did not just contend for BUSY_TIMEOUT_MS's write lock -- it wedged
+    the process *permanently*. py-spy showed the event loop itself parked
+    forever inside `connection.close()` (reached through
+    `get_current_user` -> `get_user_from_token` -> `control()`), with every
+    other thread spinning on the GIL futex and making no progress at all.
+    Only `kill -9` recovered it; no timeout on this platform could have,
+    because the thing that would have to fire the timeout -- the event loop
+    -- was the thing that was stuck.
+
+    With `wal_autocheckpoint` left at SQLite's default (1000 pages), a
+    connection opened this often against a file this contended can trigger
+    an automatic checkpoint on commit or close, competing with every other
+    short-lived connection doing the same thing at the same moment. Turning
+    it off here does not skip checkpointing -- see
+    `backend.workers._checkpoint_all_databases`, which does it explicitly, on
+    a clock, one connection at a time. Restarting the server after this fix
+    and repeating the exact live load it froze on -- write burst, SSE holds,
+    and concurrent CPU-heavy PDF/CSV exports together -- produced zero
+    timeouts on `/health/` and a clean, empty connection table afterward.
+    """
+    with platform["manager"].control() as conn:
+        value = conn.execute("PRAGMA wal_autocheckpoint").fetchone()[0]
+
+    assert value == 0, (
+        f"PRAGMA wal_autocheckpoint is {value}, not 0. A connection opened "
+        "under load may try to run an automatic checkpoint on commit or "
+        "close -- see database/manager.py's `_open` for the live freeze this "
+        "was reproduced against."
+    )
+
+
 def test_the_busy_timeout_is_bounded_low_enough_to_matter():
     """The regression this whole file exists to prevent, in one line.
 

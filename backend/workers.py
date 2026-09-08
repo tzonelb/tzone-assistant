@@ -294,6 +294,55 @@ async def maintenance_worker() -> None:
         except Exception:
             logger.exception("Activity log pruning failed")
 
+        # Pairs with `PRAGMA wal_autocheckpoint = 0` in database/manager.py's
+        # `_open` -- see the comment there for the live-reproduced freeze this
+        # closes. Turning automatic checkpointing off does not stop the WAL
+        # from ever being checkpointed; it moves the job here, one connection
+        # at a time, on a clock, instead of leaving it to whichever of a
+        # hundred concurrent short-lived connections happens to be the one
+        # that crosses the page threshold under load.
+        try:
+            checkpointed = await asyncio.to_thread(_checkpoint_all_databases)
+            if checkpointed:
+                logger.info(
+                    "Checkpointed the write-ahead log on %s database(s)",
+                    checkpointed,
+                )
+        except Exception:
+            logger.exception("WAL checkpoint sweep failed")
+
+
+def _checkpoint_all_databases() -> int:
+    """Run one PASSIVE checkpoint per database. Never blocks a writer.
+
+    PASSIVE is the mode that does not wait for or interrupt anything: it folds
+    in as much of the write-ahead log as it can without a lock any other
+    connection is holding, and returns immediately with whatever is left. That
+    makes it safe to run on a timer regardless of what else is happening on
+    the platform at that moment -- the busy_timeout on every other connection
+    is not affected, because this never becomes the thing they would wait for.
+
+    The full company list, not the active-only one, for the same reason the
+    activity-log sweep above uses it: a suspended company's WAL still grows
+    from whatever wrote to it before suspension, and letting it grow forever
+    is not a property of being suspended.
+    """
+    checkpointed = 0
+
+    with database_manager.control() as conn:
+        conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        checkpointed += 1
+
+    for company_id in database_manager.list_all_company_ids():
+        try:
+            with database_manager.tenant(company_id) as conn:
+                conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+                checkpointed += 1
+        except Exception:
+            logger.exception("WAL checkpoint failed for company %s", company_id)
+
+    return checkpointed
+
 
 def _prune_activity_logs() -> int:
     """Apply each kind's retention across every company. Returns rows removed.

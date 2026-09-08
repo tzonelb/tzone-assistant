@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.concurrency import run_in_threadpool
 
 from config.settings import config
 from database.manager import database_manager
@@ -1489,7 +1490,27 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Every protected route in the app depends on this, directly or through
+    # `require_permission`, which makes it the one dependency guaranteed to
+    # run on every authenticated request. `get_user_from_token` opens and
+    # closes a real SQLite connection to the control database -- and a stress
+    # run that produced a genuine, permanent freeze (see the comment on
+    # `PRAGMA wal_autocheckpoint` in database/manager.py's `_open`) caught it
+    # doing that blocking open/close synchronously on the event loop, not in
+    # a worker thread the way every other blocking database call in this
+    # codebase is written. The checkpoint fix addresses the freeze this
+    # specific load produced; offloading this call is the independent,
+    # always-correct half: a dependency that runs before FastAPI has even
+    # resolved the route must not be the one place blocking I/O bypasses the
+    # thread pool, because when it blocks here, it blocks the loop that every
+    # other connection -- including ones touching no database at all --
+    # depends on to be scheduled at all. The three siblings below
+    # (`get_user_changing_password`, `get_platform_admin`,
+    # `get_platform_admin_enrolling`) call the same blocking function on the
+    # same event loop and get the same fix for the same reason.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
@@ -1546,7 +1567,11 @@ async def get_user_changing_password(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Offloaded to a worker thread for the same reason as `get_current_user`
+    # above -- see its comment.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
@@ -1576,7 +1601,11 @@ async def get_platform_admin(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Offloaded to a worker thread for the same reason as `get_current_user`
+    # above -- see its comment.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
@@ -1639,7 +1668,11 @@ async def get_platform_admin_enrolling(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Offloaded to a worker thread for the same reason as `get_current_user`
+    # above -- see its comment.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
