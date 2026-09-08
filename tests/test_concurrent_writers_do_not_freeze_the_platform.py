@@ -162,3 +162,81 @@ def test_a_burst_of_writers_to_one_row_clears_in_bounded_time(platform):
         ).fetchone()
 
     assert row["notes"] is not None, "not one of the thirty writers ever won"
+
+
+def test_connection_open_and_close_are_serialized(platform):
+    """A third mitigation for the same freeze, after the first two turned out
+    not to be the whole story.
+
+    `wal_autocheckpoint = 0` (the test above this one) closed one path to the
+    live freeze but not all of it: under *sustained*, moderate,
+    *reconnecting* load -- not one short violent burst -- against a real
+    server with that fix already applied, the platform wedged again. py-spy
+    caught worker threads stuck inside `sqlcipher.connect(...)` and inside
+    `connection.close()` at the same time, unmoving across repeated dumps
+    seconds apart, with the rest of the process starved alongside them.
+    Calling the same service functions directly from plain Python threads, at
+    a higher call rate than the load that triggered it, could not reproduce
+    it -- pointing at something about real OS thread creation and teardown
+    under the ASGI server's own pool, not at call volume in isolation, which
+    is not something this test can force either.
+
+    What it can pin is the fix: `DatabaseManager._connect_lock` makes it
+    structurally impossible for two threads to be inside `_open` or the close
+    in `_held` at the same time, whatever the exact native mechanism was.
+    This drives many threads through open-then-close as fast as they can,
+    across both `control()` and `tenant()`, and asserts the burst finishes in
+    bounded time -- not that any one native call was slow, which this
+    process's own threads can't observe from outside the C extension, but
+    that the *lock exists and every call still gets through it*.
+    """
+    manager = platform["manager"]
+    alpha_id = _alpha(platform)
+    beta_id = platform["companies"]["beta"]["id"]
+
+    assert isinstance(manager._connect_lock, type(threading.Lock())), (
+        "DatabaseManager has no _connect_lock serializing connection open "
+        "and close -- see this test's docstring for the live freeze that "
+        "exists to prevent."
+    )
+
+    WORKERS = 30
+    ROUNDS = 20
+    errors: list[BaseException] = []
+    start = time.monotonic()
+
+    def _churn(n: int) -> None:
+        try:
+            for i in range(ROUNDS):
+                company_id = alpha_id if (n + i) % 2 == 0 else beta_id
+                with manager.tenant(company_id) as conn:
+                    conn.execute("SELECT 1").fetchone()
+                with manager.control() as conn:
+                    conn.execute("SELECT 1").fetchone()
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_churn, args=(n,)) for n in range(WORKERS)]
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join(timeout=30)
+
+    assert not any(thread.is_alive() for thread in threads), (
+        f"a connection-churn thread never finished after {WORKERS} threads x "
+        f"{ROUNDS} open/close rounds each -- the exact shape of the live "
+        "freeze this test exists to catch."
+    )
+
+    assert not errors, f"connection churn raised: {errors[0]!r}"
+
+    elapsed = time.monotonic() - start
+
+    assert elapsed < 20, (
+        f"{WORKERS} threads x {ROUNDS} rounds of open+close on two files took "
+        f"{elapsed:.2f}s. Serializing open/close trades some throughput for "
+        "safety, but this should still be fast -- if it is not, the lock "
+        "itself may have become the bottleneck rather than the fix."
+    )
