@@ -147,7 +147,8 @@ def test_one_companys_block_does_not_reach_another(platform, alpha, beta, monkey
     assert result["status"] != "ignored"
 
 
-def test_blocking_an_unknown_customer_raises(platform, alpha):
+def test_blocking_an_unknown_customer_raises(platform, alpha, monkeypatch):
+    _wire(platform, monkeypatch)
     from backend.services.customer_service import customer_service
 
     with pytest.raises(KeyError):
