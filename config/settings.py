@@ -219,6 +219,26 @@ class AppConfig:
     # writes and possibly an outbound Graph call.
     WEBHOOK_MAX_EVENTS: int = int(os.getenv("WEBHOOK_MAX_EVENTS", "1000"))
 
+    # deploy/nginx.conf's own comment on its `tzone_api` zone says "the
+    # application enforces its own ceilings independently... a deployment that
+    # never sees nginx must still be bounded" -- a promise the application did
+    # not keep. Login has its own database-backed lock (auth_service), and a
+    # handful of individual routes cap their own concurrency, but nothing
+    # bounded the rest of the API. Kept numerically equal to nginx's own
+    # tzone_api zone (deploy/nginx.conf) so the two layers agree; change one,
+    # change the other.
+    API_RATE_LIMIT_PER_MINUTE: int = int(
+        os.getenv("API_RATE_LIMIT_PER_MINUTE", "600")
+    )
+    API_RATE_LIMIT_BURST: int = int(os.getenv("API_RATE_LIMIT_BURST", "120"))
+
+    # Distinct addresses tracked at once, the same reasoning as
+    # `_PROFILE_CACHE` in channels/profile.py: bounded so a flood of forged or
+    # spoofed source addresses cannot grow the bucket table without limit.
+    API_RATE_LIMIT_MAX_TRACKED_ADDRESSES: int = int(
+        os.getenv("API_RATE_LIMIT_MAX_TRACKED_ADDRESSES", "20000")
+    )
+
     # A pending batch holds the messages one customer sent while the assistant
     # waited for them to finish typing. Past this the batch is delivered as it
     # stands rather than growing without limit.

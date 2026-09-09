@@ -13,6 +13,10 @@ names and nginx's `add_header` wins on the wire, so the two do not fight.
 
 from __future__ import annotations
 
+import time
+from collections import OrderedDict
+from threading import Lock
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -158,6 +162,150 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
                     f"{limit // (1024 * 1024)} MB."
                 )
             },
+        )
+
+
+class GeneralRateLimitMiddleware(BaseHTTPMiddleware):
+    """Bound API request *rate*, the same way `BodySizeLimitMiddleware` bounds
+    request *size*: because nginx doing it is a deployment assumption, not a
+    property of the system.
+
+    `deploy/nginx.conf` already runs a `tzone_api` zone in front of every API
+    route, and its own comment says the quiet part: "the application enforces
+    its own ceilings independently... a deployment that never sees nginx must
+    still be bounded." Login backs that with a database-backed lock, a couple
+    of routes cap their own concurrency -- but nothing backed it for the API
+    as a whole. A `uvicorn main:app` reachable directly had no rate limit at
+    all.
+
+    A token bucket per client address, refilling at `API_RATE_LIMIT_PER_MINUTE`
+    and capped at `API_RATE_LIMIT_BURST` -- the same two numbers as nginx's
+    `tzone_api` zone, so the two layers agree on what "too fast" means. Kept
+    in a plain dict rather than the database: the login lock has to survive a
+    restart and be visible platform-wide, this does not -- it exists to blunt
+    a flood in the seconds it is happening, and `uvicorn` here is a single
+    worker on purpose (see `deploy/tzone-api.service`), so in-process state is
+    the whole picture, not a partial one.
+
+    Scoped to the same path prefixes nginx meters (`/api/`, `/conversations/`,
+    `/knowledge/`, `/tickets/`, `/webhook/`) -- not the SPA's static files,
+    and not `/health`, which nginx itself exempts (`access_log off`) because
+    it is what an uptime monitor polls on a schedule the operator chose, not a
+    client that needs throttling.
+    """
+
+    METERED_PREFIXES = (
+        "/api/",
+        "/conversations/",
+        "/knowledge/",
+        "/tickets/",
+        "/webhook/",
+        "/webhook",
+    )
+
+    # Same shape as `_PROFILE_CACHE` in channels/meta/profile.py: an
+    # OrderedDict under a lock, evicted oldest-first once it grows past the
+    # tracked-address cap, so a flood of distinct (real or spoofed) source
+    # addresses cannot grow this table without bound.
+    _buckets: OrderedDict[str, list[float]] = OrderedDict()
+    _lock = Lock()
+
+    # Refused requests are logged as a security event, but not one write per
+    # refusal -- a sustained flood would turn the throttle meant to protect
+    # the database into the thing hammering it. At most one entry per address
+    # per window.
+    _LOG_COOLDOWN_SECONDS = 60.0
+
+    async def dispatch(self, request, call_next):
+        from config.settings import config
+
+        path = request.url.path
+
+        if not path.startswith(self.METERED_PREFIXES):
+            return await call_next(request)
+
+        from backend.services.auth_service import client_ip
+
+        address = client_ip(request) or "unknown"
+        capacity = float(config.API_RATE_LIMIT_BURST)
+        refill_per_second = config.API_RATE_LIMIT_PER_MINUTE / 60.0
+        now = time.monotonic()
+
+        with self._lock:
+            bucket = self._buckets.get(address)
+
+            if bucket is None:
+                # A never-seen address starts with a full bucket, exactly like
+                # nginx's `burst` -- the first requests from a new visitor are
+                # never punished for a flood that has not happened yet.
+                tokens, last_refill, last_logged = capacity, now, 0.0
+            else:
+                tokens, last_refill, last_logged = bucket
+                elapsed = max(0.0, now - last_refill)
+                tokens = min(capacity, tokens + elapsed * refill_per_second)
+
+            if tokens < 1.0:
+                self._buckets[address] = [tokens, now, last_logged]
+                self._buckets.move_to_end(address)
+                self._evict_locked()
+
+                retry_after = max(1, int((1.0 - tokens) / refill_per_second) + 1)
+                should_log = (now - last_logged) >= self._LOG_COOLDOWN_SECONDS
+
+                if should_log:
+                    self._buckets[address][2] = now
+
+            else:
+                tokens -= 1.0
+                self._buckets[address] = [tokens, now, last_logged]
+                self._buckets.move_to_end(address)
+                self._evict_locked()
+                retry_after = None
+                should_log = False
+
+        if retry_after is not None:
+            if should_log:
+                self._log_refused(address, path)
+
+            return self._refused(retry_after)
+
+        return await call_next(request)
+
+    @classmethod
+    def _evict_locked(cls) -> None:
+        from config.settings import config
+
+        limit = config.API_RATE_LIMIT_MAX_TRACKED_ADDRESSES
+
+        while len(cls._buckets) > limit:
+            cls._buckets.popitem(last=False)
+
+    @staticmethod
+    def _log_refused(address: str, path: str) -> None:
+        # Best-effort and never allowed to turn a 429 into a 500: a database
+        # hiccup while *recording* a flood must not be what breaks the
+        # response that was already refusing it.
+        try:
+            from backend.services.activity_service import activity_service
+
+            activity_service.record_unattributed(
+                action="api_rate_limited",
+                summary=f"Rate limit exceeded for {path}",
+                ip_address=None if address == "unknown" else address,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
+    @staticmethod
+    def _refused(retry_after: int):
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Too many requests. Please slow down and try again shortly."
+            },
+            headers={"Retry-After": str(retry_after)},
         )
 
 

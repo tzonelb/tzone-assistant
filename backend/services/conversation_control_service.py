@@ -226,6 +226,7 @@ class ConversationControlService:
         channel: str,
         external_user_id: str,
         channel_account_id: int | None = None,
+        customer_id: int | None = None,
     ) -> dict[str, Any]:
         """The conversation for this customer on this channel, created if new.
 
@@ -255,6 +256,12 @@ class ConversationControlService:
             else None
         )
 
+        customer_row_id = (
+            int(customer_id)
+            if customer_id is not None
+            else None
+        )
+
         with database_manager.tenant(company_id) as conn:
             row = conn.execute(
                 """
@@ -277,15 +284,25 @@ class ConversationControlService:
                 # An existing conversation predating this column, or one created
                 # before the account was known, is filled in rather than left
                 # blank — but never re-pointed, because a conversation belongs
-                # to the account it started on.
-                if account_id is not None and row["channel_account_id"] is None:
+                # to the account it started on. `customer_id` gets the same
+                # treatment: the customer record is looked up (or created) on
+                # every inbound message, but a conversation that started before
+                # `customer_service.upsert_from_channel` had run, or was never
+                # told the id, left this column NULL forever — the customer
+                # page's own "conversations" count for that person read 0
+                # always, even mid-conversation.
+                needs_account = account_id is not None and row["channel_account_id"] is None
+                needs_customer = customer_row_id is not None and row["customer_id"] is None
+                if needs_account or needs_customer:
                     conn.execute(
                         """
                         UPDATE conversations
-                        SET channel_account_id = ?, updated_at = ?
+                        SET channel_account_id = COALESCE(?, channel_account_id),
+                            customer_id = COALESCE(?, customer_id),
+                            updated_at = ?
                         WHERE id = ? AND company_id = ?
                         """,
-                        (account_id, utc_now_iso(), row["id"], company_id),
+                        (account_id, customer_row_id, utc_now_iso(), row["id"], company_id),
                     )
                     conn.commit()
 
@@ -312,6 +329,7 @@ class ConversationControlService:
                     channel,
                     external_user_id,
                     channel_account_id,
+                    customer_id,
                     status,
                     workflow_state,
                     ai_enabled,
@@ -326,6 +344,7 @@ class ConversationControlService:
                     updated_at
                 )
                 VALUES (
+                    ?,
                     ?,
                     ?,
                     ?,
@@ -349,6 +368,7 @@ class ConversationControlService:
                     normalized_channel,
                     normalized_user_id,
                     account_id,
+                    customer_row_id,
                     (
                         default_department["code"]
                         if default_department
@@ -1828,12 +1848,14 @@ class ConversationControlService:
         official_customer_name: str | None = None,
         customer_profile_picture: str | None = None,
         channel_account_id: int | None = None,
+        customer_id: int | None = None,
     ) -> dict[str, Any]:
         state = self.get_or_create(
             company_id=company_id,
             channel=channel,
             external_user_id=external_user_id,
             channel_account_id=channel_account_id,
+            customer_id=customer_id,
         )
 
         old_folder = state.get("folder", "inbox")

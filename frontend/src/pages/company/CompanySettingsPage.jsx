@@ -260,7 +260,8 @@ function BillingView() {
               <span style={{ color: "#6b7280" }}>
                 {data.subscription_status}
                 {data.expires_at ? ` · renews/expires ${data.expires_at.slice(0, 10)}` : ""}
-                {" · $"}{data.price_monthly}/mo
+                {" · "}
+                {data.price_monthly > 0 ? `$${data.price_monthly}/mo` : "Custom pricing — contact your platform administrator"}
               </span>
             </div>
           </div>
@@ -339,7 +340,11 @@ function BillingView() {
             <div key={plan.id} className="workflow-settings-card" style={isCurrent ? { borderColor: "#4f7fff", borderWidth: 2 } : undefined}>
               <div style={{ padding: "4px 0" }}>
                 <strong style={{ fontSize: 15 }}>{plan.name}</strong>
-                <div style={{ fontSize: 20, fontWeight: 700, margin: "4px 0" }}>${plan.price_monthly}<span style={{ fontSize: 13, fontWeight: 400, color: "#6b7280" }}>/mo</span></div>
+                <div style={{ fontSize: 20, fontWeight: 700, margin: "4px 0" }}>
+                  {plan.price_monthly > 0
+                    ? <>${plan.price_monthly}<span style={{ fontSize: 13, fontWeight: 400, color: "#6b7280" }}>/mo</span></>
+                    : <span style={{ fontSize: 15, fontWeight: 600 }}>Custom pricing</span>}
+                </div>
                 <ul style={{ listStyle: "none", padding: 0, margin: "8px 0", fontSize: 13, color: "#374151", lineHeight: 1.8 }}>
                   <li>{plan.max_users} users</li>
                   <li>{plan.max_channel_accounts} channels</li>

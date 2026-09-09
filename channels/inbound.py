@@ -127,6 +127,7 @@ def process_inbound_event(
         official_customer_name=effective_customer_name,
         customer_profile_picture=effective_profile_picture,
         channel_account_id=channel_account_id,
+        customer_id=customer.get("id"),
     )
 
     saved = message_service.save_message(
