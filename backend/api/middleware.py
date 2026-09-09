@@ -228,7 +228,10 @@ class GeneralRateLimitMiddleware(BaseHTTPMiddleware):
 
         address = client_ip(request) or "unknown"
         capacity = float(config.API_RATE_LIMIT_BURST)
-        refill_per_second = config.API_RATE_LIMIT_PER_MINUTE / 60.0
+        # `0` is a legitimate operator choice -- "block every metered request" --
+        # not a divide-by-zero waiting to happen: the retry-after computation
+        # below divides by this.
+        refill_per_second = max(0.0, config.API_RATE_LIMIT_PER_MINUTE) / 60.0
         now = time.monotonic()
 
         with self._lock:
@@ -249,7 +252,14 @@ class GeneralRateLimitMiddleware(BaseHTTPMiddleware):
                 self._buckets.move_to_end(address)
                 self._evict_locked()
 
-                retry_after = max(1, int((1.0 - tokens) / refill_per_second) + 1)
+                retry_after = (
+                    # A `0` rate never refills, so there is no meaningful wait
+                    # to report -- an hour is a deliberately long, clearly
+                    # "try much later" number rather than a fabricated one.
+                    3600
+                    if refill_per_second <= 0
+                    else max(1, int((1.0 - tokens) / refill_per_second) + 1)
+                )
                 should_log = (now - last_logged) >= self._LOG_COOLDOWN_SECONDS
 
                 if should_log:

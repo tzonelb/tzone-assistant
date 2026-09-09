@@ -95,3 +95,19 @@ def test_a_new_window_refills_the_bucket(client, monkeypatch):
         "the bucket never refilled -- a client that waits out the limit "
         "should be let through again"
     )
+
+
+def test_a_zero_rate_refuses_cleanly_instead_of_crashing(client, monkeypatch):
+    """API_RATE_LIMIT_PER_MINUTE=0 is a legitimate operator choice -- block
+    every metered request -- not a divide-by-zero waiting to happen in the
+    retry-after computation."""
+    from config.settings import config
+
+    monkeypatch.setattr(config, "API_RATE_LIMIT_BURST", 1)
+    monkeypatch.setattr(config, "API_RATE_LIMIT_PER_MINUTE", 0)
+
+    client.get("/api/auth/me")
+    response = client.get("/api/auth/me")
+
+    assert response.status_code == 429
+    assert int(response.headers["retry-after"]) > 0

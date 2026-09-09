@@ -88,6 +88,32 @@ logging.basicConfig(
 logger = logging.getLogger("tzone")
 
 
+def forbid_wildcard_cors_with_credentials(origins: list[str]) -> None:
+    """Refuse to start rather than serve a CORS policy that defeats itself.
+
+    Starlette's CORSMiddleware treats a literal "*" in allow_origins specially
+    once allow_credentials=True (which this API always sets): rather than send
+    the literal wildcard -- which browsers refuse to honour on a credentialed
+    request anyway -- it reflects whatever Origin the request actually
+    carried, with Access-Control-Allow-Credentials: true attached. That is not
+    "CORS disabled"; it is CORS actively telling every browser that every
+    origin may make credentialed requests and read the response, which for a
+    cookie-authenticated API means any site a signed-in employee visits could
+    read their whole inbox with nothing more than a fetch() call. Session
+    writes stay behind the CSRF cookie regardless, but reads do not.
+
+    Checked here, at startup, rather than left to whichever operator later
+    sets CORS_ORIGINS=* to make a CORS error on their own laptop go away.
+    """
+    if "*" in origins:
+        raise RuntimeError(
+            "CORS_ORIGINS contains \"*\", which combined with credentialed "
+            "requests (always on for this API) means any website a signed-in "
+            "user visits can read their data. List the real origin(s) this "
+            "platform is served from instead."
+        )
+
+
 # The background jobs live in `backend/workers.py`. Imported by name rather
 # than with a star, so this file lists in one place exactly what the process
 # runs on a timer — and so that removing a worker breaks the import here
@@ -263,6 +289,8 @@ app.add_middleware(BodySizeLimitMiddleware)
 # preflight never sends the real one — so a CSRF refusal here would be reported
 # to the page as a network failure with no explanation.
 app.add_middleware(SessionCookieMiddleware)
+
+forbid_wildcard_cors_with_credentials(config.CORS_ORIGINS)
 
 app.add_middleware(
     CORSMiddleware,
