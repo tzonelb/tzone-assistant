@@ -19,7 +19,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -49,8 +49,10 @@ from backend.services.conversation_control_service import (
 )
 from backend.services.business_department_service import business_department_service
 from backend.services.channel_account_service import SUPPORTED_CHANNELS
+from backend.services import conversation_share_service, mailer, transcript_service
 from backend.services.message_service import message_service
 from backend.services.stream_access import may_continue
+from config.settings import config
 from database.manager import DatabaseError, database_manager
 
 
@@ -79,6 +81,7 @@ class ConversationControlUpdate(BaseModel):
     tags: list[str] | None = None
     clear_assignment: bool | None = None
     is_unread: bool | None = None
+    is_spam: bool | None = None
 
 
 class ConversationReminderRequest(BaseModel):
@@ -754,6 +757,7 @@ def update_control(
         tags=payload.tags,
         clear_assignment=payload.clear_assignment,
         is_unread=payload.is_unread,
+        is_spam=payload.is_spam,
     )
 
     assigned_user_id = conversation.get("assigned_user_id")
@@ -1141,3 +1145,122 @@ def export_conversation(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ----------------------------------------------------------------------
+# Share link and email -- send the transcript somewhere, rather than
+# download it. Same `conversations.view` gate as export, since both are the
+# same underlying act: taking a copy of the conversation off the platform.
+# ----------------------------------------------------------------------
+
+
+class ShareLinkCreate(BaseModel):
+    scope: Literal["chat", "full"] = "chat"
+
+
+class EmailExportRequest(BaseModel):
+    to: EmailStr
+    scope: Literal["chat", "full"] = "chat"
+
+
+@router.post("/{channel}/{user_id}/share-link", status_code=status.HTTP_201_CREATED)
+def create_share_link(
+    channel: str,
+    user_id: str,
+    payload: ShareLinkCreate,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    timeline_result = conversation_control_service.timeline(
+        company_id=company_id, channel=channel, external_user_id=user_id
+    )
+    if timeline_result is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    try:
+        link = conversation_share_service.create_link(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=user_id,
+            scope=payload.scope,
+            created_by_user_id=current_user.get("id"),
+        )
+    except conversation_share_service.ShareLinkError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CONVERSATION_EXPORTED,
+        category="conversations",
+        kind="read",
+        target_type="conversation",
+        target_id=f"{channel}:{user_id}",
+        summary=f"Created a share link for a {channel} conversation",
+        severity="notice",
+        after={"scope": payload.scope},
+        ip_address=client_ip(request),
+    )
+
+    base = str(config.APP_PUBLIC_URL or "").rstrip("/")
+    return {
+        "url": f"{base}/api/share/conversation/{link['token']}",
+        "expires_at": link["expires_at"],
+        "scope": link["scope"],
+    }
+
+
+@router.post("/{channel}/{user_id}/email-export")
+def email_conversation_export(
+    channel: str,
+    user_id: str,
+    payload: EmailExportRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    text = transcript_service.build_transcript_text(
+        company_id=company_id,
+        channel=channel,
+        external_user_id=user_id,
+        scope=payload.scope,
+    )
+    if text is None:
+        raise HTTPException(status_code=404, detail="Conversation not found.")
+
+    try:
+        mailer.assert_configured()
+    except mailer.MailerNotConfigured as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+
+    result = mailer.send(
+        to=str(payload.to),
+        subject=f"{_company_name(company_id)} conversation transcript",
+        body=text,
+    )
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=result.reason or "The email could not be sent.",
+        )
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CONVERSATION_EXPORTED,
+        category="conversations",
+        kind="read",
+        target_type="conversation",
+        target_id=f"{channel}:{user_id}",
+        summary=f"Emailed a {channel} conversation transcript",
+        severity="notice",
+        after={"scope": payload.scope, "to": str(payload.to)},
+        ip_address=client_ip(request),
+    )
+
+    return {"sent": True}

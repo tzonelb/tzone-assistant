@@ -21,6 +21,7 @@ from typing import Any, Callable
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from starlette.concurrency import run_in_threadpool
 
 from config.settings import config
 from database.manager import database_manager
@@ -670,6 +671,7 @@ class AuthService:
                     auth_sessions.id AS session_id,
                     auth_sessions.expires_at,
                     auth_sessions.revoked_at,
+                    auth_sessions.last_used_at,
                     auth_sessions.company_id AS active_company_id,
                     auth_sessions.scope AS session_scope,
                     users.*
@@ -698,11 +700,45 @@ class AuthService:
             except (TypeError, ValueError):
                 return None
 
-            conn.execute(
-                "UPDATE auth_sessions SET last_used_at = ? WHERE id = ?",
-                (utc_now_iso(), data["session_id"]),
-            )
-            conn.commit()
+            # Every protected route depends on this call, directly or through
+            # require_permission -- so before this check, "last active" was
+            # written on every single request against every session, for
+            # every company on the platform: a poll, an SSE reconnect, a page
+            # of a list, all the same as a real action. That is a write to
+            # the control database's single-writer file on the hot path of
+            # everything, and it is where a live overload test (~330
+            # concurrent workers, most of them authenticated) traced back to:
+            # dozens of worker threads piled up waiting on this one UPDATE,
+            # and once the shared thread pool that offloads this call (see
+            # get_current_user's own comment) filled with those, unrelated
+            # routes that touch no database at all -- /health/ among them --
+            # were starved of a thread too and stopped answering.
+            #
+            # "Last active" is a courtesy line on a settings screen
+            # (`s.last_used_at` in UISettingsPage.jsx), not something anything
+            # security-relevant reads at request granularity -- revocation is
+            # its own column, checked above, not inferred from staleness here.
+            # A minute of slack is invisible there and turns "every request"
+            # into "at most once a minute per session," independent of how
+            # many requests that session makes in between.
+            last_used_at = data.get("last_used_at")
+            stale = True
+
+            if last_used_at:
+                try:
+                    parsed = datetime.fromisoformat(last_used_at)
+                    if parsed.tzinfo is None:
+                        parsed = parsed.replace(tzinfo=timezone.utc)
+                    stale = (now - parsed) >= timedelta(minutes=1)
+                except (TypeError, ValueError):
+                    stale = True
+
+            if stale:
+                conn.execute(
+                    "UPDATE auth_sessions SET last_used_at = ? WHERE id = ?",
+                    (utc_now_iso(), data["session_id"]),
+                )
+                conn.commit()
 
             safe_user = self.sanitize_user(data)
             safe_user["session_scope"] = data.get("session_scope") or COMPANY_SCOPE
@@ -730,6 +766,79 @@ class AuthService:
                 WHERE user_id = ? AND revoked_at IS NULL
                 """,
                 (utc_now_iso(), user_id),
+            )
+            conn.commit()
+            return cursor.rowcount
+
+    def list_user_sessions(
+        self, user_id: int, *, current_token: str | None = None
+    ) -> list[dict[str, Any]]:
+        """The user's own live sessions, for the "where am I signed in" screen.
+
+        Only live ones (not revoked, not expired), and never the token itself --
+        the row identifies a session by where and when it signed in, which is
+        what a person needs to recognise a device they do not own. The session
+        the caller is using is flagged so the screen can label it and refuse to
+        let them cut off the branch they are sitting on by accident.
+        """
+        current_hash = self.hash_token(current_token) if current_token else None
+        now = utc_now_iso()
+        with database_manager.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, token_hash, ip_address, user_agent,
+                       created_at, last_used_at, expires_at
+                FROM auth_sessions
+                WHERE user_id = ?
+                  AND revoked_at IS NULL
+                  AND expires_at > ?
+                ORDER BY last_used_at DESC
+                """,
+                (int(user_id), now),
+            ).fetchall()
+
+        sessions = []
+        for row in rows:
+            data = dict(row)
+            is_current = current_hash is not None and data["token_hash"] == current_hash
+            data.pop("token_hash", None)
+            data["current"] = is_current
+            sessions.append(data)
+        return sessions
+
+    def revoke_session(self, *, user_id: int, session_id: int) -> bool:
+        """End one session, but only if it belongs to this user.
+
+        The user id is in the WHERE clause, not just the file that was opened,
+        so a session id guessed from another account matches nothing and revokes
+        nothing rather than signing a stranger out.
+        """
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = ?
+                WHERE id = ? AND user_id = ? AND revoked_at IS NULL
+                """,
+                (utc_now_iso(), int(session_id), int(user_id)),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def revoke_other_sessions(self, *, user_id: int, current_token: str) -> int:
+        """Sign out every device except the one making this request.
+
+        "Sign out everywhere else" after a scare, without logging yourself out.
+        """
+        current_hash = self.hash_token(current_token)
+        with database_manager.control() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE auth_sessions
+                SET revoked_at = ?
+                WHERE user_id = ? AND revoked_at IS NULL AND token_hash != ?
+                """,
+                (utc_now_iso(), int(user_id), current_hash),
             )
             conn.commit()
             return cursor.rowcount
@@ -1416,7 +1525,27 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Every protected route in the app depends on this, directly or through
+    # `require_permission`, which makes it the one dependency guaranteed to
+    # run on every authenticated request. `get_user_from_token` opens and
+    # closes a real SQLite connection to the control database -- and a stress
+    # run that produced a genuine, permanent freeze (see the comment on
+    # `PRAGMA wal_autocheckpoint` in database/manager.py's `_open`) caught it
+    # doing that blocking open/close synchronously on the event loop, not in
+    # a worker thread the way every other blocking database call in this
+    # codebase is written. The checkpoint fix addresses the freeze this
+    # specific load produced; offloading this call is the independent,
+    # always-correct half: a dependency that runs before FastAPI has even
+    # resolved the route must not be the one place blocking I/O bypasses the
+    # thread pool, because when it blocks here, it blocks the loop that every
+    # other connection -- including ones touching no database at all --
+    # depends on to be scheduled at all. The three siblings below
+    # (`get_user_changing_password`, `get_platform_admin`,
+    # `get_platform_admin_enrolling`) call the same blocking function on the
+    # same event loop and get the same fix for the same reason.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
@@ -1473,7 +1602,11 @@ async def get_user_changing_password(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Offloaded to a worker thread for the same reason as `get_current_user`
+    # above -- see its comment.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
@@ -1503,7 +1636,11 @@ async def get_platform_admin(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Offloaded to a worker thread for the same reason as `get_current_user`
+    # above -- see its comment.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(
@@ -1566,7 +1703,11 @@ async def get_platform_admin_enrolling(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = auth_service.get_user_from_token(credentials.credentials)
+    # Offloaded to a worker thread for the same reason as `get_current_user`
+    # above -- see its comment.
+    user = await run_in_threadpool(
+        auth_service.get_user_from_token, credentials.credentials
+    )
 
     if not user:
         raise HTTPException(

@@ -75,6 +75,16 @@ def parse_whatsapp_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
     anything past that is counted and logged rather than dropped quietly: one
     signed body must not be able to turn into unbounded work.
     """
+    if not isinstance(payload, dict):
+        # Reproduced live: a syntactically valid but wrongly-shaped body (a
+        # bare JSON array, string, number, `null`, ...) passes signature
+        # verification -- valid JSON is not the same claim as "is an object"
+        # -- and `payload.get(...)` on anything but a dict raised an
+        # unhandled AttributeError here, turning a malformed delivery into a
+        # 500. The Meta parser already guards the same way for the same
+        # reason; this sibling parser had drifted from that pattern.
+        return []
+
     events: list[dict[str, Any]] = []
     cap = event_limit()
     dropped = 0

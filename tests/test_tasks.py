@@ -710,6 +710,59 @@ def test_an_assignee_from_another_company_is_refused(service, alpha, employees):
 # ----------------------------------------------------------------------
 
 
+def _insert_conversation(platform, company, *, external_user_id="cust-1"):
+    from database.manager import utc_now_iso
+
+    now = utc_now_iso()
+
+    with platform["manager"].tenant(company["id"]) as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO conversations (
+                company_id, channel, external_user_id, created_at, updated_at
+            )
+            VALUES (?, 'messenger', ?, ?, ?)
+            """,
+            (company["id"], external_user_id, now, now),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def test_a_conversation_id_from_another_company_is_refused(service, platform, alpha, beta):
+    """A task can be linked to "the conversation this came from". That id is
+    scoped to one company's own database the same way a quote's customer_id
+    or an appointment's conversation_id is, and nothing stopped a caller from
+    writing an id that belongs to nobody, or to another company, straight into
+    the tenant's own `tickets.conversation_id` column."""
+    beta_conversation_id = _insert_conversation(platform, beta)
+
+    with pytest.raises(ValueError):
+        service.create_task(
+            company_id=alpha["id"],
+            data={"title": "Follow up", "conversation_id": beta_conversation_id},
+        )
+
+
+def test_a_conversation_id_that_does_not_exist_is_refused(service, alpha):
+    with pytest.raises(ValueError):
+        service.create_task(
+            company_id=alpha["id"],
+            data={"title": "Follow up", "conversation_id": 999999},
+        )
+
+
+def test_a_real_conversation_id_is_accepted(service, platform, alpha):
+    conversation_id = _insert_conversation(platform, alpha)
+
+    task = service.create_task(
+        company_id=alpha["id"],
+        data={"title": "Follow up", "conversation_id": conversation_id},
+    )
+
+    assert task["conversation_id"] == conversation_id
+
+
 def test_an_assistant_ticket_still_creates_and_reads_back(service, alpha):
     """`core/engine.py` creates a ticket with no title and shows the returned id
     to the customer. Adding task columns must not change that contract or the

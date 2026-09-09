@@ -52,7 +52,31 @@ from database.schema_tenant import (
 CONTROL_FILENAME = "control.db"
 TENANT_DIRNAME = "tenants"
 
-BUSY_TIMEOUT_MS = 15_000
+
+# How long a writer waits for a lock another connection holds before giving up.
+#
+# This used to be 15 seconds, and 15 seconds is what a real incident cost:
+# see tests/test_audit_write_does_not_block_its_caller.py -- one stalled write
+# held the control database's lock long enough to stall every other write on
+# the platform, on one company's plan-limit refusal with no concurrency at
+# all. The single-worker deployment (deploy/tzone-api.service) makes that
+# worse, not better: there is no second worker to answer other companies
+# while one thread waits, and every blocking database call -- reads and
+# writes alike, on any tenant -- shares the same process-wide thread pool.
+# Enough concurrent writers contending for one row can exhaust it, and once
+# it is exhausted even a request that touches no database at all (a static
+# asset) queues behind them, because serving it also needs a thread from that
+# same pool. Reproduced live: 30 concurrent writers to a single conversation
+# row froze the server for every request, including plain GET /login.
+#
+# 3 seconds is still generous for the genuine case this exists to serve --
+# two employees editing the same conversation within the same second -- and
+# it bounds how long a burst of writers can hold a thread each hostage. A
+# write that is still waiting after 3 seconds fails with a clear error
+# instead of silently freezing the platform for everyone else; nothing here
+# retries that failure gracefully today, which is the next thing to fix, not
+# a reason to leave the timeout at fifteen seconds in the meantime.
+BUSY_TIMEOUT_MS = 3_000
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +136,55 @@ class DatabaseManager:
         self._key_cache: dict[int, bytes] = {}
         self._lock = threading.RLock()
         self._control_ready = False
+
+        # Guards the *lifecycle* of a connection -- opening it, and closing
+        # it -- never a query running on one. See `_open` and `_held` for why:
+        # reproduced live, twice, with two different mitigations in between.
+        # The first (this file's `PRAGMA wal_autocheckpoint = 0`, still worth
+        # keeping) closed one path to the hang but not the whole thing --
+        # under sustained, moderate, *reconnecting* load rather than one
+        # short violent burst, py-spy caught worker threads stuck inside
+        # `sqlcipher.connect(...)` and inside `connection.close()` at the
+        # same time, both unmoving across repeated dumps seconds apart, with
+        # the rest of the process starved alongside them. A hand-written
+        # reproduction that calls the same service functions directly, at
+        # higher throughput than the load that triggered it, could not
+        # reproduce it -- which points at something about real OS thread
+        # creation and teardown under the ASGI server's own thread pool, not
+        # at call volume alone, and that is not a thing this process can
+        # safely reason its way around without a much larger rewrite (a real
+        # connection pool). Serializing connect and close is the narrow,
+        # defensible fix available today: neither is a query, both are
+        # already fast, and this makes it structurally impossible for two of
+        # them to be racing each other inside the C extension at once,
+        # whatever the exact mechanism turns out to be.
+        #
+        # One lock per *file*, not one lock for the whole process. A single
+        # global lock was the first shape of this fix, and a second live load
+        # test -- much heavier, ~390 concurrent workers, most of them
+        # authenticated -- found its cost: every request touching the control
+        # database (nearly all of them, through get_current_user) queued
+        # behind every request touching any company's tenant database too,
+        # even though they share no file and never raced each other in the
+        # first place. Company Alpha's writers, Company Beta's writers, and
+        # every request's own control-database lookup now each wait only on
+        # the lock for the one file they are actually opening or closing --
+        # the safety property (no two connections to the *same* file racing
+        # through connect/close) is unchanged, only the blast radius is.
+        self._connect_locks: dict[str, threading.Lock] = {}
+        self._connect_locks_guard = threading.Lock()
+
+    def _lock_for(self, path: Path) -> threading.Lock:
+        key = str(path)
+
+        with self._connect_locks_guard:
+            lock = self._connect_locks.get(key)
+
+            if lock is None:
+                lock = threading.Lock()
+                self._connect_locks[key] = lock
+
+            return lock
 
     # ------------------------------------------------------------------
     # Key handling
@@ -183,37 +256,77 @@ class DatabaseManager:
     # ------------------------------------------------------------------
 
     def _open(self, path: Path, key: bytes):
-        connection = sqlcipher.connect(
-            str(path),
-            timeout=BUSY_TIMEOUT_MS / 1000,
-            check_same_thread=False,
-        )
-        connection.row_factory = sqlcipher.Row
+        # The whole body, not just `connect()`: see `_lock_for`'s comment in
+        # `__init__` for the live freeze this closes. Everything below is
+        # per-connection setup, not shared query work, so holding this lock
+        # here never blocks a query running on some other, already-open
+        # connection -- only another connection's own open or close, and
+        # only one to this same file.
+        with self._lock_for(path):
+            connection = sqlcipher.connect(
+                str(path),
+                timeout=BUSY_TIMEOUT_MS / 1000,
+                check_same_thread=False,
+            )
+            connection.row_factory = sqlcipher.Row
 
-        # PRAGMA key must be the first statement on the connection; anything
-        # before it operates on an unkeyed database and fails.
-        connection.execute(f"PRAGMA key = \"{keyring.sqlcipher_key_literal(key)}\"")
+            # PRAGMA key must be the first statement on the connection;
+            # anything before it operates on an unkeyed database and fails.
+            connection.execute(
+                f"PRAGMA key = \"{keyring.sqlcipher_key_literal(key)}\""
+            )
 
-        try:
-            connection.execute("PRAGMA foreign_keys = ON")
-            connection.execute("PRAGMA journal_mode = WAL")
-            connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+            try:
+                connection.execute("PRAGMA foreign_keys = ON")
+                connection.execute("PRAGMA journal_mode = WAL")
 
-            # Forces SQLCipher to decrypt a page. A wrong key is only detected
-            # on first read, so without this the failure surfaces later as an
-            # unrelated-looking query error.
-            connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
-        except sqlcipher.Error as exc:
-            connection.close()
-            raise DatabaseError(
-                f"Could not decrypt {path.name}. The key does not match this "
-                "file, or the file is not a SQLCipher database."
-            ) from exc
+                # Reproduced live, and worse than the write-contention freeze
+                # BUSY_TIMEOUT_MS exists for: a stress run of ~160 concurrent
+                # writers plus held-open SSE connections against these two
+                # files left the whole process permanently wedged -- not
+                # slow, dead -- with zero CPU across every thread and py-spy
+                # showing the event loop itself (get_current_user ->
+                # get_user_from_token -> control()) parked forever inside
+                # connection.close(), while other threads spun on the GIL
+                # futex trying and failing to make any progress at all. Only
+                # a kill -9 recovered it.
+                #
+                # Every call here opens a brand-new connection and closes it
+                # again -- there is no pool. In WAL mode, SQLite's default
+                # (wal_autocheckpoint = 1000 pages) means a commit or a close
+                # can itself try to run a checkpoint, which needs to briefly
+                # become the only reader/writer of the file. With this many
+                # short-lived connections opening and closing at once against
+                # one file, that checkpoint attempt is where the pile-up
+                # happens: a close is not supposed to be able to out-wait
+                # BUSY_TIMEOUT_MS the way a write is, so this is the one
+                # place that guarantee did not hold.
+                #
+                # Turning automatic checkpointing off here does not stop the
+                # WAL from being checkpointed -- it moves the job to one
+                # explicit, infrequent PASSIVE checkpoint in the maintenance
+                # worker (see backend/workers.py), run one connection at a
+                # time instead of by whichever of a hundred concurrent
+                # connections happens to cross the page threshold first.
+                connection.execute("PRAGMA wal_autocheckpoint = 0")
 
-        return connection
+                connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+
+                # Forces SQLCipher to decrypt a page. A wrong key is only
+                # detected on first read, so without this the failure
+                # surfaces later as an unrelated-looking query error.
+                connection.execute("SELECT count(*) FROM sqlite_master").fetchone()
+            except sqlcipher.Error as exc:
+                connection.close()
+                raise DatabaseError(
+                    f"Could not decrypt {path.name}. The key does not match "
+                    "this file, or the file is not a SQLCipher database."
+                ) from exc
+
+            return connection
 
     @contextmanager
-    def _held(self, connection) -> Iterator[Any]:
+    def _held(self, connection, path: Path) -> Iterator[Any]:
         """Yield a connection, and run the deferred work once it is let go.
 
         The counting is what makes `after_release` possible. See that method
@@ -227,7 +340,19 @@ class DatabaseManager:
         try:
             yield connection
         finally:
-            connection.close()
+            # Locked for the same reason `_open` is locked -- see `_lock_for`'s
+            # comment in `__init__`. Only the close itself, and only against
+            # this same file: a deferred callback below may open its own
+            # connection (to this file or another) on this same thread, and
+            # a lock this code already holds must never be one it also waits
+            # on -- `_lock_for` hands out a plain, non-reentrant Lock per
+            # path, so that only holds if the callback's path matches this
+            # one, which `after_release`'s own contract already forbids (see
+            # its docstring: it exists precisely because opening the same
+            # file this thread already has open deadlocks).
+            with self._lock_for(path):
+                connection.close()
+
             _open.depth = _depth() - 1
 
             if _depth() == 0:
@@ -285,7 +410,7 @@ class DatabaseManager:
             _derive_control_key(self.master_key()),
         )
 
-        with self._held(connection) as conn:
+        with self._held(connection, self._control_path) as conn:
             yield conn
 
     @contextmanager
@@ -301,7 +426,7 @@ class DatabaseManager:
 
         connection = self._open(path, self.company_key(company_id))
 
-        with self._held(connection) as conn:
+        with self._held(connection, path) as conn:
             yield conn
 
     def tenant_path(self, company_id: int) -> Path:
@@ -405,7 +530,12 @@ class DatabaseManager:
 
             connection.commit()
         finally:
-            connection.close()
+            # One-time boot-time setup, gated by `_control_ready` above, so
+            # this is never actually contended -- locked anyway so "every
+            # close goes through `_lock_for`" stays true without an
+            # exception to remember.
+            with self._lock_for(self._control_path):
+                connection.close()
 
     @staticmethod
     def _create_tenant_tables(connection) -> None:

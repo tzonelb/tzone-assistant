@@ -159,6 +159,7 @@ class Action:
 
     CUSTOMER_CREATED = "customers.created"
     CUSTOMER_UPDATED = "customers.updated"
+    CUSTOMER_BLOCKED = "customers.blocked"
 
     # --- reads, kept apart from changes
     CONVERSATION_OPENED = "conversations.opened"

@@ -640,6 +640,39 @@ def test_one_company_cannot_modify_anothers_appointments(service, alpha, beta):
     assert untouched["starts_at"] == "2026-09-14T10:00:00+00:00"
 
 
+def _insert_customer(platform, company, name):
+    with platform["manager"].tenant(company["id"]) as conn:
+        cursor = conn.execute(
+            "INSERT INTO customers (company_id, display_name, first_seen_at,"
+            " last_seen_at, created_at, updated_at)"
+            " VALUES (?, ?, datetime('now'), datetime('now'),"
+            "         datetime('now'), datetime('now'))",
+            (company["id"], name),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def test_a_customer_id_from_another_company_is_refused(service, platform, alpha, beta):
+    """Reproduced live: a company's own screen only ever offers its own
+    customers, but the endpoint took the id on trust, the same gap
+    `_require_staff`'s own docstring already describes for staff_user_id.
+    Customers live in the tenant file, not the shared control database, so
+    nothing crosses the tenant boundary here -- but the booking still ends
+    up pointing at an id that means nothing in its own company's data."""
+    foreign_customer_id = _insert_customer(platform, beta, "Beta Customer")
+
+    with pytest.raises(ValueError):
+        book(service, alpha, customer_id=foreign_customer_id)
+
+
+def test_a_real_customer_is_accepted(service, platform, alpha):
+    customer_id = _insert_customer(platform, alpha, "Alpha Customer")
+
+    booked = book(service, alpha, customer_id=customer_id)
+    assert booked["customer_id"] == customer_id
+
+
 def test_the_same_slot_can_be_booked_by_each_company(service, alpha, beta):
     """The defect: an overlap check that reached across databases would let one
     company's fully booked day block another company's calendar entirely."""

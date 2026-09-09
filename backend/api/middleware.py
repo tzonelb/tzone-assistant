@@ -113,10 +113,20 @@ class BodySizeLimitMiddleware(BaseHTTPMiddleware):
         received = 0
         too_large = False
 
+        # Capture the ORIGINAL receive before replacing it. `request.receive`
+        # is a property that returns `request._receive`, so reading it *after*
+        # the assignment below would return `capped_receive` itself -- the
+        # wrapper would call itself instead of the real stream, and the body
+        # would never reach the endpoint. That is exactly the "There was an
+        # error parsing the body" failure this caused on every POST (login
+        # included): the route saw an empty body. Binding the original here is
+        # what makes the wrapper pass the bytes through.
+        original_receive = request._receive  # noqa: SLF001
+
         async def capped_receive():
             nonlocal received, too_large
 
-            message = await request.receive()
+            message = await original_receive()
 
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))

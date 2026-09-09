@@ -13,6 +13,7 @@ import logging
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
+import anyio.to_thread
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -22,6 +23,8 @@ from backend.api.errors import install_error_handlers
 from backend.api.routes import (
     activity,
     ai_teaching,
+    ai_instructions,
+    reply_flows,
     analytics,
     appointments,
     auth,
@@ -30,12 +33,15 @@ from backend.api.routes import (
     calls,
     catalogue,
     channels,
+    channel_oauth,
+    conversation_share,
     comments,
     company_settings,
     conversation_tags,
     media_uploads,
     saved_replies,
     conversations,
+    quotes,
     customers,
     dashboard,
     developer_center,
@@ -94,8 +100,32 @@ from backend.workers import (  # noqa: E402
 )
 
 
+# How many blocking calls -- every sync `def` route, and every call this
+# codebase explicitly offloads with `run_in_threadpool` -- may run at once.
+# anyio's own default (40) is sized for a process that expects to run
+# several workers behind a load balancer; this one runs exactly one, by
+# design (see deploy/tzone-api.service), so it alone has to absorb whatever
+# concurrent request volume the platform receives.
+#
+# Reproduced live: a ~330-worker load test, most of it authenticated
+# requests, piled up dozens of threads waiting inside get_user_from_token
+# (see its own comment on the write that used to happen on every single
+# request) and filled the pool. Once it was full, /health/ -- a route with
+# no database call at all -- stopped answering too, because serving it also
+# needs a thread from the same exhausted pool. Throttling that write cut
+# the *rate* of blocking calls; this raises the *ceiling* on how many may
+# be in flight together, which is the complementary fix -- the rate fix
+# lowers how often the pool fills, this one raises how much load it takes
+# to fill it in the first place.
+THREAD_POOL_CAPACITY = 200
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    anyio.to_thread.current_default_thread_limiter().total_tokens = (
+        THREAD_POOL_CAPACITY
+    )
+
     try:
         database_manager.master_key()
     except KeyringError as exc:
@@ -304,7 +334,10 @@ def _module_unpaid_too(key: str) -> list:
 app.include_router(dashboard.router, dependencies=_module_unpaid_too("dashboard"))
 app.include_router(analytics.router, dependencies=_module("analytics"))
 app.include_router(ai_teaching.router, dependencies=_module("ai_teaching"))
+app.include_router(ai_instructions.router, dependencies=_module("ai_teaching"))
+app.include_router(reply_flows.router, dependencies=_module("ai_teaching"))
 app.include_router(conversations.router, dependencies=_module("conversations"))
+app.include_router(quotes.router, dependencies=_module("conversations"))
 app.include_router(manual_messages.router, dependencies=_module("conversations"))
 app.include_router(conversation_tags.router, dependencies=_module("conversations"))
 app.include_router(saved_replies.router, dependencies=_module("conversations"))
@@ -322,6 +355,15 @@ app.include_router(customers.router, dependencies=_module("customers"))
 app.include_router(customers.segments_router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))
+# Not behind the module gate: its callback is a top-level redirect from
+# facebook.com carrying no session cookie, so the gate (which resolves the
+# company from the session) cannot run there. The company is proven by the
+# signed OAuth state instead, and config/start carry their own permission deps.
+app.include_router(channel_oauth.router)
+# Not behind the module gate either: whoever opens a share link sent to them
+# has no session on this platform at all. The signed token in the path is the
+# only credential, verified by conversation_share_service.resolve.
+app.include_router(conversation_share.router)
 # Broadcast is a channels feature: it speaks to customers over the same
 # connected accounts, under the same `channels.view` / `channels.manage`
 # permissions. It gets its own module switch because an operator can sell
@@ -388,7 +430,7 @@ app.include_router(telegram_webhook.router)
 # browser. The API routers are all registered above, so they still answer their
 # own paths; only what they do not claim falls through to the interface.
 _API_PREFIXES = (
-    "api/", "conversations", "webhook", "health", "knowledge", "tickets",
+    "api/", "webhook", "health",
 )
 _DIST = Path(__file__).resolve().parent / "frontend" / "dist"
 

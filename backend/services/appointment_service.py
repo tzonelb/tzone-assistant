@@ -363,6 +363,34 @@ class AppointmentService:
             conn.execute("BEGIN IMMEDIATE")
 
             try:
+                # Unlike staff_user_id and branch_id above, these ids cannot
+                # reach another company's row -- customers and conversations
+                # live in this same tenant file, not the shared control
+                # database -- but an unchecked one still lands as a dangling
+                # reference inside this company's own data: a customer_id
+                # nothing in this file's customers table answers to.
+                if customer_id:
+                    exists = conn.execute(
+                        "SELECT 1 FROM customers WHERE id = ? AND company_id = ? LIMIT 1",
+                        (int(customer_id), company_id),
+                    ).fetchone()
+                    if not exists:
+                        conn.rollback()
+                        raise ValueError(
+                            "That customer does not belong to this company."
+                        )
+
+                if conversation_id:
+                    exists = conn.execute(
+                        "SELECT 1 FROM conversations WHERE id = ? AND company_id = ? LIMIT 1",
+                        (int(conversation_id), company_id),
+                    ).fetchone()
+                    if not exists:
+                        conn.rollback()
+                        raise ValueError(
+                            "That conversation does not belong to this company."
+                        )
+
                 conflict = self._find_conflict(
                     conn,
                     company_id=company_id,

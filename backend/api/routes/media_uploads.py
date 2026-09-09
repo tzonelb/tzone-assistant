@@ -96,8 +96,25 @@ async def upload_voice_note(file: UploadFile, context=Depends(reply_context)):
 
 
 @public_router.get("/{company_id}/{stored_name}")
+@public_router.head("/{company_id}/{stored_name}")
 def read_media(company_id: int, stored_name: str):
-    """Serve a stored file to whoever holds its link -- the channel, usually."""
+    """Serve a stored file to whoever holds its link -- the channel, usually.
+
+    HEAD as well as GET: this app's routes do not get HEAD for free the way
+    Starlette's static-file serving does, and a plain `.get(...)` here left a
+    HEAD request falling through every route to the SPA catch-all and coming
+    back 404 -- reproduced live. The channels this exists for (Meta, WhatsApp,
+    Telegram) fetch a delivered attachment from exactly this URL, and more
+    than one does a HEAD check first; a 404 there is indistinguishable from
+    "this attachment does not exist" to whatever is asking.
+
+    Two decorators rather than one `api_route(methods=["GET", "HEAD"])`: a
+    single route serving both methods gives FastAPI's OpenAPI generator one
+    `unique_id` for both operations (it is computed once from `route.methods`,
+    a set, not per method), which throws a duplicate-operation-id warning.
+    Two routes -- one method each -- get two unique ids and match the same
+    two paths, with no other behaviour change.
+    """
     try:
         path = media_upload_service.path_for(
             company_id=company_id, stored_name=stored_name

@@ -333,6 +333,20 @@ export async function logoutRequest() {
   });
 }
 
+export async function listSessionsRequest() {
+  return apiRequest("/api/auth/sessions");
+}
+
+export async function revokeSessionRequest(sessionId) {
+  return apiRequest(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function revokeOtherSessionsRequest() {
+  return apiRequest("/api/auth/sessions/revoke-others", { method: "POST" });
+}
+
 export async function getCurrentUserRequest() {
   const result = await apiRequest("/api/auth/me");
 
@@ -1380,6 +1394,20 @@ export async function downloadConversationExport(
   URL.revokeObjectURL(url);
 }
 
+export async function createConversationShareLinkRequest(channel, userId, scope = "chat") {
+  return apiRequest(`${conversationPath(channel, userId)}/share-link`, {
+    method: "POST",
+    body: { scope },
+  });
+}
+
+export async function emailConversationExportRequest(channel, userId, to, scope = "chat") {
+  return apiRequest(`${conversationPath(channel, userId)}/email-export`, {
+    method: "POST",
+    body: { to, scope },
+  });
+}
+
 export async function subscribeConversationEvents({
   onEvent,
   onOpen,
@@ -1575,6 +1603,18 @@ export async function updateCustomerRequest(customerId, values) {
   );
 }
 
+export async function blockCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${encodeURIComponent(customerId)}/block`, {
+    method: "POST",
+  });
+}
+
+export async function unblockCustomerRequest(customerId) {
+  return apiRequest(`/api/customers/${encodeURIComponent(customerId)}/unblock`, {
+    method: "POST",
+  });
+}
+
 export async function bulkUpdateCustomersRequest(payload) {
   return apiRequest("/api/customers/bulk-update", {
     method: "POST",
@@ -1765,6 +1805,10 @@ export async function getCompanySettingSectionRequest(section) {
   };
 }
 
+export async function getVoiceReplyStatusRequest() {
+  return apiRequest("/api/company-settings/voice/status");
+}
+
 export async function updateCompanySettingSectionRequest(section, values) {
   if (section !== "company_profile") {
     return apiRequest(`/api/company-settings/${encodeURIComponent(section)}`, {
@@ -1852,112 +1896,15 @@ export async function getMySubscriptionRequestsRequest() {
   return apiRequest("/api/billing/requests");
 }
 
-/* ------------------------------------------- secure channels panel (v2)
- *
- * `SecureChannelsPanel` is the design's Channels section, and it is drawn
- * against a subsystem this platform does not have: a six-digit email code that
- * buys a 20-minute *elevated* session (/api/security/send-code ,
- * `/verify-code`, `/changes` and an `X-Elevated-Token` header on every write),
- * plus per-provider connect flows — a WhatsApp QR pairing bridge, and direct
- * Instagram/Facebook credential logins.
- *
- * None of it exists here. What this platform has is one generic channel
- * account API: `GET /api/channels`, `POST /api/channels`, and
- * `DELETE /api/channels/{id}`, all behind `channels.view`/`channels.manage`.
- *
- * So the two calls that DO have a home here are adapted below and are real,
- * which is what lets the section draw the company's connected accounts and its
- * plan usage rather than an empty shell. The rest reject with the reason. They
- * are deliberately NOT pointed at a plausible-looking endpoint: inventing a
- * destination for a credential-handling flow is how a connect form comes to
- * report success and store nothing, and an elevated-session check comes to be
- * skipped rather than implemented. The panel's own error handling shows the
- * message.
- */
-
-/* One message, one reason, for every design control whose backend this platform
- * does not have. It rejects rather than resolving empty on purpose: a screen
- * that quietly renders "no items" for a feature that was never built is
- * indistinguishable from one whose data failed to load, and both look like a
- * feature that exists and is broken. An error the section shows says which it
- * is. No request is made — there is no endpoint to make it to, and pointing one
- * at a plausible-looking path is how a form comes to report success and store
- * nothing. */
-function notBuiltHere(what, instead = "") {
-  return Promise.reject(
-    new Error(
-      `${what} is not available on this platform yet.` +
-      (instead ? ` ${instead}` : ""),
-    ),
-  );
-}
-
-export async function listMyChannelsRequest() {
-  // Real. `/api/channels` answers `items`; the panel reads `channels`.
-  const result = await apiRequest("/api/channels");
-
-  return { ...result, channels: result?.items || [] };
-}
-
-export async function disconnectChannelRequest(accountId, elevatedToken) {
-  // Real, minus the elevated token: there is no elevated session to prove, and
-  // sending a header the server does not read would look like one existed.
-  // `channels.manage` is what actually guards this.
-  void elevatedToken;
-
-  return apiRequest(`/api/channels/${encodeURIComponent(accountId)}`, {
-    method: "DELETE",
-  });
-}
-
-export function sendVerificationCodeRequest() {
-  return notBuiltHere("Email verification for channel access",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function verifyCodeRequest() {
-  return notBuiltHere("Email verification for channel access",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function getSessionChangesRequest() {
-  return notBuiltHere("The verified-session change log",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectTelegramRequest() {
-  return notBuiltHere("Connecting Telegram from this screen",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectWhatsAppRequest() {
-  return notBuiltHere("Connecting WhatsApp Cloud from this screen",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectInstagramDirectRequest() {
-  return notBuiltHere("Connecting Instagram with a username and password",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function connectFacebookDirectRequest() {
-  return notBuiltHere("Connecting Facebook with session cookies",
-    "Connect and disconnect accounts from the Channels screen instead.");
+// Real, but only useful once a Meta app is configured on the server. The config
+// call says whether it is; the start call returns the Facebook login URL to send
+// the browser to. Until then the button that calls these is not shown.
+export function facebookOAuthConfigRequest() {
+  return apiRequest("/api/channels/oauth/facebook/config");
 }
 
 export function startFacebookOAuthRequest() {
-  return notBuiltHere("Connecting Facebook over OAuth",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function startWhatsAppQrRequest() {
-  return notBuiltHere("WhatsApp QR pairing",
-    "Connect and disconnect accounts from the Channels screen instead.");
-}
-
-export function whatsAppQrStatusRequest() {
-  return notBuiltHere("WhatsApp QR pairing",
-    "Connect and disconnect accounts from the Channels screen instead.");
+  return apiRequest("/api/channels/oauth/facebook/start", { method: "POST" });
 }
 
 /* ----------------------------------------------- support tickets (v2)
@@ -1975,6 +1922,17 @@ export async function createSupportTicketRequest(subject, description, priority)
     method: "POST",
     body: { subject, description, priority },
   });
+}
+
+/* ------------------------------------------------- Quotes (from a chat) */
+
+export async function createQuoteRequest(values) {
+  return apiRequest("/api/quotes", { method: "POST", body: values });
+}
+
+export async function listQuotesRequest(conversationId) {
+  const query = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : "";
+  return apiRequest(`/api/quotes${query}`);
 }
 
 /* ------------------------------------------------- AI Knowledge (v2)
@@ -2045,59 +2003,85 @@ export async function deleteKnowledgeEntryRequest(entryId) {
 
 /* --------------------------------- AI Instructions and Reply Flows (v2)
  *
- * Two more sections of the design's Company Settings drawn against backends
- * this platform does not have.
- *
- * `InstructionsPage` wants /api/instructions — an ordered list of behaviour
- * rules, each scoped to a department or channel, with a reorder endpoint that
- * decides which rule wins a conflict. `ReplyFlowsListPage` wants
- * /api/reply-flows — the step-by-step conversation builder.
- *
- * Neither exists here, and neither is a rename of something that does: the
- * nearest things this platform owns are the AI profile
- * (`/api/ai-teaching/profile`) and the per-channel reply policy
- * (`/api/ai-teaching/reply-policy`), which are different models answering
- * different questions. Mapping one onto the other would produce a screen that
- * accepted rules and silently changed nothing about how the assistant replies.
- *
- * So they reject with the reason, and the sections stay in the navigation
- * drawn exactly as the design draws them.
+ * Both are real, per-company features now. `InstructionsPage` edits an ordered
+ * list of behaviour rules (`/api/ai-instructions`), each optionally scoped to a
+ * department or channel, that are appended to the assistant's system prompt.
+ * `ReplyFlowsListPage`/`ReplyFlowBuilderPage` design step-by-step scripted
+ * conversations (`/api/reply-flows`) that the reply-flow engine runs in place
+ * of the default single-shot AI reply for a matching customer.
  */
 
-export function listInstructionsRequest() {
-  return notBuiltHere("AI Instructions");
+export async function listInstructionsRequest() {
+  return apiRequest("/api/ai-instructions");
 }
 
-export function createInstructionRequest() {
-  return notBuiltHere("AI Instructions");
+export async function createInstructionRequest(text, tags = []) {
+  return apiRequest("/api/ai-instructions", {
+    method: "POST",
+    body: { text, tags },
+  });
 }
 
-export function updateInstructionRequest() {
-  return notBuiltHere("AI Instructions");
+export async function updateInstructionRequest(id, text, tags = []) {
+  return apiRequest(`/api/ai-instructions/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: { text, tags },
+  });
 }
 
-export function deleteInstructionRequest() {
-  return notBuiltHere("AI Instructions");
+export async function deleteInstructionRequest(id) {
+  return apiRequest(`/api/ai-instructions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
-export function reorderInstructionsRequest() {
-  return notBuiltHere("AI Instructions");
+export async function reorderInstructionsRequest(orderedIds) {
+  return apiRequest("/api/ai-instructions/reorder", {
+    method: "POST",
+    body: { ordered_ids: orderedIds },
+  });
 }
 
 export function listReplyFlowsRequest() {
-  return notBuiltHere("Reply Flows");
+  return apiRequest("/api/reply-flows");
 }
 
-export function createReplyFlowRequest() {
-  return notBuiltHere("Reply Flows");
+export function getReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}`);
 }
 
-export function deleteReplyFlowRequest() {
-  return notBuiltHere("Reply Flows");
+export function createReplyFlowRequest(values) {
+  return apiRequest("/api/reply-flows", { method: "POST", body: values });
 }
 
-export function duplicateReplyFlowRequest() {
-  return notBuiltHere("Reply Flows");
+export function updateReplyFlowRequest(id, values) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: values,
+  });
+}
+
+export function deleteReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export function duplicateReplyFlowRequest(id) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}/duplicate`, {
+    method: "POST",
+  });
+}
+
+export function getReplyFlowTriggerTypesRequest() {
+  return apiRequest("/api/reply-flows/trigger-types");
+}
+
+export function generateReplyFlowFromTextRequest(id, text) {
+  return apiRequest(`/api/reply-flows/${encodeURIComponent(id)}/generate`, {
+    method: "POST",
+    body: { text },
+  });
 }
 
 /* ------------------------------------------- notification preferences (v2) */
@@ -2494,6 +2478,7 @@ export async function createScheduledPostRequest(values = {}) {
         body,
         scheduled_for: scheduledFor,
         media_url: values.media_urls?.[0] || null,
+        tags: values.tags || [],
       },
     });
 

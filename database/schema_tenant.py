@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 7
+TENANT_SCHEMA_VERSION = 12
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -861,6 +861,67 @@ TENANT_TABLES: tuple[str, ...] = (
         UNIQUE(company_id, table_name, row_id)
     )
     """,
+    # The company's own behaviour rules for its assistant: how to speak, what
+    # not to say, when to hand off. Ordered by `position` (earlier wins on a
+    # conflict), each optionally scoped to departments/channels via `tags_json`.
+    # These are appended to the system prompt the model is given -- the screen
+    # that edits them is Settings -> AI Instructions.
+    """
+    CREATE TABLE IF NOT EXISTS ai_instructions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # A company's saved Reply Flows -- the step-by-step conversations designed
+    # in the visual builder (Company Settings -> Reply Flow). Each flow scopes
+    # itself to some channels/departments/reply-modes and a trigger, and its
+    # graph (the nodes and edges drawn on the canvas) is one JSON blob. Only a
+    # flow whose status is 'active' is ever run by the reply-flow engine; drafts
+    # and archived flows are stored but never reach a customer.
+    """
+    CREATE TABLE IF NOT EXISTS reply_flows (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        channels_json TEXT NOT NULL DEFAULT '[]',
+        departments_json TEXT NOT NULL DEFAULT '[]',
+        reply_modes_json TEXT NOT NULL DEFAULT '[]',
+        trigger_type TEXT NOT NULL DEFAULT 'new_conversation',
+        trigger_config_json TEXT NOT NULL DEFAULT '{}',
+        graph_json TEXT NOT NULL DEFAULT '{"nodes":[],"edges":[]}',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # A price quote raised from a conversation -- "Create quote" in the chat
+    # panel. Line items are one JSON blob (kept flexible for a future editor);
+    # `total` is stored rather than only computed, so a quote's number does not
+    # drift if the catalogue price it was based on changes later. Status is the
+    # quote's own lifecycle (draft -> sent -> accepted/declined), independent of
+    # the ticket/task status vocabulary.
+    """
+    CREATE TABLE IF NOT EXISTS quotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        conversation_id INTEGER,
+        customer_id INTEGER,
+        title TEXT NOT NULL,
+        items_json TEXT NOT NULL DEFAULT '[]',
+        currency TEXT NOT NULL DEFAULT 'USD',
+        total REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'draft',
+        notes TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
 )
 
 
@@ -878,6 +939,12 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "department_id": (
             "INTEGER REFERENCES business_departments(id) ON DELETE SET NULL"
         ),
+        # "Mark as spam" from the chat panel. Spam is a conversation's own
+        # lifecycle, independent of status/handled_by_ai: marking it also stops
+        # the AI answering (the reply path checks this before routing) and hides
+        # the conversation from the default inbox list, without deleting
+        # anything a person may want to review later.
+        "is_spam": "INTEGER NOT NULL DEFAULT 0",
     },
     # Added after the tag feature shipped without it. Existing companies have a
     # `conversation_tags` table with no `status`, so the column has to arrive
@@ -943,6 +1010,20 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         "assigned_user_id": "INTEGER",
         "custom_fields_json": "TEXT NOT NULL DEFAULT '{}'",
         "documents_json": "TEXT NOT NULL DEFAULT '[]'",
+        # "Block customer" from the chat panel. Enforced on the one path that
+        # matters -- `channels/inbound.py` drops a blocked customer's message
+        # before it is stored, notified on, or answered -- not merely a label
+        # the inbox happens to show. `blocked_by_user_id` carries no REFERENCES
+        # clause: `users` lives in the control-plane database.
+        "is_blocked": "INTEGER NOT NULL DEFAULT 0",
+        "blocked_at": "TEXT",
+        "blocked_by_user_id": "INTEGER",
+    },
+    # Free-form labels on a scheduled post -- the "Tags" button in the
+    # composer, for a company's own filing (a campaign name, a product line),
+    # never anything the channel itself sees.
+    "scheduled_posts": {
+        "tags_json": "TEXT NOT NULL DEFAULT '[]'",
     },
 }
 
@@ -1073,6 +1154,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         # Which language to answer in before the customer has asked for one.
         # `auto` detects from the message, which is what every company had.
         "reply_language": "auto",
+        # Speak a reply instead of sending it as text, on a channel that
+        # supports voice notes. Off by default: it depends on a voice
+        # provider being configured on the server (see `tts_service`), which
+        # a fresh install has not done.
+        "voice_reply_enabled": False,
         # `welcome_immediate` and `reply_only_when_customer_stops_typing` were
         # here and read by nothing. Both already have an owner elsewhere:
         # `welcome_enabled` and `welcome_mode` in the reply policy decide the

@@ -179,8 +179,19 @@ class TicketService:
         now = utc_now_iso()
 
         status = self._normalize_status(data.get("status"), default="open")
+        conversation_id = data.get("conversation_id")
 
         with database_manager.tenant(company_id) as conn:
+            if conversation_id:
+                exists = conn.execute(
+                    "SELECT 1 FROM conversations WHERE id = ? AND company_id = ? LIMIT 1",
+                    (int(conversation_id), company_id),
+                ).fetchone()
+                if not exists:
+                    raise ValueError(
+                        "That conversation does not belong to this company."
+                    )
+
             cursor = conn.execute(
                 """
                 INSERT INTO tickets (
@@ -195,7 +206,7 @@ class TicketService:
                 """,
                 (
                     company_id,
-                    data.get("conversation_id"),
+                    conversation_id,
                     self._clean(data.get("title")),
                     self._normalize_task_type(
                         data.get("task_type"), default="support"

@@ -40,11 +40,16 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   addConversationNoteRequest,
+  blockCustomerRequest,
   clearConversationReminderRequest,
+  createConversationShareLinkRequest,
+  createQuoteRequest,
   createTaskRequest,
   downloadConversationExport,
+  emailConversationExportRequest,
   getConversationControlRequest,
   getConversationMessagesRequest,
+  getCustomerRequest,
   listSavedRepliesRequest,
   releaseConversationRequest,
   returnConversationToAiRequest,
@@ -52,6 +57,7 @@ import {
   sendConversationReplyRequest,
   setConversationReminderRequest,
   takeOverConversationRequest,
+  unblockCustomerRequest,
   updateConversationControlRequest,
   uploadMediaRequest,
   uploadVoiceNoteRequest,
@@ -319,6 +325,16 @@ export default function ConversationDetailPageV2({
   const [error, setError] = useState("");
   const [actionError, setActionError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
+  const [quoteDraftOpen, setQuoteDraftOpen] = useState(false);
+  const [quoteTitle, setQuoteTitle] = useState("");
+  const [quoteAmount, setQuoteAmount] = useState("");
+  const [quoteSaving, setQuoteSaving] = useState(false);
+  const [customerBlocked, setCustomerBlocked] = useState(null);
+  const [moderationBusy, setModerationBusy] = useState(false);
+  const [sharingBusy, setSharingBusy] = useState(false);
+  const [emailDraftOpen, setEmailDraftOpen] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [noteMentionedUserIds, setNoteMentionedUserIds] = useState([]);
@@ -539,6 +555,15 @@ export default function ConversationDetailPageV2({
       behavior: "smooth",
     });
   }, [messages]);
+
+  useEffect(() => {
+    if (!control?.customer_id) return undefined;
+    let cancelled = false;
+    getCustomerRequest(control.customer_id)
+      .then((result) => { if (!cancelled) setCustomerBlocked(Boolean(result?.is_blocked)); })
+      .catch(() => { if (!cancelled) setCustomerBlocked(null); });
+    return () => { cancelled = true; };
+  }, [control?.customer_id]);
 
 
   useEffect(() => {
@@ -1001,6 +1026,128 @@ export default function ConversationDetailPageV2({
       window.setTimeout(() => setActionSuccess(""), 4000);
     } catch (requestError) {
       setActionError(requestError.message || "Could not create a task from this conversation.");
+    }
+  }
+
+  async function createRepairTicketFromConversation() {
+    setActionError("");
+    try {
+      await createTaskRequest({
+        title: `Repair: ${officialCustomerName || userId}`,
+        task_type: "maintenance",
+        conversation_id: control?.id,
+        customer_id: control?.customer_id || undefined,
+      });
+      setActionSuccess("Repair ticket created — see it on the Tasks page.");
+      window.setTimeout(() => setActionSuccess(""), 4000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a repair ticket from this conversation.");
+    }
+  }
+
+  function openAppointmentFromConversation() {
+    navigate("/appointments", {
+      state: {
+        prefillAppointment: {
+          title: `Appointment: ${officialCustomerName || userId}`,
+          customer: control?.customer_id
+            ? { id: control.customer_id, display_name: officialCustomerName || userId }
+            : null,
+          conversationId: control?.id || null,
+        },
+      },
+    });
+  }
+
+  async function createQuoteFromConversation(event) {
+    event.preventDefault();
+    const title = quoteTitle.trim();
+    const amount = Number(quoteAmount);
+    if (!title || !(amount > 0)) return;
+    setQuoteSaving(true);
+    setActionError("");
+    try {
+      const quote = await createQuoteRequest({
+        title,
+        amount,
+        conversation_id: control?.id,
+        customer_id: control?.customer_id || undefined,
+      });
+      setActionSuccess(
+        `Quote created — ${quote.currency} ${quote.total.toFixed(2)}.`,
+      );
+      window.setTimeout(() => setActionSuccess(""), 5000);
+      setQuoteDraftOpen(false);
+      setQuoteTitle("");
+      setQuoteAmount("");
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a quote from this conversation.");
+    } finally {
+      setQuoteSaving(false);
+    }
+  }
+
+  async function createShareLink() {
+    setSharingBusy(true);
+    setActionError("");
+    try {
+      const result = await createConversationShareLinkRequest(channel, userId, "chat");
+      try {
+        await navigator.clipboard.writeText(result.url);
+        setActionSuccess(`Share link copied to clipboard: ${result.url}`);
+      } catch {
+        setActionSuccess(`Share link: ${result.url}`);
+      }
+      window.setTimeout(() => setActionSuccess(""), 15000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not create a share link.");
+    } finally {
+      setSharingBusy(false);
+    }
+  }
+
+  async function sendEmailExport(event) {
+    event.preventDefault();
+    const to = emailTo.trim();
+    if (!to) return;
+    setEmailSending(true);
+    setActionError("");
+    try {
+      await emailConversationExportRequest(channel, userId, to, "chat");
+      setActionSuccess(`Transcript emailed to ${to}.`);
+      window.setTimeout(() => setActionSuccess(""), 5000);
+      setEmailDraftOpen(false);
+      setEmailTo("");
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not send the transcript by email.");
+    } finally {
+      setEmailSending(false);
+    }
+  }
+
+  async function toggleSpam() {
+    await handleControlUpdate(
+      { is_spam: !control?.is_spam },
+      control?.is_spam ? "Unmarked as spam." : "Marked as spam.",
+    );
+  }
+
+  async function toggleBlockCustomer() {
+    if (!control?.customer_id) return;
+    setModerationBusy(true);
+    setActionError("");
+    try {
+      const nextBlocked = !customerBlocked;
+      const customer = nextBlocked
+        ? await blockCustomerRequest(control.customer_id)
+        : await unblockCustomerRequest(control.customer_id);
+      setCustomerBlocked(Boolean(customer?.is_blocked));
+      setActionSuccess(nextBlocked ? "Customer blocked." : "Customer unblocked.");
+      window.setTimeout(() => setActionSuccess(""), 4000);
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not update this customer's block status.");
+    } finally {
+      setModerationBusy(false);
     }
   }
 
@@ -1806,17 +1953,42 @@ export default function ConversationDetailPageV2({
                   <button type="button" className="btn btn-secondary btn-block" onClick={createTaskFromConversation}>
                     <AddTaskOutlined fontSize="small" /> Create task
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                  <button type="button" className="btn btn-secondary btn-block" onClick={openAppointmentFromConversation}>
                     <EventOutlined fontSize="small" /> Create appointment
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                  <button type="button" className="btn btn-secondary btn-block" onClick={createRepairTicketFromConversation}>
                     <BuildOutlined fontSize="small" /> Create repair ticket
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                  <button type="button" className="btn btn-secondary btn-block" onClick={() => setQuoteDraftOpen((current) => !current)}>
                     <ReceiptLongOutlined fontSize="small" /> Create quote
                   </button>
                 </div>
-                <small className="tzv2-cd-muted">Appointment, repair ticket and quote creation from a chat aren&rsquo;t wired up yet — coming soon.</small>
+                {quoteDraftOpen ? (
+                  <form className="tzv2-cd-quote-form" onSubmit={createQuoteFromConversation}>
+                    <input
+                      className="input"
+                      value={quoteTitle}
+                      onChange={(event) => setQuoteTitle(event.target.value)}
+                      placeholder="What's this quote for?"
+                      disabled={quoteSaving}
+                      required
+                    />
+                    <input
+                      className="input"
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={quoteAmount}
+                      onChange={(event) => setQuoteAmount(event.target.value)}
+                      placeholder="Amount"
+                      disabled={quoteSaving}
+                      required
+                    />
+                    <button type="submit" className="btn btn-primary" disabled={quoteSaving || !quoteTitle.trim() || !(Number(quoteAmount) > 0)}>
+                      {quoteSaving ? "Saving…" : "Save quote"}
+                    </button>
+                  </form>
+                ) : null}
               </AccordionCard>
 
               <AccordionCard
@@ -1893,13 +2065,29 @@ export default function ConversationDetailPageV2({
                   </button>
                   <small className="tzv2-cd-muted">Full report includes the chat, internal notes and conversation metadata.</small>
                   <div className="tzv2-cd-create-grid">
-                    <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
-                      <ShareOutlined fontSize="small" /> Share link
+                    <button type="button" className="btn btn-secondary btn-block" disabled={sharingBusy} onClick={createShareLink}>
+                      <ShareOutlined fontSize="small" /> {sharingBusy ? "Creating…" : "Share link"}
                     </button>
-                    <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
+                    <button type="button" className="btn btn-secondary btn-block" onClick={() => setEmailDraftOpen((current) => !current)}>
                       <MailOutlineOutlined fontSize="small" /> Email
                     </button>
                   </div>
+                  {emailDraftOpen ? (
+                    <form className="tzv2-cd-quote-form" onSubmit={sendEmailExport}>
+                      <input
+                        className="input"
+                        type="email"
+                        value={emailTo}
+                        onChange={(event) => setEmailTo(event.target.value)}
+                        placeholder="Send transcript to…"
+                        disabled={emailSending}
+                        required
+                      />
+                      <button type="submit" className="btn btn-primary" disabled={emailSending || !emailTo.trim()}>
+                        {emailSending ? "Sending…" : "Send"}
+                      </button>
+                    </form>
+                  ) : null}
                 </div>
               </AccordionCard>
 
@@ -1911,14 +2099,22 @@ export default function ConversationDetailPageV2({
                 onToggle={() => setModerationPanelOpen((current) => !current)}
               >
                 <div className="tzv2-cd-create-grid">
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
-                    <ReportOutlined fontSize="small" /> Mark as spam
+                  <button type="button" className="btn btn-secondary btn-block" disabled={saving} onClick={toggleSpam}>
+                    <ReportOutlined fontSize="small" /> {control?.is_spam ? "Unmark as spam" : "Mark as spam"}
                   </button>
-                  <button type="button" className="btn btn-secondary btn-block" disabled title="Not available in this build yet">
-                    <BlockOutlined fontSize="small" /> Block customer
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-block"
+                    disabled={moderationBusy || !control?.customer_id}
+                    onClick={toggleBlockCustomer}
+                  >
+                    <BlockOutlined fontSize="small" /> {control?.customer_id && customerBlocked ? "Unblock customer" : "Block customer"}
                   </button>
                 </div>
-                <small className="tzv2-cd-muted">Spam and block controls aren&rsquo;t available in this build yet.</small>
+                <small className="tzv2-cd-muted">
+                  {control?.is_spam ? "This conversation is marked as spam — the assistant will not reply to it." : "Marking as spam stops the assistant answering this conversation."}
+                  {control?.customer_id && customerBlocked ? " This customer is blocked — their messages are not received." : null}
+                </small>
               </AccordionCard>
             </div>
           </aside>

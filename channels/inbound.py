@@ -85,6 +85,22 @@ def process_inbound_event(
         username=official_profile.get("username"),
     )
 
+    # "Block customer" enforced. Checked after the customer record is found
+    # (blocking is a property of the person, not the message) but before
+    # anything about this message is stored, notified on, or answered — a
+    # block that still logged the conversation and pinged the team would be a
+    # label, not a block.
+    if customer.get("is_blocked"):
+        log_meta_event(
+            "event_blocked_customer",
+            {"channel": channel, "company_id": company_id},
+        )
+        return {
+            "status": "ignored",
+            "reason": "customer_blocked",
+            "channel": channel,
+        }
+
     effective_customer_name = (
         official_profile.get("customer_name")
         or delivered_name

@@ -319,3 +319,29 @@
     flex-direction: column;
   }
 }
+
+/* The notice shown after returning from the Facebook connect flow. */
+.channels-connect-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.channels-connect-notice-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  opacity: 0.7;
+}
+
+.channels-connect-notice-dismiss:hover {
+  opacity: 1;
+}

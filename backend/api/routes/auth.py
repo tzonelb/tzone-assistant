@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
@@ -312,6 +313,47 @@ def logout(response: Response, current_user: dict = Depends(get_current_user)):
     session_cookies.clear(response)
 
     return {"success": True, "message": "Logged out successfully."}
+
+
+# ----------------------------------------------------------------------
+# Sessions ("where am I signed in")
+# ----------------------------------------------------------------------
+
+
+@router.get("/sessions")
+def list_sessions(current_user: dict = Depends(get_current_user)) -> dict[str, Any]:
+    sessions = auth_service.list_user_sessions(
+        int(current_user["id"]), current_token=current_user.get("_raw_token")
+    )
+    return {"sessions": sessions}
+
+
+@router.delete("/sessions/{session_id}")
+def revoke_one_session(
+    session_id: int, current_user: dict = Depends(get_current_user)
+) -> dict[str, Any]:
+    removed = auth_service.revoke_session(
+        user_id=int(current_user["id"]), session_id=session_id
+    )
+    if not removed:
+        raise HTTPException(status_code=404, detail="That session is not active.")
+    return {"revoked": True}
+
+
+@router.post("/sessions/revoke-others")
+def revoke_other_sessions(
+    current_user: dict = Depends(get_current_user),
+) -> dict[str, Any]:
+    raw_token = current_user.get("_raw_token")
+    if not raw_token:
+        raise HTTPException(
+            status_code=400,
+            detail="This action is only available from a browser session.",
+        )
+    count = auth_service.revoke_other_sessions(
+        user_id=int(current_user["id"]), current_token=raw_token
+    )
+    return {"revoked_count": count}
 
 
 # ----------------------------------------------------------------------

@@ -448,6 +448,77 @@ def test_a_message_is_stored_and_read_back_in_order(service, alpha):
     assert page["has_more"] is False
 
 
+def _insert_conversation(platform, company, *, external_user_id="cust-1"):
+    from database.manager import utc_now_iso
+
+    now = utc_now_iso()
+
+    with platform["manager"].tenant(company["id"]) as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO conversations (
+                company_id, channel, external_user_id, created_at, updated_at
+            )
+            VALUES (?, 'messenger', ?, ?, ?)
+            """,
+            (company["id"], external_user_id, now, now),
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def test_a_linked_conversation_from_another_company_is_refused(
+    service, platform, alpha, beta
+):
+    """A team-chat message can point at "the conversation this is about". That
+    id is tenant-scoped like a quote's customer_id or an appointment's
+    conversation_id, and the same class of bug applies: nothing stopped a
+    caller from writing a conversation id that belongs to nobody, or to another
+    company, straight into `team_messages.linked_conversation_id`."""
+    channel = service.create_channel(company_id=alpha["id"], user_id=1, name="general")
+    beta_conversation_id = _insert_conversation(platform, beta)
+
+    with pytest.raises(ValueError):
+        service.post_message(
+            company_id=alpha["id"],
+            user_id=1,
+            channel_id=channel["id"],
+            body="see this chat",
+            linked_conversation_id=beta_conversation_id,
+            employees=[],
+        )
+
+
+def test_a_linked_conversation_that_does_not_exist_is_refused(service, alpha):
+    channel = service.create_channel(company_id=alpha["id"], user_id=1, name="general")
+
+    with pytest.raises(ValueError):
+        service.post_message(
+            company_id=alpha["id"],
+            user_id=1,
+            channel_id=channel["id"],
+            body="see this chat",
+            linked_conversation_id=999999,
+            employees=[],
+        )
+
+
+def test_a_real_linked_conversation_is_accepted(service, platform, alpha):
+    channel = service.create_channel(company_id=alpha["id"], user_id=1, name="general")
+    conversation_id = _insert_conversation(platform, alpha)
+
+    message = service.post_message(
+        company_id=alpha["id"],
+        user_id=1,
+        channel_id=channel["id"],
+        body="see this chat",
+        linked_conversation_id=conversation_id,
+        employees=[],
+    )
+
+    assert message["linked_conversation_id"] == conversation_id
+
+
 def test_pagination_returns_the_newest_page_and_a_cursor_backwards(service, alpha):
     """Opening a busy channel must not load its whole history, and paging back
     must not skip or repeat a message."""

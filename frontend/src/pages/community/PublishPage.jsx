@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AddOutlined,
   ArticleOutlined,
@@ -46,7 +46,46 @@ function formatDateTime(value) {
 
 const POST_TYPE_LABELS = { feed: "Post", reels: "Reel", story: "Story" };
 
-function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSave }) {
+const MAX_TAGS = 20;
+const MAX_TAG_LENGTH = 40;
+const SLOT_MINUTES = 30;
+
+const EMOJI_OPTIONS = [
+  "😀", "😂", "😍", "👍", "🎉", "🔥", "❤️", "😊", "🙌", "👏",
+  "💡", "✅", "⭐", "📸", "🎯", "😅", "🤔", "👀", "🚀", "💬",
+  "📅", "🛒", "🎁", "📣", "🙏", "😎", "💯", "✨", "👋", "🏆",
+];
+
+function toDatetimeLocalValue(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/* Picks the next half-hour mark that isn't already within a slot of another
+ * scheduled post, so two posts don't land on the same minute by accident. */
+function computeNextAvailableSlot(existingTimes) {
+  const now = new Date();
+  const candidate = new Date(now);
+  candidate.setSeconds(0, 0);
+  const remainder = candidate.getMinutes() % SLOT_MINUTES;
+  candidate.setMinutes(candidate.getMinutes() + (SLOT_MINUTES - remainder));
+
+  const occupied = (existingTimes || [])
+    .map((value) => new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`))
+    .filter((date) => !Number.isNaN(date.getTime()));
+
+  for (let guard = 0; guard < 500; guard += 1) {
+    const conflict = occupied.some(
+      (date) => Math.abs(date.getTime() - candidate.getTime()) < SLOT_MINUTES * 60000,
+    );
+    if (!conflict) break;
+    candidate.setMinutes(candidate.getMinutes() + SLOT_MINUTES);
+  }
+
+  return candidate;
+}
+
+function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSave, onFindNextAvailable }) {
   const [text, setText] = useState("");
   const [selectedAccountIds, setSelectedAccountIds] = useState([]);
   const [contentOverrides, setContentOverrides] = useState({});
@@ -64,19 +103,81 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
   const [createAnother, setCreateAnother] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [rightPanel, setRightPanel] = useState("preview");
+  const [tags, setTags] = useState([]);
+  const [tagDraft, setTagDraft] = useState("");
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [findingSlot, setFindingSlot] = useState(false);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (!open) {
       setText(""); setSelectedAccountIds([]); setContentOverrides({}); setChannelPostTypes({});
       setCustomizeMode(false); setExpandedAccountId(null); setChannelPickerOpen(false); setMediaUrl(""); setMediaType("");
       setMediaFileName(""); setMediaError(""); setWhen("now"); setScheduledAt(""); setCreateAnother(false);
-      setFullscreen(false); setRightPanel("preview");
+      setFullscreen(false); setRightPanel("preview"); setTags([]); setTagDraft(""); setTagsOpen(false); setEmojiOpen(false);
     }
   }, [open]);
 
   function resetContentOnly() {
     setText(""); setContentOverrides({}); setMediaUrl(""); setMediaType(""); setMediaFileName("");
-    setWhen("now"); setScheduledAt("");
+    setWhen("now"); setScheduledAt(""); setTags([]); setTagDraft(""); setTagsOpen(false); setEmojiOpen(false);
+  }
+
+  function addTagFromDraft() {
+    const value = tagDraft.trim().slice(0, MAX_TAG_LENGTH);
+    setTagDraft("");
+    if (!value) return;
+    setTags((current) => {
+      if (current.some((tag) => tag.toLowerCase() === value.toLowerCase())) return current;
+      if (current.length >= MAX_TAGS) return current;
+      return [...current, value];
+    });
+  }
+
+  function handleTagKeyDown(event) {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTagFromDraft();
+    } else if (event.key === "Backspace" && !tagDraft && tags.length) {
+      setTags((current) => current.slice(0, -1));
+    }
+  }
+
+  function removeTag(tag) {
+    setTags((current) => current.filter((item) => item !== tag));
+  }
+
+  function insertEmoji(emoji) {
+    const node = textareaRef.current;
+    if (!node) {
+      setText((current) => current + emoji);
+      setEmojiOpen(false);
+      return;
+    }
+    const start = node.selectionStart ?? text.length;
+    const end = node.selectionEnd ?? text.length;
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    setEmojiOpen(false);
+    requestAnimationFrame(() => {
+      node.focus();
+      const cursor = start + emoji.length;
+      node.setSelectionRange(cursor, cursor);
+    });
+  }
+
+  async function useNextAvailable() {
+    setFindingSlot(true);
+    try {
+      const existingTimes = (await onFindNextAvailable?.()) || [];
+      const slot = computeNextAvailableSlot(existingTimes);
+      setWhen("schedule");
+      setScheduledAt(toDatetimeLocalValue(slot));
+    } finally {
+      setFindingSlot(false);
+    }
   }
 
   if (!open) return null;
@@ -131,6 +232,7 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
       media_type: mediaUrl ? mediaType : null,
       content_overrides: overrides,
       channel_post_types: postTypes,
+      tags,
       status: asDraft ? "draft" : "scheduled",
       scheduled_at: asDraft
         ? null
@@ -161,7 +263,37 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
         <header className="bp-header">
           <div className="bp-header-left">
             <h3>Create Post</h3>
-            <button type="button" className="bp-tags-btn" disabled title="Tagging posts isn't available yet"><LocalOfferOutlined fontSize="small" /> Tags</button>
+            <div className="bp-tags-popover-wrap">
+              <button type="button" className="bp-tags-btn" onClick={() => setTagsOpen((current) => !current)}>
+                <LocalOfferOutlined fontSize="small" /> Tags{tags.length ? ` (${tags.length})` : ""}
+              </button>
+              {tagsOpen ? (
+                <div className="bp-tags-popover">
+                  {tags.length ? (
+                    <div className="bp-tags-chips">
+                      {tags.map((tag) => (
+                        <span key={tag} className="bp-tag-chip">
+                          {tag}
+                          <button type="button" onClick={() => removeTag(tag)} aria-label={`Remove tag ${tag}`}>
+                            <CloseOutlined fontSize="inherit" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <input
+                    type="text"
+                    className="bp-tags-input"
+                    placeholder="Add a tag and press Enter"
+                    value={tagDraft}
+                    onChange={(event) => setTagDraft(event.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    onBlur={addTagFromDraft}
+                    maxLength={MAX_TAG_LENGTH}
+                  />
+                </div>
+              ) : null}
+            </div>
           </div>
           <div className="bp-header-right">
             <button type="button" className={`bp-header-action ${rightPanel === "templates" ? "is-active" : ""}`} onClick={() => setRightPanel("templates")}>
@@ -228,11 +360,20 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
             {!customizeMode ? (
               <div className="bp-composer">
                 <textarea
+                  ref={textareaRef}
                   rows={8}
                   value={text}
                   disabled={saving}
                   onChange={(event) => setText(event.target.value)}
                   placeholder="Start writing or get inspired with Templates"
+                />
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  ref={fileInputRef}
+                  hidden
+                  disabled={mediaUploading}
+                  onChange={handleMediaFileChange}
                 />
                 <div className="bp-dropzone">
                   {mediaUrl ? (
@@ -251,9 +392,34 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
                   {mediaError ? <span className="broadcast-field-note broadcast-media-error">{mediaError}</span> : null}
                 </div>
                 <div className="bp-toolbar">
-                  <button type="button" disabled title="Not built yet"><AddOutlined fontSize="small" /></button>
-                  <button type="button" disabled title="Not built yet"><InsertEmoticonOutlined fontSize="small" /></button>
-                  <button type="button" disabled title="Not built yet"><TagOutlined fontSize="small" /></button>
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={mediaUploading} title="Add media">
+                    <AddOutlined fontSize="small" />
+                  </button>
+                  <div className="bp-emoji-wrap">
+                    <button
+                      type="button"
+                      className={emojiOpen ? "is-active" : ""}
+                      onClick={() => setEmojiOpen((current) => !current)}
+                      title="Emoji"
+                    >
+                      <InsertEmoticonOutlined fontSize="small" />
+                    </button>
+                    {emojiOpen ? (
+                      <div className="bp-emoji-popover">
+                        {EMOJI_OPTIONS.map((emoji) => (
+                          <button type="button" key={emoji} onClick={() => insertEmoji(emoji)}>{emoji}</button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    className={tagsOpen ? "is-active" : ""}
+                    onClick={() => setTagsOpen((current) => !current)}
+                    title="Tags"
+                  >
+                    <TagOutlined fontSize="small" />
+                  </button>
                 </div>
               </div>
             ) : (
@@ -375,7 +541,15 @@ function CreatePostDialog({ open, channelAccounts, saving, error, onCancel, onSa
             Create Another
           </label>
           <div className="bp-footer-right">
-            <button type="button" className="bp-next-available" disabled title="Not built yet — pick a date & time above instead"><EventOutlined fontSize="small" /> Next Available</button>
+            <button
+              type="button"
+              className="bp-next-available"
+              disabled={findingSlot || saving}
+              onClick={useNextAvailable}
+              title="Find the next open time slot"
+            >
+              <EventOutlined fontSize="small" /> {findingSlot ? "Finding…" : "Next Available"}
+            </button>
             {!customizeMode ? (
               <button
                 type="button"
@@ -474,6 +648,16 @@ export default function PublishPage() {
       return false;
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function findNextAvailableSlot() {
+    try {
+      const result = await listScheduledPostsRequest({ status: "scheduled" });
+      const items = Array.isArray(result?.items) ? result.items : [];
+      return items.map((post) => post.scheduled_at).filter(Boolean);
+    } catch {
+      return [];
     }
   }
 
@@ -600,6 +784,7 @@ export default function PublishPage() {
         error={saveError}
         onCancel={() => setDialogOpen(false)}
         onSave={savePost}
+        onFindNextAvailable={findNextAvailableSlot}
       />
       <ConfirmDialog
         open={Boolean(toDelete)}

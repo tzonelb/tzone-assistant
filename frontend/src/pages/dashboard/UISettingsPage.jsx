@@ -3,8 +3,153 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { readNotificationPreferences, saveNotificationPreferences } from "../../utils/notificationPreferences";
-import { getNotificationPreferencesRequest, updateNotificationPreferencesRequest, twoFactorStatusRequest, twoFactorEnrollStartRequest, twoFactorEnrollConfirmRequest, twoFactorDisableRequest } from "../../api/client";
+import { getNotificationPreferencesRequest, updateNotificationPreferencesRequest, twoFactorStatusRequest, twoFactorEnrollStartRequest, twoFactorEnrollConfirmRequest, twoFactorDisableRequest, changeOwnPasswordRequest, listSessionsRequest, revokeSessionRequest, revokeOtherSessionsRequest } from "../../api/client";
 import { SUPPORTED_CHANNELS } from "../../utils/channels";
+
+// Real password change: POST /api/auth/password exists and revokes every other
+// session on success. The old button was disabled with "contact support"; this
+// is the working form.
+function ChangePasswordForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    setStatus("");
+    if (next.length < 10) { setError("The new password must be at least 10 characters."); return; }
+    if (next !== confirm) { setError("The two new passwords do not match."); return; }
+    setBusy(true);
+    try {
+      await changeOwnPasswordRequest(current, next);
+      setStatus("Password changed. Your other sessions have been signed out.");
+      setCurrent(""); setNext(""); setConfirm("");
+    } catch (e) {
+      setError(e.message || "Could not change the password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="settings-form-grid" onSubmit={submit} style={{ gap: 10 }}>
+      <label><strong>Current password</strong>
+        <input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+      </label>
+      <label><strong>New password</strong>
+        <input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} minLength={10} required />
+      </label>
+      <label><strong>Confirm new password</strong>
+        <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} minLength={10} required />
+      </label>
+      {error ? <div className="admin-access-error">{error}</div> : null}
+      {status ? <div className="admin-access-notice">{status}</div> : null}
+      <button type="submit" className="primary-action" disabled={busy}>{busy ? "Changing…" : "Change password"}</button>
+    </form>
+  );
+}
+
+// Real "where am I signed in": GET /api/auth/sessions lists this user's live
+// sessions (never the token), and each can be revoked; "Sign out other devices"
+// ends all but the one in use. Replaces the old disabled "coming soon" button.
+function fmtWhen(value) {
+  if (!value) return "—";
+  const normalized = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`;
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString();
+}
+
+function ActiveSessions() {
+  const [open, setOpen] = useState(false);
+  const [sessions, setSessions] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function load() {
+    setError("");
+    try {
+      const result = await listSessionsRequest();
+      setSessions(Array.isArray(result?.sessions) ? result.sessions : []);
+    } catch (e) {
+      setError(e.message || "Sessions could not be loaded.");
+      setSessions([]);
+    }
+  }
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && sessions === null) load();
+  }
+
+  async function revokeOne(id) {
+    setBusy(true);
+    try {
+      await revokeSessionRequest(id);
+      await load();
+    } catch (e) {
+      setError(e.message || "Could not sign out that session.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeOthers() {
+    setBusy(true);
+    try {
+      await revokeOtherSessionsRequest();
+      await load();
+    } catch (e) {
+      setError(e.message || "Could not sign out other devices.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="active-sessions">
+      <button type="button" className="secondary-action" onClick={toggle}>
+        {open ? "Hide active sessions" : "View active sessions"}
+      </button>
+      {open ? (
+        <div className="active-sessions-body" style={{ marginTop: "0.75rem" }}>
+          {error ? <div className="admin-access-error">{error}</div> : null}
+          {sessions === null ? (
+            <p>Loading…</p>
+          ) : sessions.length === 0 ? (
+            <p>No active sessions.</p>
+          ) : (
+            <ul className="active-sessions-list" style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {sessions.map((s) => (
+                <li key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", padding: "0.5rem 0.75rem", border: "1px solid rgba(0,0,0,0.08)", borderRadius: "8px" }}>
+                  <span style={{ display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+                    <strong>{s.current ? "This device" : (s.ip_address || "Unknown device")}</strong>
+                    <span style={{ fontSize: "0.8rem", opacity: 0.7 }}>{(s.user_agent || "").slice(0, 60) || "—"}</span>
+                    <span style={{ fontSize: "0.75rem", opacity: 0.6 }}>Last active {fmtWhen(s.last_used_at)}</span>
+                  </span>
+                  {s.current ? (
+                    <span style={{ fontSize: "0.8rem", opacity: 0.7 }}>Current</span>
+                  ) : (
+                    <button type="button" className="secondary-action" disabled={busy} onClick={() => revokeOne(s.id)}>Sign out</button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {sessions && sessions.some((s) => !s.current) ? (
+            <button type="button" className="secondary-action" style={{ marginTop: "0.75rem" }} disabled={busy} onClick={revokeOthers}>
+              Sign out all other devices
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 // The one place this list is decided. The design writes the four channels out
 // again and ends with `website: "Website"` — a toggle for a channel this
@@ -194,7 +339,7 @@ export default function UISettingsPage() {
 
           {active === "language" ? <section className="settings-section-card"><h3>Language & region</h3><p>The selected timezone controls all conversation, notification and timeline timestamps. The dashboard's own screens (buttons, labels) stay in English regardless of this setting — only the AI's replies to customers already adapt to their language automatically.</p><div className="settings-form-grid"><label><strong>Language</strong><select value={language} onChange={(e) => { setLanguage(e.target.value); setSaved(false); }}><option value="en">English</option><option value="ar">Arabic</option><option value="tr">Turkish</option></select></label><label><strong>Timezone</strong><select value={timezone} onChange={(e) => { setTimezone(e.target.value); setSaved(false); }}><option value="Asia/Beirut">Beirut</option><option value="Asia/Qatar">Qatar</option><option value="UTC">UTC</option></select></label></div></section> : null}
 
-          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => { setAutoLogout(e.target.value); setSaved(false); }}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><button type="button" className="secondary-action" disabled title="Not built yet - contact T-ZONE support to reset your password">Change password (coming soon)</button><button type="button" className="secondary-action" disabled title="Not built yet">View active sessions (coming soon)</button></div>
+          {active === "session" ? <section className="settings-section-card"><h3>Session & security</h3><p>Automatic logout and account security.</p><div className="settings-form-grid"><label><strong>Auto logout after inactivity</strong><select value={autoLogout} onChange={(e) => { setAutoLogout(e.target.value); setSaved(false); }}><option value="10">10 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option><option value="never">Never</option></select></label><ChangePasswordForm /><ActiveSessions /></div>
             <div className="settings-2fa" style={{ marginTop: "1.5rem", borderTop: "1px solid rgba(0,0,0,0.08)", paddingTop: "1.25rem" }}>
               <h3>Two-factor authentication</h3>
               <p>Add a one-time code from an authenticator app (Google Authenticator, Authy, 1Password) to every sign-in.</p>

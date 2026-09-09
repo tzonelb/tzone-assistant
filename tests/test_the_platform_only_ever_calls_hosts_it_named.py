@@ -42,6 +42,10 @@ CONFIGURED_BASES = {
         "The model endpoint, from the environment. Set by whoever runs the "
         "server; no request reaches it."
     ),
+    "config.OPENAI_TTS_API_URL": (
+        "The voice-synthesis endpoint, from the environment. Set by whoever "
+        "runs the server; no request reaches it."
+    ),
 }
 
 

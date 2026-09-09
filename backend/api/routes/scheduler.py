@@ -33,6 +33,7 @@ class ScheduledPostCreate(BaseModel):
     media_url: str | None = Field(default=None, max_length=1000)
     link_url: str | None = Field(default=None, max_length=1000)
     channel_account_id: int | None = None
+    tags: list[str] = Field(default_factory=list)
 
     @field_validator("scheduled_for")
     @classmethod
@@ -63,6 +64,7 @@ class ScheduledPostUpdate(BaseModel):
     scheduled_for: str | None = None
     media_url: str | None = Field(default=None, max_length=1000)
     link_url: str | None = Field(default=None, max_length=1000)
+    tags: list[str] | None = None
 
 
 @router.get("")
@@ -123,6 +125,7 @@ def create_scheduled_post(
             link_url=payload.link_url,
             channel_account_id=payload.channel_account_id,
             created_by_user_id=int(current_user["id"]),
+            tags=payload.tags,
         )
     except SchedulerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

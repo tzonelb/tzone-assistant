@@ -10,6 +10,7 @@ published, so a half-written draft cannot go out because a clock ticked over.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -35,6 +36,8 @@ STATUSES = (DRAFT, APPROVED, PUBLISHED, FAILED, CANCELLED)
 
 LEASE_SECONDS = 300
 MAX_ATTEMPTS = 4
+MAX_TAGS = 20
+MAX_TAG_LENGTH = 40
 
 
 def utc_now() -> datetime:
@@ -47,6 +50,30 @@ def utc_now_iso() -> str:
 
 def _iso_in(seconds: float) -> str:
     return (utc_now() + timedelta(seconds=seconds)).isoformat()
+
+
+def _normalize_tags(tags: list[str] | None) -> list[str]:
+    if not tags:
+        return []
+    seen: set[str] = set()
+    cleaned: list[str] = []
+    for tag in tags:
+        text = str(tag or "").strip()[:MAX_TAG_LENGTH]
+        key = text.casefold()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(text)
+    return cleaned[:MAX_TAGS]
+
+
+def _row(row: Any) -> dict[str, Any]:
+    data = dict(row)
+    try:
+        data["tags"] = json.loads(data.pop("tags_json", None) or "[]")
+    except (TypeError, ValueError):
+        data["tags"] = []
+    return data
 
 
 class SchedulerError(ValueError):
@@ -107,6 +134,7 @@ class SchedulerService:
         media_url: str | None = None,
         link_url: str | None = None,
         channel_account_id: int | None = None,
+        tags: list[str] | None = None,
     ) -> dict[str, Any]:
         company_id = int(company_id)
         now = utc_now_iso()
@@ -121,9 +149,9 @@ class SchedulerService:
                 INSERT INTO scheduled_posts (
                     company_id, channel, channel_account_id, body, media_url,
                     link_url, scheduled_for, status, created_by_user_id,
-                    created_at, updated_at
+                    tags_json, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     company_id,
@@ -135,6 +163,7 @@ class SchedulerService:
                     scheduled_for,
                     DRAFT,
                     created_by_user_id,
+                    json.dumps(_normalize_tags(tags)),
                     now,
                     now,
                 ),
@@ -170,6 +199,10 @@ class SchedulerService:
             if column in values:
                 assignments.append(f"{column} = ?")
                 params.append(values[column])
+
+        if "tags" in values:
+            assignments.append("tags_json = ?")
+            params.append(json.dumps(_normalize_tags(values["tags"])))
 
         # The account is validated against the channel the post will actually
         # go out on, which may be the one being set in this same edit.
@@ -311,7 +344,7 @@ class SchedulerService:
                 (int(post_id), int(company_id)),
             ).fetchone()
 
-        return dict(row) if row else None
+        return _row(row) if row else None
 
     def list_posts(
         self,
@@ -372,7 +405,7 @@ class SchedulerService:
             }
 
         return {
-            "items": [dict(row) for row in rows],
+            "items": [_row(row) for row in rows],
             "total": total,
             "status_counts": {status: counts.get(status, 0) for status in STATUSES},
         }

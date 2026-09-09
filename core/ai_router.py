@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from backend.services.business_department_service import business_department_service
+from backend.services.instruction_service import instruction_service
 from config.settings import config
 from core.prompt_builder import prompt_builder
 
@@ -56,6 +57,8 @@ class AIRouter:
         match_result: dict[str, Any] | None = None,
         company_id: int | None = None,
         channel_account_id: int | None = None,
+        department: str | None = None,
+        flow_instructions: str = "",
     ) -> dict[str, Any] | None:
         if not config.AI_ENABLED:
             return None
@@ -87,6 +90,8 @@ class AIRouter:
                 match_result=match_result,
                 company_id=company_id,
                 channel_account_id=channel_account_id,
+                department=department,
+                flow_instructions=flow_instructions,
             )
 
             result = self.normalize_result(raw_result, company_id=company_id)
@@ -102,6 +107,41 @@ class AIRouter:
             logger.exception("AI Router failed")
             return None
 
+    def _with_instructions(
+        self,
+        company_prompt: str,
+        *,
+        company_id: int | None,
+        department: str | None,
+        channel: str | None,
+    ) -> str:
+        """Append the company's own behaviour rules to its system prompt.
+
+        Returns the prompt unchanged when there is no company or no applicable
+        rule. Reading the rules never fails the reply: ``for_prompt`` already
+        swallows and logs its own errors and returns an empty list, so a broken
+        rule set costs the company its rules, not its assistant.
+        """
+        if not company_id:
+            return company_prompt
+
+        rules = instruction_service.for_prompt(
+            int(company_id),
+            department=department,
+            channel=channel,
+        )
+        if not rules:
+            return company_prompt
+
+        numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(rules, 1))
+        block = (
+            "The business owner has set these rules for how you must reply. "
+            "They override the general guidance above when they conflict, and "
+            "you must follow them even while staying grounded in confirmed "
+            "facts:\n" + numbered
+        )
+        return f"{company_prompt}\n\n{block}"
+
     def call_openai(
         self,
         message: str,
@@ -116,6 +156,8 @@ class AIRouter:
         match_result: dict[str, Any],
         company_id: int | None = None,
         channel_account_id: int | None = None,
+        department: str | None = None,
+        flow_instructions: str = "",
     ) -> dict[str, Any]:
         # The company's own trained profile — tone, instructions, examples.
         # Without the company this returns a neutral prompt carrying no
@@ -125,6 +167,29 @@ class AIRouter:
             company_id=company_id,
             channel_account_id=channel_account_id,
         )
+
+        # The owner's own behaviour rules for this reply, scoped to the
+        # department and channel it belongs to. These are the company's, stored
+        # in its own encrypted database — one company's rules never reach
+        # another's assistant. Appended as a distinct, high-priority system
+        # message so a rule reads as a rule, not as background profile text.
+        company_prompt = self._with_instructions(
+            company_prompt,
+            company_id=company_id,
+            department=department,
+            channel=channel,
+        )
+
+        # A Reply Flow step handed this turn to the AI with its own instruction
+        # ("answer only from the knowledge base", "help them book"). It applies
+        # to this one reply, so it is appended after the standing rules, closest
+        # to the task at hand.
+        flow_instructions = str(flow_instructions or "").strip()
+        if flow_instructions:
+            company_prompt = (
+                f"{company_prompt}\n\nFor this reply, follow this step's "
+                f"instruction:\n{flow_instructions}"
+            )
 
         grounded_prompt = """
 You are the customer-facing AI assistant for a business platform.

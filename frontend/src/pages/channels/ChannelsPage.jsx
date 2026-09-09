@@ -12,6 +12,10 @@ import {
   updateChannelAccountRequest,
 } from "../../api/channels";
 import {
+  facebookOAuthConfigRequest,
+  startFacebookOAuthRequest,
+} from "../../api/client";
+import {
   AppButton,
   AppCard,
   AppTable,
@@ -22,6 +26,26 @@ import {
 } from "../../components/common";
 import { formatPlatformDateTime } from "../../utils/dateTime";
 import "./ChannelsPage.css";
+
+// The message shown after returning from the Facebook connect flow, read once
+// from the ?connect= status the callback redirects with. Kept out of the
+// component so it can seed initial state without a set-state-in-effect.
+const CONNECT_MESSAGES = {
+  ok: "Connected. Your Facebook Page and any linked Instagram account are now receiving messages.",
+  none: "Signed in, but no Page could be connected. Make sure you manage a Facebook Page.",
+  cancelled: "Facebook sign-in was cancelled.",
+  invalid: "That sign-in link expired. Please try connecting again.",
+  failed: "Facebook sign-in failed. Please try again.",
+};
+
+function readConnectNotice() {
+  try {
+    const status = new URLSearchParams(window.location.search).get("connect");
+    return status ? CONNECT_MESSAGES[status] || "" : "";
+  } catch {
+    return "";
+  }
+}
 
 // Only used as a fallback label; the server is the authority on which
 // identifier a channel is routed by and sends it in `routing_fields`.
@@ -130,6 +154,13 @@ export default function ChannelsPage() {
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
+  // "Log in with Facebook" is only offered when the server has a Meta app
+  // configured; otherwise the button is not shown at all, so nothing on screen
+  // suggests a connect method that cannot work yet.
+  const [oauthConfigured, setOauthConfigured] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connectNotice, setConnectNotice] = useState(readConnectNotice);
+
   const visibleItems = useMemo(() => {
     if (branchFilter === "all") {
       return items;
@@ -171,6 +202,53 @@ export default function ChannelsPage() {
   useEffect(() => {
     loadAccounts();
   }, [loadAccounts]);
+
+  useEffect(() => {
+    let cancelled = false;
+    facebookOAuthConfigRequest()
+      .then((result) => {
+        if (!cancelled) setOauthConfigured(Boolean(result?.configured));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The Facebook callback lands the person back here with ?connect=... The
+  // message was read into state above; here we just strip the params from the
+  // URL so a refresh does not repeat the notice.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.get("connect")) return;
+    params.delete("connect");
+    params.delete("reason");
+    const next = params.toString();
+    window.history.replaceState(
+      {},
+      "",
+      window.location.pathname + (next ? `?${next}` : ""),
+    );
+  }, []);
+
+  const connectWithFacebook = useCallback(async () => {
+    setConnecting(true);
+    setConnectNotice("");
+    try {
+      const result = await startFacebookOAuthRequest();
+      if (result?.authorize_url) {
+        window.location.href = result.authorize_url;
+        return;
+      }
+      setConnectNotice("Could not start Facebook sign-in. Please try again.");
+    } catch (requestError) {
+      setConnectNotice(
+        requestError.message || "Could not start Facebook sign-in.",
+      );
+    } finally {
+      setConnecting(false);
+    }
+  }, []);
 
   const routingField = routingFields[form.channel] || "";
 
@@ -446,6 +524,16 @@ export default function ChannelsPage() {
               Refresh
             </AppButton>
 
+            {oauthConfigured ? (
+              <AppButton
+                variant="secondary"
+                onClick={connectWithFacebook}
+                disabled={connecting}
+              >
+                {connecting ? "Connecting…" : "Log in with Facebook"}
+              </AppButton>
+            ) : null}
+
             <AppButton
               variant="primary"
               icon={<AddOutlined fontSize="small" />}
@@ -456,6 +544,20 @@ export default function ChannelsPage() {
           </>
         }
       />
+
+      {connectNotice ? (
+        <AppCard padding="small" className="channels-connect-notice">
+          <span>{connectNotice}</span>
+          <button
+            type="button"
+            className="channels-connect-notice-dismiss"
+            onClick={() => setConnectNotice("")}
+            aria-label="Dismiss"
+          >
+            <CloseOutlined fontSize="small" />
+          </button>
+        </AppCard>
+      ) : null}
 
       <div className={`channels-layout ${editorOpen ? "has-editor" : ""}`}>
         <AppCard padding="medium" className="channels-list-card">

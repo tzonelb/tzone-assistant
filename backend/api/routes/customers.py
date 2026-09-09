@@ -272,6 +272,76 @@ def update_customer(
     return customer
 
 
+@router.post("/{customer_id}/block")
+def block_customer(
+    customer_id: int,
+    request: Request,
+    context=Depends(manage_context),
+):
+    """Stop this person's messages from reaching the platform at all.
+
+    Enforced on `channels/inbound.py`'s inbound path -- a blocked customer's
+    message is dropped before it is stored, notified on, or answered. This is
+    what makes it a block rather than a tag on the conversation.
+    """
+    current_user, company_id = context
+
+    try:
+        customer = customer_service.set_blocked(
+            company_id=company_id,
+            customer_id=customer_id,
+            blocked=True,
+            actor_user_id=current_user.get("id"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CUSTOMER_BLOCKED,
+        category="customers",
+        target_type="customer",
+        target_id=customer_id,
+        summary="Blocked a customer",
+        ip_address=client_ip(request),
+    )
+
+    return customer
+
+
+@router.post("/{customer_id}/unblock")
+def unblock_customer(
+    customer_id: int,
+    request: Request,
+    context=Depends(manage_context),
+):
+    current_user, company_id = context
+
+    try:
+        customer = customer_service.set_blocked(
+            company_id=company_id,
+            customer_id=customer_id,
+            blocked=False,
+            actor_user_id=current_user.get("id"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CUSTOMER_BLOCKED,
+        category="customers",
+        target_type="customer",
+        target_id=customer_id,
+        summary="Unblocked a customer",
+        ip_address=client_ip(request),
+    )
+
+    return customer
+
+
 @segments_router.get("")
 def list_segments(context=Depends(view_context)):
     _, company_id = context

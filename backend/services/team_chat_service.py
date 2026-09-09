@@ -656,6 +656,16 @@ class TeamChatService:
                     conn, channel_id=int(channel_id), user_ids=mentioned
                 )
 
+            if linked_conversation_id:
+                exists = conn.execute(
+                    "SELECT 1 FROM conversations WHERE id = ? AND company_id = ? LIMIT 1",
+                    (int(linked_conversation_id), company_id),
+                ).fetchone()
+                if not exists:
+                    raise ValueError(
+                        "That conversation does not belong to this company."
+                    )
+
             cursor = conn.execute(
                 """
                 INSERT INTO team_messages (
