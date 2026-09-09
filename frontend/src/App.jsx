@@ -37,7 +37,6 @@ const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalo
 const ReplyFlowBuilderPage = lazy(() => import("./pages/reply-flows/ReplyFlowBuilderPage"));
 const RolesPermissionsPage = lazy(() => import("./pages/admin/RolesPermissionsPage"));
 const ActivityLogPage = lazy(() => import("./pages/admin/ActivityLogPage"));
-const PlatformAdminPage = lazy(() => import("./pages/admin/PlatformAdminPage"));
 const ThemeStudioPage = lazy(() => import("./pages/admin/ThemeStudioPage"));
 const SavedRepliesPage = lazy(() => import("./pages/saved-replies/SavedRepliesPage"));
 const SchedulerPage = lazy(() => import("./pages/scheduler/SchedulerPage"));
@@ -87,14 +86,24 @@ export default function App() {
         <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
         <Route path="/superadmin/*" element={<SuperAdminApp />} />
         <Route path="/conversations/:channel/:userId/full" element={<ProtectedRoute><ModuleRoute module="conversations"><ConversationDetailScreen standalone /></ModuleRoute></ProtectedRoute>} />
-        {/* The two screens SidebarV2 has always linked to and nothing routed,
-            so both fell through to the catch-all and bounced to the dashboard.
-            Outside AppLayout deliberately, matching where the design branch
-            mounts them: each draws its own header and its own way back, and
-            inside the shell they would carry two of each. `company_settings`
+        {/* Outside AppLayout deliberately, matching where the design branch
+            mounts it: it draws its own header and its own way back, and
+            inside the shell it would carry two of each. `company_settings`
             is the gate — the design branch has none, and this is the module a
-            company's own administration already sits behind. */}
-        <Route path="/platform-admin" element={<ProtectedRoute requireSuperAdmin><ModuleRoute module="company_settings"><PlatformAdminPage /></ModuleRoute></ProtectedRoute>} />
+            company's own administration already sits behind.
+
+            `/platform-admin` itself used to live here too, gated the same
+            way: a company session that happens to belong to a super admin.
+            Every one of its tabs calls `/api/platform/*`, and every one of
+            those routes is `get_platform_admin`-guarded -- it demands a
+            *platform*-scope session, the separate one `/superadmin/login`
+            mints with its own mandatory TOTP. A company session, however
+            privileged, can never satisfy that, so the page 403'd on every
+            tab, not just the one this had been reported against. `/superadmin`
+            is the real console and always has been -- several of this page's
+            own request functions already said so in their error text. Removed
+            rather than reworked: it duplicated working, correctly-guarded
+            screens with a page that could never authenticate. */}
         <Route path="/platform-admin/theme-studio" element={<ProtectedRoute requireSuperAdmin><ModuleRoute module="company_settings"><ThemeStudioPage /></ModuleRoute></ProtectedRoute>} />
         <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
           <Route path="/dashboard" element={<ModuleRoute module="dashboard"><DashboardScreen /></ModuleRoute>} />

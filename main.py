@@ -62,6 +62,7 @@ from backend.api.routes import (
 )
 from backend.api.middleware import (
     BodySizeLimitMiddleware,
+    GeneralRateLimitMiddleware,
     SecurityHeadersMiddleware,
     SessionCookieMiddleware,
 )
@@ -246,6 +247,11 @@ install_error_handlers(app)
 # application carries the headers, including CORS preflights and error
 # responses raised inside the stack.
 app.add_middleware(SecurityHeadersMiddleware)
+# Inside the header middleware so a refusal still carries the headers, and as
+# early as possible otherwise: a request over the rate limit is rejected
+# before it costs anything else, the same reason nginx's own `tzone_api` zone
+# sits in front of everything in deploy/nginx.conf.
+app.add_middleware(GeneralRateLimitMiddleware)
 # Inside the header middleware so a refusal still carries the headers, and
 # before the routes so an oversized body is abandoned rather than parsed. The
 # webhook routes are skipped inside the middleware -- they keep their own,

@@ -211,7 +211,7 @@ export default function SidebarV2({ open, collapsed, companyName, onClose, onTog
           {isSuperAdmin ? (
             <div className="sidebar-v2-group">
               {expanded ? <div className="sidebar-v2-kicker sidebar-v2-group-label">Platform</div> : null}
-              <NavLink to="/platform-admin" className={({ isActive }) => `sidebar-v2-link ${isActive ? "sidebar-v2-link-active" : ""}`} onClick={onClose}>
+              <NavLink to="/superadmin" className={({ isActive }) => `sidebar-v2-link ${isActive ? "sidebar-v2-link-active" : ""}`} onClick={onClose}>
                 <AdminPanelSettingsOutlined fontSize="small" />
                 <span>Platform Admin</span>
               </NavLink>
