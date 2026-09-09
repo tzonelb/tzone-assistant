@@ -114,7 +114,7 @@ export default function DashboardPageV2() {
               ))}
             </div>
           ) : (
-            <EmptyState icon={<ChatOutlined />} title="No database conversations yet" description="The existing Messenger system remains active. Conversation database synchronization will be connected in the next stage." />
+            <EmptyState icon={<ChatOutlined />} title="No conversations yet" description="A conversation appears here as soon as a customer messages one of your connected channels." />
           )}
         </section>
 
@@ -124,9 +124,9 @@ export default function DashboardPageV2() {
             <span className="tag tag-accent">{subscription?.status || "—"}</span>
           </div>
           <div className="tzv2-dash-plan-grid">
-            <div><span className="tz-kick">Users</span><div className="tz-fig tzv2-dash-plan-fig">{counts.users || 0} / {subscription?.max_users || 0}</div></div>
-            <div><span className="tz-kick">Channels</span><div className="tz-fig tzv2-dash-plan-fig">{counts.channel_accounts || 0} / {subscription?.max_channel_accounts || 0}</div></div>
-            <div><span className="tz-kick">AI messages</span><div className="tz-fig tzv2-dash-plan-fig">{subscription?.max_ai_messages || 0}</div></div>
+            <div><span className="tz-kick">Users</span><div className="tz-fig tzv2-dash-plan-fig">{subscription ? `${counts.users || 0} / ${subscription.max_users || 0}` : "—"}</div></div>
+            <div><span className="tz-kick">Channels</span><div className="tz-fig tzv2-dash-plan-fig">{subscription ? `${counts.channel_accounts || 0} / ${subscription.max_channel_accounts || 0}` : "—"}</div></div>
+            <div><span className="tz-kick">AI messages</span><div className="tz-fig tzv2-dash-plan-fig">{subscription ? (subscription.max_ai_messages || 0) : "—"}</div></div>
             <div><span className="tz-kick">Expires</span><div className="tz-fig tzv2-dash-plan-fig">{subscription?.expires_at ? new Date(subscription.expires_at).toLocaleDateString() : "—"}</div></div>
           </div>
         </section>
@@ -148,7 +148,7 @@ export default function DashboardPageV2() {
             ))}
           </div>
         ) : (
-          <EmptyState icon={<HubOutlined />} title="No channel accounts registered" description="Messenger remains connected through the current webhook. Channel account registration will be added without changing the working connection." />
+          <EmptyState icon={<HubOutlined />} title="No channel accounts registered" description="Connect a channel from Company Settings to start receiving conversations here." />
         )}
       </section>
     </div>

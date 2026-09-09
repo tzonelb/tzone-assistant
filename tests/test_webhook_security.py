@@ -650,3 +650,82 @@ def test_meta_events_are_empty_for_a_non_dict_payload(payload):
 @pytest.mark.parametrize("payload", NON_DICT_PAYLOADS)
 def test_whatsapp_events_are_empty_for_a_non_dict_payload(payload):
     assert parse_whatsapp_events(payload) == []
+
+
+def test_whatsapp_events_carry_the_senders_profile_name():
+    """WhatsApp hands over the sender's own profile name with every delivery,
+    in a `contacts[]` array parallel to `messages[]` and matched by `wa_id`.
+
+    Reproduced live: a first-time sender's message created a customer record
+    with no name and no phone at all -- `channels/inbound.py` has had a
+    `customer_name` hook for this since Telegram was wired up (it sends the
+    same kind of name with every update), but the WhatsApp parser never read
+    `contacts[]` to fill it in, so it was always None here even though the
+    name was sitting right there in the payload.
+    """
+    payload = {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": "waba1",
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "metadata": {"phone_number_id": "1234567890"},
+                            "contacts": [
+                                {"profile": {"name": "Layla Hassan"}, "wa_id": "9665500001"}
+                            ],
+                            "messages": [
+                                {
+                                    "from": "9665500001",
+                                    "id": "wamid.1",
+                                    "timestamp": "1700000000",
+                                    "type": "text",
+                                    "text": {"body": "hi"},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    events = parse_whatsapp_events(payload)
+
+    assert len(events) == 1
+    assert events[0]["customer_name"] == "Layla Hassan"
+
+
+def test_whatsapp_events_tolerate_a_sender_missing_from_contacts():
+    """Not every delivery necessarily lines up 1:1 -- a missing or malformed
+    `contacts[]` entry must fall back to no name, not crash the parser."""
+    payload = {
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "value": {
+                            "metadata": {"phone_number_id": "1234567890"},
+                            "contacts": [{"profile": {}, "wa_id": "9665500001"}],
+                            "messages": [
+                                {
+                                    "from": "9665500009",
+                                    "id": "wamid.2",
+                                    "timestamp": "1700000000",
+                                    "type": "text",
+                                    "text": {"body": "hi"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        ],
+    }
+
+    events = parse_whatsapp_events(payload)
+
+    assert len(events) == 1
+    assert events[0]["customer_name"] is None

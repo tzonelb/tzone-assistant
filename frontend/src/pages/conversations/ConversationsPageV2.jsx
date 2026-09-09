@@ -191,7 +191,11 @@ export default function ConversationsPageV2() {
   }, [routeChannel, routeUserId]);
 
   const enabledChannels = useMemo(() => new Set(availableChannels), [availableChannels]);
-  const totalCount = Object.values(channelCounts).reduce((sum, value) => sum + Number(value || 0), 0);
+  // `channelCounts` comes straight from the API's own `all` + per-channel
+  // breakdown (see `channel_counts` in conversations.list) -- summing every
+  // value here double-counted `all` on top of its own channels, so "All
+  // channels" showed 2 for a single whatsapp conversation instead of 1.
+  const totalCount = Number(channelCounts.all || 0);
   const hasSelectedConversation = Boolean(routeChannel && routeUserId);
 
   function openConversation(row) {

@@ -101,6 +101,23 @@ def parse_whatsapp_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
             metadata = value.get("metadata") or {}
             phone_number_id = metadata.get("phone_number_id")
 
+            # WhatsApp sends the sender's own profile name alongside every
+            # delivery, in a `contacts[]` array parallel to `messages[]` and
+            # matched by `wa_id`. `channels/inbound.py` already has a
+            # `customer_name` hook built for exactly this (Telegram uses it
+            # the same way) -- reproduced live: without this, an inbound
+            # WhatsApp message from a first-time sender created a customer
+            # record with no name and no phone at all, even though both were
+            # sitting right here in the payload.
+            contact_names: dict[str, str] = {}
+            for contact in value.get("contacts") or []:
+                if not isinstance(contact, dict):
+                    continue
+                wa_id = contact.get("wa_id")
+                name = ((contact.get("profile") or {}).get("name") or "").strip()
+                if wa_id and name:
+                    contact_names[str(wa_id)] = name
+
             for message in value.get("messages") or []:
                 if not isinstance(message, dict):
                     continue
@@ -138,6 +155,7 @@ def parse_whatsapp_events(payload: dict[str, Any]) -> list[dict[str, Any]]:
                         "text": text,
                         "message_id": message.get("id"),
                         "timestamp": message.get("timestamp"),
+                        "customer_name": contact_names.get(str(sender)),
                         "raw_event": message,
                     }
                 )
