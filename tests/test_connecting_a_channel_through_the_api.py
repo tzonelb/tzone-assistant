@@ -55,8 +55,9 @@ def app_client(platform, monkeypatch):
 
 
 @pytest.fixture()
-def owner(platform, alpha, app_client):
+def owner(platform, alpha, app_client, monkeypatch):
     from backend.services.auth_service import auth_service
+    from backend.services import channel_verification_service
     from database.manager import utc_now_iso
 
     user_id = auth_service.create_user(
@@ -87,7 +88,30 @@ def owner(platform, alpha, app_client):
     )
     assert response.status_code == 200, response.text
 
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    # Connecting a channel now requires an elevated grant from confirming a
+    # 6-digit emailed code (see test_channel_verification.py for that flow in
+    # detail). Fixed here to a known value so this file can stay focused on
+    # the routing/validation behaviour it actually tests.
+    monkeypatch.setattr(
+        channel_verification_service, "_generate_code", lambda: "482913"
+    )
+    request_sent = app_client.post(
+        "/api/channels/verification/request", headers=headers
+    )
+    assert request_sent.status_code == 200, request_sent.text
+
+    confirmed = app_client.post(
+        "/api/channels/verification/confirm",
+        json={"code": "482913"},
+        headers=headers,
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    headers["X-Elevated-Token"] = confirmed.json()["elevated_token"]
+
+    return headers
 
 
 def test_a_telegram_account_can_be_connected_over_http(app_client, owner):

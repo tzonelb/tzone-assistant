@@ -221,6 +221,41 @@ CONTROL_TABLES: tuple[str, ...] = (
         FOREIGN KEY(branch_id) REFERENCES branches(id) ON DELETE SET NULL
     )
     """,
+    # A one-time code, emailed to the account itself, that must be entered
+    # before connecting or disconnecting a channel. Channel credentials route a
+    # company's real customer conversations, so establishing or removing one is
+    # treated the same way a password reset is: the code is never stored, only
+    # its hash, exactly like `password_reset_tokens.token_hash`.
+    """
+    CREATE TABLE IF NOT EXISTS channel_verification_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        company_id INTEGER NOT NULL,
+        code_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+    """,
+    # What confirming a code above actually grants: a short-lived pass that
+    # lets connect/disconnect proceed without asking again for every action in
+    # the same sitting. Bearer value never stored, only its hash -- the same
+    # shape as `auth_sessions.token_hash`, deliberately separate from the
+    # employee's own session token so it cannot outlive or substitute for it.
+    """
+    CREATE TABLE IF NOT EXISTS channel_elevated_grants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        company_id INTEGER NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+    """,
     # What the Super Admin decides a company may see and use. Control-plane
     # because the customer app reads it at sign-in, before any tenant database
     # is opened, and because a company must not be able to grant itself a
@@ -633,6 +668,9 @@ CONTROL_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_login_attempts_ip ON login_attempts(ip_address, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_reset_tokens(token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_reset_tokens(user_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_channel_verify_codes_user ON channel_verification_codes(user_id, company_id, used_at)",
+    "CREATE INDEX IF NOT EXISTS idx_channel_elevated_hash ON channel_elevated_grants(token_hash)",
+    "CREATE INDEX IF NOT EXISTS idx_channel_elevated_user ON channel_elevated_grants(user_id, company_id)",
     "CREATE INDEX IF NOT EXISTS idx_share_links_hash ON conversation_share_links(token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_share_links_conversation ON conversation_share_links(company_id, channel, external_user_id)",
     "CREATE INDEX IF NOT EXISTS idx_channel_accounts_company ON channel_accounts(company_id)",

@@ -16,10 +16,18 @@ export async function getChannelAccountRequest(accountId) {
   return apiRequest(`/api/channels/${encodeURIComponent(accountId)}`);
 }
 
-export async function createChannelAccountRequest(values) {
+/*
+ * Connecting or disconnecting a channel additionally requires an elevated
+ * token from confirming a 6-digit code emailed to the account (see
+ * requestChannelVerificationRequest / confirmChannelVerificationRequest
+ * below). Editing an already-connected account does not.
+ */
+
+export async function createChannelAccountRequest(values, elevatedToken) {
   return apiRequest("/api/channels", {
     method: "POST",
     body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
   });
 }
 
@@ -30,8 +38,20 @@ export async function updateChannelAccountRequest(accountId, values) {
   });
 }
 
-export async function deleteChannelAccountRequest(accountId) {
+export async function deleteChannelAccountRequest(accountId, elevatedToken) {
   return apiRequest(`/api/channels/${encodeURIComponent(accountId)}`, {
     method: "DELETE",
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function requestChannelVerificationRequest() {
+  return apiRequest("/api/channels/verification/request", { method: "POST" });
+}
+
+export async function confirmChannelVerificationRequest(code) {
+  return apiRequest("/api/channels/verification/confirm", {
+    method: "POST",
+    body: { code },
   });
 }
