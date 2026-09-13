@@ -40,6 +40,7 @@ class IntentTransitionManager:
         "whatsapp",
         "instagram",
         "telegram",
+        "slack",
     ]
 
     @staticmethod

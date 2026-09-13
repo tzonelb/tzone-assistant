@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 
-ChannelName = Literal["messenger", "instagram", "whatsapp", "telegram"]
+ChannelName = Literal["messenger", "instagram", "whatsapp", "telegram", "slack"]
 
 
 class ChannelAccountCreate(BaseModel):
@@ -80,6 +80,16 @@ class ChannelAccountCreate(BaseModel):
             if not self.access_token:
                 raise ValueError(
                     "A telegram account requires the bot token from BotFather."
+                )
+
+            return self
+
+        # Slack is the same shape as Telegram just above: the workspace id is
+        # derived from the bot token by channel_account_service, not typed in.
+        if self.channel == "slack":
+            if not self.access_token:
+                raise ValueError(
+                    "A slack account requires its Bot User OAuth Token."
                 )
 
             return self

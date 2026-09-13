@@ -20,4 +20,5 @@ export const SUPPORTED_CHANNELS = [
   "whatsapp",
   "instagram",
   "telegram",
+  "slack",
 ];

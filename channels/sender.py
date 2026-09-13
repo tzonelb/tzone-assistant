@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from channels.meta.sender import send_meta_buttons, send_meta_media, send_meta_text
+from channels.slack.sender import send_slack_text
 from channels.telegram.sender import send_telegram_media, send_telegram_text
 from channels.whatsapp.sender import send_whatsapp_media, send_whatsapp_text
 
@@ -21,8 +22,16 @@ logger = logging.getLogger(__name__)
 META_CHANNELS = frozenset({"messenger", "instagram"})
 WHATSAPP_CHANNELS = frozenset({"whatsapp"})
 TELEGRAM_CHANNELS = frozenset({"telegram"})
+SLACK_CHANNELS = frozenset({"slack"})
 
-SUPPORTED_CHANNELS = META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS
+SUPPORTED_CHANNELS = META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS | SLACK_CHANNELS
+
+# Slack is deliberately absent here: it has no media sender yet (see
+# channels/slack/sender.py's docstring), so a media send for it falls through
+# to UnsupportedChannel below rather than pretending to succeed. Kept as its
+# own set, distinct from SUPPORTED_CHANNELS, so that error message never lists
+# a channel that cannot actually carry an attachment.
+MEDIA_SUPPORTED_CHANNELS = META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS
 
 
 class UnsupportedChannel(ValueError):
@@ -168,7 +177,7 @@ def send_media(
 
     raise UnsupportedChannel(
         f"Channel '{channel}' cannot send attachments. "
-        f"Supported: {', '.join(sorted(SUPPORTED_CHANNELS))}."
+        f"Supported: {', '.join(sorted(MEDIA_SUPPORTED_CHANNELS))}."
     )
 
 

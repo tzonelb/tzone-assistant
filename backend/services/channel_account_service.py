@@ -16,6 +16,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from backend.security import keyring
 from backend.security.keyring import CorruptedKeyMaterial
 from backend.services.business_department_service import business_department_service
@@ -26,21 +28,24 @@ from database.manager import database_manager
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp", "telegram")
+SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp", "telegram", "slack")
 
 # Which identifier each channel is routed by. Getting this wrong sends one
 # company's customers to another, so it is declared once here.
 #
-# Telegram routes on `external_account_id`, which holds the bot's numeric id.
-# It has no column of its own because it needs none: a Telegram bot has exactly
-# one identity, the id is the prefix of its own token, and the existing unique
-# index on `(channel, external_account_id)` already stops two companies claiming
-# the same bot.
+# Telegram and Slack both route on `external_account_id` rather than a column
+# of their own: a Telegram bot has exactly one identity (the prefix of its own
+# token) and a Slack app has exactly one workspace (its `team_id`, read back
+# from Slack itself with the token the operator pasted). Both are derived, not
+# typed, for the same reason -- see `telegram_bot_id` and `slack_team_id`
+# below -- and the existing unique index on `(channel, external_account_id)`
+# already stops two companies claiming the same bot or the same workspace.
 ROUTING_FIELD = {
     "messenger": "page_id",
     "instagram": "instagram_business_id",
     "whatsapp": "phone_number_id",
     "telegram": "external_account_id",
+    "slack": "external_account_id",
 }
 
 
@@ -75,6 +80,57 @@ def telegram_bot_id(token: str) -> str:
         )
 
     return bot_id
+
+
+SLACK_AUTH_TEST_URL = "https://slack.com/api/auth.test"
+SLACK_TIMEOUT_SECONDS = 10
+
+
+def slack_team_id(bot_token: str) -> str:
+    """The workspace's id, read back from Slack with the bot token itself.
+
+    A Slack bot token carries no workspace id the way a Telegram token carries
+    its bot id, so there is nothing to parse locally -- it has to be asked of
+    Slack's own `auth.test`, which every valid bot token can call for free and
+    which fails immediately for a token that is wrong, revoked, or pasted from
+    the wrong app. Deriving it here keeps the same guarantee `telegram_bot_id`
+    gives: the operator never types the identifier that decides where a
+    workspace's messages get routed, so there is no transcription that could
+    misroute or collide with another company's.
+    """
+    token = str(bot_token or "").strip()
+
+    if not token:
+        raise ChannelAccountError("A Slack account needs its Bot User OAuth Token.")
+
+    try:
+        response = httpx.post(
+            SLACK_AUTH_TEST_URL,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=SLACK_TIMEOUT_SECONDS,
+        )
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ChannelAccountError(
+            "Could not reach Slack to verify that token. Please try again."
+        ) from exc
+
+    if not body.get("ok"):
+        raise ChannelAccountError(
+            "Slack rejected that token"
+            + (f" ({body.get('error')})" if body.get("error") else "")
+            + ". Paste the Bot User OAuth Token (starts with xoxb-) from your "
+            "Slack app's OAuth & Permissions page."
+        )
+
+    team_id = str(body.get("team_id") or "").strip()
+
+    if not team_id:
+        raise ChannelAccountError(
+            "Slack did not return a workspace id for that token."
+        )
+
+    return team_id
 
 
 def utc_now_iso() -> str:
@@ -186,6 +242,18 @@ class ChannelAccountService:
                 )
 
             values[routing_field] = telegram_bot_id(token)
+
+        # Slack, the same reasoning as Telegram just above: the routing id is
+        # the workspace's team_id, asked of Slack itself rather than typed in.
+        if normalized == "slack" and not values.get(routing_field):
+            token = values.get("access_token")
+
+            if not token:
+                raise ChannelAccountError(
+                    "A Slack account needs its Bot User OAuth Token."
+                )
+
+            values[routing_field] = slack_team_id(token)
 
         if not values.get(routing_field):
             raise ChannelAccountError(

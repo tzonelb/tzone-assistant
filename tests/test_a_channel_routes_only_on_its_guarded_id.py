@@ -95,8 +95,50 @@ def test_telegram_delivery_reaches_its_real_owner_not_a_page_id_shadow(
     assert resolved == victim, "a Telegram delivery was routed by an unguarded page_id"
 
 
-def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha):
+def _slack_auth_test_ok(team_id: str):
+    class Response:
+        @staticmethod
+        def json():
+            return {"ok": True, "team_id": team_id}
+
+    return lambda *args, **kwargs: Response()
+
+
+def test_slack_delivery_reaches_its_real_owner_not_a_page_id_shadow(
+    wired, alpha, beta, monkeypatch
+):
+    """The same shadow the Telegram test above pins, for the other channel
+    that also routes on the shared `external_account_id` column."""
+    import backend.services.channel_account_service as service_module
+
+    victim, attacker = alpha["id"], beta["id"]
+
+    monkeypatch.setattr(
+        service_module.httpx, "post", _slack_auth_test_ok("T_VICTIM")
+    )
+    channel_account_service.create_account(
+        company_id=victim, channel="slack", name="Victim Slack",
+        values={"access_token": "test-fixture-token-victim"},
+    )
+
+    # The attacker's own workspace, with the victim's team id smuggled into
+    # the unguarded page_id column.
+    monkeypatch.setattr(
+        service_module.httpx, "post", _slack_auth_test_ok("T_ATTACKER")
+    )
+    channel_account_service.create_account(
+        company_id=attacker, channel="slack", name="Attacker Slack",
+        values={"access_token": "test-fixture-token-attacker", "page_id": "T_VICTIM"},
+    )
+
+    resolved = _resolve(wired, channel="slack", page_id="T_VICTIM")
+    assert resolved == victim, "a Slack delivery was routed by an unguarded page_id"
+
+
+def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypatch):
     """The negative tests above are only meaningful if routing still works."""
+    import backend.services.channel_account_service as service_module
+
     company = alpha["id"]
 
     channel_account_service.create_account(
@@ -116,6 +158,13 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha):
         company_id=company, channel="telegram", name="TG",
         values={"access_token": token},
     )
+    monkeypatch.setattr(
+        service_module.httpx, "post", _slack_auth_test_ok("T_CLEAN")
+    )
+    channel_account_service.create_account(
+        company_id=company, channel="slack", name="Slack",
+        values={"access_token": "test-fixture-token-clean"},
+    )
 
     assert _resolve(wired, channel="messenger", page_id="PAGE_1") == company
     assert _resolve(
@@ -126,3 +175,4 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha):
     assert _resolve(
         wired, channel="telegram", page_id=telegram_bot_id(token)
     ) == company
+    assert _resolve(wired, channel="slack", page_id="T_CLEAN") == company
