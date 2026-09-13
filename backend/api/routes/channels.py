@@ -40,7 +40,8 @@ router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 
 ChannelName = Literal[
-    "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat"
+    "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
+    "email",
 ]
 
 
@@ -56,9 +57,23 @@ class ChannelAccountCreate(BaseModel):
     page_id: str | None = Field(default=None, max_length=120)
     instagram_business_id: str | None = Field(default=None, max_length=120)
     phone_number_id: str | None = Field(default=None, max_length=120)
+    # Email's routing value: the mailbox address itself. The one channel that
+    # types this rather than deriving or generating it -- see
+    # channel_account_service.ROUTING_FIELD's comment on why -- so it is the
+    # one channel that needs it as a field on this model at all.
+    external_account_id: str | None = Field(default=None, max_length=255)
 
     access_token: str | None = Field(default=None, max_length=1000)
     verify_token: str | None = Field(default=None, max_length=500)
+
+    # Email's own connection settings. Ignored by every other channel, the
+    # same way `page_id` is ignored by Slack.
+    imap_host: str | None = Field(default=None, max_length=255)
+    imap_port: int | None = Field(default=None, ge=1, le=65535)
+    imap_use_ssl: bool = True
+    smtp_host: str | None = Field(default=None, max_length=255)
+    smtp_port: int | None = Field(default=None, ge=1, le=65535)
+    smtp_use_starttls: bool = True
 
     ai_enabled: bool = True
     flow_enabled: bool = True
@@ -110,6 +125,26 @@ class ChannelAccountCreate(BaseModel):
         if self.channel == "webchat":
             return self
 
+        # Email is the opposite of every branch above: there is no bot token
+        # to derive a routing id from, so the operator types the mailbox
+        # address (checked below by the generic fallback, since it is this
+        # model's `external_account_id` field) and also the mailbox's own
+        # credentials and mail servers, which the fallback has no field name
+        # for.
+        if self.channel == "email":
+            if not self.access_token:
+                raise ValueError("An email account requires the mailbox password.")
+
+            if not self.imap_host:
+                raise ValueError(
+                    "An email account requires its IMAP server address."
+                )
+
+            if not self.smtp_host:
+                raise ValueError(
+                    "An email account requires its SMTP server address."
+                )
+
         field = ROUTING_FIELD[self.channel]
 
         if not getattr(self, field, None):
@@ -135,6 +170,18 @@ class ChannelAccountUpdate(BaseModel):
     # An omitted secret keeps the stored one; an empty string clears it.
     access_token: str | None = Field(default=None, max_length=1000)
     verify_token: str | None = Field(default=None, max_length=500)
+
+    # Email's connection settings. Unset means "keep whatever is already
+    # stored" (see `channel_account_service.update_account`'s merge, not a
+    # replace, of `config_json`) -- unlike the secrets above, there is no
+    # separate "clear" action for these; a mailbox with no IMAP host is not a
+    # state this form can reach.
+    imap_host: str | None = Field(default=None, max_length=255)
+    imap_port: int | None = Field(default=None, ge=1, le=65535)
+    imap_use_ssl: bool | None = None
+    smtp_host: str | None = Field(default=None, max_length=255)
+    smtp_port: int | None = Field(default=None, ge=1, le=65535)
+    smtp_use_starttls: bool | None = None
 
     ai_enabled: bool | None = None
     flow_enabled: bool | None = None

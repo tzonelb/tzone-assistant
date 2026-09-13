@@ -23,4 +23,5 @@ export const SUPPORTED_CHANNELS = [
   "slack",
   "discord",
   "webchat",
+  "email",
 ];

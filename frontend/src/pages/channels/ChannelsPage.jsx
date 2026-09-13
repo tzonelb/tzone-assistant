@@ -104,6 +104,28 @@ const FIELD_HINTS = {
     "The WhatsApp Business phone number id from the Meta app dashboard.",
 };
 
+// Email is the one channel where the routing field (`external_account_id`)
+// is typed by the operator rather than derived or generated, and the one
+// where the generic "External Account ID" label would mean nothing to them.
+// Every other channel keeps the generic label and hint above.
+const CHANNEL_ROUTING_META = {
+  email: {
+    label: "Mailbox address",
+    hint: "The email address customers write to, and the one this account logs in to the mail server with — e.g. support@yourcompany.com.",
+    placeholder: "support@yourcompany.com",
+    type: "email",
+  },
+};
+
+// See `routingField` in the component below: these channels derive or
+// generate their routing identifier rather than have the operator type it.
+const DERIVED_ROUTING_CHANNELS = new Set([
+  "telegram",
+  "slack",
+  "discord",
+  "webchat",
+]);
+
 const FEATURE_FLAGS = [
   ["ai_enabled", "Assistant replies"],
   ["flow_enabled", "Automated flows"],
@@ -135,8 +157,18 @@ function emptyForm(channel = "messenger") {
     page_id: "",
     instagram_business_id: "",
     phone_number_id: "",
+    external_account_id: "",
     access_token: "",
     verify_token: "",
+    // Email's own connection settings. Sensible protocol defaults so a
+    // company that just wants the common case only has to type the two host
+    // names and the mailbox password.
+    imap_host: "",
+    imap_port: "993",
+    imap_use_ssl: true,
+    smtp_host: "",
+    smtp_port: "587",
+    smtp_use_starttls: true,
     ai_enabled: true,
     flow_enabled: true,
     voice_ai_enabled: false,
@@ -240,10 +272,20 @@ function formFromAccount(account) {
     page_id: account.page_id || "",
     instagram_business_id: account.instagram_business_id || "",
     phone_number_id: account.phone_number_id || "",
+    external_account_id: account.external_account_id || "",
     // Never prefilled: the server does not return a token, and a placeholder
     // that looked like one would invite the team to save it back.
     access_token: "",
     verify_token: "",
+    // Email's settings, unlike the secrets above, are not sensitive and the
+    // server returns them plainly under `config` -- prefilled so editing one
+    // field does not require retyping the rest.
+    imap_host: account.config?.imap_host || "",
+    imap_port: account.config?.imap_port ? String(account.config.imap_port) : "993",
+    imap_use_ssl: account.config?.imap_use_ssl ?? true,
+    smtp_host: account.config?.smtp_host || "",
+    smtp_port: account.config?.smtp_port ? String(account.config.smtp_port) : "587",
+    smtp_use_starttls: account.config?.smtp_use_starttls ?? true,
     ai_enabled: Boolean(account.ai_enabled),
     flow_enabled: Boolean(account.flow_enabled),
     voice_ai_enabled: Boolean(account.voice_ai_enabled),
@@ -487,11 +529,19 @@ export default function ChannelsPage() {
     }
   }, []);
 
-  // Website chat is the one channel with nothing to route by that the
-  // operator types in: the widget key is minted server-side and shown after
-  // connecting, not asked for up front like every other channel's id.
-  const routingField =
-    form.channel === "webchat" ? "" : routingFields[form.channel] || "";
+  // Telegram, Slack and Discord all derive their routing identifier from the
+  // bot token pasted into Credentials below (see channel_account_service's
+  // `telegram_bot_id` / `slack_team_id` / `discord_bot_id`); website chat
+  // generates one server-side. None of them is something the operator types
+  // in, so none of them gets this field -- showing it would invite the exact
+  // mistake the derivation exists to prevent: typing an id here overrides
+  // the derived one and skips the check that it is genuinely this token's.
+  // Email is the one channel where the routing value *is* typed in, because
+  // there is no token to derive a mailbox address from.
+  const routingField = DERIVED_ROUTING_CHANNELS.has(form.channel)
+    ? ""
+    : routingFields[form.channel] || "";
+  const routingMeta = CHANNEL_ROUTING_META[form.channel];
 
   function resetFormState() {
     setClearAccessToken(false);
@@ -565,6 +615,15 @@ export default function ChannelsPage() {
         values[routingField] = form[routingField].trim();
       }
 
+      if (form.channel === "email") {
+        values.imap_host = form.imap_host.trim();
+        values.imap_port = form.imap_port ? Number(form.imap_port) : null;
+        values.imap_use_ssl = form.imap_use_ssl;
+        values.smtp_host = form.smtp_host.trim();
+        values.smtp_port = form.smtp_port ? Number(form.smtp_port) : null;
+        values.smtp_use_starttls = form.smtp_use_starttls;
+      }
+
       /*
        * A blank token field means "keep what is stored". The key is left out
        * entirely so the server's `exclude_unset` never sees it. Clearing is a
@@ -630,6 +689,15 @@ export default function ChannelsPage() {
 
     if (routingField) {
       values[routingField] = form[routingField].trim();
+    }
+
+    if (form.channel === "email") {
+      values.imap_host = form.imap_host.trim();
+      values.imap_port = form.imap_port ? Number(form.imap_port) : null;
+      values.imap_use_ssl = form.imap_use_ssl;
+      values.smtp_host = form.smtp_host.trim();
+      values.smtp_port = form.smtp_port ? Number(form.smtp_port) : null;
+      values.smtp_use_starttls = form.smtp_use_starttls;
     }
 
     if (form.access_token.trim()) {
@@ -1046,22 +1114,28 @@ export default function ChannelsPage() {
 
               {routingField ? (
                 <label htmlFor="channel-routing">
-                  <span>{fieldLabel(routingField)}</span>
+                  <span>{routingMeta?.label || fieldLabel(routingField)}</span>
 
                   <input
                     id="channel-routing"
-                    type="text"
+                    type={routingMeta?.type || "text"}
                     required
                     maxLength={120}
+                    // The update endpoint has nowhere to send a changed
+                    // mailbox address (see ChannelAccountUpdate) -- an
+                    // operator who wants a different one disconnects and
+                    // reconnects, the same as every derived-id channel above.
+                    disabled={Boolean(selected) && form.channel === "email"}
                     value={form[routingField]}
-                    placeholder={fieldLabel(routingField)}
+                    placeholder={routingMeta?.placeholder || fieldLabel(routingField)}
                     onChange={(event) =>
                       updateField(routingField, event.target.value)
                     }
                   />
 
                   <small>
-                    {FIELD_HINTS[routingField] ||
+                    {routingMeta?.hint ||
+                      FIELD_HINTS[routingField] ||
                       "Inbound messages are routed to this company by this identifier."}
                   </small>
                 </label>
@@ -1191,7 +1265,11 @@ export default function ChannelsPage() {
 
                   <div className="channels-field">
                     <label htmlFor="channel-access-token">
-                      <span>Access token</span>
+                      <span>
+                        {form.channel === "email"
+                          ? "Mailbox password"
+                          : "Access token"}
+                      </span>
 
                       <StatusBadge
                         status={
@@ -1213,7 +1291,9 @@ export default function ChannelsPage() {
                       placeholder={
                         selected?.has_access_token
                           ? "Leave blank to keep the stored token"
-                          : "Paste the page access token"
+                          : form.channel === "email"
+                            ? "The mailbox's own password or app password"
+                            : "Paste the page access token"
                       }
                       onChange={(event) =>
                         updateField("access_token", event.target.value)
@@ -1235,51 +1315,156 @@ export default function ChannelsPage() {
                     ) : null}
                   </div>
 
-                  <div className="channels-field">
-                    <label htmlFor="channel-verify-token">
-                      <span>Verify token</span>
+                  {/* Email has no webhook, so there is nothing for a verify
+                      token to verify -- IMAP already authenticates every
+                      poll with the mailbox password above. */}
+                  {form.channel === "email" ? null : (
+                    <div className="channels-field">
+                      <label htmlFor="channel-verify-token">
+                        <span>Verify token</span>
 
-                      <StatusBadge
-                        status={
-                          selected?.has_verify_token ? "connected" : "inactive"
+                        <StatusBadge
+                          status={
+                            selected?.has_verify_token ? "connected" : "inactive"
+                          }
+                          label={
+                            selected?.has_verify_token ? "Configured" : "Not set"
+                          }
+                        />
+                      </label>
+
+                      <input
+                        id="channel-verify-token"
+                        type="password"
+                        autoComplete="new-password"
+                        maxLength={500}
+                        value={form.verify_token}
+                        disabled={clearVerifyToken}
+                        placeholder={
+                          selected?.has_verify_token
+                            ? "Leave blank to keep the stored token"
+                            : "The webhook verify token"
                         }
-                        label={
-                          selected?.has_verify_token ? "Configured" : "Not set"
+                        onChange={(event) =>
+                          updateField("verify_token", event.target.value)
                         }
                       />
-                    </label>
 
-                    <input
-                      id="channel-verify-token"
-                      type="password"
-                      autoComplete="new-password"
-                      maxLength={500}
-                      value={form.verify_token}
-                      disabled={clearVerifyToken}
-                      placeholder={
-                        selected?.has_verify_token
-                          ? "Leave blank to keep the stored token"
-                          : "The webhook verify token"
-                      }
-                      onChange={(event) =>
-                        updateField("verify_token", event.target.value)
-                      }
-                    />
+                      {selected?.has_verify_token ? (
+                        <label className="channels-clear-toggle">
+                          <input
+                            type="checkbox"
+                            checked={clearVerifyToken}
+                            onChange={(event) => {
+                              setSaveStatus("");
+                              setClearVerifyToken(event.target.checked);
+                            }}
+                          />
+                          <span>Remove the stored verify token when saving</span>
+                        </label>
+                      ) : null}
+                    </div>
+                  )}
 
-                    {selected?.has_verify_token ? (
+                  {form.channel === "email" ? (
+                    <div className="channels-email-settings">
+                      <div className="channels-field">
+                        <label htmlFor="channel-imap-host">
+                          <span>IMAP server</span>
+                        </label>
+                        <input
+                          id="channel-imap-host"
+                          type="text"
+                          required
+                          maxLength={255}
+                          value={form.imap_host}
+                          placeholder="imap.yourprovider.com"
+                          onChange={(event) =>
+                            updateField("imap_host", event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="channels-field">
+                        <label htmlFor="channel-imap-port">
+                          <span>IMAP port</span>
+                        </label>
+                        <input
+                          id="channel-imap-port"
+                          type="number"
+                          min={1}
+                          max={65535}
+                          value={form.imap_port}
+                          onChange={(event) =>
+                            updateField("imap_port", event.target.value)
+                          }
+                        />
+                      </div>
+
                       <label className="channels-clear-toggle">
                         <input
                           type="checkbox"
-                          checked={clearVerifyToken}
-                          onChange={(event) => {
-                            setSaveStatus("");
-                            setClearVerifyToken(event.target.checked);
-                          }}
+                          checked={form.imap_use_ssl}
+                          onChange={(event) =>
+                            updateField("imap_use_ssl", event.target.checked)
+                          }
                         />
-                        <span>Remove the stored verify token when saving</span>
+                        <span>IMAP connects over SSL/TLS (recommended)</span>
                       </label>
-                    ) : null}
-                  </div>
+
+                      <div className="channels-field">
+                        <label htmlFor="channel-smtp-host">
+                          <span>SMTP server</span>
+                        </label>
+                        <input
+                          id="channel-smtp-host"
+                          type="text"
+                          required
+                          maxLength={255}
+                          value={form.smtp_host}
+                          placeholder="smtp.yourprovider.com"
+                          onChange={(event) =>
+                            updateField("smtp_host", event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="channels-field">
+                        <label htmlFor="channel-smtp-port">
+                          <span>SMTP port</span>
+                        </label>
+                        <input
+                          id="channel-smtp-port"
+                          type="number"
+                          min={1}
+                          max={65535}
+                          value={form.smtp_port}
+                          onChange={(event) =>
+                            updateField("smtp_port", event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <label className="channels-clear-toggle">
+                        <input
+                          type="checkbox"
+                          checked={form.smtp_use_starttls}
+                          onChange={(event) =>
+                            updateField("smtp_use_starttls", event.target.checked)
+                          }
+                        />
+                        <span>SMTP starts in plain text, then upgrades with STARTTLS</span>
+                      </label>
+
+                      <p className="channels-secrets-note">
+                        These are the mailbox's own connection settings, most
+                        often found on your email provider&apos;s IMAP/SMTP
+                        setup page. The mailbox address and password above are
+                        checked with a real login before this account is
+                        saved.
+                      </p>
+                    </div>
+                  ) : null}
                 </fieldset>
               )}
 

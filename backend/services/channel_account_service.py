@@ -12,8 +12,11 @@ owning company's database key, so the control database holds no usable secret.
 
 from __future__ import annotations
 
+import imaplib
+import json
 import logging
 import secrets
+import ssl
 from datetime import datetime, timezone
 from typing import Any
 
@@ -31,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
+    "email",
 )
 
 # Which identifier each channel is routed by. Getting this wrong sends one
@@ -51,6 +55,14 @@ ROUTING_FIELD = {
     "slack": "external_account_id",
     "discord": "external_account_id",
     "webchat": "external_account_id",
+    # Email is the exception among these: every other channel on this column
+    # derives or generates its routing value, so the operator never types the
+    # thing that decides where a message lands. A mailbox has nothing to
+    # derive it from -- there is no app to ask "which address is this" -- so
+    # the operator types the address itself, and `verify_imap_login` below is
+    # what stands in for the "ask the provider" step every other channel gets
+    # for free.
+    "email": "external_account_id",
 }
 
 
@@ -202,6 +214,96 @@ def generate_webchat_widget_key() -> str:
     return f"wc_{secrets.token_urlsafe(24)}"
 
 
+EMAIL_IMAP_TIMEOUT_SECONDS = 10
+
+# The non-secret half of an email account's connection settings, packed into
+# the generic `config_json` column (see `database/schema_control.py`) rather
+# than the three sealed slots every other channel's secrets fit in -- a host
+# name and a port are not credentials, and sealing them would cost every
+# reader a decrypt for nothing gained. Also the whole surface an operator may
+# send on create or update; `_pack_email_config` and the update path in
+# `update_account` both read from this exact set.
+EMAIL_CONFIG_FIELDS = (
+    "imap_host", "imap_port", "imap_use_ssl",
+    "smtp_host", "smtp_port", "smtp_use_starttls",
+)
+
+
+def verify_imap_login(
+    *, address: str, password: str, host: str, port: int, use_ssl: bool
+) -> None:
+    """Prove a mailbox's credentials work before this platform starts polling it.
+
+    Every other channel on this platform derives its routing id by asking the
+    provider a question a wrong credential fails immediately --
+    `slack_team_id`'s `auth.test`, `discord_bot_id`'s `/users/@me`. A mailbox
+    has no such call, only a login, so this makes that login here, once, at
+    connect time -- the alternative is a typo discovered only when
+    `channels/email/poller.py` runs on its own schedule and silently reads
+    nothing, ever.
+    """
+    try:
+        if use_ssl:
+            connection = imaplib.IMAP4_SSL(
+                host, port, timeout=EMAIL_IMAP_TIMEOUT_SECONDS
+            )
+        else:
+            connection = imaplib.IMAP4(host, port, timeout=EMAIL_IMAP_TIMEOUT_SECONDS)
+    except (OSError, imaplib.IMAP4.error) as exc:
+        raise ChannelAccountError(
+            f"Could not reach the IMAP server at {host}:{port}. {exc}"
+        ) from exc
+
+    try:
+        connection.login(address, password)
+    except imaplib.IMAP4.error as exc:
+        raise ChannelAccountError(
+            "The mailbox server rejected that address or password."
+        ) from exc
+    except (OSError, ssl.SSLError) as exc:
+        raise ChannelAccountError(f"Could not verify that mailbox: {exc}") from exc
+    finally:
+        try:
+            connection.logout()
+        except Exception:  # noqa: BLE001
+            pass
+
+
+def _pack_email_config(values: dict[str, Any]) -> dict[str, Any]:
+    """The email account's non-secret settings, normalised and defaulted.
+
+    Ports default the way the protocol does: 993 for IMAP-over-TLS, 143
+    for plaintext IMAP, 587 for SMTP submission with STARTTLS. A company
+    pointed at a mail server that genuinely uses something else still types
+    the port explicitly, same as any other field here.
+    """
+    imap_use_ssl = bool(values.get("imap_use_ssl", True))
+    smtp_use_starttls = bool(values.get("smtp_use_starttls", True))
+
+    return {
+        "imap_host": str(values.get("imap_host") or "").strip(),
+        "imap_port": int(values.get("imap_port") or (993 if imap_use_ssl else 143)),
+        "imap_use_ssl": imap_use_ssl,
+        "smtp_host": str(values.get("smtp_host") or "").strip(),
+        "smtp_port": int(values.get("smtp_port") or 587),
+        "smtp_use_starttls": smtp_use_starttls,
+    }
+
+
+def _loads_config(raw: str | None) -> dict[str, Any]:
+    """Parse `config_json` defensively. A malformed value reads as empty
+    settings, never as a crash on a screen that only wants to display them."""
+    if not raw:
+        return {}
+
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError):
+        return {}
+
+    return parsed if isinstance(parsed, dict) else {}
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -281,6 +383,13 @@ class ChannelAccountService:
         for field, column in SECRET_FIELDS.items():
             data[f"has_{field}"] = bool(data.pop(column, None))
 
+        # The one channel with non-secret settings of its own -- see
+        # `config_json` in `database/schema_control.py`. Parsed back into an
+        # object for the screen rather than left as a JSON string, the same
+        # shape every other structured field on this record already has.
+        raw_config = data.pop("config_json", None)
+        data["config"] = _loads_config(raw_config)
+
         return data
 
     # ------------------------------------------------------------------
@@ -340,6 +449,51 @@ class ChannelAccountService:
         # generated rather than derived from something the operator supplied.
         if normalized == "webchat" and not values.get(routing_field):
             values[routing_field] = generate_webchat_widget_key()
+
+        # Email, unlike every branch above: the routing value is typed by the
+        # operator (the mailbox address), not derived or generated, so there
+        # is nothing to fill in here. What this platform can still do is
+        # prove the credentials actually open that mailbox before the account
+        # is saved -- `verify_imap_login` -- and refuse a config with no
+        # server to poll or send through at all.
+        if normalized == "email":
+            address = str(values.get(routing_field) or "").strip()
+            password = values.get("access_token")
+            imap_host = str(values.get("imap_host") or "").strip()
+            smtp_host = str(values.get("smtp_host") or "").strip()
+
+            if not address:
+                raise ChannelAccountError(
+                    "An email account needs the mailbox address customers "
+                    "write to."
+                )
+
+            if not password:
+                raise ChannelAccountError(
+                    "An email account needs the mailbox password."
+                )
+
+            if not imap_host:
+                raise ChannelAccountError(
+                    "An email account needs its IMAP server address."
+                )
+
+            if not smtp_host:
+                raise ChannelAccountError(
+                    "An email account needs its SMTP server address."
+                )
+
+            config = _pack_email_config(values)
+
+            verify_imap_login(
+                address=address,
+                password=password,
+                host=config["imap_host"],
+                port=config["imap_port"],
+                use_ssl=config["imap_use_ssl"],
+            )
+
+            values[routing_field] = address
 
         if not values.get(routing_field):
             raise ChannelAccountError(
@@ -554,6 +708,12 @@ class ChannelAccountService:
 
                 account_id = int(cursor.lastrowid)
 
+                if normalized_channel == "email":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (json.dumps(_pack_email_config(values)), account_id),
+                    )
+
                 for field, column in SECRET_FIELDS.items():
                     secret = values.get(field)
 
@@ -644,6 +804,17 @@ class ChannelAccountService:
         if "branch_id" in values:
             assignments.append("branch_id = ?")
             params.append(self._resolve_branch_id(company_id, values["branch_id"]))
+
+        # Email's IMAP/SMTP settings, merged rather than replaced: an operator
+        # changing just the password should not have to retype the mail
+        # server too, so whatever this call did not send is kept from the
+        # row that already exists.
+        if channel == "email" and any(
+            field in values for field in EMAIL_CONFIG_FIELDS
+        ):
+            merged = {**_loads_config(existing["config_json"]), **values}
+            assignments.append("config_json = ?")
+            params.append(json.dumps(_pack_email_config(merged)))
 
         for field, column in SECRET_FIELDS.items():
             if field not in values:
@@ -780,6 +951,12 @@ class ChannelAccountService:
             "page_id": row["page_id"],
             "phone_number_id": row["phone_number_id"],
             "instagram_business_id": row["instagram_business_id"],
+            # Every channel's routing value, not only email's -- harmless for
+            # the others (they already have their own dedicated field above),
+            # and it is the only place email's mailbox address reaches the
+            # sender, which has no other column of its own to read it from.
+            "external_account_id": row["external_account_id"],
+            "config": _loads_config(row["config_json"]),
             "access_token": None,
         }
 

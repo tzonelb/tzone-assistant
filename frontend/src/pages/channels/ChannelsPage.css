@@ -410,6 +410,13 @@
   font-size: 12px;
 }
 
+.channels-email-settings {
+  display: grid;
+  gap: var(--tz-space-3);
+  padding-top: var(--tz-space-3);
+  border-top: 1px dashed var(--tz-border);
+}
+
 .channels-clear-toggle,
 .channels-flag {
   display: flex;

@@ -43,6 +43,7 @@ class IntentTransitionManager:
         "slack",
         "discord",
         "webchat",
+        "email",
     ]
 
     @staticmethod
