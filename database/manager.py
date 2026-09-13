@@ -851,19 +851,21 @@ class DatabaseManager:
             "telegram": "external_account_id",
             "slack": "external_account_id",
             "discord": "external_account_id",
+            "webchat": "external_account_id",
         }
         routing_value_by_channel = {
             "messenger": page_id,
             "instagram": instagram_business_id,
             "whatsapp": phone_number_id,
             "telegram": page_id,
-            # Slack's workspace id and Discord's bot id both travel through
-            # the same `page_id` slot Telegram's bot id does -- there is no
-            # dedicated parameter for every channel that routes on the shared
-            # `external_account_id` column, so the caller passes it through
-            # whichever one exists.
+            # Slack's workspace id, Discord's bot id and a webchat widget's
+            # key all travel through the same `page_id` slot Telegram's bot
+            # id does -- there is no dedicated parameter for every channel
+            # that routes on the shared `external_account_id` column, so the
+            # caller passes it through whichever one exists.
             "slack": page_id,
             "discord": page_id,
+            "webchat": page_id,
         }
 
         routing_field = routing_field_by_channel.get(normalized_channel)

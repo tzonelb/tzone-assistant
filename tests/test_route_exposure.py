@@ -82,6 +82,20 @@ PUBLIC_ROUTES: dict[str, str] = {
     # reject everything.
     "dialer.py:POST:/voice": "A signed Twilio callback. See dialer.py.",
     "dialer.py:POST:/inbound": "A signed Twilio callback. See dialer.py.",
+    # A website visitor's own browser calling directly -- there is no session
+    # of ours to hold, the same shape as media_uploads.py above but for a
+    # channel with no provider on the other end to sign anything. What stands
+    # in for a credential is scope, not auth: the widget key in the path is
+    # not a secret (it is meant to sit in a company's own page source, see
+    # channel_account_service.generate_webchat_widget_key), and a visitor can
+    # only ever read or write the conversation under their own visitor_id,
+    # which nothing here ever hands back to a different visitor.
+    "webchat_widget.py:POST:/{widget_key}/messages": (
+        "A website visitor sending a message. See webchat_widget.py."
+    ),
+    "webchat_widget.py:GET:/{widget_key}/messages": (
+        "A website visitor polling their own conversation. See webchat_widget.py."
+    ),
     "dialer.py:POST:/status": "A signed Twilio callback. See dialer.py.",
     "dialer.py:POST:/recording": "A signed Twilio callback. See dialer.py.",
     # Facebook returns the person here after they approve the connect. It is a

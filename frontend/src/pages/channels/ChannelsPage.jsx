@@ -487,7 +487,11 @@ export default function ChannelsPage() {
     }
   }, []);
 
-  const routingField = routingFields[form.channel] || "";
+  // Website chat is the one channel with nothing to route by that the
+  // operator types in: the widget key is minted server-side and shown after
+  // connecting, not asked for up front like every other channel's id.
+  const routingField =
+    form.channel === "webchat" ? "" : routingFields[form.channel] || "";
 
   function resetFormState() {
     setClearAccessToken(false);
@@ -643,7 +647,7 @@ export default function ChannelsPage() {
     setSaving(true);
 
     try {
-      await createChannelAccountRequest(values, token);
+      const response = await createChannelAccountRequest(values, token);
       setSaveStatus("Account connected.");
       recordSessionChange(`Connected ${channelLabel(values.channel)} — ${values.name}`);
 
@@ -655,7 +659,16 @@ export default function ChannelsPage() {
         access_token: "",
         verify_token: "",
       }));
-      closeEditor();
+
+      // Website chat has nothing else to show but the embed snippet, so the
+      // editor switches straight into viewing the new account instead of
+      // closing — closing here would hide the one thing the operator
+      // actually needs next.
+      if (values.channel === "webchat" && response?.account) {
+        openEdit(response.account);
+      } else {
+        closeEditor();
+      }
     } catch (requestError) {
       const message =
         requestError.message || "The account could not be saved.";
@@ -1131,107 +1144,144 @@ export default function ChannelsPage() {
                 </label>
               ) : null}
 
-              <fieldset className="channels-secrets">
-                <legend>Credentials</legend>
+              {form.channel === "webchat" ? (
+                <div className="channels-webchat-snippet">
+                  <h4>Embed this on your website</h4>
+                  <p>
+                    Paste this once, anywhere on your site&apos;s pages — it
+                    loads a chat bubble that talks to this company. The key
+                    inside it is not secret; it is meant to sit in your page
+                    source.
+                  </p>
 
-                <p className="channels-secrets-note">
-                  Tokens are stored sealed and are never sent back to this
-                  screen. Leave a field blank to keep the token that is already
-                  stored.
-                </p>
+                  {selected?.external_account_id ? (
+                    <>
+                      <code className="channels-webchat-snippet-code">
+                        {`<script src="${window.location.origin}/widget.js" data-widget-key="${selected.external_account_id}"></script>`}
+                      </code>
 
-                <div className="channels-field">
-                  <label htmlFor="channel-access-token">
-                    <span>Access token</span>
+                      <AppButton
+                        type="button"
+                        variant="secondary"
+                        size="small"
+                        onClick={() =>
+                          navigator.clipboard?.writeText(
+                            `<script src="${window.location.origin}/widget.js" data-widget-key="${selected.external_account_id}"></script>`,
+                          )
+                        }
+                      >
+                        Copy snippet
+                      </AppButton>
+                    </>
+                  ) : (
+                    <p className="channels-webchat-snippet-pending">
+                      The snippet appears here once the widget is connected.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <fieldset className="channels-secrets">
+                  <legend>Credentials</legend>
 
-                    <StatusBadge
-                      status={
-                        selected?.has_access_token ? "connected" : "inactive"
+                  <p className="channels-secrets-note">
+                    Tokens are stored sealed and are never sent back to this
+                    screen. Leave a field blank to keep the token that is already
+                    stored.
+                  </p>
+
+                  <div className="channels-field">
+                    <label htmlFor="channel-access-token">
+                      <span>Access token</span>
+
+                      <StatusBadge
+                        status={
+                          selected?.has_access_token ? "connected" : "inactive"
+                        }
+                        label={
+                          selected?.has_access_token ? "Configured" : "Not set"
+                        }
+                      />
+                    </label>
+
+                    <input
+                      id="channel-access-token"
+                      type="password"
+                      autoComplete="new-password"
+                      maxLength={1000}
+                      value={form.access_token}
+                      disabled={clearAccessToken}
+                      placeholder={
+                        selected?.has_access_token
+                          ? "Leave blank to keep the stored token"
+                          : "Paste the page access token"
                       }
-                      label={
-                        selected?.has_access_token ? "Configured" : "Not set"
+                      onChange={(event) =>
+                        updateField("access_token", event.target.value)
                       }
                     />
-                  </label>
 
-                  <input
-                    id="channel-access-token"
-                    type="password"
-                    autoComplete="new-password"
-                    maxLength={1000}
-                    value={form.access_token}
-                    disabled={clearAccessToken}
-                    placeholder={
-                      selected?.has_access_token
-                        ? "Leave blank to keep the stored token"
-                        : "Paste the page access token"
-                    }
-                    onChange={(event) =>
-                      updateField("access_token", event.target.value)
-                    }
-                  />
+                    {selected?.has_access_token ? (
+                      <label className="channels-clear-toggle">
+                        <input
+                          type="checkbox"
+                          checked={clearAccessToken}
+                          onChange={(event) => {
+                            setSaveStatus("");
+                            setClearAccessToken(event.target.checked);
+                          }}
+                        />
+                        <span>Remove the stored access token when saving</span>
+                      </label>
+                    ) : null}
+                  </div>
 
-                  {selected?.has_access_token ? (
-                    <label className="channels-clear-toggle">
-                      <input
-                        type="checkbox"
-                        checked={clearAccessToken}
-                        onChange={(event) => {
-                          setSaveStatus("");
-                          setClearAccessToken(event.target.checked);
-                        }}
+                  <div className="channels-field">
+                    <label htmlFor="channel-verify-token">
+                      <span>Verify token</span>
+
+                      <StatusBadge
+                        status={
+                          selected?.has_verify_token ? "connected" : "inactive"
+                        }
+                        label={
+                          selected?.has_verify_token ? "Configured" : "Not set"
+                        }
                       />
-                      <span>Remove the stored access token when saving</span>
                     </label>
-                  ) : null}
-                </div>
 
-                <div className="channels-field">
-                  <label htmlFor="channel-verify-token">
-                    <span>Verify token</span>
-
-                    <StatusBadge
-                      status={
-                        selected?.has_verify_token ? "connected" : "inactive"
+                    <input
+                      id="channel-verify-token"
+                      type="password"
+                      autoComplete="new-password"
+                      maxLength={500}
+                      value={form.verify_token}
+                      disabled={clearVerifyToken}
+                      placeholder={
+                        selected?.has_verify_token
+                          ? "Leave blank to keep the stored token"
+                          : "The webhook verify token"
                       }
-                      label={
-                        selected?.has_verify_token ? "Configured" : "Not set"
+                      onChange={(event) =>
+                        updateField("verify_token", event.target.value)
                       }
                     />
-                  </label>
 
-                  <input
-                    id="channel-verify-token"
-                    type="password"
-                    autoComplete="new-password"
-                    maxLength={500}
-                    value={form.verify_token}
-                    disabled={clearVerifyToken}
-                    placeholder={
-                      selected?.has_verify_token
-                        ? "Leave blank to keep the stored token"
-                        : "The webhook verify token"
-                    }
-                    onChange={(event) =>
-                      updateField("verify_token", event.target.value)
-                    }
-                  />
-
-                  {selected?.has_verify_token ? (
-                    <label className="channels-clear-toggle">
-                      <input
-                        type="checkbox"
-                        checked={clearVerifyToken}
-                        onChange={(event) => {
-                          setSaveStatus("");
-                          setClearVerifyToken(event.target.checked);
-                        }}
-                      />
-                      <span>Remove the stored verify token when saving</span>
-                    </label>
-                  ) : null}
-                </div>
-              </fieldset>
+                    {selected?.has_verify_token ? (
+                      <label className="channels-clear-toggle">
+                        <input
+                          type="checkbox"
+                          checked={clearVerifyToken}
+                          onChange={(event) => {
+                            setSaveStatus("");
+                            setClearVerifyToken(event.target.checked);
+                          }}
+                        />
+                        <span>Remove the stored verify token when saving</span>
+                      </label>
+                    ) : null}
+                  </div>
+                </fieldset>
+              )}
 
               <fieldset className="channels-flags">
                 <legend>What runs on this account</legend>

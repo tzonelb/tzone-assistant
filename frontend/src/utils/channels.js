@@ -22,4 +22,5 @@ export const SUPPORTED_CHANNELS = [
   "telegram",
   "slack",
   "discord",
+  "webchat",
 ];

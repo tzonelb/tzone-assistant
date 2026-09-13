@@ -13,6 +13,7 @@ owning company's database key, so the control database holds no usable secret.
 from __future__ import annotations
 
 import logging
+import secrets
 from datetime import datetime, timezone
 from typing import Any
 
@@ -28,7 +29,9 @@ from database.manager import database_manager
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp", "telegram", "slack", "discord")
+SUPPORTED_CHANNELS = (
+    "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
+)
 
 # Which identifier each channel is routed by. Getting this wrong sends one
 # company's customers to another, so it is declared once here.
@@ -47,6 +50,7 @@ ROUTING_FIELD = {
     "telegram": "external_account_id",
     "slack": "external_account_id",
     "discord": "external_account_id",
+    "webchat": "external_account_id",
 }
 
 
@@ -184,6 +188,20 @@ def discord_bot_id(bot_token: str) -> str:
     return bot_id
 
 
+def generate_webchat_widget_key() -> str:
+    """A new public identifier for a website chat widget.
+
+    Not a secret, unlike every other channel's routing id being derived from
+    one: there is no bot or app behind a website widget to ask, and nothing
+    to protect by hiding this value -- it is meant to sit in a company's own
+    page source, inside the embed snippet, wherever their site publishes it.
+    Random rather than sequential so one company's widget key gives no hint
+    about another's, the same reasoning behind every other token this
+    platform mints.
+    """
+    return f"wc_{secrets.token_urlsafe(24)}"
+
+
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -315,6 +333,13 @@ class ChannelAccountService:
                 raise ChannelAccountError("A Discord account needs its bot token.")
 
             values[routing_field] = discord_bot_id(token)
+
+        # Website live chat needs nothing from the operator at all: there is
+        # no bot, no app, no account on another platform to connect. The
+        # widget key is minted here, the one channel where the routing id is
+        # generated rather than derived from something the operator supplied.
+        if normalized == "webchat" and not values.get(routing_field):
+            values[routing_field] = generate_webchat_widget_key()
 
         if not values.get(routing_field):
             raise ChannelAccountError(

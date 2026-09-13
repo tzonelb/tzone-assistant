@@ -319,6 +319,48 @@ class GeneralRateLimitMiddleware(BaseHTTPMiddleware):
         )
 
 
+class PublicWidgetCorsMiddleware(BaseHTTPMiddleware):
+    """CORS for the one surface meant to be called from someone else's origin.
+
+    The app's global `CORSMiddleware` is deliberately a fixed allowlist --
+    `main.py`'s `forbid_wildcard_cors_with_credentials` refuses to even start
+    with a wildcard, because every other route is cookie-authenticated and a
+    wildcard there would let any site a signed-in employee visits read their
+    session. The website chat widget breaks that assumption on purpose: it is
+    *meant* to be called from whatever origin a company's own website happens
+    to be, which this platform has no way to know in advance, and it carries
+    no cookie and no credential to leak -- the widget key is already public,
+    and a visitor can only ever read the conversation under their own
+    `visitor_id`, which nothing here ever hands back to a different visitor.
+
+    Scoped to `/api/webchat/` alone, and answers the browser's own preflight
+    `OPTIONS` request directly rather than letting it fall through to routing
+    (which has no `OPTIONS` handler on these paths and would 405).
+    """
+
+    _PREFIX = "/api/webchat/"
+
+    async def dispatch(self, request, call_next):
+        if not request.url.path.startswith(self._PREFIX):
+            return await call_next(request)
+
+        if request.method == "OPTIONS":
+            from starlette.responses import Response
+
+            response = Response(status_code=204)
+        else:
+            response = await call_next(request)
+
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        # No Access-Control-Allow-Credentials: these routes take no cookie
+        # and no Authorization header, and must never be asked to.
+        response.headers["Access-Control-Max-Age"] = "600"
+
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     def __init__(self, app: ASGIApp, *, hsts: bool = True) -> None:
         super().__init__(app)

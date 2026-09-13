@@ -15,6 +15,7 @@ from channels.discord.sender import send_discord_text
 from channels.meta.sender import send_meta_buttons, send_meta_media, send_meta_text
 from channels.slack.sender import send_slack_text
 from channels.telegram.sender import send_telegram_media, send_telegram_text
+from channels.webchat.sender import send_webchat_text
 from channels.whatsapp.sender import send_whatsapp_media, send_whatsapp_text
 
 
@@ -25,17 +26,19 @@ WHATSAPP_CHANNELS = frozenset({"whatsapp"})
 TELEGRAM_CHANNELS = frozenset({"telegram"})
 SLACK_CHANNELS = frozenset({"slack"})
 DISCORD_CHANNELS = frozenset({"discord"})
+WEBCHAT_CHANNELS = frozenset({"webchat"})
 
 SUPPORTED_CHANNELS = (
     META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS | SLACK_CHANNELS
-    | DISCORD_CHANNELS
+    | DISCORD_CHANNELS | WEBCHAT_CHANNELS
 )
 
-# Slack and Discord are deliberately absent here: neither has a media sender
-# yet (see their own sender.py docstrings), so a media send for either falls
-# through to UnsupportedChannel below rather than pretending to succeed. Kept
-# as its own set, distinct from SUPPORTED_CHANNELS, so that error message
-# never lists a channel that cannot actually carry an attachment.
+# Slack, Discord and webchat are deliberately absent here: none of them has a
+# media sender yet (see their own sender.py docstrings), so a media send for
+# any of them falls through to UnsupportedChannel below rather than
+# pretending to succeed. Kept as its own set, distinct from
+# SUPPORTED_CHANNELS, so that error message never lists a channel that
+# cannot actually carry an attachment.
 MEDIA_SUPPORTED_CHANNELS = META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS
 
 
@@ -128,6 +131,18 @@ def send_text(
             "channel": normalized,
             "recipient_id": recipient_id,
             **send_discord_text(
+                recipient_id=recipient_id,
+                text=text,
+                company_id=company_id,
+                buttons=buttons,
+            ),
+        }
+
+    if normalized in WEBCHAT_CHANNELS:
+        return {
+            "channel": normalized,
+            "recipient_id": recipient_id,
+            **send_webchat_text(
                 recipient_id=recipient_id,
                 text=text,
                 company_id=company_id,
