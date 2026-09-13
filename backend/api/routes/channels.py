@@ -27,6 +27,7 @@ from backend.services.channel_account_service import (
     channel_account_service,
 )
 from backend.services import channel_verification_service, mailer
+from channels.discord import manager as discord_manager
 from config.settings import config
 
 
@@ -38,7 +39,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 
-ChannelName = Literal["messenger", "instagram", "whatsapp", "telegram", "slack"]
+ChannelName = Literal[
+    "messenger", "instagram", "whatsapp", "telegram", "slack", "discord"
+]
 
 
 class ChannelAccountCreate(BaseModel):
@@ -84,13 +87,20 @@ class ChannelAccountCreate(BaseModel):
 
             return self
 
-        # Slack is the same shape as Telegram just above: the workspace id is
-        # derived from the bot token by channel_account_service, not typed in.
+        # Slack and Discord are the same shape as Telegram just above: the
+        # routing id is derived from the bot token by
+        # channel_account_service, not typed in.
         if self.channel == "slack":
             if not self.access_token:
                 raise ValueError(
                     "A slack account requires its Bot User OAuth Token."
                 )
+
+            return self
+
+        if self.channel == "discord":
+            if not self.access_token:
+                raise ValueError("A discord account requires its bot token.")
 
             return self
 
@@ -310,6 +320,17 @@ def create_channel(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
 
+    # Discord alone needs this: every other channel is reachable the moment
+    # its webhook route exists, but a bot receives nothing until this
+    # platform opens its own Gateway connection to it -- so connecting the
+    # account here is only half the work.
+    if payload.channel == "discord":
+        discord_manager.start_connection(
+            account_id=int(account["id"]),
+            company_id=company_id,
+            token=payload.access_token,
+        )
+
     # A security event as well as a business one: connecting a channel points
     # a company's customers at this platform, and it is mirrored to the control
     # plane so an operator can see it. The routing identifier is recorded, the
@@ -376,6 +397,26 @@ def update_channel(
             detail=message,
         ) from exc
 
+    # Keep the Gateway connection in step with the account it belongs to.
+    # Disabling the account must stop it receiving messages immediately, not
+    # at the next deploy; a new token means the old connection is
+    # authenticated as a bot that may no longer even be this one.
+    if (previous or {}).get("channel") == "discord":
+        if account.get("status") == "disabled":
+            discord_manager.stop_connection(account_id)
+        elif "access_token" in values or (previous or {}).get("status") == "disabled":
+            fresh = channel_account_service.credentials_for(
+                company_id=company_id, channel="discord", account_id=account_id
+            )
+
+            if fresh and fresh.get("access_token"):
+                discord_manager.stop_connection(account_id)
+                discord_manager.start_connection(
+                    account_id=account_id,
+                    company_id=company_id,
+                    token=fresh["access_token"],
+                )
+
     activity_service.record_for(
         current_user,
         company_id=company_id,
@@ -416,6 +457,9 @@ def delete_channel(
 
     if not channel_account_service.delete_account(company_id, account_id):
         raise HTTPException(status_code=404, detail="Channel account not found.")
+
+    if (previous or {}).get("channel") == "discord":
+        discord_manager.stop_connection(account_id)
 
     activity_service.record_for(
         current_user,

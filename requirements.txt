@@ -35,6 +35,13 @@ httpcore==1.0.9
 certifi==2026.6.17
 idna==3.18
 
+# --- WebSocket client ----------------------------------------------------
+# Discord has no HTTP webhook for regular messages -- a bot only receives
+# them by holding open a WebSocket to Discord's own Gateway (see
+# channels/discord/gateway.py). httpx does not speak WebSocket, so this is
+# the one channel that needs a second client library.
+websockets==15.0.1
+
 # --- Encryption --------------------------------------------------------
 # SQLCipher backs the per-company encrypted databases. The -binary wheel ships
 # a bundled SQLCipher, so no system library or compiler is needed on the VPS.

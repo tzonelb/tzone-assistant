@@ -21,4 +21,5 @@ export const SUPPORTED_CHANNELS = [
   "instagram",
   "telegram",
   "slack",
+  "discord",
 ];

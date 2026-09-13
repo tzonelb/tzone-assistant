@@ -28,7 +28,7 @@ from database.manager import database_manager
 logger = logging.getLogger(__name__)
 
 
-SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp", "telegram", "slack")
+SUPPORTED_CHANNELS = ("messenger", "instagram", "whatsapp", "telegram", "slack", "discord")
 
 # Which identifier each channel is routed by. Getting this wrong sends one
 # company's customers to another, so it is declared once here.
@@ -46,6 +46,7 @@ ROUTING_FIELD = {
     "whatsapp": "phone_number_id",
     "telegram": "external_account_id",
     "slack": "external_account_id",
+    "discord": "external_account_id",
 }
 
 
@@ -131,6 +132,56 @@ def slack_team_id(bot_token: str) -> str:
         )
 
     return team_id
+
+
+DISCORD_API_BASE = "https://discord.com/api/v10"
+DISCORD_TIMEOUT_SECONDS = 10
+
+
+def discord_bot_id(bot_token: str) -> str:
+    """The bot's own Discord user id, read back with the token itself.
+
+    Same reasoning as `slack_team_id`: a Discord bot token carries no id to
+    parse locally, so it has to be asked of Discord's own API. Each company
+    creates its own bot application, so that bot's id is a single, stable
+    identity for the whole workspace it will run in -- the same role a
+    Telegram bot id or a Slack team id plays for their channels.
+    """
+    token = str(bot_token or "").strip()
+
+    if not token:
+        raise ChannelAccountError("A Discord account needs its bot token.")
+
+    try:
+        response = httpx.get(
+            f"{DISCORD_API_BASE}/users/@me",
+            headers={"Authorization": f"Bot {token}"},
+            timeout=DISCORD_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ChannelAccountError(
+            "Could not reach Discord to verify that token. Please try again."
+        ) from exc
+
+    if response.status_code != 200:
+        raise ChannelAccountError(
+            "Discord rejected that token. Paste the bot token from your "
+            "application's Bot page in the Discord Developer Portal."
+        )
+
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise ChannelAccountError(
+            "Discord did not return a usable response for that token."
+        ) from exc
+
+    bot_id = str(body.get("id") or "").strip()
+
+    if not bot_id:
+        raise ChannelAccountError("Discord did not return a bot id for that token.")
+
+    return bot_id
 
 
 def utc_now_iso() -> str:
@@ -254,6 +305,16 @@ class ChannelAccountService:
                 )
 
             values[routing_field] = slack_team_id(token)
+
+        # Discord, the same reasoning again: the routing id is the bot's own
+        # user id, asked of Discord itself rather than typed in.
+        if normalized == "discord" and not values.get(routing_field):
+            token = values.get("access_token")
+
+            if not token:
+                raise ChannelAccountError("A Discord account needs its bot token.")
+
+            values[routing_field] = discord_bot_id(token)
 
         if not values.get(routing_field):
             raise ChannelAccountError(
@@ -717,6 +778,64 @@ class ChannelAccountService:
                 return None
 
         return credentials
+
+    def active_accounts_for_channel(self, channel: str) -> list[dict[str, Any]]:
+        """Every active account of one channel, across every company.
+
+        Built for Discord: unlike a webhook channel, which is reachable the
+        moment a route exists, a Discord bot needs its own outbound Gateway
+        connection held open -- so at boot, and nowhere else, something has to
+        ask "which bots does this platform need to connect right now" rather
+        than waiting to be asked by an inbound request.
+        """
+        normalized = str(channel or "").strip().lower()
+
+        with database_manager.control() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, company_id, access_token_sealed
+                FROM channel_accounts
+                WHERE channel = ? AND status = 'active'
+                """,
+                (normalized,),
+            ).fetchall()
+
+        accounts: list[dict[str, Any]] = []
+
+        for row in rows:
+            company_id = int(row["company_id"])
+            token = None
+
+            if row["access_token_sealed"]:
+                try:
+                    token = keyring.unseal_secret(
+                        row["access_token_sealed"],
+                        database_manager.company_key(company_id),
+                        company_id,
+                        "access_token",
+                    )
+                except CorruptedKeyMaterial:
+                    logger.error(
+                        "Access token for company %s channel %s account %s "
+                        "could not be unsealed; skipping it",
+                        company_id,
+                        normalized,
+                        row["id"],
+                    )
+                    continue
+
+            if not token:
+                continue
+
+            accounts.append(
+                {
+                    "account_id": int(row["id"]),
+                    "company_id": company_id,
+                    "access_token": token,
+                }
+            )
+
+        return accounts
 
     # ------------------------------------------------------------------
     # Credentials for the inbound path

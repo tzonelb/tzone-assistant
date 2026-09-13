@@ -72,6 +72,7 @@ from backend.services.module_access import (
     require_module,
 )
 from backend.services.work_index_service import work_index_service
+from channels.discord import manager as discord_gateway_manager
 from channels.meta import webhook as meta_webhook
 from channels.webhook_limits import drain as drain_webhook_work
 from channels.slack import webhook as slack_webhook
@@ -235,6 +236,14 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(self_check_worker()),
     ]
 
+    # Discord alone needs this: it is the one channel with no webhook, so
+    # nothing else at startup would otherwise open the Gateway connections
+    # every already-connected bot needs to receive a message at all.
+    try:
+        await discord_gateway_manager.start_all()
+    except Exception:
+        logger.exception("Starting Discord Gateway connections failed")
+
     try:
         yield
     finally:
@@ -245,6 +254,11 @@ async def lifespan(app: FastAPI):
             await drain_webhook_work()
         except Exception:
             logger.exception("Draining accepted webhook work failed")
+
+        try:
+            await discord_gateway_manager.stop_all()
+        except Exception:
+            logger.exception("Stopping Discord Gateway connections failed")
 
         for task in tasks:
             task.cancel()
