@@ -123,6 +123,7 @@ def forbid_wildcard_cors_with_credentials(origins: list[str]) -> None:
 # runs on a timer — and so that removing a worker breaks the import here
 # instead of leaving a schedule that starts nothing.
 from backend.workers import (  # noqa: E402
+    email_poll_worker,
     maintenance_worker,
     pending_reply_worker,
     scheduled_post_worker,
@@ -236,6 +237,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(scheduled_post_worker()),
         asyncio.create_task(maintenance_worker()),
         asyncio.create_task(self_check_worker()),
+        asyncio.create_task(email_poll_worker()),
     ]
 
     # Discord alone needs this: it is the one channel with no webhook, so

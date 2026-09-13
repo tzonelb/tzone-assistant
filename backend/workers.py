@@ -42,6 +42,7 @@ from backend.services.work_index_service import (
     KIND_TAKEOVER,
     work_index_service,
 )
+from channels.email.poller import poll_all_accounts
 from channels.meta.smart_reply import process_due_replies
 from channels.post_publisher import publish_due_posts
 from config.settings import config
@@ -61,6 +62,12 @@ ATTEMPT_PRUNE_SECONDS = 3600
 # deep check — which reads every page of every company file — is not competing
 # with live traffic for the disk.
 SELF_CHECK_SECONDS = 900
+
+# How often a connected mailbox is checked for new mail. Not sub-minute:
+# nothing about IMAP rewards polling more often than a person refreshing
+# their own inbox would, and every company with a mailbox connected pays one
+# IMAP round trip per cycle whether or not anything arrived.
+EMAIL_POLL_SECONDS = 60
 
 
 def _sweep_concurrency() -> int:
@@ -223,6 +230,23 @@ async def self_check_worker() -> None:
             logger.exception("Self-check failed to run")
 
         await asyncio.sleep(SELF_CHECK_SECONDS)
+
+
+async def email_poll_worker() -> None:
+    """Check every connected mailbox for new customer mail, on a timer.
+
+    Not indexed like `_sweep`'s targets above: a mailbox is not something a
+    company's own actions register work for the way a reply or a scheduled
+    post does, so every active email account is checked every cycle rather
+    than only the ones with something outstanding.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(poll_all_accounts)
+        except Exception:
+            logger.exception("Email poll sweep failed")
+
+        await asyncio.sleep(EMAIL_POLL_SECONDS)
 
 
 async def maintenance_worker() -> None:

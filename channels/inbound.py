@@ -37,6 +37,7 @@ def process_inbound_event(
     event: dict[str, Any],
     company_id: int,
     channel_account_id: int | None = None,
+    extra_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     channel = event["channel"]
     user_id = event["user_id"]
@@ -149,6 +150,10 @@ def process_inbound_event(
                 for key, value in official_profile.items()
                 if key != "customer_name"
             },
+            # Channel-specific detail no other caller needs -- today only
+            # email, which stores the inbound subject here so a reply can
+            # thread as "Re: <subject>" without a second read of the message.
+            **(extra_metadata or {}),
         },
     )
 

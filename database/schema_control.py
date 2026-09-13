@@ -608,6 +608,14 @@ CONTROL_COLUMNS: dict[str, dict[str, str]] = {
         # Nullable because routing by channel is optional: a company may want
         # every account to fall through to the customer's own choice.
         "department_id": "INTEGER",
+        # Non-secret connection settings a channel needs beyond the three
+        # generic sealed fields -- today only the email channel, for its
+        # IMAP/SMTP host, port and TLS mode. Plain JSON, not sealed: a host
+        # name and a port number are not credentials, and sealing them would
+        # only cost every reader a decrypt for nothing gained. The one actual
+        # secret an email account holds (its mailbox password) still goes
+        # through `access_token_sealed` like every other channel's token.
+        "config_json": "TEXT",
     },
     "users": {
         # When the password was last set. Shown on the user's own record so an
