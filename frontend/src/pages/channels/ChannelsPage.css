@@ -4,6 +4,42 @@
   padding: var(--tz-space-5);
 }
 
+.channels-webchat-snippet {
+  display: grid;
+  gap: var(--tz-space-2);
+  padding: var(--tz-space-4);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-md);
+  background: var(--tz-surface-secondary);
+}
+
+.channels-webchat-snippet h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.channels-webchat-snippet p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tz-text-muted);
+  line-height: 1.5;
+}
+
+.channels-webchat-snippet-code {
+  display: block;
+  padding: var(--tz-space-3);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface);
+  border: 1px solid var(--tz-border);
+  font-size: 11px;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.channels-webchat-snippet-pending {
+  font-style: italic;
+}
+
 .channels-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

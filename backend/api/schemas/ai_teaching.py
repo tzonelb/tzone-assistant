@@ -49,6 +49,7 @@ PreviewChannel = Literal[
     "telegram",
     "slack",
     "discord",
+    "webchat",
 ]
 
 MAX_TEST_MESSAGE = 2000

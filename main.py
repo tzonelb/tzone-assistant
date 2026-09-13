@@ -59,10 +59,12 @@ from backend.api.routes import (
     support_tickets,
     team_chat,
     tickets,
+    webchat_widget,
 )
 from backend.api.middleware import (
     BodySizeLimitMiddleware,
     GeneralRateLimitMiddleware,
+    PublicWidgetCorsMiddleware,
     SecurityHeadersMiddleware,
     SessionCookieMiddleware,
 )
@@ -331,6 +333,16 @@ app.add_middleware(
     expose_headers=["Retry-After"],
 )
 
+# Added last, so it ends up outermost of everything above, `CORSMiddleware`
+# included: the widget is meant to be called from a company's own website, an
+# origin this platform cannot know in advance, so the global, credentialed,
+# fixed-allowlist CORS policy above does not and must not apply to it. A
+# preflight for `/api/webchat/*` needs to be answered here, before it ever
+# reaches `CORSMiddleware`'s stricter check -- placed after, that check would
+# refuse the preflight for every origin not already on `CORS_ORIGINS`, which
+# defeats the whole point of a widget any company can embed.
+app.add_middleware(PublicWidgetCorsMiddleware)
+
 
 # Reachable without a company: the service banner, signing in, the control
 # plane, and the customer app asking which modules it may draw.
@@ -477,6 +489,7 @@ app.include_router(whatsapp_webhook.router)
 app.include_router(meta_webhook.router)
 app.include_router(telegram_webhook.router)
 app.include_router(slack_webhook.router)
+app.include_router(webchat_widget.router)
 
 
 # The built single-page interface. In the reference nginx deployment the static

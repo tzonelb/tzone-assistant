@@ -52,8 +52,8 @@ export const CHANNEL_CATEGORIES = [
   {
     title: "Business & web",
     channels: [
-      { key: "webchat", name: "Website live chat", availability: "soon", icon: "Language", color: "#0EA5A5",
-        note: "An embeddable chat widget for your website." },
+      { key: "webchat", name: "Website live chat", availability: "available", icon: "Language", color: "#0EA5A5",
+        note: "An embeddable chat widget for your website — no account needed." },
       { key: "email", name: "Email", availability: "soon", icon: "Email", color: "#EA4335",
         note: "Turn support emails into conversations." },
       { key: "sms", name: "SMS", availability: "soon", icon: "Sms", color: "#6B7280" },

@@ -42,6 +42,7 @@ class IntentTransitionManager:
         "telegram",
         "slack",
         "discord",
+        "webchat",
     ]
 
     @staticmethod

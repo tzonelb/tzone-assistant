@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 
 ChannelName = Literal[
-    "messenger", "instagram", "whatsapp", "telegram", "slack", "discord"
+    "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat"
 ]
 
 
@@ -102,6 +102,12 @@ class ChannelAccountCreate(BaseModel):
             if not self.access_token:
                 raise ValueError("A discord account requires its bot token.")
 
+            return self
+
+        # Website live chat needs nothing typed in at all -- there is no bot,
+        # app or account on another platform to connect, so there is nothing
+        # here to validate. channel_account_service mints the widget key.
+        if self.channel == "webchat":
             return self
 
         field = ROUTING_FIELD[self.channel]
