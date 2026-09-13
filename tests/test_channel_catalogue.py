@@ -45,7 +45,6 @@ _RETIRED_OR_UNSUPPORTED = frozenset(
         "website_chat",
         "web",
         "sms",
-        "viber",
         "wechat",
         "line",
         "tiktok",

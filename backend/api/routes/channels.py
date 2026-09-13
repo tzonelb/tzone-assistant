@@ -25,6 +25,8 @@ from backend.services.channel_account_service import (
     ChannelAccountError,
     ROUTING_FIELD,
     channel_account_service,
+    register_viber_webhook,
+    unregister_viber_webhook,
 )
 from backend.services import channel_verification_service, mailer
 from channels.discord import manager as discord_manager
@@ -41,7 +43,7 @@ router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 ChannelName = Literal[
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email",
+    "email", "viber",
 ]
 
 
@@ -116,6 +118,14 @@ class ChannelAccountCreate(BaseModel):
         if self.channel == "discord":
             if not self.access_token:
                 raise ValueError("A discord account requires its bot token.")
+
+            return self
+
+        if self.channel == "viber":
+            if not self.access_token:
+                raise ValueError(
+                    "A viber account requires its bot Authentication Token."
+                )
 
             return self
 
@@ -384,6 +394,25 @@ def create_channel(
             token=payload.access_token,
         )
 
+    # Viber, the same idea as Discord just above but the opposite shape: not
+    # a connection to keep open, a one-time REST call to point this bot's
+    # webhook at this platform -- which cannot happen until the account row
+    # exists, since the webhook URL is built from its id. If Viber refuses
+    # the registration, the account is rolled back rather than left
+    # "connected" with nothing actually able to reach it -- the same "never
+    # look connected and not be" rule the channel catalogue itself was
+    # rebuilt around.
+    if payload.channel == "viber":
+        try:
+            register_viber_webhook(
+                token=payload.access_token, account_id=int(account["id"])
+            )
+        except ChannelAccountError as exc:
+            channel_account_service.delete_account(company_id, int(account["id"]))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
+            ) from exc
+
     # A security event as well as a business one: connecting a channel points
     # a company's customers at this platform, and it is mirrored to the control
     # plane so an operator can see it. The routing identifier is recorded, the
@@ -470,6 +499,36 @@ def update_channel(
                     token=fresh["access_token"],
                 )
 
+    # Same idea for Viber, and more lenient than the connect path above on
+    # purpose: this account already worked before the edit, so a transient
+    # failure here is logged rather than failing an otherwise-valid rename
+    # or department change.
+    if (previous or {}).get("channel") == "viber":
+        if account.get("status") == "disabled":
+            fresh = channel_account_service.credentials_for(
+                company_id=company_id, channel="viber", account_id=account_id
+            )
+
+            if fresh and fresh.get("access_token"):
+                unregister_viber_webhook(fresh["access_token"])
+        elif "access_token" in values or (previous or {}).get("status") == "disabled":
+            fresh = channel_account_service.credentials_for(
+                company_id=company_id, channel="viber", account_id=account_id
+            )
+
+            if fresh and fresh.get("access_token"):
+                try:
+                    register_viber_webhook(
+                        token=fresh["access_token"], account_id=account_id
+                    )
+                except ChannelAccountError:
+                    logger.exception(
+                        "Could not re-register the Viber webhook for "
+                        "company %s account %s",
+                        company_id,
+                        account_id,
+                    )
+
     activity_service.record_for(
         current_user,
         company_id=company_id,
@@ -508,11 +567,25 @@ def delete_channel(
     company_id = auth_service.resolve_company_id(current_user)
     previous = channel_account_service.get_account(company_id, account_id)
 
+    # Read before the row is gone: the token needed to tell Viber to stop
+    # delivering lives in the sealed column `delete_account` is about to
+    # remove.
+    viber_token = None
+
+    if (previous or {}).get("channel") == "viber":
+        fresh = channel_account_service.credentials_for(
+            company_id=company_id, channel="viber", account_id=account_id
+        )
+        viber_token = (fresh or {}).get("access_token")
+
     if not channel_account_service.delete_account(company_id, account_id):
         raise HTTPException(status_code=404, detail="Channel account not found.")
 
     if (previous or {}).get("channel") == "discord":
         discord_manager.stop_connection(account_id)
+
+    if viber_token:
+        unregister_viber_webhook(viber_token)
 
     activity_service.record_for(
         current_user,

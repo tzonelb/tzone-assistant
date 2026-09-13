@@ -124,6 +124,7 @@ const DERIVED_ROUTING_CHANNELS = new Set([
   "slack",
   "discord",
   "webchat",
+  "viber",
 ]);
 
 const FEATURE_FLAGS = [
