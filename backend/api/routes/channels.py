@@ -25,6 +25,7 @@ from backend.services.channel_account_service import (
     ChannelAccountError,
     ROUTING_FIELD,
     channel_account_service,
+    register_line_webhook,
     register_viber_webhook,
     unregister_viber_webhook,
 )
@@ -43,7 +44,7 @@ router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 ChannelName = Literal[
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber",
+    "email", "viber", "line",
 ]
 
 
@@ -126,6 +127,21 @@ class ChannelAccountCreate(BaseModel):
                 raise ValueError(
                     "A viber account requires its bot Authentication Token."
                 )
+
+            return self
+
+        # LINE needs both credentials Slack does, for the same reason:
+        # `access_token` (Channel Access Token) to send with, `verify_token`
+        # (Channel Secret) to check webhook signatures with -- neither
+        # substitutes for the other.
+        if self.channel == "line":
+            if not self.access_token:
+                raise ValueError(
+                    "A line account requires its Channel Access Token."
+                )
+
+            if not self.verify_token:
+                raise ValueError("A line account requires its Channel Secret.")
 
             return self
 
@@ -413,6 +429,19 @@ def create_channel(
                 status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
             ) from exc
 
+    # LINE, the same idea and the same rollback discipline as Viber just
+    # above.
+    if payload.channel == "line":
+        try:
+            register_line_webhook(
+                access_token=payload.access_token, account_id=int(account["id"])
+            )
+        except ChannelAccountError as exc:
+            channel_account_service.delete_account(company_id, int(account["id"]))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
+            ) from exc
+
     # A security event as well as a business one: connecting a channel points
     # a company's customers at this platform, and it is mirrored to the control
     # plane so an operator can see it. The routing identifier is recorded, the
@@ -524,6 +553,33 @@ def update_channel(
                 except ChannelAccountError:
                     logger.exception(
                         "Could not re-register the Viber webhook for "
+                        "company %s account %s",
+                        company_id,
+                        account_id,
+                    )
+
+    # LINE has no equivalent "stop delivering" call this platform makes on
+    # disable -- see `register_line_webhook`'s docstring for why -- so
+    # disabling relies on the same fail-closed check every disabled account
+    # already gets at the webhook route. Re-enabling or replacing the
+    # credential still re-registers, the same lenient, best-effort discipline
+    # as Viber just above.
+    if (previous or {}).get("channel") == "line":
+        if account.get("status") != "disabled" and (
+            "access_token" in values or (previous or {}).get("status") == "disabled"
+        ):
+            fresh = channel_account_service.credentials_for(
+                company_id=company_id, channel="line", account_id=account_id
+            )
+
+            if fresh and fresh.get("access_token"):
+                try:
+                    register_line_webhook(
+                        access_token=fresh["access_token"], account_id=account_id
+                    )
+                except ChannelAccountError:
+                    logger.exception(
+                        "Could not re-register the LINE webhook for "
                         "company %s account %s",
                         company_id,
                         account_id,

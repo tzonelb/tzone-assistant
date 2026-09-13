@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber",
+    "email", "viber", "line",
 )
 
 # Which identifier each channel is routed by. Getting this wrong sends one
@@ -67,6 +67,10 @@ ROUTING_FIELD = {
     # exactly one identity, read back from Viber's own `get_account_info`
     # with the token the operator pasted -- see `viber_account_id` below.
     "viber": "external_account_id",
+    # LINE, the same derived pattern: a channel's bot has exactly one user
+    # id, read back from LINE's own `bot/info` with the Channel Access Token
+    # the operator pasted -- see `line_bot_user_id` below.
+    "line": "external_account_id",
 }
 
 
@@ -320,6 +324,86 @@ def unregister_viber_webhook(token: str) -> None:
             "Could not unregister a Viber webhook; the token may already be "
             "invalid",
             exc_info=True,
+        )
+
+
+LINE_API_BASE = "https://api.line.me/v2/bot"
+LINE_TIMEOUT_SECONDS = 10
+
+
+def line_bot_user_id(access_token: str) -> str:
+    """The bot's own user id, read back from LINE's own `bot/info`.
+
+    Same reasoning as `viber_account_id`: a LINE Channel Access Token carries
+    no id to parse locally, so it has to be asked of LINE itself. The id
+    comes back in the form ``U<hex>`` -- the same shape a LINE customer's own
+    user id has, since a bot is addressed the same way a person is.
+    """
+    token = str(access_token or "").strip()
+
+    if not token:
+        raise ChannelAccountError("A LINE account needs its Channel Access Token.")
+
+    try:
+        response = httpx.get(
+            f"{LINE_API_BASE}/info",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=LINE_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ChannelAccountError(
+            "Could not reach LINE to verify that token. Please try again."
+        ) from exc
+
+    if response.status_code != 200:
+        raise ChannelAccountError(
+            "LINE rejected that token. Paste the Channel Access Token from "
+            "your channel's Messaging API tab."
+        )
+
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise ChannelAccountError(
+            "LINE did not return a usable response for that token."
+        ) from exc
+
+    bot_user_id = str(body.get("userId") or "").strip()
+
+    if not bot_user_id:
+        raise ChannelAccountError("LINE did not return a bot id for that token.")
+
+    return bot_user_id
+
+
+def register_line_webhook(*, access_token: str, account_id: int) -> None:
+    """Point this bot's webhook at this platform's own route.
+
+    Same reasoning as `register_viber_webhook`: LINE's endpoint can be set
+    with a plain REST call (`PUT .../channel/webhook/endpoint`), so there is
+    no reason to make the operator paste a URL into the LINE Developers
+    Console by hand. Called once, right after the account row exists.
+    """
+    from config.settings import config
+
+    url = f"{config.APP_PUBLIC_URL}/webhook/line/{int(account_id)}"
+
+    try:
+        response = httpx.put(
+            f"{LINE_API_BASE}/channel/webhook/endpoint",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json={"endpoint": url},
+            timeout=LINE_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ChannelAccountError(
+            "Could not register this bot's webhook with LINE. Please try "
+            "again."
+        ) from exc
+
+    if response.status_code != 200:
+        raise ChannelAccountError(
+            "LINE rejected the webhook registration. Please try again."
         )
 
 
@@ -578,6 +662,28 @@ class ChannelAccountService:
                 )
 
             values[routing_field] = viber_account_id(token)
+
+        # LINE, the same reasoning again for the routing id -- but LINE is
+        # also the second channel (after Slack) that needs two credentials:
+        # a Channel Access Token to call the API with, and a separate
+        # Channel Secret to verify inbound webhook signatures with. Neither
+        # substitutes for the other, so both are required up front rather
+        # than discovering the missing one the first time a delivery arrives
+        # unverifiable.
+        if normalized == "line":
+            token = values.get("access_token")
+            secret = values.get("verify_token")
+
+            if not token:
+                raise ChannelAccountError(
+                    "A LINE account needs its Channel Access Token."
+                )
+
+            if not secret:
+                raise ChannelAccountError("A LINE account needs its Channel Secret.")
+
+            if not values.get(routing_field):
+                values[routing_field] = line_bot_user_id(token)
 
         # Website live chat needs nothing from the operator at all: there is
         # no bot, no app, no account on another platform to connect. The
