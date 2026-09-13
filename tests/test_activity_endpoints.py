@@ -121,6 +121,25 @@ def _log(app_client, owner, **params) -> list[dict]:
     return response.json()["items"]
 
 
+def _elevated_headers(app_client, owner, monkeypatch, code="614205") -> dict:
+    """Connecting/disconnecting a channel now requires an emailed code."""
+    from backend.services import channel_verification_service
+
+    monkeypatch.setattr(
+        channel_verification_service, "_generate_code", lambda: code
+    )
+
+    app_client.post("/api/channels/verification/request", headers=owner["headers"])
+    confirmed = app_client.post(
+        "/api/channels/verification/confirm",
+        headers=owner["headers"],
+        json={"code": code},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    return {**owner["headers"], "X-Elevated-Token": confirmed.json()["elevated_token"]}
+
+
 # --------------------------------------------------------------------- login
 
 
@@ -278,11 +297,13 @@ def test_a_missing_product_does_not_produce_a_log_entry(app_client, owner):
 
 
 def test_connecting_a_channel_is_recorded_and_mirrored(
-    app_client, owner, platform, alpha
+    app_client, owner, platform, alpha, monkeypatch
 ):
+    elevated_headers = _elevated_headers(app_client, owner, monkeypatch)
+
     response = app_client.post(
         "/api/channels",
-        headers=owner["headers"],
+        headers=elevated_headers,
         json={
             "channel": "messenger",
             "name": "Shop page",
@@ -319,12 +340,14 @@ def test_the_access_token_never_reaches_the_log(app_client, owner):
     assert "SUPER-SECRET-TOKEN" not in str(_log(app_client, owner))
 
 
-def test_replacing_a_credential_is_not_filed_as_a_rename(app_client, owner):
+def test_replacing_a_credential_is_not_filed_as_a_rename(app_client, owner, monkeypatch):
     """It is the change that can silently redirect a company's messages, and it
     looks identical to a rename in a log that records only "account updated"."""
+    elevated_headers = _elevated_headers(app_client, owner, monkeypatch)
+
     created = app_client.post(
         "/api/channels",
-        headers=owner["headers"],
+        headers=elevated_headers,
         json={
             "channel": "messenger",
             "name": "Shop page",

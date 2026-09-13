@@ -84,7 +84,7 @@ def _code(client) -> str:
     return match.group(1)
 
 
-def test_the_whole_journey(app_client):
+def test_the_whole_journey(app_client, monkeypatch):
     from backend.services.activation_service import activation_service
 
     # 1. The plans are readable with no account, and carry nothing but what the
@@ -168,9 +168,29 @@ def test_the_whole_journey(app_client):
 
     assert demo_gate.is_demo(company_id) is False
 
+    # A live workspace still has to prove it is really the owner emailing
+    # themselves before connecting a channel -- that gate is separate from,
+    # and outlives, the demonstration gate this test exists to check.
+    from backend.services import channel_verification_service
+
+    monkeypatch.setattr(
+        channel_verification_service, "_generate_code", lambda: "704113"
+    )
+    app_client.post("/api/channels/verification/request", headers=headers)
+    confirmed = app_client.post(
+        "/api/channels/verification/confirm",
+        headers=headers,
+        json={"code": "704113"},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    elevated_headers = {
+        **headers,
+        "X-Elevated-Token": confirmed.json()["elevated_token"],
+    }
+
     after = app_client.post(
         "/api/channels",
-        headers=headers,
+        headers=elevated_headers,
         json={"channel": "telegram", "name": "Sales", "access_token": "1:AA"},
     )
 
