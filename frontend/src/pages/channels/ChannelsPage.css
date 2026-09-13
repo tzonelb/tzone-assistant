@@ -345,3 +345,61 @@
 .channels-connect-notice-dismiss:hover {
   opacity: 1;
 }
+
+/* The email-verification prompt required before connecting or disconnecting
+   an account, and the "Done" banner shown while it stays valid. */
+.channels-verify-done {
+  border: none;
+  background: transparent;
+  color: var(--tz-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.channels-verify-done:hover {
+  text-decoration: underline;
+}
+
+.channels-verify-form p {
+  margin: 0 0 var(--tz-space-3);
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.channels-verify-code-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface);
+  color: var(--tz-text-primary);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-align: center;
+  outline: 0;
+}
+
+.channels-verify-code-input:focus {
+  border-color: var(--tz-primary);
+  box-shadow: 0 0 0 3px var(--tz-primary-soft);
+}
+
+.channels-verify-error {
+  margin: var(--tz-space-3) 0 0;
+  color: var(--tz-danger);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.channels-verify-changes {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}

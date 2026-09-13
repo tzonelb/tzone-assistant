@@ -26,6 +26,8 @@ from backend.services.channel_account_service import (
     ROUTING_FIELD,
     channel_account_service,
 )
+from backend.services import channel_verification_service, mailer
+from config.settings import config
 
 
 from database.manager import database_manager
@@ -190,11 +192,98 @@ def manage_context(
     return current_user
 
 
+class ChannelVerificationConfirm(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
+
+
+@router.post("/verification/request")
+def request_channel_verification(
+    current_user: dict[str, Any] = Depends(manage_context),
+):
+    """Email the signed-in account a 6-digit code, required before connecting
+    or disconnecting a channel. Sent to the account's own address -- there is
+    no one else to ask -- so unlike a forgot-password request there is no
+    enumeration risk in refusing plainly when it cannot be delivered."""
+    try:
+        mailer.assert_configured()
+    except mailer.MailerNotConfigured as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+        ) from exc
+
+    company_id = auth_service.resolve_company_id(current_user)
+
+    channel_verification_service.request_code(
+        user_id=int(current_user["id"]),
+        company_id=company_id,
+        email=current_user["email"],
+        full_name=current_user.get("full_name"),
+    )
+
+    return {
+        "sent": True,
+        "expires_in_minutes": config.CHANNEL_VERIFICATION_TTL_MINUTES,
+    }
+
+
+@router.post("/verification/confirm")
+def confirm_channel_verification(
+    payload: ChannelVerificationConfirm,
+    current_user: dict[str, Any] = Depends(manage_context),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    result = channel_verification_service.confirm_code(
+        user_id=int(current_user["id"]),
+        company_id=company_id,
+        code=payload.code,
+    )
+
+    if not result["granted"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="That code is wrong, expired, or already used.",
+        )
+
+    return result
+
+
+def require_elevated(
+    request: Request,
+    current_user: dict[str, Any] = Depends(manage_context),
+) -> dict[str, Any]:
+    """The extra gate on connecting or disconnecting a channel: everything
+    ``manage_context`` already requires, plus a live elevated grant from
+    confirming an emailed code. Editing an already-connected account's name,
+    branch or AI toggles does not need this -- only establishing or removing
+    the credential that routes a company's messages does, per the Channels
+    screen's own documented behaviour.
+    """
+    token = request.headers.get("x-elevated-token", "")
+    company_id = auth_service.resolve_company_id(current_user)
+
+    if not channel_verification_service.is_elevated(
+        user_id=int(current_user["id"]), company_id=company_id, token=token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error": "channel_verification_required",
+                "message": (
+                    "Verify your email with the 6-digit code before "
+                    "connecting or disconnecting a channel."
+                ),
+            },
+        )
+
+    return current_user
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_channel(
     payload: ChannelAccountCreate,
     request: Request,
-    current_user: dict[str, Any] = Depends(manage_context),
+    current_user: dict[str, Any] = Depends(require_elevated),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     values = payload.model_dump(exclude={"channel", "name"})
@@ -310,7 +399,7 @@ def update_channel(
 def delete_channel(
     account_id: int,
     request: Request,
-    current_user: dict[str, Any] = Depends(manage_context),
+    current_user: dict[str, Any] = Depends(require_elevated),
 ):
     company_id = auth_service.resolve_company_id(current_user)
     previous = channel_account_service.get_account(company_id, account_id)

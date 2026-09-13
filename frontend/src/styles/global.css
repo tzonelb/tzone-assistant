@@ -1291,14 +1291,22 @@ body[data-ui-density="compact"] .app-content {
   .settings-save-bar { position: static; }
 }
 .secondary-action { min-height:38px; padding:0 12px; border:1px solid var(--tz-border); border-radius:10px; background:var(--tz-surface); }
+/* This nav used to be a hard-coded blue gradient, regardless of the
+   company's own published theme -- so it looked like a different product
+   from the main app rail beside it, most visibly on the phone drawer where
+   the two sit back to back. It now reads from the same --tz-rail-bg /
+   --tz-rail-text custom properties SidebarV2.css computes from Theme
+   Studio's rail setting (see the comment there), with the same fallback, so
+   a company's chosen theme reaches every nav on the screen, not just the
+   main one. */
 .company-settings-shell { min-height:100dvh; display:grid; grid-template-columns:270px minmax(0,1fr); background:var(--tz-background); }
-.company-settings-nav { min-height:100dvh; padding:16px 12px; overflow:auto; color:#fff; background:linear-gradient(180deg,#086dc6,#0758a8); }
-.company-settings-back { display:flex; align-items:center; gap:7px; min-height:38px; border:0; color:#fff; background:transparent; font-weight:800; }
+.company-settings-nav { min-height:100dvh; padding:16px 12px; overflow:auto; color:var(--tz-rail-text, #201f1d); background:var(--tz-rail-bg, #f8f7f5); }
+.company-settings-back { display:flex; align-items:center; gap:7px; min-height:38px; border:0; color:inherit; background:transparent; font-weight:800; }
 .company-settings-nav h1 { margin:12px 4px; }
-.company-settings-nav .settings-search { background:#fff; color:var(--tz-text-primary); }
+.company-settings-nav .settings-search { background:color-mix(in srgb, var(--tz-rail-text, #201f1d) 6%, var(--tz-surface, #fff)); color:var(--tz-text-primary); }
 .company-settings-nav nav { display:grid; gap:4px; margin-top:12px; }
-.company-settings-nav nav button { min-height:38px; padding:0 10px; border:0; border-radius:9px; color:rgb(255 255 255 / 82%); background:transparent; text-align:left; }
-.company-settings-nav nav button:hover,.company-settings-nav nav button.is-active { color:#fff; background:rgb(255 255 255 / 15%); }
+.company-settings-nav nav button { min-height:38px; padding:0 10px; border:0; border-radius:9px; color:color-mix(in srgb, var(--tz-rail-text, #201f1d) 82%, transparent); background:transparent; text-align:left; }
+.company-settings-nav nav button:hover,.company-settings-nav nav button.is-active { color:var(--tz-rail-text, #201f1d); background:color-mix(in srgb, var(--tz-rail-text, #201f1d) 10%, transparent); }
 .company-settings-content { min-width:0; padding:28px; overflow:auto; }
 .company-settings-content header h2 { margin:6px 0; font-size:30px; }
 .company-settings-content header p { color:var(--tz-text-muted); }
@@ -1346,10 +1354,14 @@ body[data-ui-density="compact"] .app-content {
 .notification-scroll-area{scrollbar-gutter:stable}
 .notification-row{min-height:86px}
 .user-settings-shell{height:100dvh;display:grid;grid-template-columns:300px minmax(0,1fr);background:var(--tz-background)}
-.user-settings-nav{height:100dvh;padding:16px 14px;overflow:hidden;color:#fff;background:linear-gradient(180deg,#086dc6,#0758a8)}
-.user-settings-nav .company-settings-nav-heading{margin:14px 4px}.user-settings-nav .company-settings-nav-heading span{color:rgb(255 255 255 / 58%)}.user-settings-nav .company-settings-nav-heading h1{margin:8px 0 18px;font-size:34px;line-height:1.05}
-.user-settings-nav .settings-search{background:#fff;color:var(--tz-text-primary)}
-.user-settings-nav nav{display:grid;gap:5px;margin-top:14px}.user-settings-nav nav button{min-height:42px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:rgb(255 255 255 / 82%);font:inherit;text-align:left}.user-settings-nav nav button:hover,.user-settings-nav nav button.is-active{color:#fff;background:rgb(255 255 255 / 16%)}
+/* Same fix as .company-settings-nav above, and for the same reason: this
+   was the identical hard-coded blue gradient, independent of the rail
+   colour the rest of the app (and the company's own Theme Studio choice)
+   actually uses. */
+.user-settings-nav{height:100dvh;padding:16px 14px;overflow:hidden;color:var(--tz-rail-text, #201f1d);background:var(--tz-rail-bg, #f8f7f5)}
+.user-settings-nav .company-settings-nav-heading{margin:14px 4px}.user-settings-nav .company-settings-nav-heading span{color:color-mix(in srgb, var(--tz-rail-text, #201f1d) 58%, transparent)}.user-settings-nav .company-settings-nav-heading h1{margin:8px 0 18px;font-size:34px;line-height:1.05}
+.user-settings-nav .settings-search{background:color-mix(in srgb, var(--tz-rail-text, #201f1d) 6%, var(--tz-surface, #fff));color:var(--tz-text-primary)}
+.user-settings-nav nav{display:grid;gap:5px;margin-top:14px}.user-settings-nav nav button{min-height:42px;padding:0 14px;border:0;border-radius:10px;background:transparent;color:color-mix(in srgb, var(--tz-rail-text, #201f1d) 82%, transparent);font:inherit;text-align:left}.user-settings-nav nav button:hover,.user-settings-nav nav button.is-active{color:var(--tz-rail-text, #201f1d);background:color-mix(in srgb, var(--tz-rail-text, #201f1d) 16%, transparent)}
 .user-settings-content{min-width:0;height:100dvh;overflow:hidden}.user-settings-content-scroll{height:100%;overflow:auto;padding:42px 7vw 80px}.user-settings-content header{margin-bottom:26px}.user-settings-content header span{color:var(--tz-primary);font-size:11px;font-weight:900;letter-spacing:.12em}.user-settings-content header h2{margin:8px 0;font-size:38px}.user-settings-content header p{margin:0;color:var(--tz-text-muted)}
 .settings-section-card{display:grid;gap:14px;padding:22px;border:1px solid var(--tz-border);border-radius:18px;background:var(--tz-surface);box-shadow:var(--tz-shadow-sm)}.settings-section-card h3{margin:0}.settings-section-card>p{margin:-8px 0 4px;color:var(--tz-text-muted)}
 @media(max-width:900px){.notification-filterbar{grid-template-columns:1fr}.notification-topline{align-items:stretch;flex-direction:column}.user-settings-shell{grid-template-columns:1fr}.user-settings-nav{height:auto;max-height:42dvh}.user-settings-content{height:auto}.user-settings-content-scroll{padding:24px 16px 90px}}
@@ -1439,10 +1451,10 @@ body[data-ui-density="compact"] .app-content {
   border-color: var(--tz-border-strong);
 }
 
-[data-theme="dark"] .user-settings-nav,
-[data-theme="dark"] .company-settings-nav {
-  color: #fff;
-}
+/* No dark-theme override needed for .user-settings-nav / .company-settings-nav
+   any more: both now read --tz-rail-text directly, which ThemeContext.jsx
+   already computes correctly for dark mode (see its own comment), the same
+   value the main sidebar rail uses. */
 
 [data-theme="dark"] .primary-action,
 [data-theme="dark"] .workflow-settings-footer button {

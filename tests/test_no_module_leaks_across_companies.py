@@ -339,9 +339,31 @@ CASES = {
 }
 
 
-def _make(app_client, owner, spec):
+def _elevated_headers(app_client, owner, monkeypatch, code="503917"):
+    """Connecting a channel now requires an emailed code first."""
+    from backend.services import channel_verification_service
+
+    monkeypatch.setattr(channel_verification_service, "_generate_code", lambda: code)
+
+    app_client.post("/api/channels/verification/request", headers=owner["headers"])
+    confirmed = app_client.post(
+        "/api/channels/verification/confirm",
+        headers=owner["headers"],
+        json={"code": code},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    return {**owner["headers"], "X-Elevated-Token": confirmed.json()["elevated_token"]}
+
+
+def _make(app_client, owner, spec, monkeypatch=None):
     verb, path, payload = spec
-    response = app_client.request(verb, path, headers=owner["headers"], json=payload)
+
+    headers = owner["headers"]
+    if path == "/api/channels" and monkeypatch is not None:
+        headers = _elevated_headers(app_client, owner, monkeypatch)
+
+    response = app_client.request(verb, path, headers=headers, json=payload)
 
     assert response.status_code in (200, 201), (
         f"setup failed: {verb} {path} -> {response.status_code} {response.text}"
@@ -356,7 +378,7 @@ def _probe(app_client, owner, method, path, payload):
 
 @pytest.mark.parametrize("case", sorted(CASES), ids=sorted(CASES))
 def test_alpha_cannot_touch_betas_row_by_id(
-    app_client, alpha_owner, beta_owner, case
+    app_client, alpha_owner, beta_owner, case, monkeypatch
 ):
     """Alpha holds every permission — in Alpha. That is the point.
 
@@ -364,7 +386,7 @@ def test_alpha_cannot_touch_betas_row_by_id(
     ordinary employee with a valid token who changes a number in the URL.
     """
     create, probes = CASES[case]
-    resource_id = _make(app_client, beta_owner, create)
+    resource_id = _make(app_client, beta_owner, create, monkeypatch)
 
     for method, template, payload in probes:
         path = template.format(id=resource_id)
@@ -385,7 +407,7 @@ def test_alpha_cannot_touch_betas_row_by_id(
 
 
 @pytest.mark.parametrize("case", sorted(CASES), ids=sorted(CASES))
-def test_beta_can_reach_its_own_row(app_client, beta_owner, case):
+def test_beta_can_reach_its_own_row(app_client, beta_owner, case, monkeypatch):
     """The control, and the reason the test above means anything.
 
     A 404 is what you get for a row that was never created. Without this,
@@ -393,7 +415,7 @@ def test_beta_can_reach_its_own_row(app_client, beta_owner, case):
     the exact way a security check rots into decoration.
     """
     create, probes = CASES[case]
-    resource_id = _make(app_client, beta_owner, create)
+    resource_id = _make(app_client, beta_owner, create, monkeypatch)
 
     method, template, payload = probes[0]
     path = template.format(id=resource_id)

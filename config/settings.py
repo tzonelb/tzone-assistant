@@ -125,6 +125,14 @@ class AppConfig:
         os.getenv("PASSWORD_RESET_TTL_MINUTES", "30")
     )
 
+    # How long a channel-verification code stays usable, and how long
+    # confirming one keeps connecting/disconnecting a channel open before the
+    # owner has to verify again. Documented on the Channels screen itself as
+    # 20 minutes; kept as one number so the two never drift apart.
+    CHANNEL_VERIFICATION_TTL_MINUTES: int = int(
+        os.getenv("CHANNEL_VERIFICATION_TTL_MINUTES", "20")
+    )
+
     # ------------------------------------------------------------------
     # Outbound email
     # ------------------------------------------------------------------

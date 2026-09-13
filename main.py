@@ -299,8 +299,16 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     # `X-CSRF-Token` has to be allowed explicitly: it is not a CORS-safelisted
     # request header, so without it the browser refuses the preflight and every
-    # cookie-authenticated write fails before it is sent.
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-CSRF-Token"],
+    # cookie-authenticated write fails before it is sent. `X-Elevated-Token`
+    # carries the same requirement for connecting or disconnecting a channel,
+    # once an emailed code has been confirmed.
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "X-CSRF-Token",
+        "X-Elevated-Token",
+    ],
     # `Retry-After` is not a CORS-safelisted response header, so without this
     # the browser hides it from the application even though the server sent it.
     # The login screen uses it to say how long a lockout has left; withholding

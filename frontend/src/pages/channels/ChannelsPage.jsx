@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AddOutlined,
   CloseOutlined,
@@ -6,9 +6,11 @@ import {
 } from "@mui/icons-material";
 
 import {
+  confirmChannelVerificationRequest,
   createChannelAccountRequest,
   deleteChannelAccountRequest,
   getChannelAccountsRequest,
+  requestChannelVerificationRequest,
   updateChannelAccountRequest,
 } from "../../api/channels";
 import {
@@ -37,6 +39,43 @@ const CONNECT_MESSAGES = {
   invalid: "That sign-in link expired. Please try connecting again.",
   failed: "Facebook sign-in failed. Please try again.",
 };
+
+// The elevated grant from confirming an emailed code, kept per-tab rather
+// than persisted anywhere durable: it is a short-lived pass to connect or
+// disconnect a channel, not a credential worth surviving a closed tab.
+const ELEVATION_KEY = "tzone_channel_elevation";
+
+function readStoredElevation() {
+  try {
+    const raw = sessionStorage.getItem(ELEVATION_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+
+    if (!parsed?.token || !parsed?.expiresAt) return null;
+    if (new Date(parsed.expiresAt).getTime() <= Date.now()) {
+      sessionStorage.removeItem(ELEVATION_KEY);
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredElevation(elevation) {
+  try {
+    if (elevation) {
+      sessionStorage.setItem(ELEVATION_KEY, JSON.stringify(elevation));
+    } else {
+      sessionStorage.removeItem(ELEVATION_KEY);
+    }
+  } catch {
+    // A private window or a browser blocking storage loses the "remember
+    // across a reload" convenience, not the ability to verify again.
+  }
+}
 
 function readConnectNotice() {
   try {
@@ -160,6 +199,118 @@ export default function ChannelsPage() {
   const [oauthConfigured, setOauthConfigured] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [connectNotice, setConnectNotice] = useState(readConnectNotice);
+
+  // Connecting or disconnecting an account requires a live elevated grant
+  // from confirming an emailed 6-digit code (see channel_verification_service
+  // on the backend). One verification covers a whole sitting rather than
+  // asking again for every click.
+  const [elevation, setElevation] = useState(readStoredElevation);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyStep, setVerifyStep] = useState("request");
+  const [verifyCode, setVerifyCode] = useState("");
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [verifyError, setVerifyError] = useState("");
+  const [sessionChanges, setSessionChanges] = useState([]);
+  const [changesSummaryOpen, setChangesSummaryOpen] = useState(false);
+  const pendingElevatedActionRef = useRef(null);
+
+  function currentElevation() {
+    if (!elevation) return null;
+
+    if (new Date(elevation.expiresAt).getTime() <= Date.now()) {
+      setElevation(null);
+      writeStoredElevation(null);
+      return null;
+    }
+
+    return elevation;
+  }
+
+  // Runs `action(token)` if already verified this sitting; otherwise remembers
+  // it and opens the code prompt, which resumes it the moment a code is
+  // confirmed.
+  function withElevation(action) {
+    const live = currentElevation();
+
+    if (live) {
+      action(live.token);
+      return;
+    }
+
+    pendingElevatedActionRef.current = action;
+    setVerifyStep("request");
+    setVerifyCode("");
+    setVerifyError("");
+    setVerifyOpen(true);
+  }
+
+  function recordSessionChange(summary) {
+    setSessionChanges((current) => [...current, summary]);
+  }
+
+  async function sendVerificationCode() {
+    setVerifyBusy(true);
+    setVerifyError("");
+
+    try {
+      await requestChannelVerificationRequest();
+      setVerifyStep("code");
+    } catch (requestError) {
+      setVerifyError(
+        requestError.message || "The code could not be sent.",
+      );
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
+  async function confirmVerificationCode() {
+    setVerifyBusy(true);
+    setVerifyError("");
+
+    try {
+      const result = await confirmChannelVerificationRequest(verifyCode.trim());
+      const next = {
+        token: result.elevated_token,
+        expiresAt: result.expires_at,
+      };
+
+      setElevation(next);
+      writeStoredElevation(next);
+      setVerifyOpen(false);
+      setSessionChanges([]);
+
+      const action = pendingElevatedActionRef.current;
+      pendingElevatedActionRef.current = null;
+      action?.(next.token);
+    } catch (requestError) {
+      setVerifyError(requestError.message || "That code is wrong or expired.");
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
+  function endElevatedSession() {
+    setElevation(null);
+    writeStoredElevation(null);
+
+    if (sessionChanges.length) {
+      setChangesSummaryOpen(true);
+    }
+  }
+
+  const elevationExpiryLabel = useMemo(() => {
+    if (!elevation) return "";
+
+    try {
+      return new Date(elevation.expiresAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return "";
+    }
+  }, [elevation]);
 
   const visibleItems = useMemo(() => {
     if (branchFilter === "all") {
@@ -286,77 +437,57 @@ export default function ChannelsPage() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  async function handleSubmit(event) {
+  function handleSubmit(event) {
     event.preventDefault();
 
+    if (selected) {
+      submitUpdate();
+    } else {
+      submitConnect();
+    }
+  }
+
+  async function submitUpdate() {
     setSaving(true);
     setFormError("");
     setFormConflict("");
     setSaveStatus("");
 
     try {
-      if (selected) {
-        const values = {
-          name: form.name.trim(),
-          branch_id: form.branch_id ? Number(form.branch_id) : null,
-          department_id: form.department_id ? Number(form.department_id) : null,
-          status: form.status,
-          ai_enabled: form.ai_enabled,
-          flow_enabled: form.flow_enabled,
-          voice_ai_enabled: form.voice_ai_enabled,
-          image_ai_enabled: form.image_ai_enabled,
-        };
+      const values = {
+        name: form.name.trim(),
+        branch_id: form.branch_id ? Number(form.branch_id) : null,
+        department_id: form.department_id ? Number(form.department_id) : null,
+        status: form.status,
+        ai_enabled: form.ai_enabled,
+        flow_enabled: form.flow_enabled,
+        voice_ai_enabled: form.voice_ai_enabled,
+        image_ai_enabled: form.image_ai_enabled,
+      };
 
-        if (routingField) {
-          values[routingField] = form[routingField].trim();
-        }
-
-        /*
-         * A blank token field means "keep what is stored". The key is left out
-         * entirely so the server's `exclude_unset` never sees it. Clearing is a
-         * deliberate, separate action that sends an empty string.
-         */
-        if (clearAccessToken) {
-          values.access_token = "";
-        } else if (form.access_token.trim()) {
-          values.access_token = form.access_token.trim();
-        }
-
-        if (clearVerifyToken) {
-          values.verify_token = "";
-        } else if (form.verify_token.trim()) {
-          values.verify_token = form.verify_token.trim();
-        }
-
-        await updateChannelAccountRequest(selected.id, values);
-        setSaveStatus("Account updated.");
-      } else {
-        const values = {
-          channel: form.channel,
-          name: form.name.trim(),
-          branch_id: form.branch_id ? Number(form.branch_id) : null,
-          department_id: form.department_id ? Number(form.department_id) : null,
-          ai_enabled: form.ai_enabled,
-          flow_enabled: form.flow_enabled,
-          voice_ai_enabled: form.voice_ai_enabled,
-          image_ai_enabled: form.image_ai_enabled,
-        };
-
-        if (routingField) {
-          values[routingField] = form[routingField].trim();
-        }
-
-        if (form.access_token.trim()) {
-          values.access_token = form.access_token.trim();
-        }
-
-        if (form.verify_token.trim()) {
-          values.verify_token = form.verify_token.trim();
-        }
-
-        await createChannelAccountRequest(values);
-        setSaveStatus("Account connected.");
+      if (routingField) {
+        values[routingField] = form[routingField].trim();
       }
+
+      /*
+       * A blank token field means "keep what is stored". The key is left out
+       * entirely so the server's `exclude_unset` never sees it. Clearing is a
+       * deliberate, separate action that sends an empty string.
+       */
+      if (clearAccessToken) {
+        values.access_token = "";
+      } else if (form.access_token.trim()) {
+        values.access_token = form.access_token.trim();
+      }
+
+      if (clearVerifyToken) {
+        values.verify_token = "";
+      } else if (form.verify_token.trim()) {
+        values.verify_token = form.verify_token.trim();
+      }
+
+      await updateChannelAccountRequest(selected.id, values);
+      setSaveStatus("Account updated.");
 
       await loadAccounts();
       setClearAccessToken(false);
@@ -366,10 +497,6 @@ export default function ChannelsPage() {
         access_token: "",
         verify_token: "",
       }));
-
-      if (!selected) {
-        closeEditor();
-      }
     } catch (requestError) {
       const message =
         requestError.message || "The account could not be saved.";
@@ -386,25 +513,98 @@ export default function ChannelsPage() {
     }
   }
 
-  async function handleDelete() {
+  // Connecting a new account requires an elevated grant, unlike editing one
+  // (submitUpdate above): building the values happens up front so the code
+  // prompt, if one is needed, does not lose what was typed into the form.
+  function submitConnect() {
+    setFormError("");
+    setFormConflict("");
+    setSaveStatus("");
+
+    const values = {
+      channel: form.channel,
+      name: form.name.trim(),
+      branch_id: form.branch_id ? Number(form.branch_id) : null,
+      department_id: form.department_id ? Number(form.department_id) : null,
+      ai_enabled: form.ai_enabled,
+      flow_enabled: form.flow_enabled,
+      voice_ai_enabled: form.voice_ai_enabled,
+      image_ai_enabled: form.image_ai_enabled,
+    };
+
+    if (routingField) {
+      values[routingField] = form[routingField].trim();
+    }
+
+    if (form.access_token.trim()) {
+      values.access_token = form.access_token.trim();
+    }
+
+    if (form.verify_token.trim()) {
+      values.verify_token = form.verify_token.trim();
+    }
+
+    withElevation((token) => performConnect(values, token));
+  }
+
+  async function performConnect(values, token) {
+    setSaving(true);
+
+    try {
+      await createChannelAccountRequest(values, token);
+      setSaveStatus("Account connected.");
+      recordSessionChange(`Connected ${channelLabel(values.channel)} — ${values.name}`);
+
+      await loadAccounts();
+      setClearAccessToken(false);
+      setClearVerifyToken(false);
+      setForm((current) => ({
+        ...current,
+        access_token: "",
+        verify_token: "",
+      }));
+      closeEditor();
+    } catch (requestError) {
+      const message =
+        requestError.message || "The account could not be saved.";
+
+      if (requestError.status === 409) {
+        setFormConflict(message);
+      } else {
+        setFormError(message);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDelete() {
     if (!pendingDelete) return;
 
+    const target = pendingDelete;
+    setPendingDelete(null);
+
+    withElevation((token) => performDelete(target, token));
+  }
+
+  async function performDelete(target, token) {
     setDeleting(true);
 
     try {
-      await deleteChannelAccountRequest(pendingDelete.id);
+      await deleteChannelAccountRequest(target.id, token);
 
-      if (selected?.id === pendingDelete.id) {
+      if (selected?.id === target.id) {
         closeEditor();
       }
 
-      setPendingDelete(null);
+      recordSessionChange(
+        `Disconnected ${target.name || channelLabel(target.channel)}`,
+      );
       await loadAccounts();
     } catch (requestError) {
       setError(
         requestError.message || "The account could not be disconnected.",
       );
-      setPendingDelete(null);
     } finally {
       setDeleting(false);
     }
@@ -555,6 +755,22 @@ export default function ChannelsPage() {
             aria-label="Dismiss"
           >
             <CloseOutlined fontSize="small" />
+          </button>
+        </AppCard>
+      ) : null}
+
+      {elevation ? (
+        <AppCard padding="small" className="channels-connect-notice">
+          <span>
+            Verified until {elevationExpiryLabel} — connect or disconnect
+            channels without entering the code again until then.
+          </span>
+          <button
+            type="button"
+            className="channels-verify-done"
+            onClick={endElevatedSession}
+          >
+            Done{sessionChanges.length ? " — show what changed" : ""}
           </button>
         </AppCard>
       ) : null}
@@ -953,6 +1169,70 @@ export default function ChannelsPage() {
         loading={deleting}
         onConfirm={handleDelete}
         onCancel={() => setPendingDelete(null)}
+      />
+
+      <ConfirmDialog
+        open={verifyOpen}
+        title="Verify your email"
+        confirmLabel={verifyStep === "request" ? "Send code" : "Verify"}
+        confirmVariant="primary"
+        cancelLabel="Cancel"
+        loading={verifyBusy}
+        onConfirm={
+          verifyStep === "request" ? sendVerificationCode : confirmVerificationCode
+        }
+        onCancel={() => {
+          setVerifyOpen(false);
+          pendingElevatedActionRef.current = null;
+        }}
+        message={
+          <div className="channels-verify-form">
+            {verifyStep === "request" ? (
+              <p>
+                Connecting or disconnecting a channel first asks for a
+                6-digit code sent to your email. Once verified, you can
+                connect or disconnect other channels in the same sitting
+                without entering it again.
+              </p>
+            ) : (
+              <>
+                <p>Enter the 6-digit code sent to your email.</p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  className="channels-verify-code-input"
+                  value={verifyCode}
+                  onChange={(event) =>
+                    setVerifyCode(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  autoFocus
+                />
+              </>
+            )}
+
+            {verifyError ? (
+              <p className="channels-verify-error">{verifyError}</p>
+            ) : null}
+          </div>
+        }
+      />
+
+      <ConfirmDialog
+        open={changesSummaryOpen}
+        title="What changed"
+        confirmLabel="Close"
+        cancelLabel="Close"
+        onConfirm={() => setChangesSummaryOpen(false)}
+        onCancel={() => setChangesSummaryOpen(false)}
+        message={
+          <ul className="channels-verify-changes">
+            {sessionChanges.map((line, index) => (
+              <li key={index}>{line}</li>
+            ))}
+          </ul>
+        }
       />
     </div>
   );

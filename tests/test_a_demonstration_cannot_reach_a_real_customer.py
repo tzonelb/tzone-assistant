@@ -151,13 +151,24 @@ def test_every_route_that_writes_a_channel_goes_through_the_same_door():
     Read from the source rather than exercised, because the failure is a route
     that was never written to be exercised -- one added later with the bare
     permission dependency copied from an older route.
+
+    `create_channel` and `delete_channel` reach `manage_context` one hop
+    further away than `update_channel` does: they depend on `require_elevated`
+    (the emailed-code gate added alongside this file), which itself depends on
+    `manage_context`. Both hops are checked below rather than assumed, so a
+    later edit that breaks the chain -- `require_elevated` stops depending on
+    `manage_context`, or a route stops depending on either -- still fails
+    this test instead of silently reopening the hole this file exists to
+    close.
     """
     source = (ROOT / "backend/api/routes/channels.py").read_text()
     tree = ast.parse(source)
 
     writers = {"create_channel", "update_channel", "delete_channel"}
+    door_functions = {"manage_context", "require_elevated"}
     seen = set()
     bare = []
+    function_defaults: dict[str, list[str]] = {}
 
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -167,14 +178,15 @@ def test_every_route_that_writes_a_channel_goes_through_the_same_door():
         defaults = [ast.unparse(d) for d in arguments.defaults + [
             d for d in arguments.kw_defaults if d is not None
         ]]
+        function_defaults[node.name] = defaults
 
         # Every route whose own dependency is the raw permission, rather than
         # the shared door, writes without the workspace check.
         if any('require_permission("channels.manage")' in d for d in defaults):
-            if node.name != "manage_context":
+            if node.name not in door_functions:
                 bare.append(node.name)
 
-        if any("manage_context" in d for d in defaults):
+        if any(door in d for door in door_functions for d in defaults):
             seen.add(node.name)
 
     assert not bare, (
@@ -184,8 +196,23 @@ def test_every_route_that_writes_a_channel_goes_through_the_same_door():
     )
 
     assert writers <= seen, (
-        "These write routes no longer go through `manage_context`: "
-        + ", ".join(sorted(writers - seen))
+        "These write routes no longer go through `manage_context` or "
+        "`require_elevated`: " + ", ".join(sorted(writers - seen))
+    )
+
+    # The second hop: whichever writers go through `require_elevated` must
+    # find `manage_context` there, or the demo gate is never actually reached.
+    routed_through_elevated = {
+        name for name in writers
+        if any("require_elevated" in d for d in function_defaults.get(name, []))
+    }
+    assert routed_through_elevated, "expected at least one writer to use require_elevated"
+    assert any(
+        "manage_context" in d for d in function_defaults.get("require_elevated", [])
+    ), (
+        "require_elevated no longer depends on manage_context, so "
+        f"{', '.join(sorted(routed_through_elevated))} no longer consult the "
+        "demo gate"
     )
 
 
@@ -238,10 +265,12 @@ def test_the_refusal_lifts_the_moment_the_workspace_is_activated(
         json={"channel": "telegram", "name": "Sales", "access_token": "1:AA"},
     )
 
-    # Anything but the demo refusal: the workspace is past this gate now, and
-    # whether the credentials themselves are good is a different question this
-    # test has no business asserting.
-    assert allowed.status_code != 403, allowed.text
+    # Anything but the demo refusal: the workspace is past this gate now.
+    # It may still 403 for an unrelated reason (no elevated grant confirmed
+    # this call never went near) -- that is a different question this test
+    # has no business asserting, so only the demo-specific wording is ruled
+    # out rather than the status code itself.
+    assert "demonstration" not in allowed.text.lower(), allowed.text
 
 
 def test_reading_the_channels_screen_still_works_for_a_demonstration(

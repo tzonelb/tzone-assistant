@@ -503,11 +503,37 @@ def test_scheduler_queues_and_cancels_a_post(app_client, owner):
     )
 
 
-def test_channels_connects_and_disconnects_an_account(app_client, owner):
+def test_channels_connects_and_disconnects_an_account(app_client, owner, monkeypatch):
+    # Connecting and disconnecting a channel account requires a live elevated
+    # grant from confirming an emailed 6-digit code (see
+    # test_channel_verification.py). Fixed to a known value here so this test
+    # can stay about the module actually working, not the verification flow.
+    from backend.services import channel_verification_service
+
+    monkeypatch.setattr(
+        channel_verification_service, "_generate_code", lambda: "117308"
+    )
+    _ok(
+        app_client.post("/api/channels/verification/request", headers=owner["headers"]),
+        "requesting a channel verification code",
+    )
+    confirmed = _ok(
+        app_client.post(
+            "/api/channels/verification/confirm",
+            headers=owner["headers"],
+            json={"code": "117308"},
+        ),
+        "confirming the channel verification code",
+    )
+    elevated_headers = {
+        **owner["headers"],
+        "X-Elevated-Token": confirmed["elevated_token"],
+    }
+
     created = _ok(
         app_client.post(
             "/api/channels",
-            headers=owner["headers"],
+            headers=elevated_headers,
             json={"channel": "messenger", "name": "Shop page", "page_id": "PAGE-77"},
         ),
         "connecting a channel",
@@ -520,7 +546,9 @@ def test_channels_connects_and_disconnects_an_account(app_client, owner):
     assert "Shop page" in str(listed)
 
     _ok(
-        app_client.delete(f"/api/channels/{account_id}", headers=owner["headers"]),
+        app_client.delete(
+            f"/api/channels/{account_id}", headers=elevated_headers
+        ),
         "disconnecting it",
     )
 
