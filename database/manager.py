@@ -849,12 +849,18 @@ class DatabaseManager:
             "instagram": "instagram_business_id",
             "whatsapp": "phone_number_id",
             "telegram": "external_account_id",
+            "slack": "external_account_id",
         }
         routing_value_by_channel = {
             "messenger": page_id,
             "instagram": instagram_business_id,
             "whatsapp": phone_number_id,
             "telegram": page_id,
+            # Slack's workspace id travels through the same `page_id` slot
+            # Telegram's bot id does -- there is no dedicated parameter for
+            # every channel that routes on the shared `external_account_id`
+            # column, so the caller passes it through whichever one exists.
+            "slack": page_id,
         }
 
         routing_field = routing_field_by_channel.get(normalized_channel)

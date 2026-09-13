@@ -74,6 +74,7 @@ from backend.services.module_access import (
 from backend.services.work_index_service import work_index_service
 from channels.meta import webhook as meta_webhook
 from channels.webhook_limits import drain as drain_webhook_work
+from channels.slack import webhook as slack_webhook
 from channels.telegram import webhook as telegram_webhook
 from channels.whatsapp import webhook as whatsapp_webhook
 from config.settings import config
@@ -461,6 +462,7 @@ app.include_router(developer_center.router)
 app.include_router(whatsapp_webhook.router)
 app.include_router(meta_webhook.router)
 app.include_router(telegram_webhook.router)
+app.include_router(slack_webhook.router)
 
 
 # The built single-page interface. In the reference nginx deployment the static

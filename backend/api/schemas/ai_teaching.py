@@ -47,6 +47,7 @@ PreviewChannel = Literal[
     "instagram",
     "whatsapp",
     "telegram",
+    "slack",
 ]
 
 MAX_TEST_MESSAGE = 2000

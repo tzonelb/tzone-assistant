@@ -64,7 +64,8 @@ export const CHANNEL_CATEGORIES = [
   {
     title: "Team & collaboration",
     channels: [
-      { key: "slack", name: "Slack", availability: "soon", icon: "Slack", color: "#4A154B" },
+      { key: "slack", name: "Slack", availability: "available", icon: "Slack", color: "#4A154B",
+        note: "Paste your app's Bot User OAuth Token and Signing Secret." },
       { key: "discord", name: "Discord", availability: "soon", icon: "Discord", color: "#5865F2" },
       { key: "google_chat", name: "Google Chat", availability: "soon", icon: "Google", color: "#34A853" },
     ],
