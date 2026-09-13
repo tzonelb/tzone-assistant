@@ -24,4 +24,5 @@ export const SUPPORTED_CHANNELS = [
   "discord",
   "webchat",
   "email",
+  "viber",
 ];

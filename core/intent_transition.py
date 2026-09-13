@@ -44,6 +44,7 @@ class IntentTransitionManager:
         "discord",
         "webchat",
         "email",
+        "viber",
     ]
 
     @staticmethod

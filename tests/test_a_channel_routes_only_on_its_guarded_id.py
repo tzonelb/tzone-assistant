@@ -173,6 +173,46 @@ def test_discord_delivery_reaches_its_real_owner_not_a_page_id_shadow(
     assert resolved == victim, "a Discord delivery was routed by an unguarded page_id"
 
 
+def _viber_account_info_ok(account_id: str):
+    class Response:
+        @staticmethod
+        def json():
+            return {"status": 0, "status_message": "ok", "id": account_id}
+
+    return lambda *args, **kwargs: Response()
+
+
+def test_viber_delivery_reaches_its_real_owner_not_a_page_id_shadow(
+    wired, alpha, beta, monkeypatch
+):
+    """The same shadow again, for the fourth channel routing on the shared
+    `external_account_id` column."""
+    import backend.services.channel_account_service as service_module
+
+    victim, attacker = alpha["id"], beta["id"]
+
+    monkeypatch.setattr(
+        service_module.httpx, "post", _viber_account_info_ok("pa:VICTIM")
+    )
+    channel_account_service.create_account(
+        company_id=victim, channel="viber", name="Victim Viber",
+        values={"access_token": "test-fixture-token-victim"},
+    )
+
+    # The attacker's own bot, with the victim's account id smuggled into the
+    # unguarded page_id column.
+    monkeypatch.setattr(
+        service_module.httpx, "post", _viber_account_info_ok("pa:ATTACKER")
+    )
+    channel_account_service.create_account(
+        company_id=attacker, channel="viber", name="Attacker Viber",
+        values={"access_token": "test-fixture-token-attacker", "page_id": "pa:VICTIM"},
+    )
+
+    resolved = _resolve(wired, channel="viber", page_id="pa:VICTIM")
+    assert resolved == victim, "a Viber delivery was routed by an unguarded page_id"
+
+
 def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypatch):
     """The negative tests above are only meaningful if routing still works."""
     import backend.services.channel_account_service as service_module
@@ -210,6 +250,13 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
         company_id=company, channel="discord", name="Discord",
         values={"access_token": "test-fixture-token-clean-discord"},
     )
+    monkeypatch.setattr(
+        service_module.httpx, "post", _viber_account_info_ok("pa:CLEAN")
+    )
+    channel_account_service.create_account(
+        company_id=company, channel="viber", name="Viber",
+        values={"access_token": "test-fixture-token-clean-viber"},
+    )
 
     assert _resolve(wired, channel="messenger", page_id="PAGE_1") == company
     assert _resolve(
@@ -222,3 +269,4 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
     ) == company
     assert _resolve(wired, channel="slack", page_id="T_CLEAN") == company
     assert _resolve(wired, channel="discord", page_id="D_CLEAN") == company
+    assert _resolve(wired, channel="viber", page_id="pa:CLEAN") == company

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email",
+    "email", "viber",
 )
 
 # Which identifier each channel is routed by. Getting this wrong sends one
@@ -63,6 +63,10 @@ ROUTING_FIELD = {
     # what stands in for the "ask the provider" step every other channel gets
     # for free.
     "email": "external_account_id",
+    # Viber, back to the derived pattern: a Viber "public account" (bot) has
+    # exactly one identity, read back from Viber's own `get_account_info`
+    # with the token the operator pasted -- see `viber_account_id` below.
+    "viber": "external_account_id",
 }
 
 
@@ -198,6 +202,125 @@ def discord_bot_id(bot_token: str) -> str:
         raise ChannelAccountError("Discord did not return a bot id for that token.")
 
     return bot_id
+
+
+VIBER_API_BASE = "https://chatapi.viber.com/pa"
+VIBER_TIMEOUT_SECONDS = 10
+
+
+def viber_account_id(bot_token: str) -> str:
+    """The bot's own public-account id, read back from Viber itself.
+
+    Same reasoning as `slack_team_id` and `discord_bot_id`: a Viber
+    authentication token carries no id to parse locally, so it has to be
+    asked of Viber's own `get_account_info`, which every valid token can call
+    for free and which fails immediately for a token that is wrong or
+    revoked. The id comes back in the form ``pa:<digits>`` -- Viber's own
+    prefix for a public account, kept as-is rather than stripped, since it is
+    exactly the value every other Viber API call already expects to see.
+    """
+    token = str(bot_token or "").strip()
+
+    if not token:
+        raise ChannelAccountError(
+            "A Viber account needs its bot Authentication Token."
+        )
+
+    try:
+        response = httpx.post(
+            f"{VIBER_API_BASE}/get_account_info",
+            headers={"X-Viber-Auth-Token": token},
+            json={},
+            timeout=VIBER_TIMEOUT_SECONDS,
+        )
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ChannelAccountError(
+            "Could not reach Viber to verify that token. Please try again."
+        ) from exc
+
+    if body.get("status") != 0:
+        raise ChannelAccountError(
+            "Viber rejected that token"
+            + (
+                f" ({body.get('status_message')})"
+                if body.get("status_message")
+                else ""
+            )
+            + ". Paste the Authentication Token from your bot's page on the "
+            "Viber Admin Panel."
+        )
+
+    account_id = str(body.get("id") or "").strip()
+
+    if not account_id:
+        raise ChannelAccountError("Viber did not return an account id for that token.")
+
+    return account_id
+
+
+def register_viber_webhook(*, token: str, account_id: int) -> None:
+    """Point this bot's webhook at this platform's own route.
+
+    Unlike Telegram -- whose webhook secret is typed in because nothing here
+    can call `setWebhook` without knowing the platform's own public URL at
+    the time the operator connects -- Viber's registration needs nothing
+    Telegram's didn't already have available, so there is no reason to make
+    the operator do this by hand. Called once, right after the account row
+    exists (so the URL can carry its id), by the route that creates or
+    re-enables the account -- see `backend/api/routes/channels.py`.
+    """
+    from config.settings import config
+
+    url = f"{config.APP_PUBLIC_URL}/webhook/viber/{int(account_id)}"
+
+    try:
+        response = httpx.post(
+            f"{VIBER_API_BASE}/set_webhook",
+            headers={"X-Viber-Auth-Token": token},
+            json={"url": url, "event_types": ["message", "conversation_started"]},
+            timeout=VIBER_TIMEOUT_SECONDS,
+        )
+        body = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ChannelAccountError(
+            "Could not register this bot's webhook with Viber. Please try "
+            "again."
+        ) from exc
+
+    if body.get("status") != 0:
+        raise ChannelAccountError(
+            "Viber rejected the webhook registration"
+            + (
+                f" ({body.get('status_message')})"
+                if body.get("status_message")
+                else ""
+            )
+            + "."
+        )
+
+
+def unregister_viber_webhook(token: str) -> None:
+    """Best-effort: stop Viber sending events for a disconnected account.
+
+    Never raises -- called from delete/disable paths that must still succeed
+    locally even when Viber's own API is unreachable. An account this
+    platform no longer serves will simply be refused at the webhook route
+    (see `channels/viber/webhook.py`) if Viber keeps delivering to it anyway.
+    """
+    try:
+        httpx.post(
+            f"{VIBER_API_BASE}/set_webhook",
+            headers={"X-Viber-Auth-Token": token},
+            json={"url": ""},
+            timeout=VIBER_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError:
+        logger.warning(
+            "Could not unregister a Viber webhook; the token may already be "
+            "invalid",
+            exc_info=True,
+        )
 
 
 def generate_webchat_widget_key() -> str:
@@ -442,6 +565,19 @@ class ChannelAccountService:
                 raise ChannelAccountError("A Discord account needs its bot token.")
 
             values[routing_field] = discord_bot_id(token)
+
+        # Viber, the same reasoning as Slack and Discord just above: the
+        # routing id is the bot's own public-account id, asked of Viber
+        # itself rather than typed in.
+        if normalized == "viber" and not values.get(routing_field):
+            token = values.get("access_token")
+
+            if not token:
+                raise ChannelAccountError(
+                    "A Viber account needs its bot Authentication Token."
+                )
+
+            values[routing_field] = viber_account_id(token)
 
         # Website live chat needs nothing from the operator at all: there is
         # no bot, no app, no account on another platform to connect. The
@@ -948,6 +1084,13 @@ class ChannelAccountService:
         credentials: dict[str, Any] = {
             "id": int(row["id"]),
             "channel": normalized,
+            # The display name the operator gave this account when connecting
+            # it. Most senders never touch it -- Slack and Discord identify
+            # the sender through the bot's own app identity -- but Viber's
+            # `send_message` takes a `sender.name` on every call, and the
+            # name the operator already chose here is a better default than
+            # a hardcoded one.
+            "name": row["name"],
             "page_id": row["page_id"],
             "phone_number_id": row["phone_number_id"],
             "instagram_business_id": row["instagram_business_id"],
