@@ -27,6 +27,8 @@ import {
   StatusBadge,
 } from "../../components/common";
 import { formatPlatformDateTime } from "../../utils/dateTime";
+import { CHANNEL_CATEGORIES } from "./channelCatalog";
+import { resolveChannelIcon } from "./channelIcons";
 import "./ChannelsPage.css";
 
 // The message shown after returning from the Facebook connect flow, read once
@@ -142,6 +144,86 @@ function emptyForm(channel = "messenger") {
   };
 }
 
+// The catalogue shown before the connect form: every channel type this kind
+// of platform is expected to offer, not only the ones already wired up.
+// Clicking an available one opens the real form below; a "Coming soon" card
+// has no click handler at all — the platform's own history is why: the
+// previous version of this screen made those buttons look clickable and had
+// nothing behind them, and got deleted for it.
+function ChannelCatalogGrid({ connectedCounts, supported, onPick }) {
+  return (
+    <div className="channels-catalog">
+      <p className="channels-catalog-intro">
+        Pick a channel to connect. Anything marked "Coming soon" is planned
+        but not wired up yet — nothing here pretends to work before it does.
+      </p>
+
+      {CHANNEL_CATEGORIES.map((category) => (
+        <div className="channels-catalog-category" key={category.title}>
+          <h4>{category.title}</h4>
+
+          <div className="channels-catalog-grid">
+            {category.channels.map((channel) => {
+              const isSupported =
+                supported.includes(channel.key) &&
+                channel.availability === "available";
+              const connected = connectedCounts[channel.key] || 0;
+
+              const Icon = resolveChannelIcon(channel.icon);
+
+              const badge = connected
+                ? { cls: "is-connected", label: `${connected} connected` }
+                : isSupported
+                  ? { cls: "is-available", label: "Available" }
+                  : { cls: "is-soon", label: "Coming soon" };
+
+              return (
+                <div className="channels-catalog-card" key={channel.key}>
+                  <div
+                    className="channels-catalog-card-icon"
+                    style={{
+                      background: `${channel.color}1a`,
+                      color: channel.color,
+                    }}
+                  >
+                    <Icon fontSize="small" />
+                  </div>
+
+                  <div className="channels-catalog-card-body">
+                    <div className="channels-catalog-card-head">
+                      <span className="channels-catalog-card-name">
+                        {channel.name}
+                      </span>
+                      <span className={`channels-catalog-badge ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+
+                    {channel.note ? (
+                      <span className="channels-catalog-card-note">
+                        {channel.note}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    className="channels-catalog-card-connect"
+                    disabled={!isSupported}
+                    onClick={() => onPick(channel.key)}
+                  >
+                    {isSupported ? "Connect" : "Coming soon"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function formFromAccount(account) {
   return {
     channel: account.channel || "messenger",
@@ -181,6 +263,10 @@ export default function ChannelsPage() {
   const [error, setError] = useState("");
 
   const [editorOpen, setEditorOpen] = useState(false);
+  // "catalog" shows every channel type with a Connect/Coming-soon card;
+  // "form" is the existing connect/edit form, reached by picking an
+  // available card, or directly when editing an existing account.
+  const [formStep, setFormStep] = useState("catalog");
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [clearAccessToken, setClearAccessToken] = useState(false);
@@ -412,16 +498,21 @@ export default function ChannelsPage() {
   }
 
   function openCreate() {
-    const firstChannel = supportedChannels[0] || "messenger";
     setSelected(null);
-    setForm(emptyForm(firstChannel));
+    setFormStep("catalog");
     resetFormState();
     setEditorOpen(true);
+  }
+
+  function pickChannel(channel) {
+    setForm(emptyForm(channel));
+    setFormStep("form");
   }
 
   function openEdit(account) {
     setSelected(account);
     setForm(formFromAccount(account));
+    setFormStep("form");
     resetFormState();
     setEditorOpen(true);
   }
@@ -429,6 +520,7 @@ export default function ChannelsPage() {
   function closeEditor() {
     setEditorOpen(false);
     setSelected(null);
+    setFormStep("catalog");
     resetFormState();
   }
 
@@ -708,6 +800,15 @@ export default function ChannelsPage() {
     ? supportedChannels
     : Object.keys(routingFields);
 
+  const connectedCounts = useMemo(
+    () =>
+      items.reduce((map, row) => {
+        map[row.channel] = (map[row.channel] || 0) + 1;
+        return map;
+      }, {}),
+    [items],
+  );
+
   return (
     <div className="channels-page">
       <PageHeader
@@ -848,12 +949,18 @@ export default function ChannelsPage() {
             <header className="channels-editor-head">
               <div>
                 <span>
-                  {selected ? "EDIT CONNECTION" : "CONNECT A NEW ACCOUNT"}
+                  {selected
+                    ? "EDIT CONNECTION"
+                    : formStep === "catalog"
+                      ? "CHOOSE A CHANNEL"
+                      : "CONNECT A NEW ACCOUNT"}
                 </span>
                 <h3>
                   {selected
                     ? selected.name || `Account #${selected.id}`
-                    : "New channel account"}
+                    : formStep === "catalog"
+                      ? "What do you want to connect?"
+                      : "New channel account"}
                 </h3>
               </div>
 
@@ -867,6 +974,14 @@ export default function ChannelsPage() {
               </button>
             </header>
 
+            {!selected && formStep === "catalog" ? (
+              <ChannelCatalogGrid
+                connectedCounts={connectedCounts}
+                supported={channelOptions}
+                onPick={pickChannel}
+              />
+            ) : (
+              <>
             {formConflict ? (
               <div className="channels-conflict" role="alert">
                 <strong>This account is already connected elsewhere</strong>
@@ -1139,6 +1254,16 @@ export default function ChannelsPage() {
                 </span>
 
                 <div>
+                  {!selected ? (
+                    <AppButton
+                      variant="secondary"
+                      disabled={saving}
+                      onClick={() => setFormStep("catalog")}
+                    >
+                      Back
+                    </AppButton>
+                  ) : null}
+
                   <AppButton
                     variant="secondary"
                     disabled={saving}
@@ -1153,6 +1278,8 @@ export default function ChannelsPage() {
                 </div>
               </footer>
             </form>
+              </>
+            )}
           </AppCard>
         ) : null}
       </div>
