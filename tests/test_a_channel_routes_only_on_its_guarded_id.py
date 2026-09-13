@@ -135,6 +135,44 @@ def test_slack_delivery_reaches_its_real_owner_not_a_page_id_shadow(
     assert resolved == victim, "a Slack delivery was routed by an unguarded page_id"
 
 
+def _discord_users_me_ok(bot_id: str):
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"id": bot_id}
+
+    return lambda *args, **kwargs: Response()
+
+
+def test_discord_delivery_reaches_its_real_owner_not_a_page_id_shadow(
+    wired, alpha, beta, monkeypatch
+):
+    """The same shadow again, for the third channel routing on the shared
+    `external_account_id` column."""
+    import backend.services.channel_account_service as service_module
+
+    victim, attacker = alpha["id"], beta["id"]
+
+    monkeypatch.setattr(service_module.httpx, "get", _discord_users_me_ok("D_VICTIM"))
+    channel_account_service.create_account(
+        company_id=victim, channel="discord", name="Victim Discord",
+        values={"access_token": "test-fixture-token-victim"},
+    )
+
+    # The attacker's own bot, with the victim's bot id smuggled into the
+    # unguarded page_id column.
+    monkeypatch.setattr(service_module.httpx, "get", _discord_users_me_ok("D_ATTACKER"))
+    channel_account_service.create_account(
+        company_id=attacker, channel="discord", name="Attacker Discord",
+        values={"access_token": "test-fixture-token-attacker", "page_id": "D_VICTIM"},
+    )
+
+    resolved = _resolve(wired, channel="discord", page_id="D_VICTIM")
+    assert resolved == victim, "a Discord delivery was routed by an unguarded page_id"
+
+
 def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypatch):
     """The negative tests above are only meaningful if routing still works."""
     import backend.services.channel_account_service as service_module
@@ -165,6 +203,13 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
         company_id=company, channel="slack", name="Slack",
         values={"access_token": "test-fixture-token-clean"},
     )
+    monkeypatch.setattr(
+        service_module.httpx, "get", _discord_users_me_ok("D_CLEAN")
+    )
+    channel_account_service.create_account(
+        company_id=company, channel="discord", name="Discord",
+        values={"access_token": "test-fixture-token-clean-discord"},
+    )
 
     assert _resolve(wired, channel="messenger", page_id="PAGE_1") == company
     assert _resolve(
@@ -176,3 +221,4 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
         wired, channel="telegram", page_id=telegram_bot_id(token)
     ) == company
     assert _resolve(wired, channel="slack", page_id="T_CLEAN") == company
+    assert _resolve(wired, channel="discord", page_id="D_CLEAN") == company

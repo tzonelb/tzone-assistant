@@ -474,6 +474,31 @@ def test_slack_is_reachable_through_the_shared_dispatcher():
     assert "slack" in SUPPORTED_CHANNELS
 
 
+def test_send_text_actually_calls_the_slack_sender(wired, alpha, monkeypatch):
+    """Membership in `SUPPORTED_CHANNELS` alone does not prove the dispatcher
+    calls anything -- a channel can be listed as supported and still have no
+    branch in `send_text` that reaches it. Pinned here after exactly that gap
+    shipped: Slack was added to the set without a matching branch."""
+    import channels.sender as sender_module
+
+    _connect(alpha, monkeypatch)
+    captured = {}
+
+    def fake_send_slack_text(**kwargs):
+        captured.update(kwargs)
+        return {"ok": True, "skipped": False}
+
+    monkeypatch.setattr(sender_module, "send_slack_text", fake_send_slack_text)
+
+    result = sender_module.send_text(
+        channel="slack", recipient_id="D999", company_id=alpha["id"], text="hi"
+    )
+
+    assert result["ok"] is True
+    assert captured["recipient_id"] == "D999"
+    assert captured["text"] == "hi"
+
+
 def test_sending_without_a_connected_account_fails_rather_than_raising(wired, alpha):
     """The dispatcher's contract is a result dict. A sender that threw would
     take down the batch a customer is waiting in."""
