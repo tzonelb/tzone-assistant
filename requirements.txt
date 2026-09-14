@@ -59,6 +59,17 @@ pyotp==2.10.0
 # encoder, no temporary file, and the secret never leaves the response.
 segno==1.6.6
 
+# --- Channel-specific crypto ---------------------------------------------
+# Google Chat's inbound webhook authenticates the caller with a Google-signed
+# JWT (see channels/google_chat/webhook.py), and a connecting Chat app
+# authenticates its own outbound calls by self-signing one (see channels/
+# google_chat/sender.py). `cryptography` above already does the actual RSA
+# work underneath; PyJWT is the thin, well-audited layer that builds the
+# token shape and, on the inbound side, fetches and caches Google's public
+# keys -- reimplementing JWK-to-RSA-key reconstruction by hand is exactly the
+# kind of crypto code most likely to hide a subtle bug.
+PyJWT==2.14.0
+
 # --- Configuration -----------------------------------------------------
 python-dotenv==1.2.2
 

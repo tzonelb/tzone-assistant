@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line", "sms",
+    "email", "viber", "line", "sms", "google_chat",
 )
 
 # Which identifier each channel is routed by. Getting this wrong sends one
@@ -77,6 +77,13 @@ ROUTING_FIELD = {
     # below stands in for the "ask the provider" step by confirming that
     # number genuinely belongs to the account whose credentials came with it.
     "sms": "external_account_id",
+    # Google Chat, back to the derived pattern, but derived from the
+    # credential itself rather than an API call to a "who am I" endpoint --
+    # Chat apps have no such endpoint. A Google Cloud service account's
+    # `client_email` is globally unique (Google enforces that at creation),
+    # so it stands in for a bot id exactly the way Viber's and LINE's do --
+    # see `google_chat_parse_service_account` below.
+    "google_chat": "external_account_id",
 }
 
 
@@ -515,6 +522,127 @@ def register_sms_webhook(
         )
 
 
+GOOGLE_CHAT_TOKEN_URI = "https://oauth2.googleapis.com/token"
+GOOGLE_CHAT_SCOPE = "https://www.googleapis.com/auth/chat.bot"
+GOOGLE_CHAT_API_BASE = "https://chat.googleapis.com/v1"
+GOOGLE_CHAT_TIMEOUT_SECONDS = 10
+
+
+def google_chat_parse_service_account(raw_json: str) -> dict[str, str]:
+    """Pull the three fields this platform needs out of a pasted service
+    account key file.
+
+    A Google Cloud service account key is a JSON document, not a single
+    token -- there is no shorter credential a Chat app can authenticate
+    with. Asking the operator to transcribe individual fields out of it
+    invites transcription errors on a value (`private_key`) that is
+    thousands of characters of PEM; asking them to paste the whole file, as
+    downloaded, is both the natural operator action and the one least
+    likely to corrupt the key.
+    """
+    try:
+        parsed = json.loads(raw_json)
+    except (ValueError, TypeError) as exc:
+        raise ChannelAccountError(
+            "That doesn't look like a service account key file. Paste the "
+            "whole JSON file Google Cloud downloaded for you."
+        ) from exc
+
+    if not isinstance(parsed, dict):
+        raise ChannelAccountError(
+            "That doesn't look like a service account key file. Paste the "
+            "whole JSON file Google Cloud downloaded for you."
+        )
+
+    client_email = str(parsed.get("client_email") or "").strip()
+    private_key = str(parsed.get("private_key") or "").strip()
+    project_id = str(parsed.get("project_id") or "").strip()
+
+    if not client_email or not private_key:
+        raise ChannelAccountError(
+            "That service account key is missing its client_email or "
+            "private_key field. Paste the file exactly as Google Cloud "
+            "downloaded it."
+        )
+
+    return {"client_email": client_email, "private_key": private_key, "project_id": project_id}
+
+
+def google_chat_mint_access_token(*, client_email: str, private_key: str) -> str:
+    """Prove a pasted service account key is real by using it to get a token.
+
+    This stands in for every other channel's "ask the provider" step: a
+    Chat app has no `bot/info`-style endpoint to confirm an identity
+    against, so the confirmation is that Google's own token endpoint
+    accepts a JWT self-signed with the pasted key and hands back a real
+    access token for it -- a malformed or fabricated key fails here rather
+    than the first time a customer messages the bot.
+
+    The JWT-bearer grant (RFC 7523) is Google's documented flow for a
+    service account to authenticate as itself: a JWT whose claims are
+    `iss`/`sub` (the service account's own email), `scope`, `aud` (the
+    token endpoint) and a short expiry, signed with the account's own
+    private key, exchanged for an access token in one POST. No Google SDK
+    needed -- PyJWT signs the RS256 assertion and httpx posts it.
+    """
+    import jwt as pyjwt
+
+    now = int(datetime.now(timezone.utc).timestamp())
+
+    try:
+        assertion = pyjwt.encode(
+            {
+                "iss": client_email,
+                "scope": GOOGLE_CHAT_SCOPE,
+                "aud": GOOGLE_CHAT_TOKEN_URI,
+                "iat": now,
+                "exp": now + 3600,
+            },
+            private_key,
+            algorithm="RS256",
+        )
+    except (ValueError, TypeError, pyjwt.PyJWTError) as exc:
+        raise ChannelAccountError(
+            "That private key is not a usable RSA key. Paste the service "
+            "account key file exactly as Google Cloud downloaded it."
+        ) from exc
+
+    try:
+        response = httpx.post(
+            GOOGLE_CHAT_TOKEN_URI,
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": assertion,
+            },
+            timeout=GOOGLE_CHAT_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ChannelAccountError(
+            "Could not reach Google to verify that service account key. "
+            "Please try again."
+        ) from exc
+
+    if response.status_code != 200:
+        raise ChannelAccountError(
+            "Google rejected that service account key. Confirm the Chat "
+            "API is enabled on its project and paste the key file again."
+        )
+
+    try:
+        access_token = str(response.json().get("access_token") or "")
+    except ValueError as exc:
+        raise ChannelAccountError(
+            "Google did not return a usable response for that key."
+        ) from exc
+
+    if not access_token:
+        raise ChannelAccountError(
+            "Google did not return an access token for that key."
+        )
+
+    return access_token
+
+
 def generate_webchat_widget_key() -> str:
     """A new public identifier for a website chat widget.
 
@@ -874,6 +1002,31 @@ class ChannelAccountService:
             )
             values[routing_field] = phone_number
 
+        # Google Chat, back to the derived pattern (see ROUTING_FIELD's
+        # comment): the operator pastes a service account key file whole,
+        # rather than any individual field of it, and the bot id this
+        # account is routed by is read out of that file rather than typed.
+        if normalized == "google_chat":
+            raw_key = values.get("access_token")
+
+            if not raw_key:
+                raise ChannelAccountError(
+                    "A Google Chat account needs its service account JSON key."
+                )
+
+            parsed_key = google_chat_parse_service_account(raw_key)
+            google_chat_mint_access_token(
+                client_email=parsed_key["client_email"],
+                private_key=parsed_key["private_key"],
+            )
+            values["_google_chat_project_id"] = parsed_key["project_id"]
+            values[routing_field] = parsed_key["client_email"]
+            # Only the private key is sealed from here on -- `client_email`
+            # is already stored, unsealed, as the routing identifier above,
+            # and duplicating it in the sealed field would only mean two
+            # places for the same value to drift.
+            values["access_token"] = parsed_key["private_key"]
+
         if not values.get(routing_field):
             raise ChannelAccountError(
                 f"A {normalized} account needs a {routing_field.replace('_', ' ')} "
@@ -1109,6 +1262,21 @@ class ChannelAccountService:
                                         "_twilio_phone_number_sid"
                                     ),
                                 }
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # Google Chat's own non-secret setting: the Cloud project the
+                # service account belongs to, kept purely for the operator's
+                # own reference on the account list -- nothing here reads it
+                # back to authenticate or send.
+                if normalized_channel == "google_chat":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {"project_id": values.get("_google_chat_project_id")}
                             ),
                             account_id,
                         ),

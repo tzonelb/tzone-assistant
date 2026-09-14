@@ -75,6 +75,7 @@ from backend.services.module_access import (
 )
 from backend.services.work_index_service import work_index_service
 from channels.discord import manager as discord_gateway_manager
+from channels.google_chat import webhook as google_chat_webhook
 from channels.meta import webhook as meta_webhook
 from channels.webhook_limits import drain as drain_webhook_work
 from channels.line import webhook as line_webhook
@@ -497,6 +498,7 @@ app.include_router(slack_webhook.router)
 app.include_router(viber_webhook.router)
 app.include_router(line_webhook.router)
 app.include_router(sms_webhook.router)
+app.include_router(google_chat_webhook.router)
 app.include_router(webchat_widget.router)
 
 

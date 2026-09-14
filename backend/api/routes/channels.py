@@ -45,7 +45,7 @@ router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 ChannelName = Literal[
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line", "sms",
+    "email", "viber", "line", "sms", "google_chat",
 ]
 
 
@@ -67,7 +67,13 @@ class ChannelAccountCreate(BaseModel):
     # one channel that needs it as a field on this model at all.
     external_account_id: str | None = Field(default=None, max_length=255)
 
-    access_token: str | None = Field(default=None, max_length=1000)
+    # 1000 was enough for every bot token here until Google Chat: a pasted
+    # service account key file -- type, project id, both key ids, the PEM
+    # private key itself, and a handful of URLs -- runs to several thousand
+    # characters. Raised for every channel rather than branched per-channel,
+    # since a generous upper bound on one field costs nothing the channels
+    # that never approach it.
+    access_token: str | None = Field(default=None, max_length=8000)
     verify_token: str | None = Field(default=None, max_length=500)
 
     # Email's own connection settings. Ignored by every other channel, the
@@ -152,6 +158,20 @@ class ChannelAccountCreate(BaseModel):
 
             return self
 
+        # Google Chat, the same derived-routing shape as Viber/LINE just
+        # above, but the credential is a whole service account key file
+        # rather than a single token -- see channel_account_service's
+        # `google_chat_parse_service_account`, which is what actually reads
+        # the bot id (`client_email`) out of it. This layer only confirms
+        # something was pasted at all.
+        if self.channel == "google_chat":
+            if not self.access_token:
+                raise ValueError(
+                    "A Google Chat account requires its service account JSON key."
+                )
+
+            return self
+
         # Website live chat needs nothing typed in at all -- there is no bot,
         # app or account on another platform to connect, so there is nothing
         # here to validate. channel_account_service mints the widget key.
@@ -212,7 +232,10 @@ class ChannelAccountUpdate(BaseModel):
     phone_number_id: str | None = Field(default=None, max_length=120)
 
     # An omitted secret keeps the stored one; an empty string clears it.
-    access_token: str | None = Field(default=None, max_length=1000)
+    # Google Chat's credential is never actually replaced through this route
+    # (see `update_channel` below) -- kept at the same 8000 as the create
+    # model purely so the two stay in step, not because this path uses it.
+    access_token: str | None = Field(default=None, max_length=8000)
     verify_token: str | None = Field(default=None, max_length=500)
 
     # Email's connection settings. Unset means "keep whatever is already
@@ -530,6 +553,26 @@ def update_channel(
         key in values for key in ("access_token", "verify_token", "app_secret")
     )
     previous = channel_account_service.get_account(company_id, account_id)
+
+    # Google Chat's stored secret is not the whole pasted key -- it is just
+    # the private key `_validate` extracted from it at connect time, with
+    # the bot id (`client_email`) it was extracted alongside already written
+    # to `external_account_id`. Sealing a fresh `access_token` here would
+    # bypass that extraction entirely: whatever the operator pastes would be
+    # sealed as-is, an operation `update_account` never routes through
+    # `_validate`, leaving `access_token_sealed` holding a full JSON document
+    # sender.py will fail to sign anything with, and `external_account_id`
+    # silently naming a bot this key no longer matches. Rotating the key is
+    # a disconnect and reconnect, the same as email's mailbox address and
+    # SMS's Account SID.
+    if (previous or {}).get("channel") == "google_chat" and "access_token" in values:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "A Google Chat account's service account key cannot be "
+                "replaced here -- disconnect and reconnect with the new key."
+            ),
+        )
 
     try:
         account = channel_account_service.update_account(

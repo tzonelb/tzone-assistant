@@ -19,12 +19,38 @@ owner.
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 from backend.services.channel_account_service import (
     channel_account_service,
     telegram_bot_id,
 )
+
+# One throwaway RSA keypair for this file's Google Chat tests -- see
+# `tests/test_google_chat_channel.py` for why it is generated once rather
+# than per test.
+_GOOGLE_CHAT_PRIVATE_KEY_PEM = rsa.generate_private_key(
+    public_exponent=65537, key_size=2048
+).private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+).decode()
+
+
+def _google_chat_service_account_json(client_email: str) -> str:
+    return json.dumps(
+        {
+            "project_id": "test-project",
+            "private_key": _GOOGLE_CHAT_PRIVATE_KEY_PEM,
+            "client_email": client_email,
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    )
 
 
 @pytest.fixture()
@@ -302,6 +328,49 @@ def test_sms_delivery_reaches_its_real_owner_not_a_page_id_shadow(
     assert resolved == victim, "an SMS delivery was routed by an unguarded page_id"
 
 
+def _google_chat_token_mint_ok():
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"access_token": "fake-access-token"}
+
+    return lambda *args, **kwargs: Response()
+
+
+def test_google_chat_delivery_reaches_its_real_owner_not_a_page_id_shadow(
+    wired, alpha, beta, monkeypatch
+):
+    """The same shadow again, for the seventh channel routing on the shared
+    `external_account_id` column -- here a service account's `client_email`,
+    read out of the pasted key rather than asked of the provider."""
+    import backend.services.channel_account_service as service_module
+
+    victim, attacker = alpha["id"], beta["id"]
+
+    monkeypatch.setattr(service_module.httpx, "post", _google_chat_token_mint_ok())
+    channel_account_service.create_account(
+        company_id=victim, channel="google_chat", name="Victim Chat app",
+        values={"access_token": _google_chat_service_account_json("victim@test-project.iam.gserviceaccount.com")},
+    )
+
+    # The attacker's own bot, with the victim's client_email smuggled into
+    # the unguarded page_id column.
+    channel_account_service.create_account(
+        company_id=attacker, channel="google_chat", name="Attacker Chat app",
+        values={
+            "access_token": _google_chat_service_account_json("attacker@test-project.iam.gserviceaccount.com"),
+            "page_id": "victim@test-project.iam.gserviceaccount.com",
+        },
+    )
+
+    resolved = _resolve(
+        wired, channel="google_chat", page_id="victim@test-project.iam.gserviceaccount.com"
+    )
+    assert resolved == victim, "a Google Chat delivery was routed by an unguarded page_id"
+
+
 def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypatch):
     """The negative tests above are only meaningful if routing still works."""
     import backend.services.channel_account_service as service_module
@@ -363,6 +432,15 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
             "account_sid": "ACclean000000000000000000000000000",
         },
     )
+    monkeypatch.setattr(service_module.httpx, "post", _google_chat_token_mint_ok())
+    channel_account_service.create_account(
+        company_id=company, channel="google_chat", name="Google Chat",
+        values={
+            "access_token": _google_chat_service_account_json(
+                "clean@test-project.iam.gserviceaccount.com"
+            ),
+        },
+    )
 
     assert _resolve(wired, channel="messenger", page_id="PAGE_1") == company
     assert _resolve(
@@ -378,3 +456,6 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
     assert _resolve(wired, channel="viber", page_id="pa:CLEAN") == company
     assert _resolve(wired, channel="line", page_id="ULINECLEAN") == company
     assert _resolve(wired, channel="sms", page_id="+15551230000") == company
+    assert _resolve(
+        wired, channel="google_chat", page_id="clean@test-project.iam.gserviceaccount.com"
+    ) == company

@@ -71,7 +71,8 @@ export const CHANNEL_CATEGORIES = [
         note: "Paste your app's Bot User OAuth Token and Signing Secret." },
       { key: "discord", name: "Discord", availability: "available", icon: "Discord", color: "#5865F2",
         note: "Paste your bot's token. Direct messages only, not server channels." },
-      { key: "google_chat", name: "Google Chat", availability: "soon", icon: "Google", color: "#34A853" },
+      { key: "google_chat", name: "Google Chat", availability: "available", icon: "Google", color: "#34A853",
+        note: "Paste your Chat app's service account JSON key, then point Google at the URL you're shown." },
     ],
   },
 ];
