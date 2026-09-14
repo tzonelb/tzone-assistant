@@ -115,6 +115,12 @@ const CHANNEL_ROUTING_META = {
     placeholder: "support@yourcompany.com",
     type: "email",
   },
+  sms: {
+    label: "Phone number",
+    hint: "The Twilio phone number customers text, in E.164 format. Verified with Twilio, and its webhook is registered automatically, before this account is saved.",
+    placeholder: "+15551234567",
+    type: "tel",
+  },
 };
 
 // See `routingField` in the component below: these channels derive or
@@ -162,6 +168,9 @@ function emptyForm(channel = "messenger") {
     external_account_id: "",
     access_token: "",
     verify_token: "",
+    // Twilio's Account SID -- not a secret (see channel_account_service's
+    // reasoning), so it lives here rather than alongside the sealed tokens.
+    account_sid: "",
     // Email's own connection settings. Sensible protocol defaults so a
     // company that just wants the common case only has to type the two host
     // names and the mailbox password.
@@ -279,6 +288,10 @@ function formFromAccount(account) {
     // that looked like one would invite the team to save it back.
     access_token: "",
     verify_token: "",
+    // Not a secret, so the server returns it plainly under `config` -- shown
+    // for reference, but the field is disabled once connected (see the
+    // routing-field disabled note below: there is nowhere to send a change).
+    account_sid: account.config?.account_sid || "",
     // Email's settings, unlike the secrets above, are not sensitive and the
     // server returns them plainly under `config` -- prefilled so editing one
     // field does not require retyping the rest.
@@ -700,6 +713,10 @@ export default function ChannelsPage() {
       values.smtp_host = form.smtp_host.trim();
       values.smtp_port = form.smtp_port ? Number(form.smtp_port) : null;
       values.smtp_use_starttls = form.smtp_use_starttls;
+    }
+
+    if (form.channel === "sms") {
+      values.account_sid = form.account_sid.trim();
     }
 
     if (form.access_token.trim()) {
@@ -1127,7 +1144,10 @@ export default function ChannelsPage() {
                     // mailbox address (see ChannelAccountUpdate) -- an
                     // operator who wants a different one disconnects and
                     // reconnects, the same as every derived-id channel above.
-                    disabled={Boolean(selected) && form.channel === "email"}
+                    disabled={
+                      Boolean(selected) &&
+                      (form.channel === "email" || form.channel === "sms")
+                    }
                     value={form[routingField]}
                     placeholder={routingMeta?.placeholder || fieldLabel(routingField)}
                     onChange={(event) =>
@@ -1265,12 +1285,41 @@ export default function ChannelsPage() {
                     stored.
                   </p>
 
+                  {form.channel === "sms" ? (
+                    <div className="channels-field">
+                      <label htmlFor="channel-account-sid">
+                        <span>Account SID</span>
+                      </label>
+
+                      <input
+                        id="channel-account-sid"
+                        type="text"
+                        required={!selected}
+                        maxLength={64}
+                        disabled={Boolean(selected)}
+                        value={form.account_sid}
+                        placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                        onChange={(event) =>
+                          updateField("account_sid", event.target.value)
+                        }
+                      />
+
+                      <small>
+                        {selected
+                          ? "Not editable here — disconnect and reconnect to use a different Twilio account."
+                          : "From your Twilio Console, next to the Auth Token below. Not a secret, so it is stored and shown plainly, unlike the Auth Token."}
+                      </small>
+                    </div>
+                  ) : null}
+
                   <div className="channels-field">
                     <label htmlFor="channel-access-token">
                       <span>
                         {form.channel === "email"
                           ? "Mailbox password"
-                          : "Access token"}
+                          : form.channel === "sms"
+                            ? "Auth Token"
+                            : "Access token"}
                       </span>
 
                       <StatusBadge
@@ -1295,7 +1344,9 @@ export default function ChannelsPage() {
                           ? "Leave blank to keep the stored token"
                           : form.channel === "email"
                             ? "The mailbox's own password or app password"
-                            : "Paste the page access token"
+                            : form.channel === "sms"
+                              ? "Your Twilio Auth Token"
+                              : "Paste the page access token"
                       }
                       onChange={(event) =>
                         updateField("access_token", event.target.value)
@@ -1319,8 +1370,11 @@ export default function ChannelsPage() {
 
                   {/* Email has no webhook, so there is nothing for a verify
                       token to verify -- IMAP already authenticates every
-                      poll with the mailbox password above. */}
-                  {form.channel === "email" ? null : (
+                      poll with the mailbox password above. SMS's webhook is
+                      verified with Twilio's own signature, computed from the
+                      Auth Token above -- a separate verify token would be
+                      unused. */}
+                  {form.channel === "email" || form.channel === "sms" ? null : (
                     <div className="channels-field">
                       <label htmlFor="channel-verify-token">
                         <span>Verify token</span>

@@ -609,11 +609,14 @@ CONTROL_COLUMNS: dict[str, dict[str, str]] = {
         # every account to fall through to the customer's own choice.
         "department_id": "INTEGER",
         # Non-secret connection settings a channel needs beyond the three
-        # generic sealed fields -- today only the email channel, for its
-        # IMAP/SMTP host, port and TLS mode. Plain JSON, not sealed: a host
-        # name and a port number are not credentials, and sealing them would
-        # only cost every reader a decrypt for nothing gained. The one actual
-        # secret an email account holds (its mailbox password) still goes
+        # generic sealed fields -- email's IMAP/SMTP host, port and TLS mode;
+        # SMS's Twilio Account SID and phone number resource id. Plain JSON,
+        # not sealed: a host name, a port number and an Account SID (which
+        # Twilio's own security model treats as public, not a credential --
+        # it already rides along on every webhook Twilio itself sends) are
+        # not secrets, and sealing them would only cost every reader a
+        # decrypt for nothing gained. The one actual secret each of these
+        # accounts holds (a mailbox password, a Twilio Auth Token) still goes
         # through `access_token_sealed` like every other channel's token.
         "config_json": "TEXT",
     },

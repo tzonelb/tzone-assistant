@@ -26,4 +26,5 @@ export const SUPPORTED_CHANNELS = [
   "email",
   "viber",
   "line",
+  "sms",
 ];

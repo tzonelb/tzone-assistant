@@ -255,6 +255,53 @@ def test_line_delivery_reaches_its_real_owner_not_a_page_id_shadow(
     assert resolved == victim, "a LINE delivery was routed by an unguarded page_id"
 
 
+def _twilio_phone_lookup_ok(phone_sid: str = "PNexample000000000000000000000000"):
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"incoming_phone_numbers": [{"sid": phone_sid}]}
+
+    return lambda *args, **kwargs: Response()
+
+
+def test_sms_delivery_reaches_its_real_owner_not_a_page_id_shadow(
+    wired, alpha, beta, monkeypatch
+):
+    """The same shadow again, for the sixth channel routing on the shared
+    `external_account_id` column -- here a phone number, typed in and
+    confirmed against Twilio rather than derived from a token."""
+    import backend.services.channel_account_service as service_module
+
+    victim, attacker = alpha["id"], beta["id"]
+
+    monkeypatch.setattr(service_module.httpx, "get", _twilio_phone_lookup_ok())
+    channel_account_service.create_account(
+        company_id=victim, channel="sms", name="Victim SMS",
+        values={
+            "external_account_id": "+15550001111",
+            "access_token": "test-fixture-token-victim",
+            "account_sid": "ACvictim00000000000000000000000000",
+        },
+    )
+
+    # The attacker's own number, with the victim's number smuggled into the
+    # unguarded page_id column.
+    channel_account_service.create_account(
+        company_id=attacker, channel="sms", name="Attacker SMS",
+        values={
+            "external_account_id": "+15559998888",
+            "access_token": "test-fixture-token-attacker",
+            "account_sid": "ACattacker0000000000000000000000000",
+            "page_id": "+15550001111",
+        },
+    )
+
+    resolved = _resolve(wired, channel="sms", page_id="+15550001111")
+    assert resolved == victim, "an SMS delivery was routed by an unguarded page_id"
+
+
 def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypatch):
     """The negative tests above are only meaningful if routing still works."""
     import backend.services.channel_account_service as service_module
@@ -307,6 +354,15 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
             "verify_token": "clean-secret",
         },
     )
+    monkeypatch.setattr(service_module.httpx, "get", _twilio_phone_lookup_ok())
+    channel_account_service.create_account(
+        company_id=company, channel="sms", name="SMS",
+        values={
+            "external_account_id": "+15551230000",
+            "access_token": "test-fixture-token-clean-sms",
+            "account_sid": "ACclean000000000000000000000000000",
+        },
+    )
 
     assert _resolve(wired, channel="messenger", page_id="PAGE_1") == company
     assert _resolve(
@@ -321,3 +377,4 @@ def test_every_channel_still_reaches_its_legitimate_owner(wired, alpha, monkeypa
     assert _resolve(wired, channel="discord", page_id="D_CLEAN") == company
     assert _resolve(wired, channel="viber", page_id="pa:CLEAN") == company
     assert _resolve(wired, channel="line", page_id="ULINECLEAN") == company
+    assert _resolve(wired, channel="sms", page_id="+15551230000") == company

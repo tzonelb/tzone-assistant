@@ -53,6 +53,7 @@ PreviewChannel = Literal[
     "email",
     "viber",
     "line",
+    "sms",
 ]
 
 MAX_TEST_MESSAGE = 2000
