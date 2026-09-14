@@ -25,4 +25,5 @@ export const SUPPORTED_CHANNELS = [
   "webchat",
   "email",
   "viber",
+  "line",
 ];

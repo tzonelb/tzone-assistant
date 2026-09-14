@@ -45,6 +45,7 @@ class IntentTransitionManager:
         "webchat",
         "email",
         "viber",
+        "line",
     ]
 
     @staticmethod

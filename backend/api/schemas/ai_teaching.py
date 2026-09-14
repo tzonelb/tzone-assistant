@@ -52,6 +52,7 @@ PreviewChannel = Literal[
     "webchat",
     "email",
     "viber",
+    "line",
 ]
 
 MAX_TEST_MESSAGE = 2000

@@ -853,6 +853,7 @@ class DatabaseManager:
             "discord": "external_account_id",
             "webchat": "external_account_id",
             "viber": "external_account_id",
+            "line": "external_account_id",
         }
         routing_value_by_channel = {
             "messenger": page_id,
@@ -868,6 +869,7 @@ class DatabaseManager:
             "discord": page_id,
             "webchat": page_id,
             "viber": page_id,
+            "line": page_id,
         }
 
         routing_field = routing_field_by_channel.get(normalized_channel)
