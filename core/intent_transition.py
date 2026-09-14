@@ -47,6 +47,7 @@ class IntentTransitionManager:
         "viber",
         "line",
         "sms",
+        "google_chat",
     ]
 
     @staticmethod

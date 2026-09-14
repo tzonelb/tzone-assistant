@@ -27,4 +27,5 @@ export const SUPPORTED_CHANNELS = [
   "viber",
   "line",
   "sms",
+  "google_chat",
 ];

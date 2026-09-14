@@ -13,6 +13,7 @@ from typing import Any
 
 from channels.discord.sender import send_discord_text
 from channels.email.sender import send_email_text
+from channels.google_chat.sender import send_google_chat_text
 from channels.line.sender import send_line_text
 from channels.meta.sender import send_meta_buttons, send_meta_media, send_meta_text
 from channels.slack.sender import send_slack_text
@@ -35,16 +36,17 @@ EMAIL_CHANNELS = frozenset({"email"})
 VIBER_CHANNELS = frozenset({"viber"})
 LINE_CHANNELS = frozenset({"line"})
 SMS_CHANNELS = frozenset({"sms"})
+GOOGLE_CHAT_CHANNELS = frozenset({"google_chat"})
 
 SUPPORTED_CHANNELS = (
     META_CHANNELS | WHATSAPP_CHANNELS | TELEGRAM_CHANNELS | SLACK_CHANNELS
     | DISCORD_CHANNELS | WEBCHAT_CHANNELS | EMAIL_CHANNELS | VIBER_CHANNELS
-    | LINE_CHANNELS | SMS_CHANNELS
+    | LINE_CHANNELS | SMS_CHANNELS | GOOGLE_CHAT_CHANNELS
 )
 
-# Slack, Discord, webchat, email, Viber, LINE and SMS are deliberately absent
-# here: none of them has a media sender yet (see their own sender.py
-# docstrings), so a media send for any of them falls through to
+# Slack, Discord, webchat, email, Viber, LINE, SMS and Google Chat are
+# deliberately absent here: none of them has a media sender yet (see their
+# own sender.py docstrings), so a media send for any of them falls through to
 # UnsupportedChannel below rather than pretending to succeed. Kept as its own
 # set, distinct from SUPPORTED_CHANNELS, so that error message never lists a
 # channel that cannot actually carry an attachment.
@@ -200,6 +202,18 @@ def send_text(
             "channel": normalized,
             "recipient_id": recipient_id,
             **send_sms_text(
+                recipient_id=recipient_id,
+                text=text,
+                company_id=company_id,
+                buttons=buttons,
+            ),
+        }
+
+    if normalized in GOOGLE_CHAT_CHANNELS:
+        return {
+            "channel": normalized,
+            "recipient_id": recipient_id,
+            **send_google_chat_text(
                 recipient_id=recipient_id,
                 text=text,
                 company_id=company_id,

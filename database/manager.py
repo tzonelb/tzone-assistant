@@ -855,6 +855,7 @@ class DatabaseManager:
             "viber": "external_account_id",
             "line": "external_account_id",
             "sms": "external_account_id",
+            "google_chat": "external_account_id",
         }
         routing_value_by_channel = {
             "messenger": page_id,
@@ -872,6 +873,7 @@ class DatabaseManager:
             "viber": page_id,
             "line": page_id,
             "sms": page_id,
+            "google_chat": page_id,
         }
 
         routing_field = routing_field_by_channel.get(normalized_channel)

@@ -14,9 +14,12 @@ does — over HTTP, with a session — and asserts the account comes back.
 
 from __future__ import annotations
 
+import json
 import sys
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 
 
 PASSWORD = "OwnerPass123!"
@@ -24,6 +27,28 @@ PASSWORD = "OwnerPass123!"
 # A syntactically real BotFather token: the digits before the colon are the bot
 # id the service derives its routing identifier from.
 BOT_TOKEN = "7654321098:AAHfakeTokenForTestingPurposesOnly123456789"
+
+# One throwaway RSA keypair, for the Google Chat credential-replacement test
+# below -- see `tests/test_google_chat_channel.py` for why it is generated
+# once rather than per test.
+_GOOGLE_CHAT_PRIVATE_KEY_PEM = rsa.generate_private_key(
+    public_exponent=65537, key_size=2048
+).private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+).decode()
+
+
+def _google_chat_service_account_json(client_email: str) -> str:
+    return json.dumps(
+        {
+            "project_id": "test-project",
+            "private_key": _GOOGLE_CHAT_PRIVATE_KEY_PEM,
+            "client_email": client_email,
+            "token_uri": "https://oauth2.googleapis.com/token",
+        }
+    )
 
 
 @pytest.fixture()
@@ -165,3 +190,62 @@ def test_the_other_channels_still_require_their_routing_id(
         headers=owner,
     )
     assert accepted.status_code in (200, 201), accepted.text
+
+
+def test_a_google_chat_credential_cannot_be_swapped_through_a_rename(
+    app_client, owner, monkeypatch
+):
+    """`channel_account_service.update_account` never routes an update
+    through the JSON-parsing `_validate` step a create goes through, so a
+    fresh `access_token` sent here would be sealed exactly as sent -- the
+    whole pasted JSON, not the private key `_validate` would have extracted
+    from it -- while `external_account_id` kept naming whichever bot the
+    *previous* key belonged to. The route has to refuse this outright rather
+    than let the two silently drift apart.
+
+    An unrelated edit -- a rename, with no `access_token` in the request at
+    all -- must still go through, which is the difference between a real
+    guard and a route that has simply stopped accepting edits.
+    """
+    import backend.services.channel_account_service as service_module
+
+    monkeypatch.setattr(
+        service_module.httpx,
+        "post",
+        lambda *a, **k: type(
+            "Response", (), {"status_code": 200, "json": lambda self: {"access_token": "tok"}}
+        )(),
+    )
+
+    created = app_client.post(
+        "/api/channels",
+        json={
+            "channel": "google_chat",
+            "name": "Support bot",
+            "access_token": _google_chat_service_account_json(
+                "bot@test-project.iam.gserviceaccount.com"
+            ),
+        },
+        headers=owner,
+    )
+    assert created.status_code in (200, 201), created.text
+    account_id = created.json()["account"]["id"]
+
+    swap_attempt = app_client.patch(
+        f"/api/channels/{account_id}",
+        json={
+            "access_token": _google_chat_service_account_json(
+                "someone-else@another-project.iam.gserviceaccount.com"
+            )
+        },
+        headers=owner,
+    )
+    assert swap_attempt.status_code == 400, swap_attempt.text
+
+    rename = app_client.patch(
+        f"/api/channels/{account_id}",
+        json={"name": "Renamed support bot"},
+        headers=owner,
+    )
+    assert rename.status_code == 200, rename.text
+    assert rename.json()["account"]["name"] == "Renamed support bot"

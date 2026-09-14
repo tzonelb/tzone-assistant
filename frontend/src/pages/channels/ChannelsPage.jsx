@@ -14,6 +14,7 @@ import {
   updateChannelAccountRequest,
 } from "../../api/channels";
 import {
+  API_BASE_URL,
   facebookOAuthConfigRequest,
   startFacebookOAuthRequest,
 } from "../../api/client";
@@ -132,6 +133,7 @@ const DERIVED_ROUTING_CHANNELS = new Set([
   "webchat",
   "viber",
   "line",
+  "google_chat",
 ]);
 
 const FEATURE_FLAGS = [
@@ -1240,6 +1242,39 @@ export default function ChannelsPage() {
                 </label>
               ) : null}
 
+              {form.channel === "google_chat" && selected ? (
+                <div className="channels-webchat-snippet">
+                  <h4>Point your Chat app at this URL</h4>
+                  <p>
+                    Google Chat has no self-service way to register this for
+                    you — unlike every other channel here, this one manual
+                    step happens on Google&apos;s side. In Google Cloud
+                    Console, open this project&apos;s Chat API configuration
+                    and paste this into <strong>Connection settings →
+                    HTTP endpoint URL</strong>, with{" "}
+                    <strong>Authentication Audience</strong> set to
+                    &quot;HTTP endpoint URL&quot;.
+                  </p>
+
+                  <code className="channels-webchat-snippet-code">
+                    {`${API_BASE_URL}/webhook/google_chat/${selected.id}`}
+                  </code>
+
+                  <AppButton
+                    type="button"
+                    variant="secondary"
+                    size="small"
+                    onClick={() =>
+                      navigator.clipboard?.writeText(
+                        `${API_BASE_URL}/webhook/google_chat/${selected.id}`,
+                      )
+                    }
+                  >
+                    Copy URL
+                  </AppButton>
+                </div>
+              ) : null}
+
               {form.channel === "webchat" ? (
                 <div className="channels-webchat-snippet">
                   <h4>Embed this on your website</h4>
@@ -1319,7 +1354,9 @@ export default function ChannelsPage() {
                           ? "Mailbox password"
                           : form.channel === "sms"
                             ? "Auth Token"
-                            : "Access token"}
+                            : form.channel === "google_chat"
+                              ? "Service account JSON key"
+                              : "Access token"}
                       </span>
 
                       <StatusBadge
@@ -1332,28 +1369,53 @@ export default function ChannelsPage() {
                       />
                     </label>
 
-                    <input
-                      id="channel-access-token"
-                      type="password"
-                      autoComplete="new-password"
-                      maxLength={1000}
-                      value={form.access_token}
-                      disabled={clearAccessToken}
-                      placeholder={
-                        selected?.has_access_token
-                          ? "Leave blank to keep the stored token"
-                          : form.channel === "email"
-                            ? "The mailbox's own password or app password"
-                            : form.channel === "sms"
-                              ? "Your Twilio Auth Token"
-                              : "Paste the page access token"
-                      }
-                      onChange={(event) =>
-                        updateField("access_token", event.target.value)
-                      }
-                    />
+                    {form.channel === "google_chat" ? (
+                      <textarea
+                        id="channel-access-token"
+                        rows={6}
+                        maxLength={8000}
+                        value={form.access_token}
+                        disabled={Boolean(selected)}
+                        placeholder={
+                          selected
+                            ? "Not editable here"
+                            : "Paste the whole service account JSON key file, exactly as Google Cloud downloaded it"
+                        }
+                        onChange={(event) =>
+                          updateField("access_token", event.target.value)
+                        }
+                      />
+                    ) : (
+                      <input
+                        id="channel-access-token"
+                        type="password"
+                        autoComplete="new-password"
+                        maxLength={1000}
+                        value={form.access_token}
+                        disabled={clearAccessToken}
+                        placeholder={
+                          selected?.has_access_token
+                            ? "Leave blank to keep the stored token"
+                            : form.channel === "email"
+                              ? "The mailbox's own password or app password"
+                              : form.channel === "sms"
+                                ? "Your Twilio Auth Token"
+                                : "Paste the page access token"
+                        }
+                        onChange={(event) =>
+                          updateField("access_token", event.target.value)
+                        }
+                      />
+                    )}
 
-                    {selected?.has_access_token ? (
+                    {form.channel === "google_chat" && selected ? (
+                      <small>
+                        Not editable here — disconnect and reconnect with a
+                        new key.
+                      </small>
+                    ) : null}
+
+                    {selected?.has_access_token && form.channel !== "google_chat" ? (
                       <label className="channels-clear-toggle">
                         <input
                           type="checkbox"
@@ -1373,8 +1435,11 @@ export default function ChannelsPage() {
                       poll with the mailbox password above. SMS's webhook is
                       verified with Twilio's own signature, computed from the
                       Auth Token above -- a separate verify token would be
-                      unused. */}
-                  {form.channel === "email" || form.channel === "sms" ? null : (
+                      unused. Google Chat's webhook is verified with a
+                      Google-signed JWT, not a shared secret at all. */}
+                  {form.channel === "email" ||
+                  form.channel === "sms" ||
+                  form.channel === "google_chat" ? null : (
                     <div className="channels-field">
                       <label htmlFor="channel-verify-token">
                         <span>Verify token</span>
