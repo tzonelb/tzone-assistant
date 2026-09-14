@@ -70,6 +70,22 @@ segno==1.6.6
 # kind of crypto code most likely to hide a subtle bug.
 PyJWT==2.14.0
 
+# Instagram (direct login) -- the unofficial channel, not the Meta Graph API
+# "instagram" one. `instagrapi` reimplements Instagram's own private mobile
+# API (see backend/api/routes/instagram_direct.py, channels/instagram_
+# direct/), which is what a plain username and password authenticates
+# against instead of a Meta developer app. It brings its own `requests`
+# (not this codebase's own choice of HTTP client, only used inside
+# instagrapi itself), `curl_cffi` (TLS fingerprinting close enough to a
+# real Instagram app to avoid being trivially told apart from one),
+# `pycryptodomex` and `PySocks` (proxy support) -- pinned here the same way
+# every other dependency in this file is, transitive or not.
+instagrapi==3.0.2
+requests==2.34.2
+curl_cffi==0.16.3
+pycryptodomex==3.23.0
+PySocks==1.7.1
+
 # --- Configuration -----------------------------------------------------
 python-dotenv==1.2.2
 

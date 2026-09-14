@@ -246,9 +246,46 @@ def _module_functions(tree: ast.Module) -> dict[str, ast.AST]:
     }
 
 
+def _module_imports(tree: ast.Module) -> dict[str, str]:
+    """Map of name -> the routes-module file it was imported from.
+
+    A guard is not always defined in the file that depends on it:
+    `instagram_direct.py` reuses `channels.py`'s own `require_elevated`
+    rather than redefining the same elevated-grant check a second time. Only
+    `from backend.api.routes.<module> import <name>` imports are followed —
+    the one shape a dependency between two files in this directory takes.
+    """
+    imports: dict[str, str] = {}
+
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.startswith("backend.api.routes.")
+        ):
+            source_file = node.module.rsplit(".", 1)[-1] + ".py"
+
+            for alias in node.names:
+                imports[alias.asname or alias.name] = source_file
+
+    return imports
+
+
+_MODULE_CACHE: dict[str, tuple[dict[str, ast.AST], dict[str, str]]] = {}
+
+
+def _parsed_module(file_name: str) -> tuple[dict[str, ast.AST], dict[str, str]]:
+    if file_name not in _MODULE_CACHE:
+        tree = ast.parse((ROUTES_DIR / file_name).read_text())
+        _MODULE_CACHE[file_name] = (_module_functions(tree), _module_imports(tree))
+
+    return _MODULE_CACHE[file_name]
+
+
 def _is_guarded(
     fn: ast.FunctionDef | ast.AsyncFunctionDef,
     functions: dict[str, ast.AST],
+    imports: dict[str, str] | None = None,
     seen: set[str] | None = None,
 ) -> bool:
     """Whether this route establishes authorisation, directly or through a helper.
@@ -257,8 +294,10 @@ def _is_guarded(
     depend on a small local helper — `view_context`, `manage_context` — which
     depends on it, and a few call a guard in the body instead. All three count,
     so the resolver follows one dependency into the next rather than reading
-    only the signature.
+    only the signature — crossing into another routes file when the helper was
+    imported from one, the same way the dependency graph itself does.
     """
+    imports = imports or {}
     seen = seen or set()
 
     signature = _signature_text(fn)
@@ -277,7 +316,24 @@ def _is_guarded(
         if name in seen or f"Depends({name})" not in signature:
             continue
 
-        if _is_guarded(node, functions, seen | {name}):
+        if _is_guarded(node, functions, imports, seen | {name}):
+            return True
+
+    # And every dependency imported from another routes file, resolved in
+    # that file's own terms — its own local helpers, its own imports.
+    for name, source_file in imports.items():
+        key = f"{source_file}:{name}"
+
+        if key in seen or f"Depends({name})" not in signature:
+            continue
+
+        source_functions, source_imports = _parsed_module(source_file)
+        target = source_functions.get(name)
+
+        if target is None:
+            continue
+
+        if _is_guarded(target, source_functions, source_imports, seen | {key}):
             return True
 
     return False
@@ -292,6 +348,7 @@ def _routes():
         path = ROUTES_DIR / name
         tree = ast.parse(path.read_text())
         functions = _module_functions(tree)
+        imports = _module_imports(tree)
 
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -324,7 +381,7 @@ def _routes():
                 "dependencies": " ".join(
                     [_signature_text(node)] + decorator_args
                 ),
-                "guarded": _is_guarded(node, functions),
+                "guarded": _is_guarded(node, functions, imports),
             }
 
 

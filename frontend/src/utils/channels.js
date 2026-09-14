@@ -28,4 +28,5 @@ export const SUPPORTED_CHANNELS = [
   "line",
   "sms",
   "google_chat",
+  "instagram_direct",
 ];

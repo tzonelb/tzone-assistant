@@ -55,6 +55,7 @@ PreviewChannel = Literal[
     "line",
     "sms",
     "google_chat",
+    "instagram_direct",
 ]
 
 MAX_TEST_MESSAGE = 2000

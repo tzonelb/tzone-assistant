@@ -11,7 +11,9 @@ import {
   deleteChannelAccountRequest,
   getChannelAccountsRequest,
   requestChannelVerificationRequest,
+  startInstagramDirectConnectRequest,
   updateChannelAccountRequest,
+  verifyInstagramDirectConnectRequest,
 } from "../../api/channels";
 import {
   API_BASE_URL,
@@ -134,6 +136,11 @@ const DERIVED_ROUTING_CHANNELS = new Set([
   "viber",
   "line",
   "google_chat",
+  // Instagram (direct login)'s id is the Instagram account's own numeric
+  // user id, read off the logged-in session by `instagram_direct.py` --
+  // nothing this screen would ever have the operator type in, on connect or
+  // after.
+  "instagram_direct",
 ]);
 
 const FEATURE_FLAGS = [
@@ -278,6 +285,210 @@ function ChannelCatalogGrid({ connectedCounts, supported, onPick }) {
   );
 }
 
+// Instagram (direct login) is the one channel this screen cannot connect
+// through the generic form and `POST /api/channels`: the login itself can
+// pause mid-way and ask for a 2FA code from a call that already reached
+// Instagram's servers, which `backend/api/routes/instagram_direct.py`
+// resumes with a second request rather than the account being created in
+// one shot (see that router's own docstring). So this is its own small form
+// with its own two steps, reusing only the department/branch/feature-flag
+// choices every other channel's form also offers.
+function InstagramDirectConnectForm({
+  form,
+  updateField,
+  departments,
+  branches,
+  step,
+  username,
+  password,
+  proxyUrl,
+  code,
+  busy,
+  error,
+  saveStatus,
+  onUsernameChange,
+  onPasswordChange,
+  onProxyUrlChange,
+  onCodeChange,
+  onSubmitCredentials,
+  onSubmitCode,
+  onStartOver,
+  onBack,
+  onCancel,
+}) {
+  return (
+    <form
+      className="channels-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (step === "code") {
+          onSubmitCode();
+        } else {
+          onSubmitCredentials();
+        }
+      }}
+    >
+      {step === "credentials" ? (
+        <>
+          <label htmlFor="ig-name">
+            <span>Display name</span>
+            <input
+              id="ig-name"
+              type="text"
+              required
+              maxLength={120}
+              value={form.name}
+              placeholder="Instagram Support"
+              onChange={(event) => updateField("name", event.target.value)}
+            />
+          </label>
+
+          <label htmlFor="ig-username">
+            <span>Instagram username</span>
+            <input
+              id="ig-username"
+              type="text"
+              required
+              autoComplete="off"
+              maxLength={120}
+              value={username}
+              placeholder="your_business_account"
+              onChange={(event) => onUsernameChange(event.target.value)}
+            />
+          </label>
+
+          <label htmlFor="ig-password">
+            <span>Instagram password</span>
+            <input
+              id="ig-password"
+              type="password"
+              required
+              autoComplete="new-password"
+              maxLength={500}
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+            />
+            <small>
+              Used once, to log in. Only the resulting session is stored —
+              this password is never kept.
+            </small>
+          </label>
+
+          <label htmlFor="ig-proxy">
+            <span>Proxy URL (recommended)</span>
+            <input
+              id="ig-proxy"
+              type="text"
+              maxLength={500}
+              value={proxyUrl}
+              placeholder="socks5://user:pass@host:port"
+              onChange={(event) => onProxyUrlChange(event.target.value)}
+            />
+            <small>
+              A stable residential or mobile proxy this account's session
+              keeps using every time it logs in, sends or checks messages —
+              so it keeps looking like the same client to Instagram instead
+              of one that connects from a datacenter. Optional, but the
+              single highest-leverage way to keep this account from being
+              flagged.
+            </small>
+          </label>
+
+          <label htmlFor="ig-department">
+            <span>Department (optional)</span>
+            <select
+              id="ig-department"
+              value={form.department_id}
+              onChange={(event) => updateField("department_id", event.target.value)}
+            >
+              <option value="">No default — the customer chooses</option>
+              {departments.map((item) => (
+                <option value={String(item.id)} key={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="ig-branch">
+            <span>Branch (optional)</span>
+            <select
+              id="ig-branch"
+              value={form.branch_id}
+              onChange={(event) => updateField("branch_id", event.target.value)}
+            >
+              <option value="">The whole company</option>
+              {branches.map((branch) => (
+                <option value={String(branch.id)} key={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <fieldset className="channels-flags">
+            <legend>What runs on this account</legend>
+            {FEATURE_FLAGS.map(([key, label]) => (
+              <label className="channels-flag" key={key}>
+                <input
+                  type="checkbox"
+                  checked={form[key]}
+                  onChange={(event) => updateField(key, event.target.checked)}
+                />
+                <span>{label}</span>
+              </label>
+            ))}
+          </fieldset>
+        </>
+      ) : (
+        <>
+          <p>
+            Instagram sent a verification code for{" "}
+            <strong>{username}</strong>. Enter it below to finish connecting.
+          </p>
+
+          <label htmlFor="ig-code">
+            <span>Verification code</span>
+            <input
+              id="ig-code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={20}
+              required
+              autoFocus
+              value={code}
+              onChange={(event) => onCodeChange(event.target.value)}
+            />
+          </label>
+
+          <button type="button" className="channels-link-button" onClick={onStartOver}>
+            Start over with a different account
+          </button>
+        </>
+      )}
+
+      <footer className="channels-form-footer">
+        <span className={error ? "is-error" : "is-success"}>
+          {error || saveStatus}
+        </span>
+
+        <div>
+          <AppButton variant="secondary" disabled={busy} onClick={onBack}>
+            Back
+          </AppButton>
+          <AppButton variant="secondary" disabled={busy} onClick={onCancel}>
+            Cancel
+          </AppButton>
+          <AppButton type="submit" variant="primary" loading={busy}>
+            {step === "code" ? "Verify and connect" : "Connect account"}
+          </AppButton>
+        </div>
+      </footer>
+    </form>
+  );
+}
+
 function formFromAccount(account) {
   return {
     channel: account.channel || "messenger",
@@ -367,6 +578,18 @@ export default function ChannelsPage() {
   const [sessionChanges, setSessionChanges] = useState([]);
   const [changesSummaryOpen, setChangesSummaryOpen] = useState(false);
   const pendingElevatedActionRef = useRef(null);
+
+  // Instagram (direct login)'s own connect state -- kept apart from `form`
+  // because it is never sent through `submitConnect`/`performConnect` at
+  // all (see InstagramDirectConnectForm's docstring above).
+  const [igStep, setIgStep] = useState("credentials");
+  const [igUsername, setIgUsername] = useState("");
+  const [igPassword, setIgPassword] = useState("");
+  const [igProxyUrl, setIgProxyUrl] = useState("");
+  const [igPendingId, setIgPendingId] = useState("");
+  const [igCode, setIgCode] = useState("");
+  const [igBusy, setIgBusy] = useState(false);
+  const [igError, setIgError] = useState("");
 
   function currentElevation() {
     if (!elevation) return null;
@@ -575,6 +798,14 @@ export default function ChannelsPage() {
     setFormError("");
     setFormConflict("");
     setSaveStatus("");
+    setIgStep("credentials");
+    setIgUsername("");
+    setIgPassword("");
+    setIgProxyUrl("");
+    setIgPendingId("");
+    setIgCode("");
+    setIgBusy(false);
+    setIgError("");
   }
 
   function openCreate() {
@@ -586,6 +817,7 @@ export default function ChannelsPage() {
 
   function pickChannel(channel) {
     setForm(emptyForm(channel));
+    resetFormState();
     setFormStep("form");
   }
 
@@ -779,6 +1011,86 @@ export default function ChannelsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Instagram (direct login)'s own connect flow -- never touches `values`,
+  // `createChannelAccountRequest` or `performConnect` above, because the
+  // login itself happens across these two calls instead of one (see
+  // InstagramDirectConnectForm's docstring).
+  function submitInstagramDirectCredentials() {
+    setIgError("");
+    setSaveStatus("");
+
+    const values = {
+      name: form.name.trim(),
+      username: igUsername.trim(),
+      password: igPassword,
+      branch_id: form.branch_id ? Number(form.branch_id) : null,
+      department_id: form.department_id ? Number(form.department_id) : null,
+      proxy_url: igProxyUrl.trim() || null,
+    };
+
+    withElevation((token) => performInstagramDirectStart(values, token));
+  }
+
+  async function performInstagramDirectStart(values, token) {
+    setIgBusy(true);
+
+    try {
+      const result = await startInstagramDirectConnectRequest(values, token);
+
+      if (result?.status === "needs_code") {
+        setIgPendingId(result.pending_id);
+        setIgStep("code");
+        return;
+      }
+
+      setSaveStatus("Account connected.");
+      recordSessionChange(`Connected Instagram (direct login) — ${values.name}`);
+      await loadAccounts();
+      closeEditor();
+    } catch (requestError) {
+      setIgError(
+        requestError.message || "That Instagram account could not be connected.",
+      );
+    } finally {
+      setIgBusy(false);
+    }
+  }
+
+  function submitInstagramDirectCode() {
+    setIgError("");
+    withElevation((token) => performInstagramDirectVerify(token));
+  }
+
+  async function performInstagramDirectVerify(token) {
+    setIgBusy(true);
+
+    try {
+      await verifyInstagramDirectConnectRequest(
+        { pending_id: igPendingId, code: igCode.trim() },
+        token,
+      );
+
+      setSaveStatus("Account connected.");
+      recordSessionChange(
+        `Connected Instagram (direct login) — ${form.name.trim()}`,
+      );
+      await loadAccounts();
+      closeEditor();
+    } catch (requestError) {
+      setIgError(requestError.message || "That code was not accepted.");
+    } finally {
+      setIgBusy(false);
+    }
+  }
+
+  function instagramDirectStartOver() {
+    setIgStep("credentials");
+    setIgPassword("");
+    setIgCode("");
+    setIgPendingId("");
+    setIgError("");
   }
 
   function handleDelete() {
@@ -1091,6 +1403,30 @@ export default function ChannelsPage() {
                 supported={channelOptions}
                 onPick={pickChannel}
               />
+            ) : !selected && form.channel === "instagram_direct" ? (
+              <InstagramDirectConnectForm
+                form={form}
+                updateField={updateField}
+                departments={departments}
+                branches={branches}
+                step={igStep}
+                username={igUsername}
+                password={igPassword}
+                proxyUrl={igProxyUrl}
+                code={igCode}
+                busy={igBusy}
+                error={igError}
+                saveStatus={saveStatus}
+                onUsernameChange={setIgUsername}
+                onPasswordChange={setIgPassword}
+                onProxyUrlChange={setIgProxyUrl}
+                onCodeChange={(value) => setIgCode(value.replace(/\s/g, ""))}
+                onSubmitCredentials={submitInstagramDirectCredentials}
+                onSubmitCode={submitInstagramDirectCode}
+                onStartOver={instagramDirectStartOver}
+                onBack={() => setFormStep("catalog")}
+                onCancel={closeEditor}
+              />
             ) : (
               <>
             {formConflict ? (
@@ -1365,7 +1701,9 @@ export default function ChannelsPage() {
                             ? "Auth Token"
                             : form.channel === "google_chat"
                               ? "Service account JSON key"
-                              : "Access token"}
+                              : form.channel === "instagram_direct"
+                                ? "Instagram session"
+                                : "Access token"}
                       </span>
 
                       <StatusBadge
@@ -1401,15 +1739,20 @@ export default function ChannelsPage() {
                         autoComplete="new-password"
                         maxLength={1000}
                         value={form.access_token}
-                        disabled={clearAccessToken}
+                        disabled={
+                          clearAccessToken ||
+                          (form.channel === "instagram_direct" && Boolean(selected))
+                        }
                         placeholder={
-                          selected?.has_access_token
-                            ? "Leave blank to keep the stored token"
-                            : form.channel === "email"
-                              ? "The mailbox's own password or app password"
-                              : form.channel === "sms"
-                                ? "Your Twilio Auth Token"
-                                : "Paste the page access token"
+                          form.channel === "instagram_direct" && selected
+                            ? "Not editable here"
+                            : selected?.has_access_token
+                              ? "Leave blank to keep the stored token"
+                              : form.channel === "email"
+                                ? "The mailbox's own password or app password"
+                                : form.channel === "sms"
+                                  ? "Your Twilio Auth Token"
+                                  : "Paste the page access token"
                         }
                         onChange={(event) =>
                           updateField("access_token", event.target.value)
@@ -1417,14 +1760,20 @@ export default function ChannelsPage() {
                       />
                     )}
 
-                    {form.channel === "google_chat" && selected ? (
+                    {(form.channel === "google_chat" ||
+                      form.channel === "instagram_direct") &&
+                    selected ? (
                       <small>
-                        Not editable here — disconnect and reconnect with a
-                        new key.
+                        Not editable here — disconnect and reconnect{" "}
+                        {form.channel === "google_chat"
+                          ? "with a new key."
+                          : "and log in again."}
                       </small>
                     ) : null}
 
-                    {selected?.has_access_token && form.channel !== "google_chat" ? (
+                    {selected?.has_access_token &&
+                    form.channel !== "google_chat" &&
+                    form.channel !== "instagram_direct" ? (
                       <label className="channels-clear-toggle">
                         <input
                           type="checkbox"
@@ -1451,7 +1800,11 @@ export default function ChannelsPage() {
                   form.channel === "google_chat" ? null : (
                     <div className="channels-field">
                       <label htmlFor="channel-verify-token">
-                        <span>Verify token</span>
+                        <span>
+                          {form.channel === "instagram_direct"
+                            ? "Proxy URL"
+                            : "Verify token"}
+                        </span>
 
                         <StatusBadge
                           status={
@@ -1465,20 +1818,31 @@ export default function ChannelsPage() {
 
                       <input
                         id="channel-verify-token"
-                        type="password"
+                        type={form.channel === "instagram_direct" ? "text" : "password"}
                         autoComplete="new-password"
                         maxLength={500}
                         value={form.verify_token}
                         disabled={clearVerifyToken}
                         placeholder={
                           selected?.has_verify_token
-                            ? "Leave blank to keep the stored token"
-                            : "The webhook verify token"
+                            ? "Leave blank to keep the stored proxy"
+                            : form.channel === "instagram_direct"
+                              ? "socks5://user:pass@host:port (optional)"
+                              : "The webhook verify token"
                         }
                         onChange={(event) =>
                           updateField("verify_token", event.target.value)
                         }
                       />
+
+                      {form.channel === "instagram_direct" ? (
+                        <small>
+                          A stable residential or mobile proxy this account's
+                          session keeps using, so it keeps looking like the
+                          same client to Instagram. Changing it takes effect
+                          on the next poll or send.
+                        </small>
+                      ) : null}
 
                       {selected?.has_verify_token ? (
                         <label className="channels-clear-toggle">

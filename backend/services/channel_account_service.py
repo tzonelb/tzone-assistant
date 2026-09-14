@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line", "sms", "google_chat",
+    "email", "viber", "line", "sms", "google_chat", "instagram_direct",
 )
 
 # Which identifier each channel is routed by. Getting this wrong sends one
@@ -84,6 +84,18 @@ ROUTING_FIELD = {
     # so it stands in for a bot id exactly the way Viber's and LINE's do --
     # see `google_chat_parse_service_account` below.
     "google_chat": "external_account_id",
+    # Instagram (direct login) -- the unofficial channel, not the Meta Graph
+    # API "instagram" above. Also derived, but not inside `_validate` the way
+    # every other derived channel is: proving the credential here means
+    # actually logging in as the account, which can pause mid-flow for a
+    # 2FA or challenge code the operator has to type back in, and
+    # `_validate` has no way to suspend a create across two HTTP requests.
+    # `backend/api/routes/instagram_direct.py` runs that whole login (see
+    # its own module docstring) and only calls `create_account` once it has
+    # already succeeded, with the derived id and the resulting session
+    # already in `values` -- the same shape `channel_oauth.py` uses for a
+    # login flow that spans a redirect.
+    "instagram_direct": "external_account_id",
 }
 
 
@@ -1027,6 +1039,17 @@ class ChannelAccountService:
             # places for the same value to drift.
             values["access_token"] = parsed_key["private_key"]
 
+        # Instagram (direct login) is never validated here -- see
+        # ROUTING_FIELD's comment on why. By the time this branch runs, the
+        # login already happened in `instagram_direct.py`'s own route, so all
+        # that is left is confirming it actually left `values` in the shape
+        # `create_account` needs, the same backstop `webchat`'s validator
+        # would be if it needed one.
+        if normalized == "instagram_direct" and not values.get("access_token"):
+            raise ChannelAccountError(
+                "An Instagram account needs its logged-in session."
+            )
+
         if not values.get(routing_field):
             raise ChannelAccountError(
                 f"A {normalized} account needs a {routing_field.replace('_', ' ')} "
@@ -1277,6 +1300,24 @@ class ChannelAccountService:
                         (
                             json.dumps(
                                 {"project_id": values.get("_google_chat_project_id")}
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # Instagram (direct login)'s own non-secret setting: the
+                # @username, kept for the operator's own reference on the
+                # account list, the same reason Google Chat keeps its
+                # project id here -- nothing reads it back to authenticate.
+                if normalized_channel == "instagram_direct":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {
+                                    "username": values.get("_instagram_username"),
+                                    "has_proxy": bool(values.get("verify_token")),
+                                }
                             ),
                             account_id,
                         ),
@@ -1533,6 +1574,16 @@ class ChannelAccountService:
             "external_account_id": row["external_account_id"],
             "config": _loads_config(row["config_json"]),
             "access_token": None,
+            # Most senders never touch this -- LINE and Slack are the two
+            # existing channels with something sealed here, and neither's
+            # sender needs it, since it is only ever checked against an
+            # inbound signature. Instagram (direct login) is the first
+            # sender that does: it is where an operator's optional proxy
+            # URL is sealed (see instagram_direct.py), and sending has to
+            # route through the same proxy the session was established
+            # over, or it stops looking like a consistent client to
+            # Instagram's own risk model.
+            "verify_token": None,
         }
 
         sealed = row["access_token_sealed"]
@@ -1553,6 +1604,24 @@ class ChannelAccountService:
                     normalized,
                 )
                 return None
+
+        sealed_verify = row["verify_token_sealed"]
+
+        if sealed_verify:
+            try:
+                credentials["verify_token"] = keyring.unseal_secret(
+                    sealed_verify,
+                    database_manager.company_key(company_id),
+                    company_id,
+                    "verify_token",
+                )
+            except CorruptedKeyMaterial:
+                logger.error(
+                    "Verify token for company %s channel %s could not be "
+                    "unsealed; continuing without it",
+                    company_id,
+                    normalized,
+                )
 
         return credentials
 

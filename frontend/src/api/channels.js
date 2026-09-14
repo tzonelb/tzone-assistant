@@ -45,6 +45,32 @@ export async function deleteChannelAccountRequest(accountId, elevatedToken) {
   });
 }
 
+/*
+ * Instagram (direct login) connects over two calls instead of one, because
+ * Instagram itself can pause the login mid-way and ask for a 2FA code (see
+ * backend/api/routes/instagram_direct.py). `start` returns either the
+ * connected account or a `pending_id` naming that in-progress login;
+ * `verify` is only called in the second case, with the code and that same
+ * `pending_id`. Both need the same elevated grant `createChannelAccountRequest`
+ * does, for the same reason: each one can establish a new credential.
+ */
+
+export async function startInstagramDirectConnectRequest(values, elevatedToken) {
+  return apiRequest("/api/instagram-direct/connect/start", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function verifyInstagramDirectConnectRequest(values, elevatedToken) {
+  return apiRequest("/api/instagram-direct/connect/verify", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
 export async function requestChannelVerificationRequest() {
   return apiRequest("/api/channels/verification/request", { method: "POST" });
 }

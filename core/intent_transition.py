@@ -48,6 +48,7 @@ class IntentTransitionManager:
         "line",
         "sms",
         "google_chat",
+        "instagram_direct",
     ]
 
     @staticmethod

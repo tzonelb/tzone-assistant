@@ -570,6 +570,22 @@
   font-weight: 700;
 }
 
+.channels-link-button {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--tz-primary);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.channels-link-button:hover {
+  color: var(--tz-primary-hover, var(--tz-primary));
+}
+
 .channels-verify-changes {
   margin: 0;
   padding-left: 20px;
