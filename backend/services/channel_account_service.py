@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line",
+    "email", "viber", "line", "sms",
 )
 
 # Which identifier each channel is routed by. Getting this wrong sends one
@@ -71,6 +71,12 @@ ROUTING_FIELD = {
     # id, read back from LINE's own `bot/info` with the Channel Access Token
     # the operator pasted -- see `line_bot_user_id` below.
     "line": "external_account_id",
+    # SMS is the second typed-not-derived exception, for the same reason
+    # email is: the operator's Twilio phone number is not something any API
+    # call can guess or generate, so they type it -- and `twilio_phone_number_sid`
+    # below stands in for the "ask the provider" step by confirming that
+    # number genuinely belongs to the account whose credentials came with it.
+    "sms": "external_account_id",
 }
 
 
@@ -407,6 +413,108 @@ def register_line_webhook(*, access_token: str, account_id: int) -> None:
         )
 
 
+TWILIO_API_BASE = "https://api.twilio.com/2010-04-01"
+TWILIO_TIMEOUT_SECONDS = 10
+
+
+def twilio_phone_number_sid(
+    *, account_sid: str, auth_token: str, phone_number: str
+) -> str:
+    """Confirm a phone number genuinely belongs to this Twilio account, and
+    return its own resource id (`PN...`).
+
+    An operator's Twilio phone number cannot be derived the way a bot's id
+    can -- there is no "which number is this account's" question with one
+    answer, an account may hold several -- so it is typed in, and this is
+    what stands in for every other channel's "ask the provider" step: a
+    wrong number, or credentials that do not own it, fail here rather than
+    being discovered the first time a customer texts it and nothing happens.
+    The id this returns is not optional bookkeeping -- `register_sms_webhook`
+    needs it, because Twilio's webhook is a property of the phone number
+    resource, addressed by this id, not by the number's own digits.
+    """
+    try:
+        response = httpx.get(
+            f"{TWILIO_API_BASE}/Accounts/{account_sid}/IncomingPhoneNumbers.json",
+            params={"PhoneNumber": phone_number},
+            auth=(account_sid, auth_token),
+            timeout=TWILIO_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ChannelAccountError(
+            "Could not reach Twilio to verify that phone number. Please try "
+            "again."
+        ) from exc
+
+    if response.status_code == 401:
+        raise ChannelAccountError(
+            "Twilio rejected those credentials. Paste the Account SID and "
+            "Auth Token from your Twilio Console."
+        )
+
+    if response.status_code != 200:
+        raise ChannelAccountError(
+            "Could not verify that phone number with Twilio. Please try "
+            "again."
+        )
+
+    try:
+        body = response.json()
+    except ValueError as exc:
+        raise ChannelAccountError(
+            "Twilio did not return a usable response for that number."
+        ) from exc
+
+    numbers = body.get("incoming_phone_numbers") or []
+
+    if not numbers:
+        raise ChannelAccountError(
+            "That phone number was not found on this Twilio account."
+        )
+
+    phone_sid = str(numbers[0].get("sid") or "").strip()
+
+    if not phone_sid:
+        raise ChannelAccountError(
+            "Twilio did not return an id for that phone number."
+        )
+
+    return phone_sid
+
+
+def register_sms_webhook(
+    *, account_sid: str, auth_token: str, phone_number_sid: str, account_id: int
+) -> None:
+    """Point this phone number's SMS webhook at this platform's own route.
+
+    Same reasoning as `register_viber_webhook` and `register_line_webhook`:
+    Twilio's `SmsUrl` can be set with a plain REST call, so there is no
+    reason to make the operator paste a URL into the Twilio Console by hand.
+    """
+    from config.settings import config
+
+    url = f"{config.APP_PUBLIC_URL}/webhook/sms/{int(account_id)}"
+
+    try:
+        response = httpx.post(
+            f"{TWILIO_API_BASE}/Accounts/{account_sid}"
+            f"/IncomingPhoneNumbers/{phone_number_sid}.json",
+            data={"SmsUrl": url},
+            auth=(account_sid, auth_token),
+            timeout=TWILIO_TIMEOUT_SECONDS,
+        )
+    except httpx.HTTPError as exc:
+        raise ChannelAccountError(
+            "Could not register this number's webhook with Twilio. Please "
+            "try again."
+        ) from exc
+
+    if response.status_code != 200:
+        raise ChannelAccountError(
+            "Twilio rejected the webhook registration. Please try again."
+        )
+
+
 def generate_webchat_widget_key() -> str:
     """A new public identifier for a website chat widget.
 
@@ -737,6 +845,35 @@ class ChannelAccountService:
 
             values[routing_field] = address
 
+        # SMS, the same "typed, then verified" shape as email: a phone
+        # number is not something to derive, so the operator types it, and
+        # `twilio_phone_number_sid` stands in for the "ask the provider"
+        # step -- proving both that the credentials are real and that this
+        # account genuinely owns that number, and returning the id
+        # `register_sms_webhook` needs.
+        if normalized == "sms":
+            phone_number = str(values.get(routing_field) or "").strip()
+            auth_token = values.get("access_token")
+            account_sid = str(values.get("account_sid") or "").strip()
+
+            if not phone_number:
+                raise ChannelAccountError(
+                    "An SMS account needs the phone number customers text."
+                )
+
+            if not auth_token:
+                raise ChannelAccountError("An SMS account needs its Twilio Auth Token.")
+
+            if not account_sid:
+                raise ChannelAccountError("An SMS account needs its Twilio Account SID.")
+
+            values["_twilio_phone_number_sid"] = twilio_phone_number_sid(
+                account_sid=account_sid,
+                auth_token=auth_token,
+                phone_number=phone_number,
+            )
+            values[routing_field] = phone_number
+
         if not values.get(routing_field):
             raise ChannelAccountError(
                 f"A {normalized} account needs a {routing_field.replace('_', ' ')} "
@@ -954,6 +1091,27 @@ class ChannelAccountService:
                     conn.execute(
                         "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
                         (json.dumps(_pack_email_config(values)), account_id),
+                    )
+
+                # SMS's own non-secret settings, the same generic slot email's
+                # settings live in. `account_sid` is not sealed alongside the
+                # Auth Token: Twilio's own security model treats it as a
+                # public identifier, not a credential -- it already appears
+                # on every inbound webhook Twilio itself sends.
+                if normalized_channel == "sms":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {
+                                    "account_sid": values.get("account_sid"),
+                                    "phone_number_sid": values.get(
+                                        "_twilio_phone_number_sid"
+                                    ),
+                                }
+                            ),
+                            account_id,
+                        ),
                     )
 
                 for field, column in SECRET_FIELDS.items():

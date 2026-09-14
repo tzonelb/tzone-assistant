@@ -26,6 +26,7 @@ from backend.services.channel_account_service import (
     ROUTING_FIELD,
     channel_account_service,
     register_line_webhook,
+    register_sms_webhook,
     register_viber_webhook,
     unregister_viber_webhook,
 )
@@ -44,7 +45,7 @@ router = APIRouter(prefix="/api/channels", tags=["Channels"])
 
 ChannelName = Literal[
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line",
+    "email", "viber", "line", "sms",
 ]
 
 
@@ -77,6 +78,12 @@ class ChannelAccountCreate(BaseModel):
     smtp_host: str | None = Field(default=None, max_length=255)
     smtp_port: int | None = Field(default=None, ge=1, le=65535)
     smtp_use_starttls: bool = True
+
+    # SMS's own second credential: Twilio addresses an account by its
+    # Account SID as well as the Auth Token in `access_token`. Not sealed --
+    # see `database/schema_control.py`'s `config_json` comment for why an
+    # Account SID is not treated as a secret.
+    account_sid: str | None = Field(default=None, max_length=64)
 
     ai_enabled: bool = True
     flow_enabled: bool = True
@@ -170,6 +177,17 @@ class ChannelAccountCreate(BaseModel):
                 raise ValueError(
                     "An email account requires its SMTP server address."
                 )
+
+        # SMS, the same shape as email: the phone number (checked below by
+        # the generic fallback) is typed in, and the two Twilio credentials
+        # that prove it are checked here since the fallback only knows about
+        # `external_account_id`.
+        if self.channel == "sms":
+            if not self.access_token:
+                raise ValueError("An sms account requires its Twilio Auth Token.")
+
+            if not self.account_sid:
+                raise ValueError("An sms account requires its Twilio Account SID.")
 
         field = ROUTING_FIELD[self.channel]
 
@@ -442,6 +460,24 @@ def create_channel(
                 status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
             ) from exc
 
+    # SMS, the same idea and the same rollback discipline again. The phone
+    # number's Twilio resource id was already looked up in `_validate` (see
+    # `twilio_phone_number_sid`) and is read back here from `config` rather
+    # than recomputed.
+    if payload.channel == "sms":
+        try:
+            register_sms_webhook(
+                account_sid=payload.account_sid,
+                auth_token=payload.access_token,
+                phone_number_sid=(account.get("config") or {}).get("phone_number_sid"),
+                account_id=int(account["id"]),
+            )
+        except ChannelAccountError as exc:
+            channel_account_service.delete_account(company_id, int(account["id"]))
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)
+            ) from exc
+
     # A security event as well as a business one: connecting a channel points
     # a company's customers at this platform, and it is mirrored to the control
     # plane so an operator can see it. The routing identifier is recorded, the
@@ -580,6 +616,36 @@ def update_channel(
                 except ChannelAccountError:
                     logger.exception(
                         "Could not re-register the LINE webhook for "
+                        "company %s account %s",
+                        company_id,
+                        account_id,
+                    )
+
+    # SMS, the same lenient re-registration as LINE. The Account SID and
+    # phone number are not editable from this form -- changing either is a
+    # different Twilio account or number, which this platform treats as
+    # disconnect-and-reconnect, the same as email's mailbox address -- so
+    # only a fresh Auth Token or a reactivation needs Twilio told again.
+    if (previous or {}).get("channel") == "sms":
+        if account.get("status") != "disabled" and (
+            "access_token" in values or (previous or {}).get("status") == "disabled"
+        ):
+            fresh = channel_account_service.credentials_for(
+                company_id=company_id, channel="sms", account_id=account_id
+            )
+            config = (fresh or {}).get("config") or {}
+
+            if fresh and fresh.get("access_token") and config.get("phone_number_sid"):
+                try:
+                    register_sms_webhook(
+                        account_sid=config.get("account_sid"),
+                        auth_token=fresh["access_token"],
+                        phone_number_sid=config["phone_number_sid"],
+                        account_id=account_id,
+                    )
+                except ChannelAccountError:
+                    logger.exception(
+                        "Could not re-register the SMS webhook for "
                         "company %s account %s",
                         company_id,
                         account_id,

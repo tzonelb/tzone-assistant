@@ -44,7 +44,6 @@ _RETIRED_OR_UNSUPPORTED = frozenset(
         # real constants instead of recognising names.
         "website_chat",
         "web",
-        "sms",
         "wechat",
         "tiktok",
     }

@@ -79,6 +79,7 @@ from channels.meta import webhook as meta_webhook
 from channels.webhook_limits import drain as drain_webhook_work
 from channels.line import webhook as line_webhook
 from channels.slack import webhook as slack_webhook
+from channels.sms import webhook as sms_webhook
 from channels.telegram import webhook as telegram_webhook
 from channels.viber import webhook as viber_webhook
 from channels.whatsapp import webhook as whatsapp_webhook
@@ -495,6 +496,7 @@ app.include_router(telegram_webhook.router)
 app.include_router(slack_webhook.router)
 app.include_router(viber_webhook.router)
 app.include_router(line_webhook.router)
+app.include_router(sms_webhook.router)
 app.include_router(webchat_widget.router)
 
 

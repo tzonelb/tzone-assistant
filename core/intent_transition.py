@@ -46,6 +46,7 @@ class IntentTransitionManager:
         "email",
         "viber",
         "line",
+        "sms",
     ]
 
     @staticmethod
