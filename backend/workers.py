@@ -44,6 +44,9 @@ from backend.services.work_index_service import (
     work_index_service,
 )
 from channels.email.poller import poll_all_accounts
+from channels.facebook_direct.poller import (
+    poll_all_accounts as poll_facebook_direct_accounts,
+)
 from channels.instagram_direct.poller import (
     poll_all_accounts as poll_instagram_direct_accounts,
 )
@@ -80,6 +83,15 @@ EMAIL_POLL_SECONDS = 60
 # own phone would look like, not tuned for freshness.
 INSTAGRAM_DIRECT_POLL_SECONDS = 75
 INSTAGRAM_DIRECT_POLL_JITTER_SECONDS = 20
+
+# How often a connected Facebook (cookie download) Page is checked for new
+# comments. Far longer than every other poller here on purpose: one sweep is
+# a real browser loading the Page's own listing plus each of its recent
+# posts, not one API call, so this is priced like the heaviest operation on
+# the platform rather than like a cheap check. Jittered the same way
+# Instagram (direct login)'s is, and for the same reason.
+FACEBOOK_DIRECT_POLL_SECONDS = 300
+FACEBOOK_DIRECT_POLL_JITTER_SECONDS = 60
 
 
 def _sweep_concurrency() -> int:
@@ -282,6 +294,25 @@ async def instagram_direct_poll_worker() -> None:
             -INSTAGRAM_DIRECT_POLL_JITTER_SECONDS, INSTAGRAM_DIRECT_POLL_JITTER_SECONDS
         )
         await asyncio.sleep(max(15, INSTAGRAM_DIRECT_POLL_SECONDS + jitter))
+
+
+async def facebook_direct_poll_worker() -> None:
+    """Check every connected Facebook (cookie download) Page for new comments.
+
+    Same shape as `instagram_direct_poll_worker` just above -- jittered for
+    the same reason -- with a much longer base period, because one sweep
+    here is a real browser loading several real pages, not one API call.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(poll_facebook_direct_accounts)
+        except Exception:
+            logger.exception("Facebook (cookie download) poll sweep failed")
+
+        jitter = random.uniform(
+            -FACEBOOK_DIRECT_POLL_JITTER_SECONDS, FACEBOOK_DIRECT_POLL_JITTER_SECONDS
+        )
+        await asyncio.sleep(max(60, FACEBOOK_DIRECT_POLL_SECONDS + jitter))
 
 
 async def maintenance_worker() -> None:

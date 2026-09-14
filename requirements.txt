@@ -86,6 +86,17 @@ curl_cffi==0.16.3
 pycryptodomex==3.23.0
 PySocks==1.7.1
 
+# Facebook (cookie download) -- an unofficial channel with no equivalent to
+# instagrapi: there is no maintained library that reimplements Facebook's
+# own private API, and Facebook's public Graph API is exactly what this
+# channel exists to work without. What it reads instead is the same HTML a
+# logged-in browser would see, so it needs a real browser -- Playwright
+# drives a headless Chromium against a session built from the operator's own
+# exported cookies (see backend/api/routes/facebook_direct.py). Read-only by
+# design: see channels/facebook_direct/poller.py's own docstring for why
+# this channel never posts a reply back.
+playwright==1.62.0
+
 # --- Configuration -----------------------------------------------------
 python-dotenv==1.2.2
 

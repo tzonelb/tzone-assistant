@@ -7,6 +7,7 @@ import {
 
 import {
   confirmChannelVerificationRequest,
+  connectFacebookDirectRequest,
   createChannelAccountRequest,
   deleteChannelAccountRequest,
   getChannelAccountsRequest,
@@ -123,6 +124,16 @@ const CHANNEL_ROUTING_META = {
     hint: "The Twilio phone number customers text, in E.164 format. Verified with Twilio, and its webhook is registered automatically, before this account is saved.",
     placeholder: "+15551234567",
     type: "tel",
+  },
+  // Facebook (cookie download) is the third: the operator types the numeric
+  // Page id, since it is what picks one Page out of however many the
+  // cookies' own account manages -- there is nothing to derive it from the
+  // way Telegram derives a bot id from its own token.
+  facebook_direct: {
+    label: "Facebook Page ID",
+    hint: "The numeric id of the Page these cookies read comments from -- not its vanity name. Find it under the Page's own About or Page Transparency section.",
+    placeholder: "100000000000000",
+    type: "text",
   },
 };
 
@@ -489,6 +500,141 @@ function InstagramDirectConnectForm({
   );
 }
 
+// Facebook (cookie download) is simpler than Instagram (direct login) above
+// in one real way: the operator's cookies, exported from a browser they are
+// already signed in with, are already fully authenticated -- there is no
+// password to submit and so no 2FA step to pause for. One call, one form.
+function FacebookDirectConnectForm({
+  form,
+  updateField,
+  departments,
+  branches,
+  pageId,
+  cookiesJson,
+  busy,
+  error,
+  saveStatus,
+  onPageIdChange,
+  onCookiesJsonChange,
+  onSubmit,
+  onBack,
+  onCancel,
+}) {
+  return (
+    <form
+      className="channels-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit();
+      }}
+    >
+      <label htmlFor="fb-name">
+        <span>Display name</span>
+        <input
+          id="fb-name"
+          type="text"
+          required
+          maxLength={120}
+          value={form.name}
+          placeholder="Our Facebook Page"
+          onChange={(event) => updateField("name", event.target.value)}
+        />
+      </label>
+
+      <label htmlFor="fb-page-id">
+        <span>Facebook Page ID</span>
+        <input
+          id="fb-page-id"
+          type="text"
+          required
+          maxLength={64}
+          value={pageId}
+          placeholder="100000000000000"
+          onChange={(event) => onPageIdChange(event.target.value)}
+        />
+        <small>
+          The numeric id of the Page these cookies read comments from, not
+          its vanity name -- find it under the Page's own About or Page
+          Transparency section.
+        </small>
+      </label>
+
+      <label htmlFor="fb-cookies">
+        <span>Session cookies</span>
+        <textarea
+          id="fb-cookies"
+          rows={6}
+          maxLength={40000}
+          value={cookiesJson}
+          placeholder='Paste the JSON array your browser cookie-export extension produced, e.g. [{"name":"c_user","value":"..."}, ...]'
+          onChange={(event) => onCookiesJsonChange(event.target.value)}
+        />
+        <small>
+          Exported from a browser that is currently signed in to the
+          Facebook account that manages this Page. Stored sealed, never
+          shown again -- disconnect and reconnect with a fresh export if
+          these ever stop working.
+        </small>
+      </label>
+
+      <label htmlFor="fb-department">
+        <span>Department (optional)</span>
+        <select
+          id="fb-department"
+          value={form.department_id}
+          onChange={(event) => updateField("department_id", event.target.value)}
+        >
+          <option value="">No default</option>
+          {departments.map((item) => (
+            <option value={String(item.id)} key={item.id}>
+              {item.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label htmlFor="fb-branch">
+        <span>Branch (optional)</span>
+        <select
+          id="fb-branch"
+          value={form.branch_id}
+          onChange={(event) => updateField("branch_id", event.target.value)}
+        >
+          <option value="">The whole company</option>
+          {branches.map((branch) => (
+            <option value={String(branch.id)} key={branch.id}>
+              {branch.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <p className="comments-read-only-note">
+        Read-only: comments land in your Comments queue, but replies are not
+        published from here -- reply from Facebook itself.
+      </p>
+
+      <footer className="channels-form-footer">
+        <span className={error ? "is-error" : "is-success"}>
+          {error || saveStatus}
+        </span>
+
+        <div>
+          <AppButton variant="secondary" disabled={busy} onClick={onBack}>
+            Back
+          </AppButton>
+          <AppButton variant="secondary" disabled={busy} onClick={onCancel}>
+            Cancel
+          </AppButton>
+          <AppButton type="submit" variant="primary" loading={busy}>
+            Connect account
+          </AppButton>
+        </div>
+      </footer>
+    </form>
+  );
+}
+
 function formFromAccount(account) {
   return {
     channel: account.channel || "messenger",
@@ -590,6 +736,13 @@ export default function ChannelsPage() {
   const [igCode, setIgCode] = useState("");
   const [igBusy, setIgBusy] = useState(false);
   const [igError, setIgError] = useState("");
+
+  // Facebook (cookie download)'s own connect state, for the same reason as
+  // Instagram's above -- it never goes through `submitConnect` either.
+  const [fbPageId, setFbPageId] = useState("");
+  const [fbCookiesJson, setFbCookiesJson] = useState("");
+  const [fbBusy, setFbBusy] = useState(false);
+  const [fbError, setFbError] = useState("");
 
   function currentElevation() {
     if (!elevation) return null;
@@ -806,6 +959,10 @@ export default function ChannelsPage() {
     setIgCode("");
     setIgBusy(false);
     setIgError("");
+    setFbPageId("");
+    setFbCookiesJson("");
+    setFbBusy(false);
+    setFbError("");
   }
 
   function openCreate() {
@@ -1091,6 +1248,42 @@ export default function ChannelsPage() {
     setIgCode("");
     setIgPendingId("");
     setIgError("");
+  }
+
+  // Facebook (cookie download)'s own connect flow -- one call, see
+  // FacebookDirectConnectForm's docstring on why it never touches
+  // `submitConnect`/`performConnect` above.
+  function submitFacebookDirectConnect() {
+    setFbError("");
+    setSaveStatus("");
+
+    const values = {
+      name: form.name.trim(),
+      page_id: fbPageId.trim(),
+      cookies_json: fbCookiesJson.trim(),
+      branch_id: form.branch_id ? Number(form.branch_id) : null,
+      department_id: form.department_id ? Number(form.department_id) : null,
+    };
+
+    withElevation((token) => performFacebookDirectConnect(values, token));
+  }
+
+  async function performFacebookDirectConnect(values, token) {
+    setFbBusy(true);
+
+    try {
+      await connectFacebookDirectRequest(values, token);
+      setSaveStatus("Account connected.");
+      recordSessionChange(`Connected Facebook (cookie download) — ${values.name}`);
+      await loadAccounts();
+      closeEditor();
+    } catch (requestError) {
+      setFbError(
+        requestError.message || "That Facebook Page could not be connected.",
+      );
+    } finally {
+      setFbBusy(false);
+    }
   }
 
   function handleDelete() {
@@ -1427,6 +1620,23 @@ export default function ChannelsPage() {
                 onBack={() => setFormStep("catalog")}
                 onCancel={closeEditor}
               />
+            ) : !selected && form.channel === "facebook_direct" ? (
+              <FacebookDirectConnectForm
+                form={form}
+                updateField={updateField}
+                departments={departments}
+                branches={branches}
+                pageId={fbPageId}
+                cookiesJson={fbCookiesJson}
+                busy={fbBusy}
+                error={fbError}
+                saveStatus={saveStatus}
+                onPageIdChange={setFbPageId}
+                onCookiesJsonChange={setFbCookiesJson}
+                onSubmit={submitFacebookDirectConnect}
+                onBack={() => setFormStep("catalog")}
+                onCancel={closeEditor}
+              />
             ) : (
               <>
             {formConflict ? (
@@ -1493,7 +1703,9 @@ export default function ChannelsPage() {
                     // reconnects, the same as every derived-id channel above.
                     disabled={
                       Boolean(selected) &&
-                      (form.channel === "email" || form.channel === "sms")
+                      (form.channel === "email" ||
+                        form.channel === "sms" ||
+                        form.channel === "facebook_direct")
                     }
                     value={form[routingField]}
                     placeholder={routingMeta?.placeholder || fieldLabel(routingField)}
@@ -1703,7 +1915,9 @@ export default function ChannelsPage() {
                               ? "Service account JSON key"
                               : form.channel === "instagram_direct"
                                 ? "Instagram session"
-                                : "Access token"}
+                                : form.channel === "facebook_direct"
+                                  ? "Session cookies"
+                                  : "Access token"}
                       </span>
 
                       <StatusBadge
@@ -1741,10 +1955,14 @@ export default function ChannelsPage() {
                         value={form.access_token}
                         disabled={
                           clearAccessToken ||
-                          (form.channel === "instagram_direct" && Boolean(selected))
+                          ((form.channel === "instagram_direct" ||
+                            form.channel === "facebook_direct") &&
+                            Boolean(selected))
                         }
                         placeholder={
-                          form.channel === "instagram_direct" && selected
+                          (form.channel === "instagram_direct" ||
+                            form.channel === "facebook_direct") &&
+                          selected
                             ? "Not editable here"
                             : selected?.has_access_token
                               ? "Leave blank to keep the stored token"
@@ -1761,19 +1979,23 @@ export default function ChannelsPage() {
                     )}
 
                     {(form.channel === "google_chat" ||
-                      form.channel === "instagram_direct") &&
+                      form.channel === "instagram_direct" ||
+                      form.channel === "facebook_direct") &&
                     selected ? (
                       <small>
                         Not editable here — disconnect and reconnect{" "}
                         {form.channel === "google_chat"
                           ? "with a new key."
-                          : "and log in again."}
+                          : form.channel === "instagram_direct"
+                            ? "and log in again."
+                            : "with a fresh cookie export."}
                       </small>
                     ) : null}
 
                     {selected?.has_access_token &&
                     form.channel !== "google_chat" &&
-                    form.channel !== "instagram_direct" ? (
+                    form.channel !== "instagram_direct" &&
+                    form.channel !== "facebook_direct" ? (
                       <label className="channels-clear-toggle">
                         <input
                           type="checkbox"
@@ -1797,7 +2019,8 @@ export default function ChannelsPage() {
                       Google-signed JWT, not a shared secret at all. */}
                   {form.channel === "email" ||
                   form.channel === "sms" ||
-                  form.channel === "google_chat" ? null : (
+                  form.channel === "google_chat" ||
+                  form.channel === "facebook_direct" ? null : (
                     <div className="channels-field">
                       <label htmlFor="channel-verify-token">
                         <span>

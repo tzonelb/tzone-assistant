@@ -71,6 +71,21 @@ export async function verifyInstagramDirectConnectRequest(values, elevatedToken)
   });
 }
 
+/*
+ * Facebook (cookie download) connects in one call, unlike Instagram (direct
+ * login) above: the operator's cookies, exported from an already-signed-in
+ * browser, are already fully authenticated, so there is no 2FA step for a
+ * second call to resume (see backend/api/routes/facebook_direct.py).
+ */
+
+export async function connectFacebookDirectRequest(values, elevatedToken) {
+  return apiRequest("/api/facebook-direct/connect", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
 export async function requestChannelVerificationRequest() {
   return apiRequest("/api/channels/verification/request", { method: "POST" });
 }

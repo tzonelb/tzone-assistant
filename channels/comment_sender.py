@@ -34,6 +34,21 @@ def publish_comment_reply(
     """
     normalized_channel = str(channel or "messenger").strip().lower()
 
+    # Facebook (cookie download) is read-only by design -- see
+    # backend/api/routes/facebook_direct.py's docstring on why a reply is
+    # deliberately not a feature here. Checked before `resolve` so this
+    # never attempts a Graph API call with a cookie blob in place of an
+    # access token.
+    if normalized_channel == "facebook_direct":
+        return {
+            "ok": False,
+            "reason": "read_only_channel",
+            "error": (
+                "Facebook (cookie download) is read-only. Reply to this "
+                "comment from the Facebook app or facebook.com."
+            ),
+        }
+
     try:
         credentials = resolve(company_id, normalized_channel)
     except MissingChannelCredentials as exc:

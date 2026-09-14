@@ -34,8 +34,23 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line", "sms", "google_chat", "instagram_direct",
+    "email", "viber", "line", "sms", "google_chat", "instagram_direct", "facebook_direct",
 )
+
+# Every channel above but this one carries customer conversations: the AI
+# assistant answers on it, a reply policy governs it, a department switch can
+# be detected on it. Facebook (cookie download) carries none of that -- it
+# reads a Page's public posts and comments into the same queue the official
+# "messenger"/"instagram" channels' comments already use (see
+# backend/services/comment_service.py), not the conversation/message
+# pipeline `channels/inbound.py` builds on. It still belongs in
+# `channel_accounts`: the same sealed-credential storage, the same connect
+# and disconnect flow behind the same elevated grant, the same account list.
+# What it must not do is show up as an option for something that never
+# happens on it -- a bot persona preview, a per-channel reply policy scope --
+# which is what this set exists to filter out of the lists that would
+# otherwise blindly mirror `SUPPORTED_CHANNELS`.
+COMMENT_ONLY_CHANNELS = frozenset({"facebook_direct"})
 
 # Which identifier each channel is routed by. Getting this wrong sends one
 # company's customers to another, so it is declared once here.
@@ -96,6 +111,13 @@ ROUTING_FIELD = {
     # already in `values` -- the same shape `channel_oauth.py` uses for a
     # login flow that spans a redirect.
     "instagram_direct": "external_account_id",
+    # Facebook (cookie download): derived from the cookies themselves, the
+    # same shape as Instagram (direct login) just above and for the same
+    # reason -- see `backend/api/routes/facebook_direct.py`'s own docstring.
+    # The id is the Facebook Page id the cookies turn out to manage, read
+    # back from Facebook rather than typed, so a company cannot claim a Page
+    # it only guessed the id of.
+    "facebook_direct": "external_account_id",
 }
 
 
@@ -1050,6 +1072,15 @@ class ChannelAccountService:
                 "An Instagram account needs its logged-in session."
             )
 
+        # Facebook (cookie download) is the same backstop, not validated here
+        # for the same reason -- see ROUTING_FIELD's comment. The cookies
+        # were already checked against a real Facebook Page by
+        # `facebook_direct.py`'s own route before this is ever called.
+        if normalized == "facebook_direct" and not values.get("access_token"):
+            raise ChannelAccountError(
+                "A Facebook account needs its exported session cookies."
+            )
+
         if not values.get(routing_field):
             raise ChannelAccountError(
                 f"A {normalized} account needs a {routing_field.replace('_', ' ')} "
@@ -1318,6 +1349,20 @@ class ChannelAccountService:
                                     "username": values.get("_instagram_username"),
                                     "has_proxy": bool(values.get("verify_token")),
                                 }
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # Facebook (cookie download)'s own non-secret setting: the
+                # Page's name, kept for the operator's own reference on the
+                # account list -- nothing reads it back to authenticate.
+                if normalized_channel == "facebook_direct":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {"page_name": values.get("_facebook_page_name")}
                             ),
                             account_id,
                         ),

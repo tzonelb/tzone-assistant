@@ -46,6 +46,7 @@ from backend.api.routes import (
     dashboard,
     developer_center,
     dialer,
+    facebook_direct,
     health,
     instagram_direct,
     knowledge,
@@ -129,6 +130,7 @@ def forbid_wildcard_cors_with_credentials(origins: list[str]) -> None:
 # instead of leaving a schedule that starts nothing.
 from backend.workers import (  # noqa: E402
     email_poll_worker,
+    facebook_direct_poll_worker,
     instagram_direct_poll_worker,
     maintenance_worker,
     pending_reply_worker,
@@ -245,6 +247,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(self_check_worker()),
         asyncio.create_task(email_poll_worker()),
         asyncio.create_task(instagram_direct_poll_worker()),
+        asyncio.create_task(facebook_direct_poll_worker()),
     ]
 
     # Discord alone needs this: it is the one channel with no webhook, so
@@ -438,6 +441,9 @@ app.include_router(channels.router, dependencies=_module("channels"))
 # `channels.router`'s do (unlike `channel_oauth` just below, whose callback
 # has none to gate on).
 app.include_router(instagram_direct.router, dependencies=_module("channels"))
+# The unofficial Facebook connect flow -- same module gate, same reason: its
+# one route carries a normal session, unlike `channel_oauth`'s callback.
+app.include_router(facebook_direct.router, dependencies=_module("channels"))
 # Not behind the module gate: its callback is a top-level redirect from
 # facebook.com carrying no session cookie, so the gate (which resolves the
 # company from the session) cannot run there. The company is proven by the
