@@ -199,8 +199,10 @@ function ChannelCatalogGrid({ connectedCounts, supported, onPick }) {
   return (
     <div className="channels-catalog">
       <p className="channels-catalog-intro">
-        Pick a channel to connect. Anything marked "Coming soon" is planned
-        but not wired up yet — nothing here pretends to work before it does.
+        Pick a channel to connect. "Coming soon" is planned but not wired up
+        yet; "Not possible" names a channel this platform cannot reach at all
+        — read its note for the specific reason — neither pretends to work
+        before it does.
       </p>
 
       {CHANNEL_CATEGORIES.map((category) => (
@@ -212,6 +214,7 @@ function ChannelCatalogGrid({ connectedCounts, supported, onPick }) {
               const isSupported =
                 supported.includes(channel.key) &&
                 channel.availability === "available";
+              const isImpossible = channel.availability === "unavailable";
               const connected = connectedCounts[channel.key] || 0;
 
               const Icon = resolveChannelIcon(channel.icon);
@@ -220,7 +223,9 @@ function ChannelCatalogGrid({ connectedCounts, supported, onPick }) {
                 ? { cls: "is-connected", label: `${connected} connected` }
                 : isSupported
                   ? { cls: "is-available", label: "Available" }
-                  : { cls: "is-soon", label: "Coming soon" };
+                  : isImpossible
+                    ? { cls: "is-impossible", label: "Not possible" }
+                    : { cls: "is-soon", label: "Coming soon" };
 
               return (
                 <div className="channels-catalog-card" key={channel.key}>
@@ -257,7 +262,11 @@ function ChannelCatalogGrid({ connectedCounts, supported, onPick }) {
                     disabled={!isSupported}
                     onClick={() => onPick(channel.key)}
                   >
-                    {isSupported ? "Connect" : "Coming soon"}
+                    {isSupported
+                      ? "Connect"
+                      : isImpossible
+                        ? "Not possible"
+                        : "Coming soon"}
                   </button>
                 </div>
               );

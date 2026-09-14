@@ -5,10 +5,21 @@
 // real routing field, webhook and sender for it (see
 // backend/services/channel_account_service.py:SUPPORTED_CHANNELS, which
 // tests/test_channel_catalogue.py keeps this list honest against). "soon"
-// means the integration is planned but not wired yet — shown plainly, never
-// as a fake-connectable button; that shortcut is exactly what got the
-// previous version of this catalogue deleted as "the connect buttons for
-// everything past the first four just return 'not built here'".
+// means the integration is planned and technically buildable, just not wired
+// yet — shown plainly, never as a fake-connectable button; that shortcut is
+// exactly what got the previous version of this catalogue deleted as "the
+// connect buttons for everything past the first four just return 'not built
+// here'".
+//
+// "unavailable" is the fourth, more honest, answer for a channel this
+// engineering team cannot build no matter how much time is spent on it — not
+// "not built here yet", but "cannot be reached from here at all". Each one
+// carries a `note` with the specific, evidence-based reason (a shut-down
+// product, a closed partner program, a design with deliberately no API), so
+// a company doesn't read the same "coming soon" a real in-progress channel
+// gets and wait for something that is never coming. Verified by web research
+// at the time each note was written; if a platform reopens a program or
+// relaunches a product, the note is what needs revisiting, not the label.
 //
 // `icon` names a real brand mark resolved in channelIcons.js (MUI's own
 // brand icons, or the genuine Simple Icons glyph via react-icons for brands
@@ -39,7 +50,8 @@ export const CHANNEL_CATEGORIES = [
       { key: "line", name: "LINE", availability: "available", icon: "Line", color: "#06C755",
         note: "Paste your channel's Access Token and Channel Secret." },
       { key: "wechat", name: "WeChat", availability: "soon", icon: "WeChat", color: "#07C160" },
-      { key: "signal", name: "Signal", availability: "soon", icon: "Signal", color: "#3A76F0" },
+      { key: "signal", name: "Signal", availability: "unavailable", icon: "Signal", color: "#3A76F0",
+        note: "Signal has no public API for a business to send or receive through, by deliberate design — its entire model is built around not exposing one. There is no credential this screen could ever ask for." },
     ],
   },
   {
@@ -47,7 +59,8 @@ export const CHANNEL_CATEGORIES = [
     channels: [
       { key: "tiktok", name: "TikTok", availability: "soon", icon: "TikTok", color: "#010101" },
       { key: "twitter", name: "X (Twitter)", availability: "soon", icon: "X", color: "#000000" },
-      { key: "linkedin", name: "LinkedIn", availability: "soon", icon: "LinkedIn", color: "#0A66C2" },
+      { key: "linkedin", name: "LinkedIn", availability: "unavailable", icon: "LinkedIn", color: "#0A66C2",
+        note: "LinkedIn's Messaging API partner program is closed to new applicants — no application form, no waitlist, no published date to reopen. Nothing to connect until LinkedIn itself changes that." },
       { key: "youtube", name: "YouTube", availability: "soon", icon: "YouTube", color: "#FF0000" },
     ],
   },
@@ -60,8 +73,10 @@ export const CHANNEL_CATEGORIES = [
         note: "Connect a support mailbox over IMAP/SMTP." },
       { key: "sms", name: "SMS", availability: "available", icon: "Sms", color: "#6B7280",
         note: "Paste your Twilio Account SID and Auth Token, plus the phone number customers text." },
-      { key: "google_business", name: "Google Business Messages", availability: "soon", icon: "Google", color: "#4285F4" },
-      { key: "apple_business", name: "Apple Messages for Business", availability: "soon", icon: "Apple", color: "#111827" },
+      { key: "google_business", name: "Google Business Messages", availability: "unavailable", icon: "Google", color: "#4285F4",
+        note: "Google shut this product down permanently on July 31, 2024. Its API now returns an error for every request, for every business — this isn't a delay, the product no longer exists." },
+      { key: "apple_business", name: "Apple Messages for Business", availability: "unavailable", icon: "Apple", color: "#111827",
+        note: "Requires T-ZONE itself — not your business — to become an Apple-approved Messaging Service Provider: a registration, a sponsoring executive, a live demo review with Apple's own team. No customer credential can unlock this; it's a business relationship this platform doesn't hold." },
     ],
   },
   {

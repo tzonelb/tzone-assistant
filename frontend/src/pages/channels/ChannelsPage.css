@@ -290,6 +290,11 @@
   color: var(--tz-text-muted);
 }
 
+.channels-catalog-badge.is-impossible {
+  background: var(--tz-surface-secondary);
+  color: var(--tz-text-muted);
+}
+
 .channels-editor-close {
   display: grid;
   place-items: center;
