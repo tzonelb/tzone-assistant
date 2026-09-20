@@ -62,6 +62,7 @@ from backend.api.routes import (
     team_chat,
     tickets,
     webchat_widget,
+    whatsapp_qr,
 )
 from backend.api.middleware import (
     BodySizeLimitMiddleware,
@@ -137,6 +138,7 @@ from backend.workers import (  # noqa: E402
     scheduled_post_worker,
     self_check_worker,
     takeover_timeout_worker,
+    whatsapp_qr_poll_worker,
 )
 
 
@@ -248,6 +250,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(email_poll_worker()),
         asyncio.create_task(instagram_direct_poll_worker()),
         asyncio.create_task(facebook_direct_poll_worker()),
+        asyncio.create_task(whatsapp_qr_poll_worker()),
     ]
 
     # Discord alone needs this: it is the one channel with no webhook, so
@@ -444,6 +447,8 @@ app.include_router(instagram_direct.router, dependencies=_module("channels"))
 # The unofficial Facebook connect flow -- same module gate, same reason: its
 # one route carries a normal session, unlike `channel_oauth`'s callback.
 app.include_router(facebook_direct.router, dependencies=_module("channels"))
+# The unofficial WhatsApp QR connect flow -- same module gate, same reason.
+app.include_router(whatsapp_qr.router, dependencies=_module("channels"))
 # Not behind the module gate: its callback is a top-level redirect from
 # facebook.com carrying no session cookie, so the gate (which resolves the
 # company from the session) cannot run there. The company is proven by the

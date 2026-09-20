@@ -52,6 +52,9 @@ from channels.instagram_direct.poller import (
 )
 from channels.meta.smart_reply import process_due_replies
 from channels.post_publisher import publish_due_posts
+from channels.whatsapp_qr.poller import (
+    poll_all_accounts as poll_whatsapp_qr_accounts,
+)
 from config.settings import config
 from database.manager import database_manager
 
@@ -92,6 +95,13 @@ INSTAGRAM_DIRECT_POLL_JITTER_SECONDS = 20
 # Instagram (direct login)'s is, and for the same reason.
 FACEBOOK_DIRECT_POLL_SECONDS = 300
 FACEBOOK_DIRECT_POLL_JITTER_SECONDS = 60
+
+# How often a connected WhatsApp (QR scan) account is checked for new
+# messages. A real browser reload, not one API call, so priced closer to
+# Facebook's own poll than to Instagram's; jittered for the same reason
+# both of theirs are.
+WHATSAPP_QR_POLL_SECONDS = 90
+WHATSAPP_QR_POLL_JITTER_SECONDS = 25
 
 
 def _sweep_concurrency() -> int:
@@ -313,6 +323,24 @@ async def facebook_direct_poll_worker() -> None:
             -FACEBOOK_DIRECT_POLL_JITTER_SECONDS, FACEBOOK_DIRECT_POLL_JITTER_SECONDS
         )
         await asyncio.sleep(max(60, FACEBOOK_DIRECT_POLL_SECONDS + jitter))
+
+
+async def whatsapp_qr_poll_worker() -> None:
+    """Check every connected WhatsApp (QR scan) account for new messages.
+
+    Same shape as `facebook_direct_poll_worker` just above, for the same
+    reason: a sweep here opens a real browser against a real session.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(poll_whatsapp_qr_accounts)
+        except Exception:
+            logger.exception("WhatsApp (QR) poll sweep failed")
+
+        jitter = random.uniform(
+            -WHATSAPP_QR_POLL_JITTER_SECONDS, WHATSAPP_QR_POLL_JITTER_SECONDS
+        )
+        await asyncio.sleep(max(30, WHATSAPP_QR_POLL_SECONDS + jitter))
 
 
 async def maintenance_worker() -> None:

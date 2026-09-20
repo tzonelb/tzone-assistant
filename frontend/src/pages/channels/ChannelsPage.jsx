@@ -6,13 +6,16 @@ import {
 } from "@mui/icons-material";
 
 import {
+  cancelWhatsappQrConnectRequest,
   confirmChannelVerificationRequest,
   connectFacebookDirectRequest,
   createChannelAccountRequest,
   deleteChannelAccountRequest,
   getChannelAccountsRequest,
+  pollWhatsappQrConnectStatusRequest,
   requestChannelVerificationRequest,
   startInstagramDirectConnectRequest,
+  startWhatsappQrConnectRequest,
   updateChannelAccountRequest,
   verifyInstagramDirectConnectRequest,
 } from "../../api/channels";
@@ -152,6 +155,10 @@ const DERIVED_ROUTING_CHANNELS = new Set([
   // nothing this screen would ever have the operator type in, on connect or
   // after.
   "instagram_direct",
+  // WhatsApp (QR scan)'s id is the phone number read off the session once
+  // the QR code is scanned -- nothing this screen would ever have the
+  // operator type in either.
+  "whatsapp_qr",
 ]);
 
 const FEATURE_FLAGS = [
@@ -635,6 +642,143 @@ function FacebookDirectConnectForm({
   );
 }
 
+// WhatsApp (QR scan) connects over a poll, not a single call or two calls:
+// the phone has to actually scan the code, which is real human time no
+// request should block on. `ChannelsPage` owns the polling loop (see
+// `submitWhatsappQrConnect`/the `useEffect` next to it) and hands this
+// component only what step it is on and what to render for it.
+function WhatsAppQrConnectForm({
+  form,
+  updateField,
+  departments,
+  branches,
+  step,
+  qrImage,
+  busy,
+  error,
+  saveStatus,
+  onStart,
+  onCancel,
+  onBack,
+}) {
+  return (
+    <form
+      className="channels-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onStart();
+      }}
+    >
+      {step === "qr_ready" ? (
+        <div className="channels-webchat-snippet">
+          <h4>Scan this with the phone's own WhatsApp</h4>
+          <p>
+            Open WhatsApp on the phone this number belongs to → Settings →
+            Linked Devices → Link a Device, then point the camera at this
+            code. This connects automatically the moment it scans.
+          </p>
+
+          {qrImage ? (
+            <img
+              src={`data:image/png;base64,${qrImage}`}
+              alt="WhatsApp QR code"
+              className="channels-qr-image"
+            />
+          ) : (
+            <p className="channels-webchat-snippet-pending">
+              Loading the QR code...
+            </p>
+          )}
+        </div>
+      ) : (
+        <>
+          <label htmlFor="wa-name">
+            <span>Display name</span>
+            <input
+              id="wa-name"
+              type="text"
+              required
+              maxLength={120}
+              value={form.name}
+              placeholder="WhatsApp Support"
+              onChange={(event) => updateField("name", event.target.value)}
+            />
+          </label>
+
+          <label htmlFor="wa-department">
+            <span>Department (optional)</span>
+            <select
+              id="wa-department"
+              value={form.department_id}
+              onChange={(event) => updateField("department_id", event.target.value)}
+            >
+              <option value="">No default — the customer chooses</option>
+              {departments.map((item) => (
+                <option value={String(item.id)} key={item.id}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label htmlFor="wa-branch">
+            <span>Branch (optional)</span>
+            <select
+              id="wa-branch"
+              value={form.branch_id}
+              onChange={(event) => updateField("branch_id", event.target.value)}
+            >
+              <option value="">The whole company</option>
+              {branches.map((branch) => (
+                <option value={String(branch.id)} key={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <p className="comments-read-only-note">
+            Real risk, kept honest: WhatsApp's own detection has been
+            confirmed to ban unofficial clients like this one even under
+            correct, low-volume usage, with no fix and no reliable appeal
+            path. Meant as a bridge until your official WhatsApp Cloud API
+            account is ready — test it, then decide whether to keep it.
+          </p>
+        </>
+      )}
+
+      <footer className="channels-form-footer">
+        <span className={error ? "is-error" : "is-success"}>
+          {error || saveStatus}
+        </span>
+
+        <div>
+          {step === "qr_ready" ? (
+            <AppButton variant="secondary" disabled={busy} onClick={onCancel}>
+              Cancel
+            </AppButton>
+          ) : (
+            <>
+              <AppButton variant="secondary" disabled={busy} onClick={onBack}>
+                Back
+              </AppButton>
+              <AppButton variant="secondary" disabled={busy} onClick={onCancel}>
+                Cancel
+              </AppButton>
+            </>
+          )}
+
+          {step === "qr_ready" ? null : (
+            <AppButton type="submit" variant="primary" loading={busy}>
+              Show QR code
+            </AppButton>
+          )}
+        </div>
+      </footer>
+    </form>
+  );
+}
+
 function formFromAccount(account) {
   return {
     channel: account.channel || "messenger",
@@ -743,6 +887,16 @@ export default function ChannelsPage() {
   const [fbCookiesJson, setFbCookiesJson] = useState("");
   const [fbBusy, setFbBusy] = useState(false);
   const [fbError, setFbError] = useState("");
+
+  // WhatsApp (QR scan)'s own connect state -- polling, not a single call
+  // or two, since the phone has to actually scan the code (see
+  // WhatsAppQrConnectForm's own docstring).
+  const [waStep, setWaStep] = useState("credentials");
+  const [waPendingId, setWaPendingId] = useState("");
+  const [waQrImage, setWaQrImage] = useState("");
+  const [waBusy, setWaBusy] = useState(false);
+  const [waError, setWaError] = useState("");
+  const waElevatedTokenRef = useRef("");
 
   function currentElevation() {
     if (!elevation) return null;
@@ -963,6 +1117,12 @@ export default function ChannelsPage() {
     setFbCookiesJson("");
     setFbBusy(false);
     setFbError("");
+    setWaStep("credentials");
+    setWaPendingId("");
+    setWaQrImage("");
+    setWaBusy(false);
+    setWaError("");
+    waElevatedTokenRef.current = "";
   }
 
   function openCreate() {
@@ -1285,6 +1445,92 @@ export default function ChannelsPage() {
       setFbBusy(false);
     }
   }
+
+  // WhatsApp (QR scan)'s own connect flow -- a poll, not one or two calls
+  // (see WhatsAppQrConnectForm's own docstring). `waElevatedTokenRef` holds
+  // the grant `submitWhatsappQrStart` already spent, since every poll
+  // against the same pending attempt needs to prove it again.
+  function submitWhatsappQrStart() {
+    setWaError("");
+    setSaveStatus("");
+
+    const values = {
+      name: form.name.trim(),
+      branch_id: form.branch_id ? Number(form.branch_id) : null,
+      department_id: form.department_id ? Number(form.department_id) : null,
+    };
+
+    withElevation((token) => performWhatsappQrStart(values, token));
+  }
+
+  async function performWhatsappQrStart(values, token) {
+    setWaBusy(true);
+
+    try {
+      const result = await startWhatsappQrConnectRequest(values, token);
+      waElevatedTokenRef.current = token;
+      setWaPendingId(result.pending_id);
+      setWaStep("qr_ready");
+    } catch (requestError) {
+      setWaError(
+        requestError.message || "Could not start the WhatsApp connection.",
+      );
+    } finally {
+      setWaBusy(false);
+    }
+  }
+
+  async function pollWhatsappQrStatus(pendingId, token, connectedName) {
+    try {
+      const result = await pollWhatsappQrConnectStatusRequest(pendingId, token);
+
+      if (result.status === "qr_ready") {
+        setWaQrImage(result.qr_png_base64 || "");
+      } else if (result.status === "connected") {
+        setSaveStatus("Account connected.");
+        recordSessionChange(`Connected WhatsApp (QR scan) — ${connectedName}`);
+        setWaPendingId("");
+        await loadAccounts();
+        closeEditor();
+      }
+    } catch (requestError) {
+      setWaError(
+        requestError.message || "That connection did not complete. Start again.",
+      );
+      setWaStep("credentials");
+      setWaPendingId("");
+      setWaQrImage("");
+    }
+  }
+
+  function cancelWhatsappQrConnect() {
+    const pendingId = waPendingId;
+    const token = waElevatedTokenRef.current;
+
+    if (pendingId && token) {
+      cancelWhatsappQrConnectRequest(pendingId, token).catch(() => {});
+    }
+
+    setWaStep("credentials");
+    setWaPendingId("");
+    setWaQrImage("");
+    setWaError("");
+  }
+
+  useEffect(() => {
+    if (waStep !== "qr_ready" || !waPendingId) return undefined;
+
+    const pendingId = waPendingId;
+    const token = waElevatedTokenRef.current;
+    const connectedName = form.name.trim();
+
+    const interval = setInterval(() => {
+      pollWhatsappQrStatus(pendingId, token, connectedName);
+    }, 3000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [waStep, waPendingId]);
 
   function handleDelete() {
     if (!pendingDelete) return;
@@ -1637,6 +1883,24 @@ export default function ChannelsPage() {
                 onBack={() => setFormStep("catalog")}
                 onCancel={closeEditor}
               />
+            ) : !selected && form.channel === "whatsapp_qr" ? (
+              <WhatsAppQrConnectForm
+                form={form}
+                updateField={updateField}
+                departments={departments}
+                branches={branches}
+                step={waStep}
+                qrImage={waQrImage}
+                busy={waBusy}
+                error={waError}
+                saveStatus={saveStatus}
+                onStart={submitWhatsappQrStart}
+                onCancel={() => {
+                  cancelWhatsappQrConnect();
+                  closeEditor();
+                }}
+                onBack={() => setFormStep("catalog")}
+              />
             ) : (
               <>
             {formConflict ? (
@@ -1917,7 +2181,9 @@ export default function ChannelsPage() {
                                 ? "Instagram session"
                                 : form.channel === "facebook_direct"
                                   ? "Session cookies"
-                                  : "Access token"}
+                                  : form.channel === "whatsapp_qr"
+                                    ? "WhatsApp session"
+                                    : "Access token"}
                       </span>
 
                       <StatusBadge
@@ -1956,12 +2222,14 @@ export default function ChannelsPage() {
                         disabled={
                           clearAccessToken ||
                           ((form.channel === "instagram_direct" ||
-                            form.channel === "facebook_direct") &&
+                            form.channel === "facebook_direct" ||
+                            form.channel === "whatsapp_qr") &&
                             Boolean(selected))
                         }
                         placeholder={
                           (form.channel === "instagram_direct" ||
-                            form.channel === "facebook_direct") &&
+                            form.channel === "facebook_direct" ||
+                            form.channel === "whatsapp_qr") &&
                           selected
                             ? "Not editable here"
                             : selected?.has_access_token
@@ -1980,7 +2248,8 @@ export default function ChannelsPage() {
 
                     {(form.channel === "google_chat" ||
                       form.channel === "instagram_direct" ||
-                      form.channel === "facebook_direct") &&
+                      form.channel === "facebook_direct" ||
+                      form.channel === "whatsapp_qr") &&
                     selected ? (
                       <small>
                         Not editable here — disconnect and reconnect{" "}
@@ -1988,14 +2257,17 @@ export default function ChannelsPage() {
                           ? "with a new key."
                           : form.channel === "instagram_direct"
                             ? "and log in again."
-                            : "with a fresh cookie export."}
+                            : form.channel === "whatsapp_qr"
+                              ? "and scan the QR code again."
+                              : "with a fresh cookie export."}
                       </small>
                     ) : null}
 
                     {selected?.has_access_token &&
                     form.channel !== "google_chat" &&
                     form.channel !== "instagram_direct" &&
-                    form.channel !== "facebook_direct" ? (
+                    form.channel !== "facebook_direct" &&
+                    form.channel !== "whatsapp_qr" ? (
                       <label className="channels-clear-toggle">
                         <input
                           type="checkbox"
@@ -2020,7 +2292,8 @@ export default function ChannelsPage() {
                   {form.channel === "email" ||
                   form.channel === "sms" ||
                   form.channel === "google_chat" ||
-                  form.channel === "facebook_direct" ? null : (
+                  form.channel === "facebook_direct" ||
+                  form.channel === "whatsapp_qr" ? null : (
                     <div className="channels-field">
                       <label htmlFor="channel-verify-token">
                         <span>

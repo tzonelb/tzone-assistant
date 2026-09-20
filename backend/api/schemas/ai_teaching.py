@@ -56,6 +56,7 @@ PreviewChannel = Literal[
     "sms",
     "google_chat",
     "instagram_direct",
+    "whatsapp_qr",
 ]
 
 MAX_TEST_MESSAGE = 2000

@@ -40,6 +40,18 @@
   font-style: italic;
 }
 
+.channels-qr-image {
+  display: block;
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+  margin: var(--tz-space-3) 0;
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: #fff;
+  padding: var(--tz-space-2);
+}
+
 .channels-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

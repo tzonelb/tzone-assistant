@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
     "email", "viber", "line", "sms", "google_chat", "instagram_direct", "facebook_direct",
+    "whatsapp_qr",
 )
 
 # Every channel above but this one carries customer conversations: the AI
@@ -118,6 +119,13 @@ ROUTING_FIELD = {
     # back from Facebook rather than typed, so a company cannot claim a Page
     # it only guessed the id of.
     "facebook_direct": "external_account_id",
+    # WhatsApp (QR scan) -- the unofficial channel, not the Meta Cloud API
+    # "whatsapp" above. Derived the same way Instagram (direct login) is,
+    # for the same reason: the login itself is a live QR scan the operator's
+    # phone completes, which `backend/api/routes/whatsapp_qr.py` runs on its
+    # own two-step poll (see that router's own docstring), and the WhatsApp
+    # id it comes back with is read from the resulting session, not typed.
+    "whatsapp_qr": "external_account_id",
 }
 
 
@@ -1081,6 +1089,15 @@ class ChannelAccountService:
                 "A Facebook account needs its exported session cookies."
             )
 
+        # WhatsApp (QR scan) is the same backstop, not validated here for
+        # the same reason -- see ROUTING_FIELD's comment. The QR scan
+        # already happened in `whatsapp_qr.py`'s own route before this is
+        # ever called.
+        if normalized == "whatsapp_qr" and not values.get("access_token"):
+            raise ChannelAccountError(
+                "A WhatsApp account needs its scanned-in session."
+            )
+
         if not values.get(routing_field):
             raise ChannelAccountError(
                 f"A {normalized} account needs a {routing_field.replace('_', ' ')} "
@@ -1363,6 +1380,20 @@ class ChannelAccountService:
                         (
                             json.dumps(
                                 {"page_name": values.get("_facebook_page_name")}
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # WhatsApp (QR scan)'s own non-secret setting: the phone
+                # number the session belongs to, kept for the operator's own
+                # reference -- nothing reads it back to authenticate.
+                if normalized_channel == "whatsapp_qr":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {"phone_number": values.get("_whatsapp_phone_number")}
                             ),
                             account_id,
                         ),

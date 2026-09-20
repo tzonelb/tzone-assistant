@@ -30,4 +30,5 @@ export const SUPPORTED_CHANNELS = [
   "google_chat",
   "instagram_direct",
   "facebook_direct",
+  "whatsapp_qr",
 ];
