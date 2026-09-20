@@ -181,3 +181,21 @@ class SettingOverrideRequest(BaseModel):
     set_value: bool = False
     is_locked: bool | None = None
     note: str | None = Field(default=None, max_length=500)
+
+
+class PlatformChannelCredentialsRequest(BaseModel):
+    """A Meta developer app's own identity, pasted whole -- see
+    `platform_channel_service.set_credentials`'s own docstring on why this
+    replaces the stored credential entirely rather than patching a field,
+    and `platform_channel_service.FIELD_SPECS`'s own docstring on why an
+    access token is never one of these fields for either channel.
+    """
+
+    app_id: str | None = Field(default=None, max_length=120)
+    app_secret: str | None = Field(default=None, max_length=500)
+
+
+class CompanyChannelAccessRequest(BaseModel):
+    """Whether one company may reach one platform-level channel."""
+
+    enabled: bool

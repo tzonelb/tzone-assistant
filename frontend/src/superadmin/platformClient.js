@@ -383,3 +383,41 @@ export async function listAuditRequest({
 
   return platformRequest(`/api/platform/audit${query}`);
 }
+
+/*
+ * The Channels page: platform-wide Meta developer app credentials, and
+ * which companies may reach them. See backend/services/
+ * platform_channel_service.py -- configuring a credential and granting a
+ * company access to it are two separate calls on purpose.
+ */
+
+export async function listPlatformChannelsRequest() {
+  return platformRequest("/api/platform/channels");
+}
+
+export async function setPlatformChannelCredentialsRequest(channel, values) {
+  return platformRequest(
+    `/api/platform/channels/${encodeURIComponent(channel)}/credentials`,
+    { method: "PUT", body: values },
+  );
+}
+
+export async function clearPlatformChannelCredentialsRequest(channel) {
+  return platformRequest(
+    `/api/platform/channels/${encodeURIComponent(channel)}/credentials`,
+    { method: "DELETE" },
+  );
+}
+
+export async function listPlatformChannelAccessRequest(channel) {
+  return platformRequest(
+    `/api/platform/channels/${encodeURIComponent(channel)}/access`,
+  );
+}
+
+export async function setPlatformChannelAccessRequest(channel, companyId, enabled) {
+  return platformRequest(
+    `/api/platform/channels/${encodeURIComponent(channel)}/access/${encodeURIComponent(companyId)}`,
+    { method: "PUT", body: { enabled } },
+  );
+}

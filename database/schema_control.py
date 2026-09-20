@@ -563,6 +563,45 @@ CONTROL_TABLES: tuple[str, ...] = (
         created_at TEXT NOT NULL
     )
     """,
+    # One Meta developer account's credentials, held by the platform itself
+    # rather than any one company -- the Super Admin's own "Channels" page.
+    # Sealed under the platform master key the same way `channel_accounts`
+    # seals a company's own credentials under that company's key (see
+    # `backend/services/platform_channel_service.py`); `channel` is the
+    # primary key because there is exactly one platform-level credential set
+    # per channel, not one per company. `config_json` holds whatever about
+    # this credential is not secret -- an app id, a phone number id -- kept
+    # separate from the sealed blob for the same reason `channel_accounts`
+    # keeps its own non-secret settings in a plain `config_json` alongside
+    # its sealed columns.
+    """
+    CREATE TABLE IF NOT EXISTS platform_channel_credentials (
+        channel TEXT PRIMARY KEY,
+        config_json TEXT NOT NULL DEFAULT '{}',
+        sealed_secret TEXT NOT NULL,
+        updated_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # Which companies the Super Admin has let reach a platform-level
+    # channel above. A row's absence means no access, the same "default
+    # closed" shape `company_platform_config`'s own modules take -- a
+    # company is never granted a channel by a missing row being read as
+    # permissive.
+    """
+    CREATE TABLE IF NOT EXISTS company_channel_access (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 0,
+        updated_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(company_id, channel),
+        FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE
+    )
+    """,
 )
 
 

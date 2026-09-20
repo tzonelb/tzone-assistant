@@ -44,14 +44,15 @@ def _manage(current_user: dict[str, Any] = Depends(require_permission("channels.
 
 
 @router.get("/facebook/config")
-def facebook_config(_company_id: int = Depends(_view)) -> dict[str, Any]:
-    return {"configured": meta_oauth_service.is_configured()}
+def facebook_config(company_id: int = Depends(_view)) -> dict[str, Any]:
+    return {"configured": meta_oauth_service.is_available_for_company(company_id)}
 
 
 @router.post("/facebook/start")
 def facebook_start(current_user: dict = Depends(_manage)) -> dict[str, Any]:
-    # A platform fact, checked before the per-company resolution: with no Meta
-    # app there is nothing to start, whoever is asking.
+    # A platform fact, checked before the per-company resolution: with no
+    # Meta app configured at all, there is nothing to start, whoever is
+    # asking.
     if not meta_oauth_service.is_configured():
         raise HTTPException(
             status_code=503,
@@ -61,6 +62,17 @@ def facebook_start(current_user: dict = Depends(_manage)) -> dict[str, Any]:
             ),
         )
     company_id = auth_service.resolve_company_id(current_user)
+
+    # The per-company grant, checked second: the app may be configured and
+    # this company still not let through to it.
+    if not meta_oauth_service.is_available_for_company(company_id):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Facebook login is not set up on this platform yet. Connect a "
+                "Page with its access token on the Channels screen instead."
+            ),
+        )
     user_id = int(current_user["id"])
     try:
         url = meta_oauth_service.authorize_url(company_id=company_id, user_id=user_id)

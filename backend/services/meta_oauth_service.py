@@ -59,8 +59,50 @@ def _unb64(text: str) -> bytes:
 
 
 class MetaOAuthService:
+    def _app_credentials(self) -> tuple[str | None, str | None]:
+        """The Meta app id and secret this flow authorizes against.
+
+        The Super Admin's own Channels page (see `backend/services/
+        platform_channel_service.py`) is checked first -- it is what lets a
+        platform-wide app be configured once, in the console, instead of in
+        this process's own environment. The `META_APP_ID`/`META_APP_SECRET`
+        env vars remain the fallback, so a deployment that has always
+        configured the app that way keeps working unchanged.
+        """
+        from backend.services.platform_channel_service import platform_channel_service
+
+        platform_credential = platform_channel_service.get_credentials("messenger")
+
+        if platform_credential and platform_credential.get("app_id") and platform_credential.get("app_secret"):
+            return platform_credential["app_id"], platform_credential["app_secret"]
+
+        return config.META_APP_ID, config.META_APP_SECRET
+
     def is_configured(self) -> bool:
-        return bool(config.META_APP_ID and config.META_APP_SECRET)
+        app_id, app_secret = self._app_credentials()
+        return bool(app_id and app_secret)
+
+    def is_available_for_company(self, company_id: int) -> bool:
+        """Whether this one company should be offered the button at all.
+
+        A platform-level app (configured on the Super Admin's Channels
+        page) is gated per company -- see `platform_channel_service`'s own
+        docstring on why a configured credential grants nothing by itself.
+        An app configured the old way, through this process's own
+        environment, keeps its old behaviour: every company on this
+        deployment sees the button, the same as before this gate existed.
+        """
+        if not self.is_configured():
+            return False
+
+        from backend.services.platform_channel_service import platform_channel_service
+
+        platform_credential = platform_channel_service.get_credentials("messenger")
+
+        if platform_credential and platform_credential.get("app_id") and platform_credential.get("app_secret"):
+            return platform_channel_service.company_has_access(company_id, "messenger")
+
+        return True
 
     def redirect_uri(self) -> str:
         # Must match a redirect URI registered on the Meta app exactly.
@@ -112,8 +154,9 @@ class MetaOAuthService:
                 "Facebook login is not set up on this platform yet. Connect a "
                 "Page with its access token on the Channels screen instead."
             )
+        app_id, _ = self._app_credentials()
         params = {
-            "client_id": config.META_APP_ID,
+            "client_id": app_id,
             "redirect_uri": self.redirect_uri(),
             "state": self.sign_state(company_id=company_id, user_id=user_id),
             "scope": config.META_OAUTH_SCOPES,
@@ -123,9 +166,10 @@ class MetaOAuthService:
 
     def exchange_code(self, code: str) -> str:
         """The short-lived user access token for an authorization code."""
+        app_id, app_secret = self._app_credentials()
         params = {
-            "client_id": config.META_APP_ID,
-            "client_secret": config.META_APP_SECRET,
+            "client_id": app_id,
+            "client_secret": app_secret,
             "redirect_uri": self.redirect_uri(),
             "code": code,
         }
