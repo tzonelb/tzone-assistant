@@ -994,6 +994,35 @@ class AuthService:
 
         return token
 
+    def password_reset_recently_requested(self, user_id: int) -> bool:
+        """Whether this account was already issued a reset link inside the
+        cooldown window.
+
+        Checked before minting another: `forgot_password` sends a real email
+        on every call, so without this, repeating the request is a way to
+        flood a victim's inbox using nothing but their address -- the same
+        reasoning `signup_service.RESEND_COOLDOWN_SECONDS` exists for. The
+        caller returns its ordinary generic response either way rather than
+        a distinct one: a difference here would tell an unauthenticated
+        caller that a reset was already in flight for this address, which is
+        exactly the enumeration this endpoint otherwise refuses to allow.
+        """
+        cutoff = (
+            utc_now() - timedelta(seconds=config.PASSWORD_RESET_COOLDOWN_SECONDS)
+        ).isoformat()
+
+        with database_manager.control() as conn:
+            row = conn.execute(
+                """
+                SELECT 1 FROM password_reset_tokens
+                WHERE user_id = ? AND created_at >= ?
+                LIMIT 1
+                """,
+                (int(user_id), cutoff),
+            ).fetchone()
+
+        return row is not None
+
     def consume_password_reset(self, *, token: str, new_password: str) -> bool:
         """Spend a reset token and set the new password. One attempt, one use.
 

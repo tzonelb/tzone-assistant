@@ -125,6 +125,15 @@ class AppConfig:
         os.getenv("PASSWORD_RESET_TTL_MINUTES", "30")
     )
 
+    # The shortest gap between two reset links issued to the same account.
+    # `/password/forgot` sends a real email on every call and is
+    # unauthenticated, so without this, repeating the request is an
+    # email-bombing tool that needs nothing but the victim's address -- the
+    # same reasoning `signup_service.RESEND_COOLDOWN_SECONDS` exists for.
+    PASSWORD_RESET_COOLDOWN_SECONDS: int = int(
+        os.getenv("PASSWORD_RESET_COOLDOWN_SECONDS", "60")
+    )
+
     # How long a channel-verification code stays usable, and how long
     # confirming one keeps connecting/disconnecting a channel open before the
     # owner has to verify again. Documented on the Channels screen itself as

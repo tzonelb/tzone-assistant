@@ -426,6 +426,12 @@ def forgot_password(payload: PasswordForgotRequest, request: Request):
         )
         return generic
 
+    if auth_service.password_reset_recently_requested(user["id"]):
+        # Same generic response as every other branch here -- skipping the
+        # send silently is what keeps this indistinguishable from an address
+        # with no account at all.
+        return generic
+
     token = auth_service.create_password_reset(
         user_id=user["id"], ip_address=ip_address
     )
