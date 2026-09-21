@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import email as email_lib
 import email.utils
+import hashlib
 import imaplib
 import json
 import logging
@@ -198,6 +199,20 @@ def _process_one(connection, uid: bytes, *, company_id: int, account_id: int) ->
         return
 
     message_id = str(message.get("Message-ID") or "").strip() or None
+
+    if not message_id:
+        # Some senders -- and some relays -- omit Message-ID entirely; legal
+        # under RFC 5322, but it leaves this message with nothing
+        # `idx_messages_provider` can key on. That index's uniqueness is
+        # `WHERE provider_message_id IS NOT NULL`, so a NULL id sails
+        # through dedup untouched. A crash between this message being stored
+        # below and its `\Seen` flag being set reprocesses the same raw
+        # bytes on the next sweep -- without a stand-in id here, that
+        # reprocessing becomes a second, identical customer message in the
+        # inbox rather than being caught the way every other provider's
+        # retry already is.
+        message_id = f"sha256:{hashlib.sha256(raw).hexdigest()}"
+
     subject = _decode_header(message.get("Subject"))
     body = _plain_text_body(message) or "(This message had no readable text.)"
 
