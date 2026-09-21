@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from channels.meta.graph import graph_call_succeeded
 from channels.meta.logger import log_meta_event
 from config.settings import config
 
@@ -52,12 +53,13 @@ def _post(
             timeout=SEND_TIMEOUT_SECONDS,
         )
 
+        payload = response.json() if response.content else {}
         result = {
-            "ok": response.is_success,
+            "ok": graph_call_succeeded(response, payload),
             "status_code": response.status_code,
             "channel": channel,
             "recipient_id": recipient_id,
-            "response": response.json() if response.content else {},
+            "response": payload,
         }
 
     except httpx.HTTPError as exc:

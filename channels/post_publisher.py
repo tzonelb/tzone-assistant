@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from channels.meta.graph import graph_call_succeeded
 from backend.services.module_gate import module_gate
 from backend.services.company_gate import company_gate
 from backend.services.subscription_gate import subscription_gate
@@ -84,8 +85,9 @@ def publish_post(
         return {"ok": False, "reason": "network_error", "error": str(exc)}
 
     result_payload = response.json() if response.content else {}
+    ok = graph_call_succeeded(response, result_payload)
 
-    if not response.is_success:
+    if not ok:
         logger.warning(
             "Provider rejected a post for company %s with status %s",
             company_id,
@@ -93,7 +95,7 @@ def publish_post(
         )
 
     return {
-        "ok": response.is_success,
+        "ok": ok,
         "status_code": response.status_code,
         "provider_post_id": result_payload.get("post_id") or result_payload.get("id"),
         "response": result_payload,

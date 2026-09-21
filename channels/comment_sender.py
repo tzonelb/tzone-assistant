@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from channels.meta.graph import graph_call_succeeded
 from config.settings import config
 
 
@@ -79,8 +80,9 @@ def publish_comment_reply(
         return {"ok": False, "reason": "network_error", "error": str(exc)}
 
     payload = response.json() if response.content else {}
+    ok = graph_call_succeeded(response, payload)
 
-    if not response.is_success:
+    if not ok:
         logger.warning(
             "Provider rejected a comment reply for company %s with status %s",
             company_id,
@@ -88,7 +90,7 @@ def publish_comment_reply(
         )
 
     return {
-        "ok": response.is_success,
+        "ok": ok,
         "status_code": response.status_code,
         "provider_reply_id": payload.get("id"),
         "response": payload,
