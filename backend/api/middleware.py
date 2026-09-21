@@ -353,7 +353,11 @@ class PublicWidgetCorsMiddleware(BaseHTTPMiddleware):
 
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        # X-Visitor-Id: the poll route's bearer key travels as a header
+        # rather than a query string (see webchat_widget.py's
+        # list_widget_messages), which a cross-origin browser will not send
+        # without this being explicitly allowed in the preflight answer.
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Visitor-Id"
         # No Access-Control-Allow-Credentials: these routes take no cookie
         # and no Authorization header, and must never be asked to.
         response.headers["Access-Control-Max-Age"] = "600"

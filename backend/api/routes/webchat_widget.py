@@ -26,7 +26,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from backend.services.message_service import message_service
@@ -40,9 +40,19 @@ router = APIRouter(prefix="/api/webchat", tags=["Website Chat"])
 
 MAX_MESSAGES_PER_POLL = 100
 
+# `frontend/public/widget.js` mints a visitor id with `crypto.randomUUID()`
+# (or, where that is unavailable, `crypto.getRandomValues()`) -- 36 and 34
+# characters respectively. This floor is not meant to enforce that exact
+# shape; it exists so the server itself refuses an implausibly short id
+# rather than trusting the client's minimum entirely, the same
+# defense-in-depth reasoning as validating any other bearer-token-shaped
+# value's length server-side. Low enough that an older visitor's id, minted
+# before `widget.js` carried the `getRandomValues` fallback, still works.
+MIN_VISITOR_ID_LENGTH = 16
+
 
 class WidgetMessageIn(BaseModel):
-    visitor_id: str = Field(min_length=8, max_length=128)
+    visitor_id: str = Field(min_length=MIN_VISITOR_ID_LENGTH, max_length=128)
     text: str = Field(min_length=1, max_length=4000)
     # Never treated as an identity, only a courtesy label -- anyone can type
     # anything here, the same as a name a customer types on any channel.
@@ -96,9 +106,19 @@ def send_widget_message(widget_key: str, payload: WidgetMessageIn):
 @router.get("/{widget_key}/messages")
 def list_widget_messages(
     widget_key: str,
-    visitor_id: str = Query(min_length=8, max_length=128),
+    x_visitor_id: str = Header(min_length=MIN_VISITOR_ID_LENGTH, max_length=128),
     limit: int = Query(default=50, ge=1, le=MAX_MESSAGES_PER_POLL),
 ):
+    """`visitor_id` travels as a header here, not a query parameter.
+
+    It is this visitor's whole conversation's bearer key -- the same thing a
+    session cookie is everywhere else on this platform -- and a query string
+    is a worse place to carry one than a header: it rides along in server
+    and proxy access logs, browser history, and the `Referer` header sent to
+    any third-party resource the embedding page happens to load, none of
+    which a request header does by default.
+    """
+    visitor_id = x_visitor_id
     account = _resolve_account(widget_key)
 
     messages = message_service.list_messages(

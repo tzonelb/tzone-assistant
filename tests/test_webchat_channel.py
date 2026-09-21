@@ -134,7 +134,7 @@ def client(wired):
 def test_an_unknown_widget_key_is_refused(client, wired):
     response = client.post(
         "/api/webchat/wc_unknown/messages",
-        json={"visitor_id": "v-11111111", "text": "hello"},
+        json={"visitor_id": "v-1111111111111111", "text": "hello"},
     )
 
     assert response.status_code == 404
@@ -146,12 +146,16 @@ def test_a_message_reaches_storage_and_can_be_polled_back(client, wired, alpha):
 
     sent = client.post(
         f"/api/webchat/{key}/messages",
-        json={"visitor_id": "v-22222222", "text": "Do you have this in blue?"},
+        json={
+            "visitor_id": "v-2222222222222222",
+            "text": "Do you have this in blue?",
+        },
     )
     assert sent.status_code == 201, sent.text
 
     polled = client.get(
-        f"/api/webchat/{key}/messages", params={"visitor_id": "v-22222222"}
+        f"/api/webchat/{key}/messages",
+        headers={"X-Visitor-Id": "v-2222222222222222"},
     )
     assert polled.status_code == 200, polled.text
 
@@ -167,11 +171,12 @@ def test_a_visitor_never_sees_another_visitors_messages(client, wired, alpha):
 
     client.post(
         f"/api/webchat/{key}/messages",
-        json={"visitor_id": "v-visitor-one", "text": "My order is late"},
+        json={"visitor_id": "v-visitor-one-aaaaa", "text": "My order is late"},
     )
 
     polled = client.get(
-        f"/api/webchat/{key}/messages", params={"visitor_id": "v-visitor-two"}
+        f"/api/webchat/{key}/messages",
+        headers={"X-Visitor-Id": "v-visitor-two-bbbbb"},
     )
 
     assert polled.json()["messages"] == []
@@ -183,8 +188,31 @@ def test_an_empty_message_is_refused_before_it_is_stored(client, wired, alpha):
 
     response = client.post(
         f"/api/webchat/{key}/messages",
-        json={"visitor_id": "v-33333333", "text": ""},
+        json={"visitor_id": "v-3333333333333333", "text": ""},
     )
+
+    assert response.status_code == 422
+
+
+def test_a_visitor_id_shorter_than_the_floor_is_refused(client, wired, alpha):
+    """The floor is defense-in-depth, not cosmetic: the server must not trust
+    an implausibly short id just because the client sent one."""
+    account = _connect(alpha)
+    key = account["external_account_id"]
+
+    response = client.post(
+        f"/api/webchat/{key}/messages",
+        json={"visitor_id": "v-short", "text": "hi"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_polling_without_the_visitor_header_is_refused(client, wired, alpha):
+    account = _connect(alpha)
+    key = account["external_account_id"]
+
+    response = client.get(f"/api/webchat/{key}/messages")
 
     assert response.status_code == 422
 
@@ -201,7 +229,7 @@ def test_disconnecting_the_widget_stops_new_messages(client, wired, alpha):
 
     response = client.post(
         f"/api/webchat/{key}/messages",
-        json={"visitor_id": "v-44444444", "text": "hello?"},
+        json={"visitor_id": "v-4444444444444444", "text": "hello?"},
     )
 
     assert response.status_code == 404
@@ -245,11 +273,17 @@ def test_the_widget_routes_answer_any_origin(client, wired, alpha):
 
     assert preflight.status_code == 204
     assert preflight.headers["access-control-allow-origin"] == "*"
+    assert "x-visitor-id" in preflight.headers["access-control-allow-headers"].lower(), (
+        "the poll route reads its bearer key from X-Visitor-Id, but a "
+        "cross-origin browser strips a header the preflight did not allow"
+    )
 
     real = cors_client.get(
         f"/api/webchat/{key}/messages",
-        params={"visitor_id": "v-cors-check"},
-        headers={"Origin": "https://a-companys-own-website.example"},
+        headers={
+            "Origin": "https://a-companys-own-website.example",
+            "X-Visitor-Id": "v-cors-check-aaaaaaaa",
+        },
     )
 
     assert real.headers["access-control-allow-origin"] == "*"

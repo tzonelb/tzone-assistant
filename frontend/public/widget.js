@@ -41,22 +41,45 @@
   var pollTimer = null;
   var renderedIds = {};
 
+  function mintId() {
+    if (window.crypto && window.crypto.randomUUID) {
+      return window.crypto.randomUUID();
+    }
+
+    // `randomUUID` is a recent addition; `getRandomValues` has been
+    // available far longer and is just as cryptographically strong, so it
+    // covers the gap rather than falling straight through to `Math.random`,
+    // which the platform this id protects a visitor's whole conversation
+    // against guessing must not rely on -- it is explicitly not meant for
+    // anything security-related (see MDN's own note on `Math.random`).
+    if (window.crypto && window.crypto.getRandomValues) {
+      var bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      var hex = "";
+      for (var i = 0; i < bytes.length; i++) {
+        hex += (bytes[i] < 16 ? "0" : "") + bytes[i].toString(16);
+      }
+      return "v-" + hex;
+    }
+
+    // Last resort for an environment with no Web Crypto API at all. Weaker,
+    // but still functional: a collision here only lets someone impersonate
+    // a visitor who happens to mint this exact id in the same window.
+    return "v-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+  }
+
   function visitorId() {
     try {
       var existing = window.localStorage.getItem(storageKey);
       if (existing) return existing;
 
-      var minted =
-        (window.crypto && window.crypto.randomUUID
-          ? window.crypto.randomUUID()
-          : "v-" + Date.now() + "-" + Math.random().toString(36).slice(2)) + "";
-
+      var minted = mintId();
       window.localStorage.setItem(storageKey, minted);
       return minted;
     } catch (err) {
       // Private browsing or blocked storage: fall back to a per-load id.
       // History will not survive a reload, but the conversation still works.
-      return "v-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      return mintId();
     }
   }
 
@@ -150,9 +173,8 @@
       apiBase +
         "/api/webchat/" +
         encodeURIComponent(widgetKey) +
-        "/messages?visitor_id=" +
-        encodeURIComponent(visitor) +
-        "&limit=50",
+        "/messages?limit=50",
+      { headers: { "X-Visitor-Id": visitor } },
     )
       .then(function (response) {
         if (!response.ok) throw new Error("poll failed");
