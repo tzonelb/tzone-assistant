@@ -303,12 +303,18 @@ a {
   position: fixed;
   inset: 0 auto 0 0;
   z-index: 40;
-  width: 270px;
+  width: var(--tz-sidebar-width);
   display: flex;
   flex-direction: column;
-  padding: 23px 18px;
+  padding: 18px 14px;
   color: white;
-  background: #111b2f;
+  background: linear-gradient(180deg, var(--tz-brand-blue-dark), var(--tz-brand-blue-deep));
+  box-shadow:
+    8px 0 28px
+    rgb(15 111 192 / 16%);
+  transition:
+    width var(--tz-transition-normal),
+    transform var(--tz-transition-normal);
 }
 
 .sidebar-brand {
@@ -380,9 +386,17 @@ a {
 }
 
 .app-main {
-  width: calc(100% - 270px);
+  width: calc(100% - var(--tz-sidebar-width));
   min-width: 0;
-  margin-left: 270px;
+  margin-left: var(--tz-sidebar-width);
+  transition:
+    width var(--tz-transition-normal),
+    margin-left var(--tz-transition-normal);
+  height: 100vh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .topbar {
@@ -915,24 +929,6 @@ a {
    CH2-06 — Temporary T-ZONE branding and collapsible menu
    ========================================================= */
 
-.sidebar {
-  width: var(--tz-sidebar-width);
-  padding: 18px 14px;
-  background:
-    linear-gradient(
-      180deg,
-      var(--tz-brand-blue-deep) 0%,
-      var(--tz-brand-blue) 52%,
-      var(--tz-brand-blue-dark) 100%
-    );
-  box-shadow:
-    8px 0 28px
-    rgb(15 111 192 / 16%);
-  transition:
-    width var(--tz-transition-normal),
-    transform 180ms ease;
-}
-
 .sidebar-brand {
   min-height: 76px;
   gap: 11px;
@@ -1037,18 +1033,6 @@ a {
 .sidebar-footer {
   border-top-color: rgb(255 255 255 / 18%);
   color: rgb(255 255 255 / 68%);
-}
-
-.app-main {
-  width:
-    calc(
-      100% - var(--tz-sidebar-width)
-    );
-  margin-left:
-    var(--tz-sidebar-width);
-  transition:
-    width var(--tz-transition-normal),
-    margin-left var(--tz-transition-normal);
 }
 
 .app-layout-sidebar-collapsed
@@ -1167,12 +1151,6 @@ a {
 
 
 /* CH2-06A layout corrections */
-.sidebar {
-  width: var(--tz-sidebar-width);
-  padding: 18px 14px;
-  background: linear-gradient(180deg, var(--tz-brand-blue-dark), var(--tz-brand-blue-deep));
-  transition: width var(--tz-transition-normal), transform var(--tz-transition-normal);
-}
 .sidebar-collapsed { width: var(--tz-sidebar-collapsed-width); padding-inline: 10px; }
 .sidebar-brand { min-height: 72px; gap: 10px; overflow: hidden; }
 .sidebar-logo-shell { width: 54px; height: 54px; flex: 0 0 54px; display: grid; place-items: center; overflow: hidden; border-radius: 15px; background: white; box-shadow: var(--tz-shadow-sm); }
@@ -1184,7 +1162,6 @@ a {
 .sidebar-collapsed .sidebar-brand { justify-content: center; }
 .sidebar-collapsed .sidebar-logo-shell { width: 48px; height: 48px; flex-basis: 48px; }
 .sidebar-collapsed .sidebar-link { justify-content: center; padding-inline: 0; }
-.app-main { margin-left: var(--tz-sidebar-width); width: calc(100% - var(--tz-sidebar-width)); transition: margin-left var(--tz-transition-normal), width var(--tz-transition-normal); }
 .app-layout-sidebar-collapsed .app-main { margin-left: var(--tz-sidebar-collapsed-width); width: calc(100% - var(--tz-sidebar-collapsed-width)); }
 .topbar-left { min-width: 0; }
 .topbar-title-line { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
@@ -1218,14 +1195,6 @@ html, body, #root {
 .app-layout {
   height: 100vh;
   min-height: 0;
-  overflow: hidden;
-}
-
-.app-main {
-  height: 100vh;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
 }
 
