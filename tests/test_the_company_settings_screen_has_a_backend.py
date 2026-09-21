@@ -122,6 +122,47 @@ def _owner(platform, company, app_client, email):
     }
 
 
+def _employee(platform, company, app_client, email, role_code):
+    from backend.services.auth_service import auth_service
+    from database.manager import utc_now_iso
+
+    user_id = auth_service.create_user(
+        email=email, password=PASSWORD, full_name="Employee"
+    )
+
+    with platform["manager"].control() as conn:
+        role = conn.execute(
+            "SELECT id FROM roles WHERE company_id = ? AND code = ?",
+            (company["id"], role_code),
+        ).fetchone()
+        conn.execute(
+            """
+            INSERT INTO company_users (
+                company_id, user_id, role_id, status, created_at
+            )
+            VALUES (?, ?, ?, 'active', ?)
+            """,
+            (company["id"], user_id, int(role["id"]), utc_now_iso()),
+        )
+        conn.commit()
+
+    response = app_client.post(
+        "/api/auth/login",
+        json={
+            "workspace_code": company["workspace_code"],
+            "company": company["name"],
+            "email": email,
+            "password": PASSWORD,
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    return {
+        "user_id": user_id,
+        "headers": {"Authorization": f"Bearer {response.json()['access_token']}"},
+    }
+
+
 @pytest.fixture()
 def alpha_owner(platform, alpha, app_client):
     return _owner(platform, alpha, app_client, "owner@alpha.example.com")
@@ -258,6 +299,30 @@ def test_a_plan_that_does_not_exist_is_refused(app_client, alpha_owner):
         json={"plan_id": 99999, "note": ""},
     )
     assert response.status_code == 400
+
+
+def test_viewing_the_plan_does_not_authorise_requesting_a_new_one(
+    platform, alpha, app_client
+):
+    """Filing a plan-change request is a write. `subscriptions.view` -- which
+    `Viewer`, a read-only reporting role, holds by design -- must not also
+    let its holder ask the operator to change what the company pays."""
+    plan_id = _subscribe(platform, alpha["id"])
+    viewer = _employee(
+        platform, alpha, app_client, "viewer@alpha.example.com", "viewer"
+    )
+
+    readable = app_client.get(
+        "/api/billing/subscription", headers=viewer["headers"]
+    )
+    assert readable.status_code == 200, readable.text
+
+    response = app_client.post(
+        "/api/billing/requests",
+        headers=viewer["headers"],
+        json={"plan_id": plan_id, "note": "I would like a bigger plan"},
+    )
+    assert response.status_code == 403, response.text
 
 
 def test_one_company_never_sees_another_companys_billing_requests(
