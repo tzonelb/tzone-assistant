@@ -11,10 +11,20 @@ replaces the first, which is what "remind me at" means to the person clicking it
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.services.company_gate import company_gate
+from backend.services.message_service import message_service
+from backend.services.notification_service import notification_service
+from backend.services.subscription_gate import subscription_gate
+from backend.services.work_index_service import KIND_REMINDER, work_index_service
+from channels.sender import send_text
 from database.manager import database_manager, utc_now_iso
+
+
+logger = logging.getLogger(__name__)
 
 
 MAX_NOTE = 500
@@ -142,6 +152,12 @@ class ConversationReminderService:
                     now,
                 ),
             )
+
+            # Before the commit, on purpose (see work_index_service's own
+            # docstring, rule 2): a control-plane failure here must abort the
+            # reminder rather than commit one no sweep will ever be told about.
+            work_index_service.note(int(company_id), KIND_REMINDER, when)
+
             conn.commit()
             row = conn.execute(
                 """
@@ -189,6 +205,176 @@ class ConversationReminderService:
             ).fetchall()
 
         return [dict(row) for row in rows]
+
+    def fire_due(self, company_id: int, now: str | None = None) -> int:
+        """Fire every reminder whose time has arrived. Returns how many fired.
+
+        Gated the same as every other worker that can put a message in front
+        of a customer on this company's behalf -- the same reasoning
+        `publish_due_posts` applies to a post and `process_due_replies`
+        applies to an assistant reply applies here to a message an employee
+        pre-wrote and scheduled. A lapsed or suspended company gets neither
+        its message sent nor its "come back to this" notification raised;
+        both stay queued (nothing is claimed here) until the sweep runs again
+        after the company is reinstated.
+        """
+        if subscription_gate.lapsed(company_id) or company_gate.suspended(company_id):
+            return 0
+
+        fired = 0
+
+        for reminder in self.due(company_id=company_id, now=now):
+            try:
+                self._fire_one(company_id=company_id, reminder=reminder)
+                fired += 1
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Could not fire reminder %s for company %s",
+                    reminder.get("id"),
+                    company_id,
+                )
+            finally:
+                # A reminder fires once, like an alarm rather than a timer
+                # that repeats. Cleared even when something above raised, so a
+                # transient failure cannot turn one reminder into a retry
+                # storm that opens this company again every sweep forever.
+                self.clear(
+                    company_id=company_id,
+                    channel=reminder["channel"],
+                    external_user_id=reminder["external_user_id"],
+                )
+
+        return fired
+
+    def _fire_one(self, *, company_id: int, reminder: dict[str, Any]) -> None:
+        channel = str(reminder["channel"])
+        external_user_id = str(reminder["external_user_id"])
+        created_by_user_id = reminder.get("created_by_user_id")
+        wants_auto_send = bool(reminder.get("auto_send")) and bool(
+            reminder.get("message_text")
+        )
+        sent = False
+        send_error: str | None = None
+
+        if wants_auto_send:
+            sent, send_error = self._send_message(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=external_user_id,
+                text=reminder["message_text"],
+                created_by_user_id=created_by_user_id,
+                reminder_id=reminder.get("id"),
+            )
+
+        if created_by_user_id:
+            self._notify(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=external_user_id,
+                recipient_user_id=int(created_by_user_id),
+                note=reminder.get("note"),
+                wants_auto_send=wants_auto_send,
+                sent=sent,
+                send_error=send_error,
+            )
+
+    @staticmethod
+    def _send_message(
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        text: str,
+        created_by_user_id: int | None,
+        reminder_id: int | None,
+    ) -> tuple[bool, str | None]:
+        """Send the message an employee pre-wrote, and put it on the Timeline.
+
+        A reply scheduled rather than typed -- see the docstring on the route
+        that creates one (`backend/api/routes/conversations.py`'s
+        `set_conversation_reminder`) -- so it is recorded exactly as a manual
+        reply is: `sender_type="employee"`, attributed to whoever set the
+        reminder, not to the sweep that happened to be running when it fired.
+        """
+        try:
+            result = send_text(
+                channel=channel,
+                recipient_id=external_user_id,
+                company_id=company_id,
+                text=text,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "Reminder message send failed for company %s channel %s",
+                company_id,
+                channel,
+            )
+            return False, type(exc).__name__
+
+        if not result.get("ok"):
+            return False, str(result.get("error") or result.get("reason") or "")
+
+        try:
+            message_service.save_message(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=external_user_id,
+                direction="out",
+                text=text,
+                sender_type="employee",
+                sender_user_id=created_by_user_id,
+                source="reminder",
+                metadata={"reminder_id": reminder_id},
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not record a fired reminder's message for company %s",
+                company_id,
+            )
+
+        return True, None
+
+    @staticmethod
+    def _notify(
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        recipient_user_id: int,
+        note: str | None,
+        wants_auto_send: bool,
+        sent: bool,
+        send_error: str | None,
+    ) -> None:
+        if wants_auto_send:
+            title = (
+                "A scheduled reminder message was sent"
+                if sent
+                else "A scheduled reminder message failed to send"
+            )
+        else:
+            title = "A conversation reminder is due"
+
+        body_lines = [line for line in (note,) if line]
+
+        if wants_auto_send and not sent and send_error:
+            body_lines.append(f"The message could not be sent: {send_error}")
+
+        try:
+            notification_service.create(
+                company_id=company_id,
+                notification_type="conversation_reminder",
+                title=title,
+                body="\n".join(body_lines) or None,
+                recipient_user_id=recipient_user_id,
+                channel=channel,
+                external_user_id=external_user_id,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not raise a reminder notification for company %s",
+                company_id,
+            )
 
 
 conversation_reminder_service = ConversationReminderService()

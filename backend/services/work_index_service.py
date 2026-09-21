@@ -75,8 +75,14 @@ logger = logging.getLogger(__name__)
 KIND_PENDING_REPLY = "pending_reply"
 KIND_SCHEDULED_POST = "scheduled_post"
 KIND_TAKEOVER = "takeover"
+KIND_REMINDER = "reminder"
 
-KINDS: tuple[str, ...] = (KIND_PENDING_REPLY, KIND_SCHEDULED_POST, KIND_TAKEOVER)
+KINDS: tuple[str, ...] = (
+    KIND_PENDING_REPLY,
+    KIND_SCHEDULED_POST,
+    KIND_TAKEOVER,
+    KIND_REMINDER,
+)
 
 
 # The authoritative question behind each kind, asked of the company's own
@@ -95,6 +101,9 @@ _DUE_QUERIES: dict[str, str] = {
     KIND_TAKEOVER: """
         SELECT MIN(takeover_expires_at) AS due FROM conversations
         WHERE handled_by_ai = 0 AND takeover_expires_at IS NOT NULL
+    """,
+    KIND_REMINDER: """
+        SELECT MIN(remind_at) AS due FROM conversation_reminders
     """,
 }
 

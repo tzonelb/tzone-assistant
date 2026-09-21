@@ -34,11 +34,15 @@ from backend.services.auth_service import auth_service
 from backend.services.conversation_control_service import (
     conversation_control_service,
 )
+from backend.services.conversation_reminder_service import (
+    conversation_reminder_service,
+)
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.health_service import health_service
 from backend.services.notification_service import notification_service
 from backend.services.work_index_service import (
     KIND_PENDING_REPLY,
+    KIND_REMINDER,
     KIND_SCHEDULED_POST,
     KIND_TAKEOVER,
     work_index_service,
@@ -65,6 +69,7 @@ logger = logging.getLogger("tzone.workers")
 TAKEOVER_SWEEP_SECONDS = 10
 PENDING_REPLY_SWEEP_SECONDS = 2
 SCHEDULED_POST_SWEEP_SECONDS = 30
+REMINDER_SWEEP_SECONDS = 30
 ATTEMPT_PRUNE_SECONDS = 3600
 
 # How often the platform checks itself. Fifteen minutes is often enough that a
@@ -226,6 +231,20 @@ async def scheduled_post_worker() -> None:
     while True:
         await _sweep("scheduled post sweep", KIND_SCHEDULED_POST, publish_due_posts)
         await asyncio.sleep(SCHEDULED_POST_SWEEP_SECONDS)
+
+
+async def reminder_worker() -> None:
+    """Fire conversation reminders -- and the message some of them carry --
+    once their time has arrived.
+
+    Same shape as `scheduled_post_worker` just above: a reminder only exists
+    because an employee set one, which writes an exact deadline the same way
+    approving a post does, so it uses the same indexed sweep rather than
+    opening every company on a timer.
+    """
+    while True:
+        await _sweep("reminder sweep", KIND_REMINDER, conversation_reminder_service.fire_due)
+        await asyncio.sleep(REMINDER_SWEEP_SECONDS)
 
 
 async def self_check_worker() -> None:
