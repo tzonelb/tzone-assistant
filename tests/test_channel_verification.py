@@ -284,6 +284,87 @@ def test_verification_is_scoped_to_the_company_it_was_confirmed_for(
     )
 
 
+def test_wrong_guesses_exhaust_a_code_before_it_expires(app_client, owner, monkeypatch):
+    """A six-digit code is a million-value space. Nothing limited how many of
+    them one sitting could try before this: a scripted client hitting confirm
+    could keep guessing the live code for its whole TTL window."""
+    from backend.services.channel_verification_service import (
+        MAX_VERIFICATION_ATTEMPTS,
+    )
+
+    _fix_code(monkeypatch, "482913")
+    app_client.post("/api/channels/verification/request", headers=owner["headers"])
+
+    for attempt in range(MAX_VERIFICATION_ATTEMPTS):
+        wrong = app_client.post(
+            "/api/channels/verification/confirm",
+            headers=owner["headers"],
+            json={"code": "000000"},
+        )
+        assert wrong.status_code == 400, f"attempt {attempt} did not refuse"
+
+    # The correct code, tried only after the budget of wrong guesses is
+    # spent, must still be refused -- exhausting the attempts burns the code
+    # exactly as a correct guess would, not just the individual wrong tries.
+    correct = app_client.post(
+        "/api/channels/verification/confirm",
+        headers=owner["headers"],
+        json={"code": "482913"},
+    )
+    assert correct.status_code == 400, (
+        "the correct code still confirmed after the attempt budget was spent"
+    )
+
+
+def test_a_correct_guess_within_the_budget_still_works(app_client, owner, monkeypatch):
+    """The limit refuses a code that has taken too many wrong guesses -- it
+    must not also refuse a correct one that arrives within budget."""
+    _fix_code(monkeypatch, "715260")
+    app_client.post("/api/channels/verification/request", headers=owner["headers"])
+
+    for _ in range(2):
+        app_client.post(
+            "/api/channels/verification/confirm",
+            headers=owner["headers"],
+            json={"code": "000000"},
+        )
+
+    correct = app_client.post(
+        "/api/channels/verification/confirm",
+        headers=owner["headers"],
+        json={"code": "715260"},
+    )
+    assert correct.status_code == 200, correct.text
+
+
+def test_a_fresh_code_gets_its_own_attempt_budget(app_client, owner, monkeypatch):
+    """Exhausting one code must not lock the account out of the next one it
+    requests -- the budget belongs to the code, not to the account."""
+    from backend.services.channel_verification_service import (
+        MAX_VERIFICATION_ATTEMPTS,
+    )
+
+    _fix_code(monkeypatch, "111222")
+    app_client.post("/api/channels/verification/request", headers=owner["headers"])
+
+    for _ in range(MAX_VERIFICATION_ATTEMPTS):
+        app_client.post(
+            "/api/channels/verification/confirm",
+            headers=owner["headers"],
+            json={"code": "000000"},
+        )
+
+    _fix_code(monkeypatch, "333444")
+    app_client.post("/api/channels/verification/request", headers=owner["headers"])
+
+    confirmed = app_client.post(
+        "/api/channels/verification/confirm",
+        headers=owner["headers"],
+        json={"code": "333444"},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+
 def test_mailer_not_configured_refuses_the_request(app_client, owner, monkeypatch):
     from config.settings import config
 

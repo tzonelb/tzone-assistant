@@ -101,52 +101,100 @@ def request_code(*, user_id: int, company_id: int, email: str, full_name: str | 
     )
 
 
+MAX_VERIFICATION_ATTEMPTS = 5
+
+
 def confirm_code(*, user_id: int, company_id: int, code: str) -> dict[str, Any]:
     """Spend a code and mint an elevated grant. Returns the raw token once,
     the same discipline as ``auth_service.create_password_reset``: only its
     hash is ever stored.
 
-    Returns ``{"granted": False}`` for a wrong, expired, already-used or
-    missing code -- deliberately not distinguished further. A precise reason
-    ("expired" vs "wrong") turns a handful of tries into a code-guessing
-    oracle; the six-digit space is only safe against that when every miss
-    looks the same.
+    Returns ``{"granted": False}`` for a wrong, expired, already-used,
+    missing, or exhausted code -- deliberately not distinguished further. A
+    precise reason ("expired" vs "wrong") turns a handful of tries into a
+    code-guessing oracle; the six-digit space is only safe against that when
+    every miss looks the same.
+
+    A six-digit code is a million-value space, and nothing before this
+    limited how many of them one sitting could try -- ``request_code``
+    retires the previous code, but a fresh browser tab or a scripted client
+    calling this endpoint directly could keep guessing the live one for its
+    whole ``CHANNEL_VERIFICATION_TTL_MINUTES`` window. Five wrong guesses
+    spends the code outright, the same as a correct one would -- the account
+    already knows to ask for another, which costs nothing since the caller
+    is already signed in.
     """
     now = utc_now()
 
     with database_manager.control() as conn:
-        claimed = conn.execute(
-            """
-            UPDATE channel_verification_codes
-            SET used_at = ?
-            WHERE id = (
-                SELECT id FROM channel_verification_codes
-                WHERE user_id = ? AND company_id = ? AND code_hash = ?
+        conn.execute("BEGIN IMMEDIATE")
+
+        try:
+            live = conn.execute(
+                """
+                SELECT id, code_hash, attempts FROM channel_verification_codes
+                WHERE user_id = ? AND company_id = ?
                   AND used_at IS NULL AND expires_at > ?
                 ORDER BY created_at DESC
                 LIMIT 1
-            )
-            """,
-            (now.isoformat(), int(user_id), int(company_id), _hash(code), now.isoformat()),
-        )
+                """,
+                (int(user_id), int(company_id), now.isoformat()),
+            ).fetchone()
 
-        if claimed.rowcount < 1:
+            if live is None:
+                conn.commit()
+                return {"granted": False}
+
+            if int(live["attempts"]) >= MAX_VERIFICATION_ATTEMPTS or live["code_hash"] != _hash(code):
+                conn.execute(
+                    """
+                    UPDATE channel_verification_codes
+                    SET
+                        attempts = attempts + 1,
+                        used_at =
+                            CASE
+                                WHEN attempts + 1 >= ? THEN ?
+                                ELSE used_at
+                            END
+                    WHERE id = ?
+                    """,
+                    (MAX_VERIFICATION_ATTEMPTS, now.isoformat(), live["id"]),
+                )
+                conn.commit()
+                return {"granted": False}
+
+            claimed = conn.execute(
+                """
+                UPDATE channel_verification_codes
+                SET used_at = ?
+                WHERE id = ? AND used_at IS NULL
+                """,
+                (now.isoformat(), live["id"]),
+            )
+
+            if claimed.rowcount < 1:
+                # Spent by a concurrent call between the read above and this
+                # write -- one code, one use, so the second caller gets the
+                # same plain refusal a wrong guess would.
+                conn.commit()
+                return {"granted": False}
+
+            token = secrets.token_urlsafe(32)
+            expires_at = now + timedelta(minutes=config.CHANNEL_VERIFICATION_TTL_MINUTES)
+
+            conn.execute(
+                """
+                INSERT INTO channel_elevated_grants (
+                    user_id, company_id, token_hash, expires_at, created_at
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (int(user_id), int(company_id), _hash(token), expires_at.isoformat(), utc_now_iso()),
+            )
             conn.commit()
-            return {"granted": False}
-
-        token = secrets.token_urlsafe(32)
-        expires_at = now + timedelta(minutes=config.CHANNEL_VERIFICATION_TTL_MINUTES)
-
-        conn.execute(
-            """
-            INSERT INTO channel_elevated_grants (
-                user_id, company_id, token_hash, expires_at, created_at
-            )
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (int(user_id), int(company_id), _hash(token), expires_at.isoformat(), utc_now_iso()),
-        )
-        conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
     return {
         "granted": True,

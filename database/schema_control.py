@@ -703,6 +703,13 @@ CONTROL_COLUMNS: dict[str, dict[str, str]] = {
         # than this one and claims the new step atomically.
         "totp_last_step": "INTEGER",
     },
+    "channel_verification_codes": {
+        # How many wrong guesses this code has taken. `confirm_code` burns the
+        # code once this reaches `MAX_VERIFICATION_ATTEMPTS` -- a six-digit
+        # code is a million-value space, and nothing else limited how many of
+        # them one sitting could try before this column existed.
+        "attempts": "INTEGER NOT NULL DEFAULT 0",
+    },
 }
 
 
