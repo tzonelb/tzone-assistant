@@ -368,6 +368,22 @@
   box-shadow: 0 0 0 3px var(--tz-primary-soft);
 }
 
+.comments-read-only-note {
+  margin: 0;
+  padding: var(--tz-space-3);
+  border: 1px solid var(--tz-border);
+  border-radius: var(--tz-radius-sm);
+  background: var(--tz-surface-muted, var(--tz-surface));
+  color: var(--tz-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.comments-read-only-note a {
+  color: var(--tz-primary);
+  font-weight: 700;
+}
+
 .comments-reply-error {
   display: grid;
   gap: 4px;

@@ -55,7 +55,10 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from backend.services.channel_account_service import SUPPORTED_CHANNELS
+from backend.services.channel_account_service import (
+    COMMENT_ONLY_CHANNELS,
+    SUPPORTED_CHANNELS,
+)
 from backend.services.company_settings_service import company_settings_service
 
 
@@ -72,8 +75,12 @@ SETTINGS_SECTION = "reply_policy"
 # `website_chat`: a company could set a whole reply policy for a channel that
 # cannot be connected, and the policy would never decide anything. That is a
 # decision that saves and does nothing — the exact class of defect the settings
-# audit closed everywhere else.
-POLICY_CHANNELS = tuple(SUPPORTED_CHANNELS)
+# audit closed everywhere else. `COMMENT_ONLY_CHANNELS` is excluded for the
+# same reason: no reply policy is ever consulted for Facebook (cookie
+# download), since nothing on it goes through `core/engine.py`.
+POLICY_CHANNELS = tuple(
+    channel for channel in SUPPORTED_CHANNELS if channel not in COMMENT_ONLY_CHANNELS
+)
 
 WELCOME_MODES = ("always", "once_per_conversation", "never")
 

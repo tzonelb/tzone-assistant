@@ -1047,6 +1047,14 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_conversations_expiry ON conversations(takeover_expires_at) WHERE takeover_expires_at IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_messages_lookup ON messages(channel, external_user_id, created_at)",
+    # Analytics reads the whole company's message volume by date range --
+    # `volume_by_day`, `by_channel`, `hourly_distribution` and the summary
+    # counts in `analytics_service.py` all filter `created_at` with no
+    # `conversation_id` or `channel` predicate, so neither index above (both
+    # led by a column these queries never filter on) can serve them. Without
+    # this, every analytics screen open is a full scan of the company's
+    # entire message history.
+    "CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)",
     # Dedup is per conversation, not per company. Telegram message ids are
     # unique per chat, not per bot, so two customers both open at message_id 1;
     # a company-wide unique index silently rejected the second as a duplicate.

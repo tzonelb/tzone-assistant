@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from channels.meta.graph import graph_call_succeeded
 from config.settings import config
 
 
@@ -121,7 +122,9 @@ def send_whatsapp_media(
         )
         return {"sent": False, "reason": "network_error", "error": str(exc)}
 
-    if not response.is_success:
+    payload = response.json() if response.content else {}
+
+    if not graph_call_succeeded(response, payload):
         # Status and provider payload only; the file and caption are customer
         # content.
         logger.warning(
@@ -131,9 +134,9 @@ def send_whatsapp_media(
         )
 
     return {
-        "sent": response.is_success,
+        "sent": graph_call_succeeded(response, payload),
         "status_code": response.status_code,
-        "response": response.json() if response.content else {},
+        "response": payload,
     }
 
 
@@ -186,7 +189,9 @@ def send_whatsapp_text(
         logger.warning("WhatsApp send failed for company %s: %s", company_id, exc)
         return {"sent": False, "reason": "network_error", "error": str(exc)}
 
-    if not response.is_success:
+    payload = response.json() if response.content else {}
+
+    if not graph_call_succeeded(response, payload):
         # Status and provider payload only; the message body is customer content.
         logger.warning(
             "WhatsApp rejected a message for company %s with status %s",
@@ -195,7 +200,7 @@ def send_whatsapp_text(
         )
 
     return {
-        "sent": response.is_success,
+        "sent": graph_call_succeeded(response, payload),
         "status_code": response.status_code,
-        "response": response.json() if response.content else {},
+        "response": payload,
     }

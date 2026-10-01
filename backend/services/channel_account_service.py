@@ -34,8 +34,24 @@ logger = logging.getLogger(__name__)
 
 SUPPORTED_CHANNELS = (
     "messenger", "instagram", "whatsapp", "telegram", "slack", "discord", "webchat",
-    "email", "viber", "line", "sms", "google_chat",
+    "email", "viber", "line", "sms", "google_chat", "instagram_direct", "facebook_direct",
+    "whatsapp_qr",
 )
+
+# Every channel above but this one carries customer conversations: the AI
+# assistant answers on it, a reply policy governs it, a department switch can
+# be detected on it. Facebook (cookie download) carries none of that -- it
+# reads a Page's public posts and comments into the same queue the official
+# "messenger"/"instagram" channels' comments already use (see
+# backend/services/comment_service.py), not the conversation/message
+# pipeline `channels/inbound.py` builds on. It still belongs in
+# `channel_accounts`: the same sealed-credential storage, the same connect
+# and disconnect flow behind the same elevated grant, the same account list.
+# What it must not do is show up as an option for something that never
+# happens on it -- a bot persona preview, a per-channel reply policy scope --
+# which is what this set exists to filter out of the lists that would
+# otherwise blindly mirror `SUPPORTED_CHANNELS`.
+COMMENT_ONLY_CHANNELS = frozenset({"facebook_direct"})
 
 # Which identifier each channel is routed by. Getting this wrong sends one
 # company's customers to another, so it is declared once here.
@@ -84,6 +100,32 @@ ROUTING_FIELD = {
     # so it stands in for a bot id exactly the way Viber's and LINE's do --
     # see `google_chat_parse_service_account` below.
     "google_chat": "external_account_id",
+    # Instagram (direct login) -- the unofficial channel, not the Meta Graph
+    # API "instagram" above. Also derived, but not inside `_validate` the way
+    # every other derived channel is: proving the credential here means
+    # actually logging in as the account, which can pause mid-flow for a
+    # 2FA or challenge code the operator has to type back in, and
+    # `_validate` has no way to suspend a create across two HTTP requests.
+    # `backend/api/routes/instagram_direct.py` runs that whole login (see
+    # its own module docstring) and only calls `create_account` once it has
+    # already succeeded, with the derived id and the resulting session
+    # already in `values` -- the same shape `channel_oauth.py` uses for a
+    # login flow that spans a redirect.
+    "instagram_direct": "external_account_id",
+    # Facebook (cookie download): derived from the cookies themselves, the
+    # same shape as Instagram (direct login) just above and for the same
+    # reason -- see `backend/api/routes/facebook_direct.py`'s own docstring.
+    # The id is the Facebook Page id the cookies turn out to manage, read
+    # back from Facebook rather than typed, so a company cannot claim a Page
+    # it only guessed the id of.
+    "facebook_direct": "external_account_id",
+    # WhatsApp (QR scan) -- the unofficial channel, not the Meta Cloud API
+    # "whatsapp" above. Derived the same way Instagram (direct login) is,
+    # for the same reason: the login itself is a live QR scan the operator's
+    # phone completes, which `backend/api/routes/whatsapp_qr.py` runs on its
+    # own two-step poll (see that router's own docstring), and the WhatsApp
+    # id it comes back with is read from the resulting session, not typed.
+    "whatsapp_qr": "external_account_id",
 }
 
 
@@ -1027,6 +1069,35 @@ class ChannelAccountService:
             # places for the same value to drift.
             values["access_token"] = parsed_key["private_key"]
 
+        # Instagram (direct login) is never validated here -- see
+        # ROUTING_FIELD's comment on why. By the time this branch runs, the
+        # login already happened in `instagram_direct.py`'s own route, so all
+        # that is left is confirming it actually left `values` in the shape
+        # `create_account` needs, the same backstop `webchat`'s validator
+        # would be if it needed one.
+        if normalized == "instagram_direct" and not values.get("access_token"):
+            raise ChannelAccountError(
+                "An Instagram account needs its logged-in session."
+            )
+
+        # Facebook (cookie download) is the same backstop, not validated here
+        # for the same reason -- see ROUTING_FIELD's comment. The cookies
+        # were already checked against a real Facebook Page by
+        # `facebook_direct.py`'s own route before this is ever called.
+        if normalized == "facebook_direct" and not values.get("access_token"):
+            raise ChannelAccountError(
+                "A Facebook account needs its exported session cookies."
+            )
+
+        # WhatsApp (QR scan) is the same backstop, not validated here for
+        # the same reason -- see ROUTING_FIELD's comment. The QR scan
+        # already happened in `whatsapp_qr.py`'s own route before this is
+        # ever called.
+        if normalized == "whatsapp_qr" and not values.get("access_token"):
+            raise ChannelAccountError(
+                "A WhatsApp account needs its scanned-in session."
+            )
+
         if not values.get(routing_field):
             raise ChannelAccountError(
                 f"A {normalized} account needs a {routing_field.replace('_', ' ')} "
@@ -1277,6 +1348,52 @@ class ChannelAccountService:
                         (
                             json.dumps(
                                 {"project_id": values.get("_google_chat_project_id")}
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # Instagram (direct login)'s own non-secret setting: the
+                # @username, kept for the operator's own reference on the
+                # account list, the same reason Google Chat keeps its
+                # project id here -- nothing reads it back to authenticate.
+                if normalized_channel == "instagram_direct":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {
+                                    "username": values.get("_instagram_username"),
+                                    "has_proxy": bool(values.get("verify_token")),
+                                }
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # Facebook (cookie download)'s own non-secret setting: the
+                # Page's name, kept for the operator's own reference on the
+                # account list -- nothing reads it back to authenticate.
+                if normalized_channel == "facebook_direct":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {"page_name": values.get("_facebook_page_name")}
+                            ),
+                            account_id,
+                        ),
+                    )
+
+                # WhatsApp (QR scan)'s own non-secret setting: the phone
+                # number the session belongs to, kept for the operator's own
+                # reference -- nothing reads it back to authenticate.
+                if normalized_channel == "whatsapp_qr":
+                    conn.execute(
+                        "UPDATE channel_accounts SET config_json = ? WHERE id = ?",
+                        (
+                            json.dumps(
+                                {"phone_number": values.get("_whatsapp_phone_number")}
                             ),
                             account_id,
                         ),
@@ -1533,6 +1650,16 @@ class ChannelAccountService:
             "external_account_id": row["external_account_id"],
             "config": _loads_config(row["config_json"]),
             "access_token": None,
+            # Most senders never touch this -- LINE and Slack are the two
+            # existing channels with something sealed here, and neither's
+            # sender needs it, since it is only ever checked against an
+            # inbound signature. Instagram (direct login) is the first
+            # sender that does: it is where an operator's optional proxy
+            # URL is sealed (see instagram_direct.py), and sending has to
+            # route through the same proxy the session was established
+            # over, or it stops looking like a consistent client to
+            # Instagram's own risk model.
+            "verify_token": None,
         }
 
         sealed = row["access_token_sealed"]
@@ -1553,6 +1680,24 @@ class ChannelAccountService:
                     normalized,
                 )
                 return None
+
+        sealed_verify = row["verify_token_sealed"]
+
+        if sealed_verify:
+            try:
+                credentials["verify_token"] = keyring.unseal_secret(
+                    sealed_verify,
+                    database_manager.company_key(company_id),
+                    company_id,
+                    "verify_token",
+                )
+            except CorruptedKeyMaterial:
+                logger.error(
+                    "Verify token for company %s channel %s could not be "
+                    "unsealed; continuing without it",
+                    company_id,
+                    normalized,
+                )
 
         return credentials
 

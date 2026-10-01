@@ -224,7 +224,10 @@ def _raw_email(*, from_addr, subject, body, message_id="<abc123@example.com>"):
     message["From"] = from_addr
     message["To"] = "support@company.example"
     message["Subject"] = subject
-    message["Message-ID"] = message_id
+
+    if message_id:
+        message["Message-ID"] = message_id
+
     message.set_content(body)
     return message.as_bytes()
 
@@ -336,6 +339,87 @@ def test_polling_a_disabled_account_does_nothing(wired, alpha, monkeypatch):
     poller_module.poll_account(account["id"])
 
     assert calls == []
+
+
+def test_a_message_with_no_message_id_still_gets_a_dedup_key(
+    wired, alpha, monkeypatch
+):
+    """RFC 5322 does not require Message-ID, and some senders omit it.
+
+    `idx_messages_provider`'s uniqueness is `WHERE provider_message_id IS NOT
+    NULL`, so a NULL id sails through dedup untouched -- reprocessing the
+    same raw message (the crash window `_process_one`'s own docstring
+    describes, between storing it and marking it `\\Seen`) would otherwise
+    land as a second, identical customer message with nothing to catch it.
+    """
+    from backend.services.message_service import message_service
+    import channels.email.poller as poller_module
+
+    account = _connect(alpha, monkeypatch)
+
+    mailbox = FakeMailbox(
+        [
+            (
+                b"201",
+                _raw_email(
+                    from_addr="Sam Customer <sam@customer.example>",
+                    subject="No Message-ID here",
+                    body="This mail server never set one.",
+                    message_id=None,
+                ),
+            )
+        ]
+    )
+    monkeypatch.setattr(poller_module, "_connect", lambda config: mailbox)
+
+    poller_module.poll_account(account["id"])
+
+    messages = message_service.list_messages(
+        company_id=alpha["id"], channel="email", external_user_id="sam@customer.example"
+    )
+
+    assert len(messages) == 1
+    assert messages[0]["provider_message_id"], (
+        "a message with no Message-ID header stored with no dedup key at all"
+    )
+
+
+def test_reprocessing_the_same_headerless_message_is_not_duplicated(
+    wired, alpha, monkeypatch
+):
+    """The scenario the fallback id exists for: the same raw bytes, with no
+    Message-ID, arriving twice -- the shape of `_process_one`'s own
+    store-then-mark-seen crash window reprocessing on the next sweep."""
+    from backend.services.message_service import message_service
+    import channels.email.poller as poller_module
+
+    account = _connect(alpha, monkeypatch)
+
+    raw = _raw_email(
+        from_addr="Sam Customer <sam@customer.example>",
+        subject="No Message-ID here",
+        body="This mail server never set one.",
+        message_id=None,
+    )
+
+    mailbox = FakeMailbox([(b"301", raw)])
+    monkeypatch.setattr(poller_module, "_connect", lambda config: mailbox)
+    poller_module.poll_account(account["id"])
+
+    # A second sweep sees the same message again -- as it would if the
+    # process died after storing it but before the \Seen flag below was set.
+    mailbox_again = FakeMailbox([(b"301", raw)])
+    monkeypatch.setattr(poller_module, "_connect", lambda config: mailbox_again)
+    poller_module.poll_account(account["id"])
+
+    messages = message_service.list_messages(
+        company_id=alpha["id"], channel="email", external_user_id="sam@customer.example"
+    )
+
+    assert len(messages) == 1, (
+        "the same headerless message was stored twice -- the fallback dedup "
+        "key did not catch the reprocessing it exists for"
+    )
 
 
 # ------------------------------------------------------------------ the sender

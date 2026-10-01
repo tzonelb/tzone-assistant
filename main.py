@@ -46,7 +46,9 @@ from backend.api.routes import (
     dashboard,
     developer_center,
     dialer,
+    facebook_direct,
     health,
+    instagram_direct,
     knowledge,
     manual_messages,
     notification_preferences,
@@ -60,6 +62,7 @@ from backend.api.routes import (
     team_chat,
     tickets,
     webchat_widget,
+    whatsapp_qr,
 )
 from backend.api.middleware import (
     BodySizeLimitMiddleware,
@@ -128,11 +131,15 @@ def forbid_wildcard_cors_with_credentials(origins: list[str]) -> None:
 # instead of leaving a schedule that starts nothing.
 from backend.workers import (  # noqa: E402
     email_poll_worker,
+    facebook_direct_poll_worker,
+    instagram_direct_poll_worker,
     maintenance_worker,
     pending_reply_worker,
+    reminder_worker,
     scheduled_post_worker,
     self_check_worker,
     takeover_timeout_worker,
+    whatsapp_qr_poll_worker,
 )
 
 
@@ -239,9 +246,13 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(takeover_timeout_worker()),
         asyncio.create_task(pending_reply_worker()),
         asyncio.create_task(scheduled_post_worker()),
+        asyncio.create_task(reminder_worker()),
         asyncio.create_task(maintenance_worker()),
         asyncio.create_task(self_check_worker()),
         asyncio.create_task(email_poll_worker()),
+        asyncio.create_task(instagram_direct_poll_worker()),
+        asyncio.create_task(facebook_direct_poll_worker()),
+        asyncio.create_task(whatsapp_qr_poll_worker()),
     ]
 
     # Discord alone needs this: it is the one channel with no webhook, so
@@ -430,6 +441,16 @@ app.include_router(customers.router, dependencies=_module("customers"))
 app.include_router(customers.segments_router, dependencies=_module("customers"))
 app.include_router(knowledge.router, dependencies=_module("knowledge"))
 app.include_router(channels.router, dependencies=_module("channels"))
+# The unofficial Instagram connect flow -- same module gate as `channels`
+# above, since every one of its routes carries a normal session the way
+# `channels.router`'s do (unlike `channel_oauth` just below, whose callback
+# has none to gate on).
+app.include_router(instagram_direct.router, dependencies=_module("channels"))
+# The unofficial Facebook connect flow -- same module gate, same reason: its
+# one route carries a normal session, unlike `channel_oauth`'s callback.
+app.include_router(facebook_direct.router, dependencies=_module("channels"))
+# The unofficial WhatsApp QR connect flow -- same module gate, same reason.
+app.include_router(whatsapp_qr.router, dependencies=_module("channels"))
 # Not behind the module gate: its callback is a top-level redirect from
 # facebook.com carrying no session cookie, so the gate (which resolves the
 # company from the session) cannot run there. The company is proven by the

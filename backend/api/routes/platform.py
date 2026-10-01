@@ -20,12 +20,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 
 from backend.api.schemas.platform import (
     ActivationCodeMintRequest,
+    CompanyChannelAccessRequest,
     CompanyCreateRequest,
     CompanyStatusRequest,
     PlanAssignRequest,
     PlanCreateRequest,
     PlanOverrideRequest,
     PlanUpdateRequest,
+    PlatformChannelCredentialsRequest,
     PlatformConfigUpdate,
     PlatformLoginRequest,
     PlatformLoginResponse,
@@ -52,6 +54,10 @@ from backend.services.platform_service import (
     platform_service,
 )
 from backend.services.activation_service import activation_service
+from backend.services.platform_channel_service import (
+    PlatformChannelError,
+    platform_channel_service,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -807,6 +813,120 @@ def clear_setting_override(
     )
 
     return result
+
+
+# ------------------------------------------------------------------------
+# Channels -- platform-wide Meta developer credentials and, per company,
+# whether it may reach them. See backend/services/platform_channel_service.py
+# for the split between "configured" and "granted" this API surfaces.
+# ------------------------------------------------------------------------
+
+
+@router.get("/channels")
+def list_platform_channels(
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    return {"items": platform_channel_service.list_status()}
+
+
+@router.put("/channels/{channel}/credentials")
+def set_platform_channel_credentials(
+    channel: str,
+    payload: PlatformChannelCredentialsRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    try:
+        result = platform_channel_service.set_credentials(
+            channel=channel,
+            values=payload.model_dump(exclude_none=True),
+            actor_user_id=_actor(current_user),
+        )
+    except PlatformChannelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # Never the credential itself: `payload` carries the access token and
+    # app secret this call just sealed, and this row is shared across every
+    # company that will ever be granted this channel.
+    platform_service.record_audit(
+        action="platform_channel.credentials_set",
+        actor_user_id=_actor(current_user),
+        company_id=None,
+        target_type="platform_channel",
+        target_id=result["channel"],
+        data={"channel": result["channel"], "config": result["config"]},
+        ip_address=client_ip(request),
+    )
+
+    return result
+
+
+@router.delete("/channels/{channel}/credentials")
+def clear_platform_channel_credentials(
+    channel: str,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    try:
+        platform_channel_service.clear_credentials(
+            channel=channel, actor_user_id=_actor(current_user)
+        )
+    except PlatformChannelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    platform_service.record_audit(
+        action="platform_channel.credentials_cleared",
+        actor_user_id=_actor(current_user),
+        company_id=None,
+        target_type="platform_channel",
+        target_id=channel,
+        data={"channel": channel},
+        ip_address=client_ip(request),
+    )
+
+    return {"channel": channel, "configured": False}
+
+
+@router.get("/channels/{channel}/access")
+def list_platform_channel_access(
+    channel: str,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    try:
+        return {"channel": channel, "items": platform_channel_service.access_grid_for_channel(channel)}
+    except PlatformChannelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/channels/{channel}/access/{company_id}")
+def set_platform_channel_access(
+    channel: str,
+    company_id: int,
+    payload: CompanyChannelAccessRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(get_platform_admin),
+):
+    try:
+        platform_channel_service.set_company_access(
+            company_id=company_id,
+            channel=channel,
+            enabled=payload.enabled,
+            actor_user_id=_actor(current_user),
+        )
+    except PlatformChannelError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    platform_service.record_audit(
+        action="platform_channel.access_granted" if payload.enabled else "platform_channel.access_revoked",
+        actor_user_id=_actor(current_user),
+        company_id=company_id,
+        target_type="platform_channel",
+        target_id=channel,
+        data={"channel": channel, "enabled": payload.enabled},
+        ip_address=client_ip(request),
+    )
+
+    return {"company_id": company_id, "channel": channel, "enabled": payload.enabled}
 
 
 @router.get("/health")

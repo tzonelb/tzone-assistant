@@ -75,7 +75,7 @@ def list_requests(
 @router.post("/requests")
 def create_request(
     payload: PlanChangeRequest,
-    current_user: dict[str, Any] = Depends(require_permission("subscriptions.view")),
+    current_user: dict[str, Any] = Depends(require_permission("subscriptions.manage")),
 ):
     """Ask the operator to move this company onto a plan, or to renew it.
 
@@ -83,6 +83,15 @@ def create_request(
     request the T-ZONE team reviews and applies from the console — a company
     that could move itself onto a larger plan would be granting itself the
     allowances that come with it.
+
+    `subscriptions.manage`, not `subscriptions.view`: filing a request is a
+    write, and `subscriptions.view`'s own description promises only "see the
+    current plan and billing status" — every role with it, `Viewer` included,
+    could otherwise ask the operator to change what the company pays. Same
+    permission `POST /api/activation/redeem` already guards, and the same
+    description covers this ("Redeem an activation code and change the
+    plan"); granted to no default role, an owner's call to hand out on the
+    Roles screen, exactly as that route's own docstring already treats it.
     """
     try:
         return billing_service.request_change(

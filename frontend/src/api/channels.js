@@ -45,6 +45,77 @@ export async function deleteChannelAccountRequest(accountId, elevatedToken) {
   });
 }
 
+/*
+ * Instagram (direct login) connects over two calls instead of one, because
+ * Instagram itself can pause the login mid-way and ask for a 2FA code (see
+ * backend/api/routes/instagram_direct.py). `start` returns either the
+ * connected account or a `pending_id` naming that in-progress login;
+ * `verify` is only called in the second case, with the code and that same
+ * `pending_id`. Both need the same elevated grant `createChannelAccountRequest`
+ * does, for the same reason: each one can establish a new credential.
+ */
+
+export async function startInstagramDirectConnectRequest(values, elevatedToken) {
+  return apiRequest("/api/instagram-direct/connect/start", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function verifyInstagramDirectConnectRequest(values, elevatedToken) {
+  return apiRequest("/api/instagram-direct/connect/verify", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+/*
+ * Facebook (cookie download) connects in one call, unlike Instagram (direct
+ * login) above: the operator's cookies, exported from an already-signed-in
+ * browser, are already fully authenticated, so there is no 2FA step for a
+ * second call to resume (see backend/api/routes/facebook_direct.py).
+ */
+
+export async function connectFacebookDirectRequest(values, elevatedToken) {
+  return apiRequest("/api/facebook-direct/connect", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+/*
+ * WhatsApp (QR scan) connects over a poll, not a single call or two: the
+ * phone has to actually scan the code, which is real human time no request
+ * should block on. `start` begins the attempt and returns a `pending_id`;
+ * `pollStatus` is called repeatedly against that id until it reports
+ * "connected" (or a failure) -- see backend/api/routes/whatsapp_qr.py.
+ */
+
+export async function startWhatsappQrConnectRequest(values, elevatedToken) {
+  return apiRequest("/api/whatsapp-qr/connect/start", {
+    method: "POST",
+    body: values,
+    headers: { "X-Elevated-Token": elevatedToken },
+  });
+}
+
+export async function pollWhatsappQrConnectStatusRequest(pendingId, elevatedToken) {
+  return apiRequest(
+    `/api/whatsapp-qr/connect/status/${encodeURIComponent(pendingId)}`,
+    { headers: { "X-Elevated-Token": elevatedToken } },
+  );
+}
+
+export async function cancelWhatsappQrConnectRequest(pendingId, elevatedToken) {
+  return apiRequest(
+    `/api/whatsapp-qr/connect/cancel/${encodeURIComponent(pendingId)}`,
+    { method: "POST", headers: { "X-Elevated-Token": elevatedToken } },
+  );
+}
+
 export async function requestChannelVerificationRequest() {
   return apiRequest("/api/channels/verification/request", { method: "POST" });
 }

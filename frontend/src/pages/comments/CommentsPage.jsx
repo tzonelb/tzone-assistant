@@ -39,7 +39,13 @@ const CHANNELS = [
   ["all", "All channels"],
   ["messenger", "Facebook"],
   ["instagram", "Instagram"],
+  ["facebook_direct", "Facebook (cookie download)"],
 ];
+
+// Read-only, by design -- see backend/api/routes/facebook_direct.py's own
+// docstring on why. The composer below is hidden rather than shown and
+// left to fail, since the server would refuse it anyway.
+const READ_ONLY_CHANNELS = new Set(["facebook_direct"]);
 
 const STATUS_TONES = {
   open: "warning",
@@ -493,23 +499,42 @@ export default function CommentsPage() {
                 )}
               </section>
 
-              <form className="comments-composer" onSubmit={handleReply}>
-                <label htmlFor="comment-reply">
-                  <span>Reply publicly</span>
+              <form
+                className="comments-composer"
+                onSubmit={READ_ONLY_CHANNELS.has(comment.channel) ? (e) => e.preventDefault() : handleReply}
+              >
+                {READ_ONLY_CHANNELS.has(comment.channel) ? (
+                  <p className="comments-read-only-note">
+                    Facebook (cookie download) is read-only: this platform can
+                    show you this comment, but cannot publish a reply to it.
+                    Reply from Facebook itself
+                    {comment.permalink ? (
+                      <>
+                        {" "}
+                        — <a href={comment.permalink} target="_blank" rel="noreferrer">open the post</a>.
+                      </>
+                    ) : (
+                      "."
+                    )}
+                  </p>
+                ) : (
+                  <label htmlFor="comment-reply">
+                    <span>Reply publicly</span>
 
-                  <textarea
-                    id="comment-reply"
-                    rows={4}
-                    maxLength={8000}
-                    value={replyBody}
-                    placeholder="Write the answer that will be published under this comment..."
-                    onChange={(event) => {
-                      setReplyStatus("");
-                      setReplyError("");
-                      setReplyBody(event.target.value);
-                    }}
-                  />
-                </label>
+                    <textarea
+                      id="comment-reply"
+                      rows={4}
+                      maxLength={8000}
+                      value={replyBody}
+                      placeholder="Write the answer that will be published under this comment..."
+                      onChange={(event) => {
+                        setReplyStatus("");
+                        setReplyError("");
+                        setReplyBody(event.target.value);
+                      }}
+                    />
+                  </label>
+                )}
 
                 {replyError ? (
                   <div className="comments-reply-error" role="alert">
@@ -547,14 +572,16 @@ export default function CommentsPage() {
                       </AppButton>
                     )}
 
-                    <AppButton
-                      type="submit"
-                      variant="primary"
-                      loading={replying}
-                      disabled={!replyBody.trim()}
-                    >
-                      Publish reply
-                    </AppButton>
+                    {READ_ONLY_CHANNELS.has(comment.channel) ? null : (
+                      <AppButton
+                        type="submit"
+                        variant="primary"
+                        loading={replying}
+                        disabled={!replyBody.trim()}
+                      >
+                        Publish reply
+                      </AppButton>
+                    )}
                   </div>
                 </footer>
               </form>

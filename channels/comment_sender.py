@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from channels.meta.graph import graph_call_succeeded
 from config.settings import config
 
 
@@ -33,6 +34,21 @@ def publish_comment_reply(
     leave the comment open rather than losing the employee's text.
     """
     normalized_channel = str(channel or "messenger").strip().lower()
+
+    # Facebook (cookie download) is read-only by design -- see
+    # backend/api/routes/facebook_direct.py's docstring on why a reply is
+    # deliberately not a feature here. Checked before `resolve` so this
+    # never attempts a Graph API call with a cookie blob in place of an
+    # access token.
+    if normalized_channel == "facebook_direct":
+        return {
+            "ok": False,
+            "reason": "read_only_channel",
+            "error": (
+                "Facebook (cookie download) is read-only. Reply to this "
+                "comment from the Facebook app or facebook.com."
+            ),
+        }
 
     try:
         credentials = resolve(company_id, normalized_channel)
@@ -64,8 +80,9 @@ def publish_comment_reply(
         return {"ok": False, "reason": "network_error", "error": str(exc)}
 
     payload = response.json() if response.content else {}
+    ok = graph_call_succeeded(response, payload)
 
-    if not response.is_success:
+    if not ok:
         logger.warning(
             "Provider rejected a comment reply for company %s with status %s",
             company_id,
@@ -73,7 +90,7 @@ def publish_comment_reply(
         )
 
     return {
-        "ok": response.is_success,
+        "ok": ok,
         "status_code": response.status_code,
         "provider_reply_id": payload.get("id"),
         "response": payload,

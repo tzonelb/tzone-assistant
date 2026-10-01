@@ -27,24 +27,38 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 
 from backend.services.activity_service import activity_service
 from backend.services.auth_service import auth_service
 from backend.services.conversation_control_service import (
     conversation_control_service,
 )
+from backend.services.conversation_reminder_service import (
+    conversation_reminder_service,
+)
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.health_service import health_service
 from backend.services.notification_service import notification_service
 from backend.services.work_index_service import (
     KIND_PENDING_REPLY,
+    KIND_REMINDER,
     KIND_SCHEDULED_POST,
     KIND_TAKEOVER,
     work_index_service,
 )
 from channels.email.poller import poll_all_accounts
+from channels.facebook_direct.poller import (
+    poll_all_accounts as poll_facebook_direct_accounts,
+)
+from channels.instagram_direct.poller import (
+    poll_all_accounts as poll_instagram_direct_accounts,
+)
 from channels.meta.smart_reply import process_due_replies
 from channels.post_publisher import publish_due_posts
+from channels.whatsapp_qr.poller import (
+    poll_all_accounts as poll_whatsapp_qr_accounts,
+)
 from config.settings import config
 from database.manager import database_manager
 
@@ -55,6 +69,7 @@ logger = logging.getLogger("tzone.workers")
 TAKEOVER_SWEEP_SECONDS = 10
 PENDING_REPLY_SWEEP_SECONDS = 2
 SCHEDULED_POST_SWEEP_SECONDS = 30
+REMINDER_SWEEP_SECONDS = 30
 ATTEMPT_PRUNE_SECONDS = 3600
 
 # How often the platform checks itself. Fifteen minutes is often enough that a
@@ -68,6 +83,30 @@ SELF_CHECK_SECONDS = 900
 # their own inbox would, and every company with a mailbox connected pays one
 # IMAP round trip per cycle whether or not anything arrived.
 EMAIL_POLL_SECONDS = 60
+
+# How often a connected Instagram (direct login) account is checked for new
+# DMs -- deliberately not sub-minute, and deliberately not a fixed interval
+# either (see `instagram_direct_poll_worker`'s own jitter): the base period
+# is chosen the same way IMAP's is, close to what a person checking their
+# own phone would look like, not tuned for freshness.
+INSTAGRAM_DIRECT_POLL_SECONDS = 75
+INSTAGRAM_DIRECT_POLL_JITTER_SECONDS = 20
+
+# How often a connected Facebook (cookie download) Page is checked for new
+# comments. Far longer than every other poller here on purpose: one sweep is
+# a real browser loading the Page's own listing plus each of its recent
+# posts, not one API call, so this is priced like the heaviest operation on
+# the platform rather than like a cheap check. Jittered the same way
+# Instagram (direct login)'s is, and for the same reason.
+FACEBOOK_DIRECT_POLL_SECONDS = 300
+FACEBOOK_DIRECT_POLL_JITTER_SECONDS = 60
+
+# How often a connected WhatsApp (QR scan) account is checked for new
+# messages. A real browser reload, not one API call, so priced closer to
+# Facebook's own poll than to Instagram's; jittered for the same reason
+# both of theirs are.
+WHATSAPP_QR_POLL_SECONDS = 90
+WHATSAPP_QR_POLL_JITTER_SECONDS = 25
 
 
 def _sweep_concurrency() -> int:
@@ -194,6 +233,20 @@ async def scheduled_post_worker() -> None:
         await asyncio.sleep(SCHEDULED_POST_SWEEP_SECONDS)
 
 
+async def reminder_worker() -> None:
+    """Fire conversation reminders -- and the message some of them carry --
+    once their time has arrived.
+
+    Same shape as `scheduled_post_worker` just above: a reminder only exists
+    because an employee set one, which writes an exact deadline the same way
+    approving a post does, so it uses the same indexed sweep rather than
+    opening every company on a timer.
+    """
+    while True:
+        await _sweep("reminder sweep", KIND_REMINDER, conversation_reminder_service.fire_due)
+        await asyncio.sleep(REMINDER_SWEEP_SECONDS)
+
+
 async def self_check_worker() -> None:
     """Verify the platform can serve, on a timer rather than on a click.
 
@@ -247,6 +300,66 @@ async def email_poll_worker() -> None:
             logger.exception("Email poll sweep failed")
 
         await asyncio.sleep(EMAIL_POLL_SECONDS)
+
+
+async def instagram_direct_poll_worker() -> None:
+    """Check every connected Instagram (direct login) account for new DMs.
+
+    Same shape as `email_poll_worker` just above, with one addition: the
+    sleep is jittered rather than fixed. A perfectly periodic request
+    pattern is itself one of the signals this platform's own unofficial-
+    channel research found associated with automation detection -- see
+    `channels/instagram_direct/poller.py`'s docstring for the fuller
+    picture -- so this worker never sleeps the exact same duration twice
+    in a row.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(poll_instagram_direct_accounts)
+        except Exception:
+            logger.exception("Instagram (direct) poll sweep failed")
+
+        jitter = random.uniform(
+            -INSTAGRAM_DIRECT_POLL_JITTER_SECONDS, INSTAGRAM_DIRECT_POLL_JITTER_SECONDS
+        )
+        await asyncio.sleep(max(15, INSTAGRAM_DIRECT_POLL_SECONDS + jitter))
+
+
+async def facebook_direct_poll_worker() -> None:
+    """Check every connected Facebook (cookie download) Page for new comments.
+
+    Same shape as `instagram_direct_poll_worker` just above -- jittered for
+    the same reason -- with a much longer base period, because one sweep
+    here is a real browser loading several real pages, not one API call.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(poll_facebook_direct_accounts)
+        except Exception:
+            logger.exception("Facebook (cookie download) poll sweep failed")
+
+        jitter = random.uniform(
+            -FACEBOOK_DIRECT_POLL_JITTER_SECONDS, FACEBOOK_DIRECT_POLL_JITTER_SECONDS
+        )
+        await asyncio.sleep(max(60, FACEBOOK_DIRECT_POLL_SECONDS + jitter))
+
+
+async def whatsapp_qr_poll_worker() -> None:
+    """Check every connected WhatsApp (QR scan) account for new messages.
+
+    Same shape as `facebook_direct_poll_worker` just above, for the same
+    reason: a sweep here opens a real browser against a real session.
+    """
+    while True:
+        try:
+            await asyncio.to_thread(poll_whatsapp_qr_accounts)
+        except Exception:
+            logger.exception("WhatsApp (QR) poll sweep failed")
+
+        jitter = random.uniform(
+            -WHATSAPP_QR_POLL_JITTER_SECONDS, WHATSAPP_QR_POLL_JITTER_SECONDS
+        )
+        await asyncio.sleep(max(30, WHATSAPP_QR_POLL_SECONDS + jitter))
 
 
 async def maintenance_worker() -> None:

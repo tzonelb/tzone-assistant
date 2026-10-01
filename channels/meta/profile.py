@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from channels.credentials import MissingChannelCredentials, resolve
+from channels.meta.graph import graph_call_succeeded
 from channels.meta.logger import log_meta_event
 from config.settings import config
 
@@ -135,23 +136,20 @@ def resolve_meta_profile(
             timeout=8,
         )
 
-        if not response.is_success:
+        payload = response.json() if response.content else {}
+
+        if not graph_call_succeeded(response, payload):
             log_meta_event(
                 "profile_resolve_failed",
                 {
                     "channel": normalized_channel,
                     "user_id": normalized_user_id,
                     "status_code": response.status_code,
-                    "response": (
-                        response.json()
-                        if response.content
-                        else {}
-                    ),
+                    "response": payload,
                 },
             )
             return {}
 
-        payload = response.json() if response.content else {}
         first_name = str(payload.get("first_name") or "").strip()
         last_name = str(payload.get("last_name") or "").strip()
         official_name = " ".join(

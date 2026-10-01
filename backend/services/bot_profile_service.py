@@ -31,6 +31,7 @@ from uuid import uuid4
 
 from database.manager import database_manager
 from backend.services.channel_account_service import (
+    COMMENT_ONLY_CHANNELS,
     SUPPORTED_CHANNELS,
     channel_account_service,
 )
@@ -89,7 +90,12 @@ ALLOWED_STATUS = ("active", "disabled")
 # Imported from the one catalogue rather than repeated. This list used to be
 # written out here with `website_chat` on the end — a channel with no routing
 # field, no webhook and no sender, so a preview of it was a preview of nothing.
-PREVIEW_CHANNELS = tuple(SUPPORTED_CHANNELS)
+# `COMMENT_ONLY_CHANNELS` is filtered out for the same reason: no assistant
+# ever answers on Facebook (cookie download), so a preview of it would be one
+# too.
+PREVIEW_CHANNELS = tuple(
+    channel for channel in SUPPORTED_CHANNELS if channel not in COMMENT_ONLY_CHANNELS
+)
 
 DRY_RUN_USER_PREFIX = "ai-teaching-dry-run"
 
