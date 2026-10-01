@@ -76,12 +76,14 @@ KIND_PENDING_REPLY = "pending_reply"
 KIND_SCHEDULED_POST = "scheduled_post"
 KIND_TAKEOVER = "takeover"
 KIND_REMINDER = "reminder"
+KIND_REPLY_FLOW_RESUME = "reply_flow_resume"
 
 KINDS: tuple[str, ...] = (
     KIND_PENDING_REPLY,
     KIND_SCHEDULED_POST,
     KIND_TAKEOVER,
     KIND_REMINDER,
+    KIND_REPLY_FLOW_RESUME,
 )
 
 
@@ -104,6 +106,9 @@ _DUE_QUERIES: dict[str, str] = {
     """,
     KIND_REMINDER: """
         SELECT MIN(remind_at) AS due FROM conversation_reminders
+    """,
+    KIND_REPLY_FLOW_RESUME: """
+        SELECT MIN(fire_at) AS due FROM reply_flow_pending_resumes
     """,
 }
 

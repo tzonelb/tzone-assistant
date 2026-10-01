@@ -297,3 +297,300 @@ def test_a_flow_never_runs_for_another_company(bound, alpha, beta):
         message="hi", user_session=session, language="en",
     )
     assert result is None
+
+
+# ------------------------------------------------------- timeout_followup
+
+
+class _Req:
+    """Stands in for `core.request.Request`: `handle()` only reads `user_id`
+    off it, to resolve who a `timeout_followup` wait is for."""
+
+    def __init__(self, user_id):
+        self.user_id = user_id
+
+
+@pytest.fixture()
+def resumable(platform, monkeypatch):
+    """Same shape as `bound`, with the extra modules `timeout_followup`
+    touches imported first: `reply_flow_resume_service`, `work_index_service`
+    and `message_service` are only reached through a local import inside
+    `core.reply_flow_engine`, which a rebind loop run before they exist in
+    `sys.modules` cannot see into. Importing them up front is what makes the
+    test database the one they all actually open."""
+    import backend.services.message_service  # noqa: F401
+    import backend.services.reply_flow_resume_service  # noqa: F401
+    import backend.services.reply_flow_service  # noqa: F401
+    import backend.services.work_index_service  # noqa: F401
+    import core.reply_flow_engine  # noqa: F401
+
+    original = manager_module.database_manager
+    test_manager = platform["manager"]
+
+    monkeypatch.setattr(manager_module, "database_manager", test_manager)
+    for module in list(sys.modules.values()):
+        if getattr(module, "database_manager", None) is original:
+            monkeypatch.setattr(module, "database_manager", test_manager)
+
+    return test_manager
+
+
+def test_reaching_timeout_followup_schedules_a_wait_and_pauses(resumable, alpha):
+    """No scheduler yet used to mean this step was a silent pass-through --
+    the one documented gap in the module's own docstring. It must now pause
+    the turn and leave something durable behind for the sweep to find."""
+    import backend.services.reply_flow_resume_service as resume_module
+    from backend.services.work_index_service import (
+        KIND_REPLY_FLOW_RESUME,
+        work_index_service,
+    )
+    from core.reply_flow_engine import reply_flow_engine
+
+    flow = _make_active(
+        alpha["id"],
+        nodes=[
+            _node("g", "greeting", {"text": "Hang tight."}),
+            _node("t", "timeout_followup", {
+                "wait_minutes": 30, "text": "Still there?",
+            }),
+            _node("c", "canned_reply", {"text": "Following up!"}),
+            _node("e", "end"),
+        ],
+        edges=[_edge("g", "t"), _edge("t", "c"), _edge("c", "e")],
+    )
+
+    session: dict = {}
+    result = reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="hi", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+
+    assert result is not None
+    assert "Hang tight." in result.text
+    assert session["reply_flow"]["node_id"] == "t"
+
+    pending = resume_module.get(
+        company_id=alpha["id"], channel="messenger", external_user_id="cust-1"
+    )
+    assert pending is not None
+    assert pending["flow_id"] == flow["id"]
+    assert pending["node_id"] == "t"
+
+    due_companies = work_index_service.due_companies(
+        KIND_REPLY_FLOW_RESUME, now=pending["fire_at"]
+    )
+    assert alpha["id"] in due_companies
+
+
+def test_a_reply_before_the_wait_elapses_cancels_it(resumable, alpha):
+    """The customer did not go quiet after all -- the wait must not also
+    fire later and send a redundant follow-up."""
+    import backend.services.reply_flow_resume_service as resume_module
+    from core.reply_flow_engine import reply_flow_engine
+
+    _make_active(
+        alpha["id"],
+        nodes=[
+            _node("t", "timeout_followup", {"wait_minutes": 30}),
+            _node("c", "canned_reply", {"text": "Welcome back!"}),
+            _node("e", "end"),
+        ],
+        edges=[_edge("t", "c"), _edge("c", "e")],
+    )
+
+    session: dict = {}
+    reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="hi", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+    assert resume_module.get(
+        company_id=alpha["id"], channel="messenger", external_user_id="cust-1"
+    ) is not None
+
+    result = reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="still here", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+
+    assert "Welcome back!" in result.text
+    assert resume_module.get(
+        company_id=alpha["id"], channel="messenger", external_user_id="cust-1"
+    ) is None
+
+
+def test_an_unanswered_wait_fires_and_sends_the_follow_up(resumable, alpha, monkeypatch):
+    """The sweep's own path: `fire_due` resumes the flow with no customer
+    message to answer, sends what comes next through the normal dispatcher,
+    and records it on the conversation's Timeline the way every other
+    automated reply is."""
+    import channels.sender as sender_module
+    from backend.services import reply_flow_resume_service
+    from core.reply_flow_engine import reply_flow_engine
+
+    flow = _make_active(
+        alpha["id"],
+        nodes=[
+            _node("t", "timeout_followup", {"wait_minutes": 30}),
+            _node("c", "canned_reply", {"text": "Still there? Let us know!"}),
+            _node("e", "end"),
+        ],
+        edges=[_edge("t", "c"), _edge("c", "e")],
+    )
+
+    session: dict = {}
+    reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="hi", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+
+    sent = {}
+
+    def fake_send_text(*, channel, recipient_id, company_id, text, buttons=None):
+        sent["channel"] = channel
+        sent["recipient_id"] = recipient_id
+        sent["text"] = text
+        return {"ok": True}
+
+    monkeypatch.setattr(sender_module, "send_text", fake_send_text)
+
+    from datetime import datetime, timedelta, timezone
+
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    fired = reply_flow_resume_service.fire_due(alpha["id"], now=future)
+
+    assert fired == 1
+    assert sent == {
+        "channel": "messenger",
+        "recipient_id": "cust-1",
+        "text": "Still there? Let us know!",
+    }
+    # Fires once, like a reminder, not a recurring timer.
+    assert reply_flow_resume_service.due(company_id=alpha["id"]) == []
+
+    from database.manager import database_manager
+
+    with database_manager.tenant(alpha["id"]) as conn:
+        row = conn.execute(
+            "SELECT * FROM messages WHERE channel = ? AND external_user_id = ?"
+            " ORDER BY id DESC LIMIT 1",
+            ("messenger", "cust-1"),
+        ).fetchone()
+
+    assert row["direction"] == "out"
+    assert row["body"] == "Still there? Let us know!"
+    assert row["sender_type"] == "ai"
+    assert row["source"] == "reply_flow_timeout_followup"
+
+
+def test_the_nodes_own_follow_up_text_is_sent_only_on_a_real_timeout(
+    resumable, alpha, monkeypatch
+):
+    """`nodeFieldsConfig.js` labels this node's `text` field "Follow-up
+    message" -- it is the "are you still there?" itself, and must only ever
+    be said to a customer who in fact went quiet, never to one who just
+    replied."""
+    import channels.sender as sender_module
+    from backend.services import reply_flow_resume_service
+    from core.reply_flow_engine import reply_flow_engine
+
+    _make_active(
+        alpha["id"],
+        nodes=[
+            _node("t", "timeout_followup", {
+                "wait_minutes": 30, "text": "Just checking in, are you there?",
+            }),
+            _node("e", "end"),
+        ],
+        edges=[_edge("t", "e")],
+    )
+
+    session: dict = {}
+    reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="hi", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+
+    # The customer replies before the clock runs out: no follow-up text.
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("a reply that beat the clock must send nothing")
+
+    monkeypatch.setattr(sender_module, "send_text", fail_if_called)
+
+    result = reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="still here", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+    assert result is None
+
+    # A second run, this time left unanswered until the sweep fires it.
+    session2: dict = {}
+    reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="hi", user_session=session2, language="en",
+        request=_Req("cust-2"),
+    )
+
+    sent = {}
+
+    def fake_send_text(*, channel, recipient_id, company_id, text, buttons=None):
+        sent["text"] = text
+        return {"ok": True}
+
+    monkeypatch.setattr(sender_module, "send_text", fake_send_text)
+
+    from datetime import datetime, timedelta, timezone
+
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    fired = reply_flow_resume_service.fire_due(alpha["id"], now=future)
+
+    assert fired == 1
+    assert sent["text"] == "Just checking in, are you there?"
+
+
+def test_a_wait_for_an_archived_flow_sends_nothing(resumable, alpha, monkeypatch):
+    import channels.sender as sender_module
+    from backend.services import reply_flow_resume_service
+    from backend.services.reply_flow_service import reply_flow_service
+    from core.reply_flow_engine import reply_flow_engine
+
+    flow = _make_active(
+        alpha["id"],
+        nodes=[
+            _node("t", "timeout_followup", {"wait_minutes": 30}),
+            _node("c", "canned_reply", {"text": "Should never send."}),
+        ],
+        edges=[_edge("t", "c")],
+    )
+
+    session: dict = {}
+    reply_flow_engine.handle(
+        company_id=alpha["id"], channel="messenger", department=None,
+        message="hi", user_session=session, language="en",
+        request=_Req("cust-1"),
+    )
+
+    reply_flow_service.update(
+        company_id=alpha["id"], flow_id=flow["id"], name="Test Flow",
+        status="archived", channels=[], departments=[], reply_modes=[],
+        trigger_type="new_conversation", trigger_config={},
+        nodes=flow["nodes"], edges=flow["edges"],
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("an archived flow must never send a message")
+
+    monkeypatch.setattr(sender_module, "send_text", fail_if_called)
+
+    from datetime import datetime, timedelta, timezone
+
+    future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    fired = reply_flow_resume_service.fire_due(alpha["id"], now=future)
+
+    assert fired == 1
+    assert reply_flow_resume_service.due(company_id=alpha["id"]) == []
