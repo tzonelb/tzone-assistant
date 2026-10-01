@@ -16,7 +16,7 @@ jobs:
   python:
     name: Python
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,26 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # main.py only mounts the single-page app once frontend/dist exists
+      # (see its _DIST.is_dir() check) -- exactly like a real deployment,
+      # where the frontend is always built before the backend serves it.
+      # tests/test_the_spa_shell_answers_its_own_client_routes.py exercises
+      # that real fallback behaviour, so it needs the same build this job's
+      # own tests will run against; without it, _DIST.is_dir() is always
+      # false here and those two tests fail on every run no matter what the
+      # change under test actually is.
+      - name: Build the frontend (frontend/dist is what main.py serves)
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
 
       # -------------------------------------------------------------------
       # FRESH DATABASE BOOT TEST

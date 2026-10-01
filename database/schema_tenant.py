@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 12
+TENANT_SCHEMA_VERSION = 13
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -686,6 +686,31 @@ TENANT_TABLES: tuple[str, ...] = (
     )
     """,
     """
+    -- A Reply Flow paused on a `timeout_followup` node, waiting to see whether
+    -- the customer replies before the configured wait elapses. One live wait
+    -- per conversation, same reasoning as `conversation_reminders` just above:
+    -- a flow has one place in its graph per conversation, so a second wait
+    -- scheduled for the same conversation replaces the first rather than
+    -- queuing behind it.
+    --
+    -- `variables_json` is the flow's own collected-answers snapshot
+    -- (`run["variables"]` in `core/reply_flow_engine.py`), carried across the
+    -- wait so a value an `ask_question` step saved earlier in the graph is
+    -- still there when the flow resumes past this node.
+    CREATE TABLE IF NOT EXISTS reply_flow_pending_resumes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        flow_id INTEGER NOT NULL,
+        node_id TEXT NOT NULL,
+        variables_json TEXT NOT NULL DEFAULT '{}',
+        fire_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(channel, external_user_id)
+    )
+    """,
+    """
     -- A one-to-many campaign: one message, sent once, to every contact the
     -- targeting resolves to. Ported from the design branch's `broadcasts`
     -- table (backend/services/broadcast_service.py::ensure_schema there),
@@ -1033,6 +1058,7 @@ TENANT_INDEXES: tuple[str, ...] = (
     # section, and reminders are swept by the time they come due.
     "CREATE INDEX IF NOT EXISTS idx_saved_replies_department ON saved_replies(department, title)",
     "CREATE INDEX IF NOT EXISTS idx_reminders_due ON conversation_reminders(remind_at)",
+    "CREATE INDEX IF NOT EXISTS idx_reply_flow_resume_due ON reply_flow_pending_resumes(fire_at)",
     # The log is read newest-first, filtered by category or by actor, and swept
     # by kind for retention. Each index matches one of those three readings.
     "CREATE INDEX IF NOT EXISTS idx_activity_recent ON activity_log(created_at DESC)",

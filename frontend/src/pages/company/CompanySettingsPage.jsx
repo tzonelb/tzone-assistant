@@ -17,7 +17,7 @@ const SECTIONS = [
   ["flow", "Reply Flows", "Design the real step-by-step conversation flow per channel and department. Admins only.", [], "users.manage"],
   ["roles", "Roles & Permissions", "Manage employee roles, departments, and exactly what each one is allowed to do — including overrides beyond their role. Admins only.", [], "users.manage"],
   ["activity_log", "Activity Log", "Every task, customer, catalogue, broadcast and role/permission change your team makes — who did what, and when. Admins only.", [], "users.manage"],
-  ["channels", "Channels", "Messenger, WhatsApp, Instagram and Telegram — email and website are coming soon.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
+  ["channels", "Channels", "Connect and manage every messaging, social and team channel your company uses — WhatsApp, Messenger, Instagram, Telegram, website live chat, email, SMS and more.", ["Connected accounts", "Connection status", "Permissions", "Branch mapping"]],
   ["security", "Security & Backup", "How channel credential access is protected — verification, encryption at rest, the session change log — plus backup status. There is no self-service backup/restore control in T-ZONE; contact support if you need a restore.", []],
   ["billing", "Billing", "Your plan, usage limits, billing history, and plan-change or renewal requests.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
   ["help", "Help", "Frequently asked questions about running your workspace on T-ZONE.", []],
@@ -409,7 +409,7 @@ function BillingView() {
 const FAQ_ITEMS = [
   {
     q: "How do I connect a messaging channel?",
-    a: "Open Company Settings → Channels. Pick the channel (Messenger, WhatsApp, Instagram, Telegram, email or website), then follow the connect flow. Connecting or disconnecting a channel first asks for a 6-digit email verification code, valid for 20 minutes, so credentials stay protected.",
+    a: "Open Company Settings → Channels. Pick the channel from the list — WhatsApp, Messenger, Instagram, Telegram, website live chat, email, SMS and more — then follow the connect flow. Connecting or disconnecting a channel first asks for a 6-digit email verification code, valid for 20 minutes, so credentials stay protected.",
   },
   {
     q: "How does AI-to-human handoff work?",

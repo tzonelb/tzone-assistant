@@ -40,9 +40,11 @@ from backend.services.conversation_reminder_service import (
 from backend.services.diagnostics_service import diagnostics_service
 from backend.services.health_service import health_service
 from backend.services.notification_service import notification_service
+from backend.services import reply_flow_resume_service
 from backend.services.work_index_service import (
     KIND_PENDING_REPLY,
     KIND_REMINDER,
+    KIND_REPLY_FLOW_RESUME,
     KIND_SCHEDULED_POST,
     KIND_TAKEOVER,
     work_index_service,
@@ -70,6 +72,7 @@ TAKEOVER_SWEEP_SECONDS = 10
 PENDING_REPLY_SWEEP_SECONDS = 2
 SCHEDULED_POST_SWEEP_SECONDS = 30
 REMINDER_SWEEP_SECONDS = 30
+REPLY_FLOW_RESUME_SWEEP_SECONDS = 30
 ATTEMPT_PRUNE_SECONDS = 3600
 
 # How often the platform checks itself. Fifteen minutes is often enough that a
@@ -245,6 +248,25 @@ async def reminder_worker() -> None:
     while True:
         await _sweep("reminder sweep", KIND_REMINDER, conversation_reminder_service.fire_due)
         await asyncio.sleep(REMINDER_SWEEP_SECONDS)
+
+
+async def reply_flow_resume_worker() -> None:
+    """Resume a Reply Flow paused on `timeout_followup` once its wait elapses.
+
+    Same shape as `reminder_worker` just above, over
+    `reply_flow_pending_resumes` instead of `conversation_reminders`: a wait
+    only exists because the flow engine scheduled one on reaching that node,
+    which writes an exact deadline the same way setting a reminder does, so
+    this uses the same indexed sweep rather than opening every company on a
+    timer.
+    """
+    while True:
+        await _sweep(
+            "reply flow resume sweep",
+            KIND_REPLY_FLOW_RESUME,
+            reply_flow_resume_service.fire_due,
+        )
+        await asyncio.sleep(REPLY_FLOW_RESUME_SWEEP_SECONDS)
 
 
 async def self_check_worker() -> None:

@@ -23,8 +23,11 @@ The boundary of what runs here, stated plainly:
     suggestion) -- hand this turn to the normal AI reply path, carrying the
     step's own instructions. The AI already honours the company's knowledge and
     reply policy, so the flow positions the conversation and the AI answers.
-  * ``timeout_followup`` needs a scheduler to fire later; today it passes
-    through (the wait is not yet enforced). This is the one documented gap.
+  * ``timeout_followup`` pauses the flow and schedules a durable wait via
+    ``backend.services.reply_flow_resume_service`` -- see ``resume_after_timeout``
+    below, which the sweep worker (``backend.workers.reply_flow_resume_worker``)
+    calls once the wait elapses with nobody replying. A reply that arrives
+    first cancels the wait and resumes the normal way, through ``handle``.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ import logging
 from typing import Any
 
 from backend.services import module_access
+from backend.services import reply_flow_resume_service
 from backend.services.reply_flow_service import reply_flow_service
 from core.response import Response
 
@@ -190,6 +194,8 @@ class ReplyFlowEngine:
         except Exception:  # noqa: BLE001
             return None
 
+        external_user_id = getattr(request, "user_id", None)
+
         run = user_session.get("reply_flow")
         if not isinstance(run, dict):
             run = None
@@ -214,29 +220,42 @@ class ReplyFlowEngine:
             return self._advance(
                 int(company_id), flow, run, message, user_session, language,
                 company_name, customer_name, first_turn=True,
+                channel=channel, external_user_id=external_user_id,
             )
 
         flow = reply_flow_service.get(int(company_id), int(run["flow_id"]))
         if not flow or flow.get("status") != "active":
             # The owner archived or deleted the flow mid-conversation; stop
-            # running it and hand back cleanly.
+            # running it and hand back cleanly. A pending timeout wait is
+            # dropped along with it -- there is no graph left to resume into.
             user_session.pop("reply_flow", None)
+            if channel and external_user_id:
+                reply_flow_resume_service.cancel(
+                    company_id=int(company_id),
+                    channel=channel,
+                    external_user_id=external_user_id,
+                )
             return None
 
         return self._advance(
             int(company_id), flow, run, message, user_session, language,
             company_name, customer_name, first_turn=False,
+            channel=channel, external_user_id=external_user_id,
         )
 
     def _advance(
         self, company_id, flow, run, message, user_session, language,
         company_name, customer_name, *, first_turn: bool,
+        channel: str | None = None, external_user_id: str | None = None,
+        timed_out: bool = False,
     ) -> Response | FlowDefer | None:
         nodes = flow.get("nodes") or []
         edges = flow.get("edges") or []
         index = _index(nodes)
         names = {"company_name": company_name, "customer_name": customer_name}
         variables = run.setdefault("variables", {})
+        messages: list[str] = []
+        buttons: list[str] = []
 
         # Where are we? On the first turn, at the start node. Otherwise, resume
         # from the step we stopped on.
@@ -255,12 +274,35 @@ class ReplyFlowEngine:
                 if save_as:
                     variables[save_as] = message
                 current = self._next(current, edges, index, variables)
+            elif resume_type == "timeout_followup":
+                # Whatever brought us back here -- the customer replied before
+                # the wait elapsed, or the wait itself just fired and
+                # `resume_after_timeout` is driving this call -- the wait is
+                # over either way, so the durable record of it goes too. Doing
+                # this unconditionally rather than only on a live reply is
+                # what makes it safe to call from both places: a resume the
+                # sweep already fired has nothing left to cancel.
+                if channel and external_user_id:
+                    reply_flow_resume_service.cancel(
+                        company_id=int(company_id),
+                        channel=channel,
+                        external_user_id=external_user_id,
+                    )
+                if timed_out:
+                    # The customer never answered, which is the one case this
+                    # node's own "Follow-up message" field (see
+                    # nodeFieldsConfig.js) is for -- a reply that beat the
+                    # clock needs no "are you still there?" of its own.
+                    text = _fill(
+                        _config(current).get("text", ""), variables, names
+                    ).strip()
+                    if text:
+                        messages.append(text)
+                current = self._next(current, edges, index, variables)
             elif resume_type in _AI_STEPS:
                 # The AI already answered for this step last turn; move on.
                 current = self._next(current, edges, index, variables)
 
-        messages: list[str] = []
-        buttons: list[str] = []
         steps = 0
 
         while current is not None and steps < MAX_STEPS_PER_TURN:
@@ -315,8 +357,27 @@ class ReplyFlowEngine:
                 return None
 
             if node_type == "timeout_followup":
-                # No scheduler yet: the wait is not enforced, so this step is a
-                # pass-through. Documented in the module docstring.
+                # Pause here and let the sweep worker
+                # (reply_flow_resume_service.fire_due, via
+                # resume_after_timeout below) bring the flow back if the
+                # customer stays quiet. Only possible with a known channel and
+                # customer -- which a live customer message always carries,
+                # but a defensively-missing one must not crash the turn, so
+                # it degrades to the old pass-through instead.
+                if channel and external_user_id:
+                    run["node_id"] = str(current.get("id"))
+                    reply_flow_resume_service.schedule(
+                        company_id=company_id,
+                        channel=channel,
+                        external_user_id=external_user_id,
+                        flow_id=flow["id"],
+                        node_id=str(current.get("id")),
+                        variables=variables,
+                        wait_minutes=config.get("wait_minutes"),
+                    )
+                    if messages:
+                        return self._reply(messages, buttons)
+                    return None
                 current = self._next(current, edges, index, variables)
                 continue
 
@@ -339,6 +400,216 @@ class ReplyFlowEngine:
         if messages:
             return self._reply(messages, buttons)
         return None
+
+    def resume_after_timeout(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        flow_id: int,
+        resume_node_id: str,
+        variables: dict[str, Any],
+    ) -> None:
+        """Bring a flow back after its `timeout_followup` wait elapsed.
+
+        Called by `reply_flow_resume_service.fire_due` from the sweep worker,
+        never from a live customer message -- there is no inbound turn here
+        for a caller to answer, so unlike `handle()` this sends what the flow
+        produces itself, through the same dispatcher and Timeline record a
+        scheduled reminder uses (`conversation_reminder_service
+        ._send_message`), rather than returning it.
+
+        Reuses `_advance` itself to walk the graph: an ephemeral, throwaway
+        session dict stands in for the real one (this call has no live
+        customer turn to attach `_flag_human`'s diagnostic flag to, the same
+        as it would be lost had the live session already expired), and
+        passing `run["node_id"] = resume_node_id` makes `_advance` take
+        exactly the "customer replied while paused at timeout_followup"
+        branch it already has -- cancel the now-fired wait, step past the
+        node, and keep walking.
+        """
+        flow = reply_flow_service.get(int(company_id), int(flow_id))
+        if not flow or flow.get("status") != "active":
+            # Archived, deleted, or never existed since the wait was
+            # scheduled: nothing to resume into.
+            return
+
+        run: dict[str, Any] = {
+            "flow_id": flow["id"],
+            "node_id": str(resume_node_id),
+            "variables": dict(variables or {}),
+        }
+        ephemeral_session: dict[str, Any] = {}
+
+        company_name = ""
+        try:
+            from core import prompt_builder
+
+            company_name = prompt_builder._company_name(int(company_id)) or ""
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the company name resuming a reply flow wait "
+                "for company %s",
+                company_id,
+            )
+
+        customer_name, language = self._conversation_identity(
+            company_id=company_id, channel=channel, external_user_id=external_user_id
+        )
+
+        try:
+            outcome = self._advance(
+                int(company_id), flow, run, "", ephemeral_session,
+                language, company_name, customer_name, first_turn=False,
+                channel=channel, external_user_id=external_user_id,
+                timed_out=True,
+            )
+        except Exception:
+            logger.exception(
+                "Reply flow engine failed resuming a timeout wait for "
+                "company %s",
+                company_id,
+            )
+            return
+
+        if isinstance(outcome, FlowDefer):
+            # The graph continues into an AI step, which answers a customer's
+            # own words -- there are none here, this turn was not prompted by
+            # one. Sending nothing is the safe choice; inventing a message
+            # for the AI to answer would be putting words in the customer's
+            # mouth. The flow's progress past this point is not durably
+            # recorded (see the module docstring on what is and is not
+            # persisted across a restart), so this is the one shape of
+            # `timeout_followup` this does not carry all the way through --
+            # named here rather than silently dropped.
+            logger.info(
+                "Reply flow wait for company %s resumed into an AI step; "
+                "nothing sent",
+                company_id,
+            )
+            return
+
+        if not isinstance(outcome, Response) or not outcome.text:
+            return
+
+        self._send_and_record(
+            company_id=company_id,
+            channel=channel,
+            external_user_id=external_user_id,
+            text=outcome.text,
+            buttons=outcome.buttons,
+        )
+
+        # The flow is not over (it is paused again -- another ask_question,
+        # another timeout_followup, another AI step): if the customer still
+        # has a live in-memory session, carry the new position into it so
+        # their next message resumes the normal, synchronous way. A customer
+        # with no live session picks the flow up fresh on their next message
+        # instead, the same as a session that expired for any other reason.
+        if ephemeral_session.get("reply_flow") is not None:
+            self._seed_live_session(
+                channel=channel, external_user_id=external_user_id,
+                company_id=company_id, run=run,
+            )
+
+    @staticmethod
+    def _conversation_identity(
+        *, company_id: int, channel: str, external_user_id: str
+    ) -> tuple[str, str]:
+        """The stored customer name and language for a conversation already
+        on file -- there is no live request to read either from, the way a
+        real inbound message carries them."""
+        try:
+            from database.manager import database_manager
+
+            with database_manager.tenant(int(company_id)) as conn:
+                row = conn.execute(
+                    """
+                    SELECT official_customer_name, language FROM conversations
+                    WHERE channel = ? AND external_user_id = ?
+                    LIMIT 1
+                    """,
+                    (str(channel), str(external_user_id)),
+                ).fetchone()
+            if not row:
+                return "", "ar"
+            language = str(row["language"] or "").strip().lower()
+            return (
+                str(row["official_customer_name"] or ""),
+                language if language in ("ar", "en") else "ar",
+            )
+        except Exception:  # noqa: BLE001
+            return "", "ar"
+
+    @staticmethod
+    def _send_and_record(
+        *, company_id: int, channel: str, external_user_id: str,
+        text: str, buttons: list[str],
+    ) -> None:
+        from channels.sender import send_text
+
+        try:
+            result = send_text(
+                channel=channel,
+                recipient_id=external_user_id,
+                company_id=company_id,
+                text=text,
+                buttons=buttons or None,
+            )
+        except Exception:
+            logger.exception(
+                "Reply flow timeout follow-up send failed for company %s "
+                "channel %s",
+                company_id,
+                channel,
+            )
+            return
+
+        if not result.get("ok"):
+            logger.warning(
+                "Reply flow timeout follow-up was not delivered for company "
+                "%s channel %s: %s",
+                company_id,
+                channel,
+                result.get("error") or result.get("reason"),
+            )
+            return
+
+        try:
+            from backend.services.message_service import message_service
+
+            message_service.save_message(
+                company_id=company_id,
+                channel=channel,
+                external_user_id=external_user_id,
+                direction="out",
+                text=text,
+                sender_type="ai",
+                source="reply_flow_timeout_followup",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not record a reply flow timeout follow-up for "
+                "company %s",
+                company_id,
+            )
+
+    @staticmethod
+    def _seed_live_session(
+        *, channel: str, external_user_id: str, company_id: int, run: dict[str, Any],
+    ) -> None:
+        from core.session import SessionManager, session
+
+        try:
+            key = SessionManager.key(external_user_id, channel, company_id)
+            session.create(key)["reply_flow"] = run
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not seed the live session resuming a reply flow wait "
+                "for company %s",
+                company_id,
+            )
 
     # --------------------------------------------------------------- helpers
 
