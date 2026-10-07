@@ -465,6 +465,20 @@ class AppointmentService:
         if created is None:  # pragma: no cover - only reachable on a lost write
             raise AppointmentError("The appointment could not be stored.")
 
+        try:
+            from backend.services.reply_flow_event_service import fire_for_customer
+
+            fire_for_customer(
+                company_id=company_id, customer_id=customer_id,
+                trigger_type="appointment_created",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not fire the appointment_created reply flow trigger "
+                "for company %s",
+                company_id,
+            )
+
         return created
 
     def reschedule(
@@ -689,6 +703,23 @@ class AppointmentService:
             except Exception:
                 conn.rollback()
                 raise
+
+        if status == "completed" and current["status"] != "completed":
+            try:
+                from backend.services.reply_flow_event_service import (
+                    fire_for_customer,
+                )
+
+                fire_for_customer(
+                    company_id=company_id, customer_id=current.get("customer_id"),
+                    trigger_type="appointment_completed",
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Could not fire the appointment_completed reply flow "
+                    "trigger for company %s",
+                    company_id,
+                )
 
         return self.get(company_id=company_id, appointment_id=appointment_id)
 

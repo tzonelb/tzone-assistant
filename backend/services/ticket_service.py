@@ -444,9 +444,12 @@ class TicketService:
 
         now = utc_now_iso()
 
+        newly_completed = False
+
         with database_manager.tenant(company_id) as conn:
             existing = conn.execute(
-                "SELECT id, status, closed_at FROM tickets WHERE id = ? AND company_id = ? LIMIT 1",
+                "SELECT id, status, closed_at, conversation_id FROM tickets "
+                "WHERE id = ? AND company_id = ? LIMIT 1",
                 (task_id, company_id),
             ).fetchone()
 
@@ -460,6 +463,7 @@ class TicketService:
                         # task took must not be reset by a later edit.
                         if not existing["closed_at"]:
                             cleaned["closed_at"] = now
+                            newly_completed = True
                     else:
                         cleaned["closed_at"] = None
 
@@ -474,6 +478,22 @@ class TicketService:
                     [*cleaned.values(), now, task_id, company_id],
                 )
                 conn.commit()
+
+        if newly_completed:
+            try:
+                from backend.services.reply_flow_event_service import fire_for_task
+
+                fire_for_task(
+                    company_id=company_id,
+                    conversation_id=existing["conversation_id"],
+                    trigger_type="task_completed",
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Could not fire the task_completed reply flow trigger "
+                    "for company %s",
+                    company_id,
+                )
 
         logger.info(
             "Updated task id=%s company id=%s fields=%s",

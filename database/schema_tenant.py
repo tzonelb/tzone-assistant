@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 13
+TENANT_SCHEMA_VERSION = 14
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -711,6 +711,26 @@ TENANT_TABLES: tuple[str, ...] = (
     )
     """,
     """
+    -- One row per (conversation, trigger) the `customer_no_reply` /
+    -- `team_no_reply` silence sweep has already started a flow for, keyed by
+    -- the exact `last_message_at` that earned it -- not a one-shot flag,
+    -- because that moment is the natural reset: the flow's own proactive
+    -- message is itself an outbound message, which moves `last_message_at`
+    -- forward and lets the next silence become eligible again on its own.
+    -- Without this a conversation that stayed quiet would be re-detected,
+    -- and re-started, on every single sweep cycle in between.
+    CREATE TABLE IF NOT EXISTS reply_flow_silence_fired (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        channel TEXT NOT NULL,
+        external_user_id TEXT NOT NULL,
+        trigger_type TEXT NOT NULL,
+        fired_for_message_at TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(channel, external_user_id, trigger_type)
+    )
+    """,
+    """
     -- A one-to-many campaign: one message, sent once, to every contact the
     -- targeting resolves to. Ported from the design branch's `broadcasts`
     -- table (backend/services/broadcast_service.py::ensure_schema there),
@@ -970,6 +990,15 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
         # the conversation from the default inbox list, without deleting
         # anything a person may want to review later.
         "is_spam": "INTEGER NOT NULL DEFAULT 0",
+        # "in" or "out", written alongside `last_message_at` by every path
+        # through `message_service.save_message` (manual reply, AI reply,
+        # inbound webhook, scheduled reminder, reply-flow send -- there is
+        # exactly one writer of a message row). Exists for
+        # `reply_flow_silence_service`'s `customer_no_reply` /
+        # `team_no_reply` sweep, which needs to tell "we spoke last, they
+        # went quiet" from "they spoke last, we did" without a join against
+        # `messages` per conversation on every sweep cycle.
+        "last_message_direction": "TEXT",
     },
     # Added after the tag feature shipped without it. Existing companies have a
     # `conversation_tags` table with no `status`, so the column has to arrive
@@ -1059,6 +1088,7 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_saved_replies_department ON saved_replies(department, title)",
     "CREATE INDEX IF NOT EXISTS idx_reminders_due ON conversation_reminders(remind_at)",
     "CREATE INDEX IF NOT EXISTS idx_reply_flow_resume_due ON reply_flow_pending_resumes(fire_at)",
+    "CREATE INDEX IF NOT EXISTS idx_conversations_last_direction ON conversations(last_message_direction, last_message_at)",
     # The log is read newest-first, filtered by category or by actor, and swept
     # by kind for retention. Each index matches one of those three readings.
     "CREATE INDEX IF NOT EXISTS idx_activity_recent ON activity_log(created_at DESC)",

@@ -200,7 +200,7 @@ class DemoSeedService:
                     company_id=company_id,
                     channel=channel,
                     external_user_id=external_id,
-                    direction="inbound" if direction == "in" else "outbound",
+                    direction=direction,
                     text=text,
                     sender_type=sender_type,
                 )

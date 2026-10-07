@@ -155,10 +155,10 @@ class MessageService:
                 conn.execute(
                     """
                     UPDATE conversations
-                    SET last_message_at = ?, updated_at = ?
+                    SET last_message_at = ?, last_message_direction = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (now, now, resolved_id),
+                    (now, direction, now, resolved_id),
                 )
 
                 conn.commit()

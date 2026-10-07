@@ -498,6 +498,32 @@ class ReplyFlowService:
 
     # -------------------------------------------------------- the engine reads
 
+    def active_flows_for_triggers(
+        self, company_id: int, trigger_types: tuple[str, ...]
+    ) -> list[dict[str, Any]]:
+        """Every active flow matching any of the given trigger types, full
+        rows (trigger_config included). For `reply_flow_silence_service`'s
+        sweep, which -- unlike `active_flow_for` -- does not already know a
+        single channel/department to match against; it has to check each
+        matching flow's own scope against every conversation itself.
+        """
+        try:
+            summaries = self.list(int(company_id))
+        except Exception:  # noqa: BLE001
+            logger.exception("Could not read reply flows for company %s", company_id)
+            return []
+
+        matches = [
+            s for s in summaries
+            if s["status"] == "active" and s["trigger_type"] in trigger_types
+        ]
+        flows = []
+        for summary in matches:
+            full = self.get(int(company_id), int(summary["id"]))
+            if full:
+                flows.append(full)
+        return flows
+
     def active_flow_for(
         self,
         company_id: int,
