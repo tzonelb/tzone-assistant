@@ -1212,6 +1212,52 @@ def create_share_link(
     }
 
 
+@router.get("/{channel}/{user_id}/share-links")
+def list_share_links(
+    channel: str,
+    user_id: str,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    links = conversation_share_service.list_links(
+        company_id=company_id, channel=channel, external_user_id=user_id
+    )
+
+    return {"items": links, "total": len(links)}
+
+
+@router.post("/{channel}/{user_id}/share-links/{link_id}/revoke")
+def revoke_share_link(
+    channel: str,
+    user_id: str,
+    link_id: int,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.view")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+
+    revoked = conversation_share_service.revoke(company_id=company_id, link_id=link_id)
+    if not revoked:
+        raise HTTPException(status_code=404, detail="Share link not found.")
+
+    activity_service.record_for(
+        current_user,
+        company_id=company_id,
+        action=Action.CONVERSATION_SHARE_LINK_REVOKED,
+        category="conversations",
+        kind="change",
+        target_type="conversation",
+        target_id=f"{channel}:{user_id}",
+        summary=f"Revoked a share link for a {channel} conversation",
+        severity="notice",
+        after={"link_id": link_id},
+        ip_address=client_ip(request),
+    )
+
+    return {"success": True}
+
+
 @router.post("/{channel}/{user_id}/email-export")
 def email_conversation_export(
     channel: str,

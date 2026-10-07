@@ -273,6 +273,26 @@ export async function resetPasswordRequest(token, newPassword) {
   );
 }
 
+export async function signupPlansRequest() {
+  return apiRequest("/api/signup/plans", { authenticated: false });
+}
+
+export async function sendSignupCodeRequest(email) {
+  return apiRequest("/api/signup/code", {
+    method: "POST",
+    authenticated: false,
+    body: { email },
+  });
+}
+
+export async function signupRequest(payload) {
+  return apiRequest("/api/signup", {
+    method: "POST",
+    authenticated: false,
+    body: payload,
+  });
+}
+
 export async function getAccessOverviewRequest() {
   return apiRequest("/api/admin/access/overview");
 }
@@ -381,6 +401,38 @@ export async function getWorkspaceConfigRequest() {
 }
 
 /* ------------------------------------------------------------------ *
+ * Developer Center -- a technical event stream (webhook received, AI
+ * buffer started, send failed) kept apart from the customer-facing
+ * Timeline, visible only to a super admin's own active company.
+ * ------------------------------------------------------------------ */
+export async function getDiagnosticsSummaryRequest() {
+  return apiRequest("/api/developer-center/summary");
+}
+
+export async function listDiagnosticEventsRequest({
+  limit = 100,
+  eventType = "",
+  severity = "",
+  channel = "",
+} = {}) {
+  return apiRequest(
+    `/api/developer-center/events${createQueryString({
+      limit,
+      event_type: eventType,
+      severity,
+      channel,
+    })}`,
+  );
+}
+
+export async function cleanupDiagnosticEventsRequest(retentionDays = 14) {
+  return apiRequest(
+    `/api/developer-center/cleanup${createQueryString({ retention_days: retentionDays })}`,
+    { method: "POST" },
+  );
+}
+
+/* ------------------------------------------------------------------ *
  * The company's activity log, in the shape the screen reads it.
  *
  * Two calls rather than one, because this platform splits them: `/api/activity`
@@ -471,8 +523,32 @@ export async function listProductsRequest({ search = "", limit = 24 } = {}) {
   );
 }
 
-export async function listTasksRequest({ search = "", limit = 20 } = {}) {
-  return apiRequest(`/api/tasks${createQueryString({ search, limit })}`);
+export async function listTasksRequest({
+  search = "",
+  limit = 20,
+  status = "",
+  taskType = "",
+  priority = "",
+  assignee = "",
+  unassigned = "",
+  overdue = "",
+  mine = "",
+  offset = "",
+} = {}) {
+  return apiRequest(
+    `/api/tasks${createQueryString({
+      search,
+      limit,
+      status,
+      task_type: taskType,
+      priority,
+      assignee,
+      unassigned,
+      overdue,
+      mine,
+      offset,
+    })}`,
+  );
 }
 
 /* ---------------------------------------------------------------- *
@@ -488,6 +564,36 @@ export async function listSavedRepliesRequest({ department = "" } = {}) {
   // this the Saved Replies page and the composer picker silently show an
   // empty library while the request itself succeeds.
   return { ...result, replies: result?.items || [] };
+}
+
+/* ----------------------------------------------------------------- *
+ * Conversation tags -- the company's own named, coloured vocabulary
+ * (distinct from the free-form per-conversation labels the inbox keeps in
+ * `tags_json`). Reading rides on conversations.view; writing takes
+ * conversations.manage.
+ * ----------------------------------------------------------------- */
+export async function listConversationTagsRequest() {
+  return apiRequest("/api/conversation-tags");
+}
+
+export async function createConversationTagRequest(name, color) {
+  return apiRequest("/api/conversation-tags", {
+    method: "POST",
+    body: { name, color: color || undefined },
+  });
+}
+
+export async function updateConversationTagRequest(tagId, name, color) {
+  return apiRequest(`/api/conversation-tags/${encodeURIComponent(tagId)}`, {
+    method: "PUT",
+    body: { name, color: color || undefined },
+  });
+}
+
+export async function deleteConversationTagRequest(tagId) {
+  return apiRequest(`/api/conversation-tags/${encodeURIComponent(tagId)}`, {
+    method: "DELETE",
+  });
 }
 
 // The design read `{ departments: [names] }` from its own /api/departments
@@ -1233,6 +1339,16 @@ export async function createConversationShareLinkRequest(channel, userId, scope 
   });
 }
 
+export async function listConversationShareLinksRequest(channel, userId) {
+  return apiRequest(`${conversationPath(channel, userId)}/share-links`);
+}
+
+export async function revokeConversationShareLinkRequest(channel, userId, linkId) {
+  return apiRequest(`${conversationPath(channel, userId)}/share-links/${linkId}/revoke`, {
+    method: "POST",
+  });
+}
+
 export async function emailConversationExportRequest(channel, userId, to, scope = "chat") {
   return apiRequest(`${conversationPath(channel, userId)}/email-export`, {
     method: "POST",
@@ -1765,6 +1881,21 @@ export async function createQuoteRequest(values) {
 export async function listQuotesRequest(conversationId) {
   const query = conversationId ? `?conversation_id=${encodeURIComponent(conversationId)}` : "";
   return apiRequest(`/api/quotes${query}`);
+}
+
+export async function getQuoteRequest(quoteId) {
+  return apiRequest(`/api/quotes/${encodeURIComponent(quoteId)}`);
+}
+
+export async function updateQuoteStatusRequest(quoteId, status) {
+  return apiRequest(`/api/quotes/${encodeURIComponent(quoteId)}/status`, {
+    method: "PATCH",
+    body: { status },
+  });
+}
+
+export async function deleteQuoteRequest(quoteId) {
+  return apiRequest(`/api/quotes/${encodeURIComponent(quoteId)}`, { method: "DELETE" });
 }
 
 /* ------------------------------------------------- AI Knowledge (v2)

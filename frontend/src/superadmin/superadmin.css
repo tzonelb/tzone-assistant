@@ -377,6 +377,9 @@
 
 .superadmin-root .sa-inline-form .sa-field { min-width: 190px; }
 
+.superadmin-root .sa-limit-editor input[type="number"] { width: 110px; }
+.superadmin-root .sa-limit-editor input[type="text"] { width: 180px; }
+
 .superadmin-root .sa-button {
   display: inline-flex;
   align-items: center;

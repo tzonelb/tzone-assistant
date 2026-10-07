@@ -9,7 +9,6 @@ import {
 import {
   createTaskRequest,
   deleteTaskRequest,
-  listCustomersRequest,
   listTasksRequest,
   taskOptionsRequest,
   updateTaskRequest,
@@ -21,6 +20,12 @@ import "./TasksPageV2.css";
 // matching the mockup's kicker + segmented status filter + bordered table.
 const FALLBACK_PRIORITIES = ["low", "normal", "high", "urgent"];
 const FALLBACK_TASK_TYPES = ["follow_up", "complaint", "service_request", "sales_inquiry", "internal", "other"];
+
+// Mirrors backend ticket_service.TicketService.DONE_STATUS -- the frontend
+// has no server-provided list of which statuses count as finished, and
+// "done"/"cancelled" (this screen's old guess) are not values the backend
+// vocabulary (open / in_progress / resolved / closed) has ever had.
+const DONE_STATUSES = ["resolved", "closed"];
 
 const EMPTY_FORM = {
   title: "",
@@ -50,17 +55,8 @@ function formatDueDate(value) {
   return date ? date.toLocaleDateString() : "—";
 }
 
-function isOverdue(value, status) {
-  if (status === "done" || status === "cancelled") return false;
-  const date = toDateValue(value);
-  if (!date) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return date.getTime() < today.getTime();
-}
-
 function isDueToday(value, status) {
-  if (status === "done" || status === "cancelled") return false;
+  if (DONE_STATUSES.includes(status)) return false;
   const date = toDateValue(value);
   if (!date) return false;
   const today = new Date();
@@ -92,18 +88,13 @@ export default function TasksPageV2() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [customerQuery, setCustomerQuery] = useState("");
-  const [customerResults, setCustomerResults] = useState([]);
-  const [customerSearching, setCustomerSearching] = useState(false);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
       const result = await listTasksRequest({
         status: statusFilter || undefined,
-        assignedUserId: assigneeFilter || undefined,
+        assignee: assigneeFilter || undefined,
       });
       setRows(Array.isArray(result?.items) ? result.items : []);
     } catch (requestError) {
@@ -126,21 +117,6 @@ export default function TasksPageV2() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!dialogOpen || !customerQuery.trim()) {
-      setCustomerResults([]);
-      return undefined;
-    }
-    const timeout = window.setTimeout(() => {
-      setCustomerSearching(true);
-      listCustomersRequest({ search: customerQuery.trim(), limit: 8 })
-        .then((result) => setCustomerResults(Array.isArray(result?.items) ? result.items : []))
-        .catch(() => setCustomerResults([]))
-        .finally(() => setCustomerSearching(false));
-    }, 300);
-    return () => window.clearTimeout(timeout);
-  }, [customerQuery, dialogOpen]);
-
   async function changeStatus(row, status) {
     setSavingRowId(row.id);
     try {
@@ -155,21 +131,12 @@ export default function TasksPageV2() {
 
   function openDialog() {
     setForm(EMPTY_FORM);
-    setSelectedCustomer(null);
-    setCustomerQuery("");
-    setCustomerResults([]);
     setFormError("");
     setDialogOpen(true);
   }
 
   function closeDialog() {
     setDialogOpen(false);
-  }
-
-  function pickCustomer(customer) {
-    setSelectedCustomer(customer);
-    setCustomerQuery("");
-    setCustomerResults([]);
   }
 
   async function saveNewTask(event) {
@@ -184,7 +151,6 @@ export default function TasksPageV2() {
         task_type: form.taskType,
         priority: form.priority,
         assigned_user_id: form.assignedUserId ? Number(form.assignedUserId) : undefined,
-        customer_id: selectedCustomer ? selectedCustomer.id : undefined,
         due_at: form.dueDate || undefined,
       });
       closeDialog();
@@ -224,9 +190,9 @@ export default function TasksPageV2() {
     );
   }
 
-  const openCount = rows.filter((row) => row.status !== "done" && row.status !== "cancelled").length;
-  const overdueCount = rows.filter((row) => isOverdue(row.due_at, row.status)).length;
-  const dueTodayCount = rows.filter((row) => isDueToday(row.due_at, row.status)).length;
+  const openCount = rows.filter((row) => !DONE_STATUSES.includes(row.status)).length;
+  const overdueCount = rows.filter((row) => row.is_overdue).length;
+  const dueTodayCount = rows.filter((row) => isDueToday(row.due_date, row.status)).length;
 
   return (
     <div className="tz-screen tzv2-tasks-page">
@@ -290,7 +256,6 @@ export default function TasksPageV2() {
                 <th>Assigned</th>
                 <th>Due</th>
                 <th>Status</th>
-                <th>Contact</th>
                 <th style={{ width: 76 }} />
               </tr>
             </thead>
@@ -301,23 +266,23 @@ export default function TasksPageV2() {
                     <input
                       type="checkbox"
                       className="tzv2-tasks-checkbox"
-                      checked={row.status === "done"}
+                      checked={DONE_STATUSES.includes(row.status)}
                       disabled={savingRowId === row.id}
-                      aria-label={row.status === "done" ? `Mark "${row.title}" not done` : `Mark "${row.title}" done`}
-                      onChange={() => changeStatus(row, row.status === "done" ? "open" : "done")}
+                      aria-label={DONE_STATUSES.includes(row.status) ? `Mark "${row.title}" not done` : `Mark "${row.title}" done`}
+                      onChange={() => changeStatus(row, DONE_STATUSES.includes(row.status) ? "open" : "resolved")}
                     />
                   </td>
                   <td>
                     <strong className="tzv2-tasks-title">{row.title}</strong>
-                    {row.description ? <span className="tzv2-tasks-desc">{row.description}</span> : null}
+                    {row.problem ? <span className="tzv2-tasks-desc">{row.problem}</span> : null}
                   </td>
                   <td className="tzv2-tasks-type">{humanize(row.task_type)}</td>
                   <td><span className="tag tag-outline">{humanize(row.priority)}</span></td>
                   <td className="tzv2-tasks-assignee">
                     {row.assigned_user_name || <span className="tzv2-tasks-muted">Unassigned</span>}
                   </td>
-                  <td className={`tz-num tzv2-tasks-due${isOverdue(row.due_at, row.status) ? " tzv2-tasks-due-overdue" : ""}`}>
-                    {formatDueDate(row.due_at)}
+                  <td className={`tz-num tzv2-tasks-due${row.is_overdue ? " tzv2-tasks-due-overdue" : ""}`}>
+                    {formatDueDate(row.due_date)}
                   </td>
                   <td>
                     <select
@@ -328,13 +293,6 @@ export default function TasksPageV2() {
                     >
                       {statuses.map((status) => <option value={status} key={status}>{humanize(status)}</option>)}
                     </select>
-                  </td>
-                  <td>
-                    {row.customer_id ? (
-                      <button type="button" className="btn btn-ghost tzv2-tasks-link" onClick={() => navigate(`/customers/${row.customer_id}`)}>
-                        {row.customer_name || "View contact"}
-                      </button>
-                    ) : <span className="tzv2-tasks-muted">—</span>}
                   </td>
                   <td>
                     <div className="tzv2-tasks-row-actions">
@@ -447,45 +405,6 @@ export default function TasksPageV2() {
                     onChange={(event) => setForm((current) => ({ ...current, dueDate: event.target.value }))}
                   />
                 </div>
-              </div>
-
-              <div className="field">
-                <label>Link to a contact (optional)</label>
-                {selectedCustomer ? (
-                  <div className="tzv2-tasks-selected-customer">
-                    <span>{selectedCustomer.display_name || selectedCustomer.internal_name || "Unnamed contact"}</span>
-                    <button type="button" className="btn btn-ghost btn-icon" aria-label="Remove linked contact" onClick={() => setSelectedCustomer(null)}>
-                      <CloseOutlined fontSize="small" />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <input
-                      className="input"
-                      value={customerQuery}
-                      placeholder="Search contacts by name, phone, email..."
-                      onChange={(event) => setCustomerQuery(event.target.value)}
-                    />
-                    {customerQuery.trim() ? (
-                      <div className="tzv2-tasks-customer-results">
-                        {customerSearching ? <span className="tzv2-tasks-customer-hint">Searching…</span> : null}
-                        {!customerSearching && customerResults.length === 0 ? (
-                          <span className="tzv2-tasks-customer-hint">No contacts match.</span>
-                        ) : null}
-                        {customerResults.map((customer) => (
-                          <button
-                            type="button"
-                            className="tzv2-tasks-customer-result"
-                            key={customer.id}
-                            onClick={() => pickCustomer(customer)}
-                          >
-                            {customer.display_name || customer.internal_name || "Unnamed contact"}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                  </>
-                )}
               </div>
 
               {formError ? <p className="tzv2-tasks-form-error">{formError}</p> : null}

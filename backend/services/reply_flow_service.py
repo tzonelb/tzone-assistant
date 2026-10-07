@@ -68,11 +68,16 @@ NODE_TYPES = (
 
 # The triggers a flow can start on. Mirror of the frontend's
 # FALLBACK_TRIGGER_TYPES; the builder fetches this list from
-# GET /api/reply-flows/trigger-types so the two never drift. Only
-# ``new_conversation`` and ``message_received`` are driven by the live message
-# path today; the event-driven ones (appointments, calls, tasks, silence) are
-# recognised and stored so a flow can be authored against them, and are fired by
-# their originating services as those hooks are added.
+# GET /api/reply-flows/trigger-types so the two never drift.
+# ``new_conversation`` is driven by the live message path
+# (``core.reply_flow_engine``); every other trigger is proactive, started
+# from outside an inbound message: ``conversation_closed``,
+# ``appointment_created``, ``appointment_completed``, ``call_logged`` and
+# ``task_completed`` fire inline, right from the service whose own write they
+# are named after (``backend.services.reply_flow_event_service``);
+# ``customer_no_reply``, ``team_no_reply`` and ``appointment_reminder`` have
+# no single moment to fire from, so each is swept on its own timer instead
+# (``reply_flow_silence_service``, ``reply_flow_appointment_reminder_service``).
 TRIGGER_TYPES: tuple[dict[str, Any], ...] = (
     {
         "key": "new_conversation",

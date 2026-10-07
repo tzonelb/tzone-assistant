@@ -75,6 +75,20 @@ def manage_context(current_user=Depends(require_permission("appointments.manage"
     return _context(current_user)
 
 
+def _can_view_all(current_user: dict[str, Any], company_id: int) -> bool:
+    """Only an owner, super admin, or a role granted ``users.manage`` may see
+    appointments belonging to another employee -- everyone else asking
+    ``appointments.view`` sees only their own calendar. ``owner`` is covered
+    implicitly: ``user_permission_codes`` already returns every permission
+    code for that role.
+    """
+    if current_user.get("is_super_admin"):
+        return True
+
+    codes = auth_service.user_permission_codes(int(current_user["id"]), company_id)
+    return "users.manage" in codes
+
+
 # ----------------------------------------------------------------------
 # Shared helpers
 # ----------------------------------------------------------------------
@@ -310,7 +324,10 @@ def list_appointments(
     offset: int = Query(default=0, ge=0),
     context=Depends(view_context),
 ):
-    _, company_id = context
+    current_user, company_id = context
+
+    if not _can_view_all(current_user, company_id):
+        staff_user_id = int(current_user["id"])
 
     result = _handle(
         lambda: appointment_service.list(

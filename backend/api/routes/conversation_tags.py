@@ -63,3 +63,16 @@ def update_conversation_tag(
         return {"item": item}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/{tag_id}")
+def delete_conversation_tag(
+    tag_id: int,
+    current_user: dict[str, Any] = Depends(require_permission("conversations.manage")),
+):
+    company_id = auth_service.resolve_company_id(current_user)
+    try:
+        conversation_control_service.delete_tag(company_id=company_id, tag_id=tag_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"success": True}

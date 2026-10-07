@@ -12,6 +12,8 @@ import {
 } from "../platformClient";
 import { formatBytes, formatCount, formatTimestamp, humanize } from "../format";
 import CompanyConfigEditor from "../components/CompanyConfigEditor";
+import CompanyLimitsPanel from "../components/CompanyLimitsPanel";
+import CompanySettingOverridesPanel from "../components/CompanySettingOverridesPanel";
 import {
   ConfirmDialog,
   ConsoleBanner,
@@ -375,6 +377,10 @@ export default function CompanyDetailPage() {
           </div>
         )}
       </ConsolePanel>
+
+      <CompanyLimitsPanel companyId={companyId} />
+
+      <CompanySettingOverridesPanel companyId={companyId} />
 
       {detail.platform_config ? (
         <CompanyConfigEditor

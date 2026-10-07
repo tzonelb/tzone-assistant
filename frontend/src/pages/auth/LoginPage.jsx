@@ -265,6 +265,11 @@ export default function LoginPage() {
         </form>
 
         <small className="login-security-note">
+          New company?{" "}
+          <Link to="/signup">Create an account</Link>
+        </small>
+
+        <small className="login-security-note">
           Protected access · T-ZONE Platform
         </small>
       </section>

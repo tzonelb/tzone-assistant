@@ -164,6 +164,7 @@ class Action:
     # --- reads, kept apart from changes
     CONVERSATION_OPENED = "conversations.opened"
     CONVERSATION_EXPORTED = "conversations.exported"
+    CONVERSATION_SHARE_LINK_REVOKED = "conversations.share_link_revoked"
     CUSTOMER_OPENED = "customers.opened"
 
     # --- security, mirrored to the control plane
@@ -172,6 +173,8 @@ class Action:
     WORKSPACE_CODE_REJECTED = "auth.workspace_code_rejected"
     ACCOUNT_LOCKED = "auth.account_locked"
     PASSWORD_CHANGED = "auth.password_changed"
+    TOTP_ENABLED = "auth.totp_enabled"
+    TOTP_DISABLED = "auth.totp_disabled"
     PERMISSION_DENIED = "auth.permission_denied"
     PLAN_LIMIT_HIT = "platform.plan_limit_hit"
     WEBHOOK_SIGNATURE_REJECTED = "platform.webhook_signature_rejected"
@@ -187,6 +190,8 @@ SECURITY_ACTIONS = frozenset(
         Action.WORKSPACE_CODE_REJECTED,
         Action.ACCOUNT_LOCKED,
         Action.PASSWORD_CHANGED,
+        Action.TOTP_ENABLED,
+        Action.TOTP_DISABLED,
         Action.PERMISSION_DENIED,
         Action.PLAN_LIMIT_HIT,
         Action.WEBHOOK_SIGNATURE_REJECTED,

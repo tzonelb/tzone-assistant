@@ -135,6 +135,70 @@ def test_a_view_only_role_can_read_but_not_book(client, service, platform, alpha
     assert booked.status_code == 403, booked.text
 
 
+def test_an_ordinary_employee_only_sees_their_own_appointments(
+    client, service, platform, alpha
+):
+    """An employee holding plain `appointments.view` (no `users.manage`, not
+    `owner`) must not be able to browse a colleague's calendar -- not even by
+    asking for it explicitly. The frontend already hides the "All employees"
+    picker on this assumption (`AppointmentsPageV2.jsx`'s `canViewAllEmployees`);
+    this is the server-side half of that contract."""
+    agent1_id, agent1_headers = _employee(
+        client, service, platform, alpha, "agent1@alpha.example.com", "agent"
+    )
+    agent2_id, agent2_headers = _employee(
+        client, service, platform, alpha, "agent2@alpha.example.com", "agent"
+    )
+
+    booked1 = client.post(
+        "/api/appointments", headers=agent1_headers, json=_booking(agent1_id)
+    )
+    assert booked1.status_code == 201, booked1.text
+
+    booked2 = client.post(
+        "/api/appointments", headers=agent2_headers, json=_booking(agent2_id)
+    )
+    assert booked2.status_code == 201, booked2.text
+
+    own_view = client.get("/api/appointments", headers=agent1_headers)
+    assert own_view.status_code == 200, own_view.text
+    own_ids = {item["staff_user_id"] for item in own_view.json()["items"]}
+    assert own_ids == {agent1_id}
+
+    # Explicitly asking for a colleague's id is silently overridden back to
+    # the caller's own, exactly as the frontend comment describes -- not a
+    # 403, since the UI simply never lets this value reach the request.
+    nosy_view = client.get(
+        "/api/appointments",
+        headers=agent1_headers,
+        params={"staff_user_id": agent2_id},
+    )
+    assert nosy_view.status_code == 200, nosy_view.text
+    nosy_ids = {item["staff_user_id"] for item in nosy_view.json()["items"]}
+    assert nosy_ids == {agent1_id}
+
+
+def test_the_owner_sees_every_employees_appointments(client, service, platform, alpha):
+    agent_id, agent_headers = _employee(
+        client, service, platform, alpha, "agent3@alpha.example.com", "agent"
+    )
+    booked = client.post(
+        "/api/appointments", headers=agent_headers, json=_booking(agent_id)
+    )
+    assert booked.status_code == 201, booked.text
+
+    _, owner_headers = _employee(
+        client, service, platform, alpha, "owner-view@alpha.example.com", "owner"
+    )
+
+    seen = client.get(
+        "/api/appointments", headers=owner_headers, params={"staff_user_id": agent_id}
+    )
+    assert seen.status_code == 200, seen.text
+    seen_ids = {item["staff_user_id"] for item in seen.json()["items"]}
+    assert seen_ids == {agent_id}
+
+
 def test_an_unauthenticated_request_is_refused(client):
     response = client.get("/api/appointments")
 

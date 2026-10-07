@@ -4,10 +4,15 @@ Previously this router had no authentication at all: anyone who knew the URL
 could read every ticket from every company — customer phone numbers and problem
 descriptions included — and create unlimited new ones.
 
-Two routers live here because one table serves two audiences. ``router``
-(``/api/tickets``) is the escalation view the inbox already uses and is gated on
-the conversations permissions. ``tasks_router`` (``/api/tasks``) is the team's
-task list, gated on ``tasks.view`` and ``tasks.manage``.
+Two routers live here because one table serves two audiences. ``tasks_router``
+(``/api/tasks``) is the team's task list, gated on ``tasks.view`` and
+``tasks.manage``, and the one every screen actually calls. ``router``
+(``/api/tickets``) is a human-facing GET/PATCH view onto the same rows, gated
+on the conversations permissions -- but the assistant's own escalation path
+(``core/engine.py``) calls ``ticket_service.create`` directly in Python rather
+than this route, and no frontend screen calls it either; an escalated row
+still surfaces on the Tasks screen either way, since both routers read and
+write the same ``tickets`` table.
 
 Neither of them takes a company from the client. It is resolved from the token,
 and every employee id a request names is checked against that company's own
@@ -245,6 +250,9 @@ def list_tasks(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     result["items"] = with_display_names(company_id, result["items"])
+    result["items"] = ticket_service.with_conversation_links(
+        company_id, result["items"]
+    )
     return result
 
 
@@ -340,7 +348,8 @@ def create_task(
         ip_address=client_ip(request),
     )
 
-    return with_display_names(company_id, [task])[0]
+    task = with_display_names(company_id, [task])[0]
+    return ticket_service.with_conversation_links(company_id, [task])[0]
 
 
 @tasks_router.get("/{task_id}")
@@ -360,6 +369,7 @@ def get_task(
         raise HTTPException(status_code=404, detail="Task not found.") from exc
 
     with_display_names(company_id, [task, *comments])
+    ticket_service.with_conversation_links(company_id, [task])
 
     task["comments"] = comments
     return task
@@ -434,7 +444,8 @@ def update_task(
         ),
     )
 
-    return with_display_names(company_id, [task])[0]
+    task = with_display_names(company_id, [task])[0]
+    return ticket_service.with_conversation_links(company_id, [task])[0]
 
 
 @tasks_router.delete("/{task_id}")
@@ -495,7 +506,8 @@ def change_task_status(
         summary=f"Moved the task {task.get('title')} to {payload.status}",
     )
 
-    return with_display_names(company_id, [task])[0]
+    task = with_display_names(company_id, [task])[0]
+    return ticket_service.with_conversation_links(company_id, [task])[0]
 
 
 @tasks_router.post("/{task_id}/assign")
@@ -532,7 +544,8 @@ def assign_task(
         ),
     )
 
-    return with_display_names(company_id, [task])[0]
+    task = with_display_names(company_id, [task])[0]
+    return ticket_service.with_conversation_links(company_id, [task])[0]
 
 
 @tasks_router.get("/{task_id}/comments")

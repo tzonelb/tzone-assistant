@@ -428,6 +428,67 @@ def test_a_company_account_may_turn_it_off_with_a_code(
     assert wired.status(user_id)["enabled"] is False
 
 
+def test_enabling_and_disabling_log_their_own_distinct_actions(
+    client, wired, platform, alpha
+):
+    """Both used to log `Action.PASSWORD_CHANGED` -- turning on or off a
+    second factor is not changing a password, and anything filtering the
+    security log by action type would misfile a 2FA toggle as one, or miss
+    it entirely when filtering for the other."""
+    from backend.services.auth_service import auth_service
+    from database.manager import utc_now_iso
+
+    user_id = auth_service.create_user(
+        email="agent2fa@alpha.example.com", password=PASSWORD, full_name="An Agent"
+    )
+
+    with platform["manager"].control() as conn:
+        conn.execute(
+            """
+            INSERT INTO company_users (company_id, user_id, role_id, status, created_at)
+            VALUES (?, ?, NULL, 'active', ?)
+            """,
+            (alpha["id"], user_id, utc_now_iso()),
+        )
+        conn.commit()
+
+    login = client.post(
+        "/api/auth/login",
+        json={
+            "workspace_code": alpha["workspace_code"],
+            "company": alpha["name"],
+            "email": "agent2fa@alpha.example.com",
+            "password": PASSWORD,
+        },
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+
+    secret = client.post("/api/auth/totp/begin", headers=_bearer(token)).json()["secret"]
+    client.post(
+        "/api/auth/totp/confirm",
+        headers=_bearer(token),
+        json={"code": pyotp.TOTP(secret).now()},
+    )
+    client.request(
+        "DELETE", "/api/auth/totp", headers=_bearer(token),
+        json={"code": pyotp.TOTP(secret).now()},
+    )
+
+    with platform["manager"].tenant(alpha["id"]) as conn:
+        actions = [
+            row["action"]
+            for row in conn.execute(
+                "SELECT action FROM activity_log WHERE actor_user_id = ? ORDER BY id",
+                (user_id,),
+            ).fetchall()
+        ]
+
+    assert "auth.totp_enabled" in actions
+    assert "auth.totp_disabled" in actions
+    assert "auth.password_changed" not in actions
+
+
 def test_a_company_account_is_not_required_to_enrol(client, wired, platform, alpha):
     """Optional on a company account and mandatory only for a platform
     administrator: the platform decides what protects the platform, and the

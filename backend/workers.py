@@ -41,6 +41,7 @@ from backend.services.diagnostics_service import diagnostics_service
 from backend.services.health_service import health_service
 from backend.services.notification_service import notification_service
 from backend.services import reply_flow_resume_service
+from backend.services import reply_flow_appointment_reminder_service
 from backend.services import reply_flow_silence_service
 from backend.services.work_index_service import (
     KIND_PENDING_REPLY,
@@ -81,6 +82,12 @@ REPLY_FLOW_RESUME_SWEEP_SECONDS = 30
 # company even have a silence trigger configured" -- a real cost worth
 # paying less often for.
 REPLY_FLOW_SILENCE_SWEEP_SECONDS = 120
+
+# Same shape and the same reasoning as the silence sweep just above: an
+# appointment reminder's own "due" window depends on each flow's own
+# `minutes_before`, so there is nothing to register in `work_index_service`
+# in advance either.
+REPLY_FLOW_APPOINTMENT_REMINDER_SWEEP_SECONDS = 120
 ATTEMPT_PRUNE_SECONDS = 3600
 
 # How often the platform checks itself. Fifteen minutes is often enough that a
@@ -295,6 +302,23 @@ async def reply_flow_silence_worker() -> None:
             reply_flow_silence_service.fire_due,
         )
         await asyncio.sleep(REPLY_FLOW_SILENCE_SWEEP_SECONDS)
+
+
+async def reply_flow_appointment_reminder_worker() -> None:
+    """Start an `appointment_reminder` Reply Flow once an appointment has
+    entered its own flow's reminder window.
+
+    Same shape as `reply_flow_silence_worker`, and for the same reason: the
+    "due" window depends on each flow's own `minutes_before`, which is not a
+    deadline `work_index_service` can index in advance.
+    """
+    while True:
+        await _run_for_companies(
+            "reply flow appointment reminder sweep",
+            database_manager.list_company_ids(),
+            reply_flow_appointment_reminder_service.fire_due,
+        )
+        await asyncio.sleep(REPLY_FLOW_APPOINTMENT_REMINDER_SWEEP_SECONDS)
 
 
 async def self_check_worker() -> None:

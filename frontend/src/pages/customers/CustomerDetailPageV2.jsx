@@ -164,6 +164,7 @@ export default function CustomerDetailPageV2() {
 
   const [timeline, setTimeline] = useState([]);
   const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineError, setTimelineError] = useState("");
 
   const [lifecycleStages, setLifecycleStages] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -187,9 +188,12 @@ export default function CustomerDetailPageV2() {
 
   useEffect(() => {
     setTimelineLoading(true);
+    setTimelineError("");
     getCustomerTimelineRequest(customerId)
       .then((result) => setTimeline(Array.isArray(result?.items) ? result.items : []))
-      .catch(() => {})
+      .catch((requestError) => {
+        setTimelineError(requestError.message || "The timeline could not be loaded.");
+      })
       .finally(() => setTimelineLoading(false));
   }, [customerId]);
 
@@ -199,7 +203,9 @@ export default function CustomerDetailPageV2() {
         setLifecycleStages(Array.isArray(result?.lifecycle_stages) ? result.lifecycle_stages : []);
         setEmployees(Array.isArray(result?.employees) ? result.employees : []);
       })
-      .catch(() => {});
+      .catch((requestError) => {
+        setError(requestError.message || "Lifecycle stages and employees could not be loaded.");
+      });
   }, []);
 
   async function persist(updates) {
@@ -408,6 +414,8 @@ export default function CustomerDetailPageV2() {
           <span className="card-kicker"><HistoryOutlined fontSize="inherit" /> Timeline</span>
           {timelineLoading ? (
             <LoadingState title="Loading timeline…" />
+          ) : timelineError ? (
+            <p className="tzv2-custdet-empty-hint">{timelineError}</p>
           ) : timeline.length === 0 ? (
             <p className="tzv2-custdet-empty-hint">No activity recorded yet.</p>
           ) : (

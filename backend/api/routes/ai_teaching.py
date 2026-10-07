@@ -180,13 +180,32 @@ def get_composed_prompt(
     """The exact system prompt this company's assistant is given.
 
     Shown in the screen so an owner can see that their instructions really are
-    what the assistant is told, rather than trusting that they are.
+    what the assistant is told, rather than trusting that they are. Appends
+    the AI Instructions block exactly the way `core.ai_router.AIRouter
+    ._with_instructions` does on the real reply path -- without it, a company
+    with Instructions-tab rules saw a preview missing a whole section of what
+    is actually sent, department-scoped rules aside (this screen carries no
+    department context to scope them with).
     """
+    from backend.services.instruction_service import instruction_service
     from core.prompt_builder import prompt_builder
+
+    prompt = prompt_builder.build_system_prompt(channel, company_id=company_id)
+
+    rules = instruction_service.for_prompt(company_id, channel=channel)
+    if rules:
+        numbered = "\n".join(f"{i}. {text}" for i, text in enumerate(rules, 1))
+        block = (
+            "The business owner has set these rules for how you must reply. "
+            "They override the general guidance above when they conflict, and "
+            "you must follow them even while staying grounded in confirmed "
+            "facts:\n" + numbered
+        )
+        prompt = f"{prompt}\n\n{block}"
 
     return {
         "channel": channel,
-        "prompt": prompt_builder.build_system_prompt(channel, company_id=company_id),
+        "prompt": prompt,
     }
 
 
