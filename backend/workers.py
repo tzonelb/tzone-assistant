@@ -41,6 +41,7 @@ from backend.services.diagnostics_service import diagnostics_service
 from backend.services.health_service import health_service
 from backend.services.notification_service import notification_service
 from backend.services import reply_flow_resume_service
+from backend.services import reply_flow_silence_service
 from backend.services.work_index_service import (
     KIND_PENDING_REPLY,
     KIND_REMINDER,
@@ -73,6 +74,13 @@ PENDING_REPLY_SWEEP_SECONDS = 2
 SCHEDULED_POST_SWEEP_SECONDS = 30
 REMINDER_SWEEP_SECONDS = 30
 REPLY_FLOW_RESUME_SWEEP_SECONDS = 30
+
+# Longer than the deadline-based sweeps above: those cost nothing when there
+# is no work (one indexed control-plane read decides it). This one opens
+# every active company's own database every cycle to answer "does this
+# company even have a silence trigger configured" -- a real cost worth
+# paying less often for.
+REPLY_FLOW_SILENCE_SWEEP_SECONDS = 120
 ATTEMPT_PRUNE_SECONDS = 3600
 
 # How often the platform checks itself. Fifteen minutes is often enough that a
@@ -267,6 +275,26 @@ async def reply_flow_resume_worker() -> None:
             reply_flow_resume_service.fire_due,
         )
         await asyncio.sleep(REPLY_FLOW_RESUME_SWEEP_SECONDS)
+
+
+async def reply_flow_silence_worker() -> None:
+    """Start a `customer_no_reply` / `team_no_reply` Reply Flow once a
+    conversation has gone quiet long enough.
+
+    Not `_sweep`-shaped like the two workers just above: a silence condition
+    has no scheduled deadline to register in `work_index_service` (see
+    `reply_flow_silence_service`'s own docstring for why), so this opens
+    every active company on a timer -- the same shape `email_poll_worker`
+    checks every connected mailbox on a timer, for the same reason: nothing
+    here registers in advance when it becomes due.
+    """
+    while True:
+        await _run_for_companies(
+            "reply flow silence sweep",
+            database_manager.list_company_ids(),
+            reply_flow_silence_service.fire_due,
+        )
+        await asyncio.sleep(REPLY_FLOW_SILENCE_SWEEP_SECONDS)
 
 
 async def self_check_worker() -> None:

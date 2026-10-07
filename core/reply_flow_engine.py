@@ -429,6 +429,13 @@ class ReplyFlowEngine:
         branch it already has -- cancel the now-fired wait, step past the
         node, and keep walking.
         """
+        if not self._module_enabled(company_id):
+            # Downgraded since the wait was scheduled: `handle()` checks
+            # this before a flow ever starts, and a sweep firing later must
+            # hold the same line -- a company that lost the module mid-wait
+            # must not still get the follow-up it bought the module for.
+            return
+
         flow = reply_flow_service.get(int(company_id), int(flow_id))
         if not flow or flow.get("status") != "active":
             # Archived, deleted, or never existed since the wait was
@@ -440,23 +447,10 @@ class ReplyFlowEngine:
             "node_id": str(resume_node_id),
             "variables": dict(variables or {}),
         }
-        ephemeral_session: dict[str, Any] = {}
-
-        company_name = ""
-        try:
-            from core import prompt_builder
-
-            company_name = prompt_builder._company_name(int(company_id)) or ""
-        except Exception:  # noqa: BLE001
-            logger.exception(
-                "Could not read the company name resuming a reply flow wait "
-                "for company %s",
-                company_id,
-            )
-
-        customer_name, language = self._conversation_identity(
+        company_name, customer_name, language = self._proactive_context(
             company_id=company_id, channel=channel, external_user_id=external_user_id
         )
+        ephemeral_session: dict[str, Any] = {}
 
         try:
             outcome = self._advance(
@@ -473,20 +467,122 @@ class ReplyFlowEngine:
             )
             return
 
+        self._deliver_proactive_outcome(
+            company_id=company_id, channel=channel, external_user_id=external_user_id,
+            outcome=outcome, run=run, ephemeral_session=ephemeral_session,
+            log_context="resuming a timeout wait",
+        )
+
+    def start_for_trigger(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        flow: dict[str, Any],
+    ) -> bool:
+        """Start a flow proactively for a conversation nobody just messaged
+        into -- `reply_flow_silence_service`'s own entry point for
+        `customer_no_reply` / `team_no_reply`, the same way
+        `resume_after_timeout` is `reply_flow_resume_service`'s.
+
+        The one real difference from a live `new_conversation` start
+        (`handle()`'s own `run is None` branch): this never runs for a
+        conversation a flow is already mid-way through, live or otherwise --
+        the caller deciding to start one here has no turn of its own to
+        answer, so it must not step on one that does.
+
+        Returns whether it actually attempted to start one -- the caller's
+        own silence-dedup record must not be written for a call this skipped,
+        or a conversation that stays occupied by another flow across more
+        than one sweep cycle would never be reconsidered once it is free.
+        """
+        if not self._module_enabled(company_id):
+            return False
+
+        if self.has_live_run(company_id=company_id, channel=channel, external_user_id=external_user_id):
+            return False
+
+        run: dict[str, Any] = {
+            "flow_id": flow["id"], "node_id": None, "variables": {},
+        }
+        company_name, customer_name, language = self._proactive_context(
+            company_id=company_id, channel=channel, external_user_id=external_user_id
+        )
+        ephemeral_session: dict[str, Any] = {}
+
+        try:
+            outcome = self._advance(
+                int(company_id), flow, run, "", ephemeral_session,
+                language, company_name, customer_name, first_turn=True,
+                channel=channel, external_user_id=external_user_id,
+            )
+        except Exception:
+            logger.exception(
+                "Reply flow engine failed starting a %s flow for company %s",
+                flow.get("trigger_type"),
+                company_id,
+            )
+            return True
+
+        self._deliver_proactive_outcome(
+            company_id=company_id, channel=channel, external_user_id=external_user_id,
+            outcome=outcome, run=run, ephemeral_session=ephemeral_session,
+            log_context=f"starting a {flow.get('trigger_type')} flow",
+        )
+        return True
+
+    @staticmethod
+    def has_live_run(*, company_id: int, channel: str, external_user_id: str) -> bool:
+        """Whether this conversation's in-memory session already has a Reply
+        Flow mid-run -- live or otherwise, the one check a proactive trigger
+        must make before starting a second one on top of it."""
+        from core.session import SessionManager, session
+
+        key = SessionManager.key(external_user_id, channel, company_id)
+        existing = session.get(key)
+        return existing is not None and existing.get("reply_flow") is not None
+
+    @staticmethod
+    def _module_enabled(company_id: int) -> bool:
+        """Same gate `handle()` applies before a flow is ever allowed to
+        start -- the one every proactive entry point (no live message to
+        gate on) must re-apply on its own, since a sweep can fire long after
+        a flow started under a module the company may since have lost."""
+        try:
+            return module_access.module_enabled(int(company_id), "ai_teaching")
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _deliver_proactive_outcome(
+        self,
+        *,
+        company_id: int,
+        channel: str,
+        external_user_id: str,
+        outcome: Response | FlowDefer | None,
+        run: dict[str, Any],
+        ephemeral_session: dict[str, Any],
+        log_context: str,
+    ) -> None:
+        """What `resume_after_timeout` and `start_for_trigger` share once
+        `_advance` has run with no live customer turn to answer: send what
+        the flow produced, or explain in the log why nothing was sent."""
         if isinstance(outcome, FlowDefer):
-            # The graph continues into an AI step, which answers a customer's
-            # own words -- there are none here, this turn was not prompted by
+            # The graph reaches an AI step, which answers a customer's own
+            # words -- there are none here, this turn was not prompted by
             # one. Sending nothing is the safe choice; inventing a message
             # for the AI to answer would be putting words in the customer's
             # mouth. The flow's progress past this point is not durably
             # recorded (see the module docstring on what is and is not
-            # persisted across a restart), so this is the one shape of
-            # `timeout_followup` this does not carry all the way through --
-            # named here rather than silently dropped.
+            # persisted across a restart), so this is the one shape neither
+            # proactive path carries all the way through -- named here
+            # rather than silently dropped.
             logger.info(
-                "Reply flow wait for company %s resumed into an AI step; "
-                "nothing sent",
+                "Reply flow for company %s (%s) reached an AI step; nothing "
+                "sent",
                 company_id,
+                log_context,
             )
             return
 
@@ -501,17 +597,41 @@ class ReplyFlowEngine:
             buttons=outcome.buttons,
         )
 
-        # The flow is not over (it is paused again -- another ask_question,
-        # another timeout_followup, another AI step): if the customer still
-        # has a live in-memory session, carry the new position into it so
-        # their next message resumes the normal, synchronous way. A customer
-        # with no live session picks the flow up fresh on their next message
+        # The flow is not over (it is paused again -- an ask_question,
+        # a timeout_followup, an AI step): if the customer has a live
+        # in-memory session, carry the new position into it so their next
+        # message resumes the normal, synchronous way. A customer with no
+        # live session picks the flow up fresh on their next message
         # instead, the same as a session that expired for any other reason.
         if ephemeral_session.get("reply_flow") is not None:
             self._seed_live_session(
                 channel=channel, external_user_id=external_user_id,
                 company_id=company_id, run=run,
             )
+
+    @staticmethod
+    def _proactive_context(
+        *, company_id: int, channel: str, external_user_id: str
+    ) -> tuple[str, str, str]:
+        """company_name, customer_name, language for a conversation already
+        on file -- there is no live request to read any of them from, the
+        way a real inbound message carries them."""
+        company_name = ""
+        try:
+            from core.prompt_builder import prompt_builder
+
+            company_name = prompt_builder._company_name(int(company_id)) or ""
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not read the company name for a proactive reply flow "
+                "turn, company %s",
+                company_id,
+            )
+
+        customer_name, language = ReplyFlowEngine._conversation_identity(
+            company_id=company_id, channel=channel, external_user_id=external_user_id
+        )
+        return company_name, customer_name, language
 
     @staticmethod
     def _conversation_identity(

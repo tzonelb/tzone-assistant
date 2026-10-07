@@ -91,7 +91,7 @@ def test_the_sample_is_imperfect_on_purpose(wired, alpha):
             WHERE company_id = ?
               AND id NOT IN (
                 SELECT conversation_id FROM messages
-                WHERE company_id = ? AND direction = 'outbound'
+                WHERE company_id = ? AND direction = 'out'
               )
             """,
             (alpha["id"], alpha["id"]),
@@ -112,6 +112,30 @@ def test_the_sample_is_imperfect_on_purpose(wired, alpha):
     assert unanswered >= 1, "nobody was left unanswered, so the report has nothing to find"
     assert assistant >= 1, "the assistant answered nothing, so automation reads 0%"
     assert person >= 1, "no employee replied, so the per-employee report is empty"
+
+
+def test_seeded_messages_use_the_same_direction_values_every_other_writer_does(
+    wired, alpha
+):
+    """`save_message`'s own `direction` is "in" or "out" everywhere else it is
+    called (a real inbound webhook, a manual reply, the AI path) -- and that
+    is also what `ConversationDetailPageV2.jsx` compares against to decide
+    which side of the thread a bubble renders on. A seeder that wrote
+    "inbound"/"outbound" instead produced rows the real writers never would:
+    every demo workspace's message bubbles rendered on the wrong side."""
+    from database.manager import database_manager
+    from backend.services.demo_seed_service import demo_seed_service
+
+    demo_seed_service.seed(company_id=alpha["id"], owner_user_id=1)
+
+    with database_manager.tenant(alpha["id"]) as conn:
+        stray = conn.execute(
+            "SELECT DISTINCT direction FROM messages "
+            "WHERE company_id = ? AND direction NOT IN ('in', 'out')",
+            (alpha["id"],),
+        ).fetchall()
+
+    assert stray == []
 
 
 def test_the_messages_are_spread_over_days_not_one_second(wired, alpha):

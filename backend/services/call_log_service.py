@@ -135,6 +135,20 @@ class CallLogService:
             call_id = int(cursor.lastrowid)
             conn.commit()
 
+        try:
+            from backend.services.reply_flow_event_service import fire_for_customer
+
+            fire_for_customer(
+                company_id=company_id, customer_id=customer_id,
+                trigger_type="call_logged",
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "Could not fire the call_logged reply flow trigger for "
+                "company %s",
+                company_id,
+            )
+
         return self.get_call_log(company_id=company_id, call_id=call_id)
 
     def delete_call_log(self, *, company_id: int, call_id: int) -> None:

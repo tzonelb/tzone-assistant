@@ -1653,6 +1653,33 @@ class ConversationControlService:
 
         _note_takeover_deadline(company_id, takeover_expiry)
 
+        if any(
+            field == "status" and new == "closed"
+            for field, _, new in actual_changes
+        ):
+            # Best-effort and outside the transaction above on purpose: a
+            # reply flow that fails to start must never turn a successful
+            # close into a failed one (reply_flow_event_service.
+            # fire_for_conversation never raises, but nothing here depends
+            # on that promise holding).
+            try:
+                from backend.services.reply_flow_event_service import (
+                    fire_for_conversation,
+                )
+
+                fire_for_conversation(
+                    company_id=company_id, channel=channel,
+                    external_user_id=external_user_id,
+                    department=state.get("department") or "",
+                    trigger_type="conversation_closed",
+                )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "Could not fire the conversation_closed reply flow "
+                    "trigger for company %s",
+                    company_id,
+                )
+
         return self.get_state(
             company_id=company_id,
             channel=channel,
