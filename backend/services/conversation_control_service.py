@@ -2254,6 +2254,25 @@ class ConversationControlService:
             raise ValueError("Tag not found.")
         return dict(row)
 
+    def delete_tag(self, company_id: int, tag_id: int) -> None:
+        """Retire a tag rather than erasing the row.
+
+        `create_tag`'s own `ON CONFLICT` already revives an `'archived'` tag
+        by name, the same soft-delete the rest of this table's rows use via
+        `status` -- a hard `DELETE` here would let a later `create_tag` call
+        with the same name silently resurrect a tag with a new id, orphaning
+        anything that still referenced the old one.
+        """
+        with database_manager.tenant(company_id) as conn:
+            cursor = conn.execute(
+                """UPDATE conversation_tags SET status = 'archived', updated_at = ?
+                   WHERE id = ? AND company_id = ? AND status = 'active'""",
+                (utc_now_iso(), tag_id, company_id),
+            )
+            conn.commit()
+        if cursor.rowcount == 0:
+            raise ValueError("Tag not found.")
+
     @staticmethod
     def serialize_event(
         row,

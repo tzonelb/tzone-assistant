@@ -1023,8 +1023,13 @@ class AuthService:
 
         return row is not None
 
-    def consume_password_reset(self, *, token: str, new_password: str) -> bool:
-        """Spend a reset token and set the new password. One attempt, one use.
+    def consume_password_reset(self, *, token: str, new_password: str) -> int | None:
+        """Spend a reset token and set the new password, returning whose it was.
+
+        The caller needs the user id back to log the change against their
+        company's own security log -- this route runs unauthenticated, so
+        there is no session to read a company from the way every other
+        password-change path has one.
 
         The claim is a single ``UPDATE ... WHERE used_at IS NULL`` whose
         rowcount is the whole decision, not a ``SELECT`` of ``used_at`` followed
@@ -1060,7 +1065,7 @@ class AuthService:
             # request finds rowcount 0 and stops here.
             if claimed.rowcount != 1:
                 conn.commit()
-                return False
+                return None
 
             row = conn.execute(
                 "SELECT user_id FROM password_reset_tokens WHERE token_hash = ? "
@@ -1071,12 +1076,12 @@ class AuthService:
             conn.commit()
 
             if row is None:
-                return False
+                return None
 
             user_id = int(row["user_id"])
 
         self.set_password(user_id=user_id, new_password=new_password)
-        return True
+        return user_id
 
     def prune_expired_sessions(self, retention_hours: int = 72) -> int:
         """Delete sessions that expired or were revoked a while ago.

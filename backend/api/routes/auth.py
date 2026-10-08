@@ -364,6 +364,7 @@ def revoke_other_sessions(
 @router.post("/password", response_model=PasswordChangeResponse)
 def change_password(
     payload: PasswordChangeRequest,
+    request: Request,
     current_user: dict = Depends(get_user_changing_password),
 ):
     """Change your own password.
@@ -387,6 +388,21 @@ def change_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The current password is incorrect.",
+        )
+
+    company_id = current_user.get("active_company_id")
+
+    if company_id is not None:
+        activity_service.record(
+            company_id=int(company_id),
+            action=Action.PASSWORD_CHANGED,
+            category="auth",
+            kind="security",
+            actor_user_id=int(current_user["id"]),
+            actor_label=current_user.get("full_name") or current_user.get("email"),
+            summary="Changed their own password",
+            severity="warning",
+            ip_address=client_ip(request),
         )
 
     return {
@@ -468,9 +484,11 @@ def reset_password(token: str, payload: PasswordResetRequest, request: Request):
     """
     ip_address = client_ip(request)
 
-    if not auth_service.consume_password_reset(
+    user_id = auth_service.consume_password_reset(
         token=token, new_password=payload.new_password
-    ):
+    )
+
+    if user_id is None:
         logger.warning("Rejected password reset token from %s", ip_address)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -478,6 +496,31 @@ def reset_password(token: str, payload: PasswordResetRequest, request: Request):
                 "This reset link is no longer valid. Ask an administrator at "
                 "your company to send a new one."
             ),
+        )
+
+    # No session exists yet to read a company from -- the whole point of this
+    # route is that the caller cannot sign in. Logged against their first
+    # company, the same fallback `_record_auth_failure` already uses for an
+    # account lock, which faces the identical problem.
+    companies = auth_service.get_user_companies(user_id)
+    company_id = companies[0]["id"] if companies else None
+
+    if company_id is not None:
+        activity_service.record(
+            company_id=int(company_id),
+            action=Action.PASSWORD_CHANGED,
+            category="auth",
+            kind="security",
+            actor_user_id=user_id,
+            summary="Reset the password using an emailed link",
+            severity="warning",
+            ip_address=ip_address,
+        )
+    else:
+        activity_service.record_unattributed(
+            action=Action.PASSWORD_CHANGED,
+            summary="Reset the password using an emailed link",
+            ip_address=ip_address,
         )
 
     return {
@@ -536,7 +579,7 @@ def totp_confirm(
     if company_id is not None:
         activity_service.record(
             company_id=int(company_id),
-            action=Action.PASSWORD_CHANGED,
+            action=Action.TOTP_ENABLED,
             category="auth",
             kind="security",
             actor_user_id=int(current_user["id"]),
@@ -577,7 +620,7 @@ def totp_disable(
     if company_id is not None:
         activity_service.record(
             company_id=int(company_id),
-            action=Action.PASSWORD_CHANGED,
+            action=Action.TOTP_DISABLED,
             category="auth",
             kind="security",
             actor_user_id=int(current_user["id"]),

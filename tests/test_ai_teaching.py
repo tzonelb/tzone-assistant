@@ -571,6 +571,25 @@ def test_endpoints_read_save_and_test_the_profile(service, alpha, monkeypatch):
     assert tested.json()["stored"] is False
 
 
+def test_the_prompt_preview_includes_the_companys_own_instructions(service, alpha):
+    """`get_composed_prompt` promises "the exact system prompt this company's
+    assistant is given" -- it was only ever the bot profile, never the
+    Instructions tab's own rules, even though `core.ai_router._with_instructions`
+    appends exactly those rules on the real reply path. A company with a rule
+    saved here saw a preview missing a whole section of what is actually sent."""
+    from backend.services.instruction_service import instruction_service
+
+    instruction_service.create(
+        company_id=alpha["id"], text="Never promise a delivery date.", tags=[],
+    )
+
+    client = _client(alpha["id"])
+    prompt = client.get("/api/ai-teaching/profile/prompt")
+
+    assert prompt.status_code == 200
+    assert "Never promise a delivery date." in prompt.json()["prompt"]
+
+
 def test_endpoints_refuse_a_caller_without_a_token(service, alpha):
     """These routes edit what the assistant tells customers and can spend money
     on a model call. An unauthenticated caller must never reach either."""

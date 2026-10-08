@@ -265,6 +265,34 @@ def test_conversation_tags_can_be_listed_and_created(app_client, owner):
     )
 
 
+def test_a_deleted_tag_is_retired_not_erased(app_client, owner):
+    """`create_tag`'s own `ON CONFLICT` revives an `'active'` tag by name --
+    a hard DELETE here would let a later create with the same name silently
+    resurrect it under a new id. Delete must retire it (`status = 'archived'`)
+    the same way every other row in this table is soft-deleted, so it drops
+    out of the list without orphaning anything that already referenced it."""
+    created = app_client.post(
+        "/api/conversation-tags",
+        headers=owner["headers"],
+        json={"name": "VIP", "color": "#00ff00"},
+    )
+    assert created.status_code in (200, 201), created.text
+    tag_id = created.json()["item"]["id"]
+
+    deleted = app_client.delete(
+        f"/api/conversation-tags/{tag_id}", headers=owner["headers"]
+    )
+    assert deleted.status_code == 200, deleted.text
+
+    after = app_client.get("/api/conversation-tags", headers=owner["headers"])
+    assert after.json()["items"] == []
+
+    again = app_client.delete(
+        f"/api/conversation-tags/{tag_id}", headers=owner["headers"]
+    )
+    assert again.status_code == 404, again.text
+
+
 def test_a_tag_survives_the_upgrade_path_too(platform, alpha):
     """New companies get `status` from CREATE TABLE. Companies provisioned
     before this release get it from `TENANT_COLUMNS`, and that is the path that

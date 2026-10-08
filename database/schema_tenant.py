@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 14
+TENANT_SCHEMA_VERSION = 15
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -728,6 +728,21 @@ TENANT_TABLES: tuple[str, ...] = (
         fired_for_message_at TEXT NOT NULL,
         created_at TEXT NOT NULL,
         UNIQUE(channel, external_user_id, trigger_type)
+    )
+    """,
+    """
+    -- One row per appointment the `appointment_reminder` sweep has already
+    -- started a flow for. Unlike the silence trigger above, an appointment's
+    -- `starts_at` never moves on its own, so there is no natural reset to key
+    -- against -- a flat one-shot-per-appointment flag is enough, and correct:
+    -- once reminded, an appointment should never be reminded again even if a
+    -- company edits `minutes_before` on the flow afterwards.
+    CREATE TABLE IF NOT EXISTS reply_flow_appointment_reminders_fired (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        appointment_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        UNIQUE(appointment_id)
     )
     """,
     """

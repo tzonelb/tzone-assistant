@@ -45,14 +45,19 @@ import {
   createConversationShareLinkRequest,
   createQuoteRequest,
   createTaskRequest,
+  deleteQuoteRequest,
   downloadConversationExport,
   emailConversationExportRequest,
   getConversationControlRequest,
   getConversationMessagesRequest,
   getCustomerRequest,
+  listConversationShareLinksRequest,
+  listQuotesRequest,
   listSavedRepliesRequest,
   releaseConversationRequest,
   returnConversationToAiRequest,
+  revokeConversationShareLinkRequest,
+  updateQuoteStatusRequest,
   sendConversationMediaReplyRequest,
   sendConversationReplyRequest,
   setConversationReminderRequest,
@@ -329,9 +334,13 @@ export default function ConversationDetailPageV2({
   const [quoteTitle, setQuoteTitle] = useState("");
   const [quoteAmount, setQuoteAmount] = useState("");
   const [quoteSaving, setQuoteSaving] = useState(false);
+  const [quotes, setQuotes] = useState([]);
+  const [quoteStatusBusyId, setQuoteStatusBusyId] = useState(null);
   const [customerBlocked, setCustomerBlocked] = useState(null);
   const [moderationBusy, setModerationBusy] = useState(false);
   const [sharingBusy, setSharingBusy] = useState(false);
+  const [shareLinks, setShareLinks] = useState([]);
+  const [revokingLinkId, setRevokingLinkId] = useState(null);
   const [emailDraftOpen, setEmailDraftOpen] = useState(false);
   const [emailTo, setEmailTo] = useState("");
   const [emailSending, setEmailSending] = useState(false);
@@ -380,6 +389,20 @@ export default function ConversationDetailPageV2({
         // Non-critical — the composer works fine without saved replies loaded.
       });
   }, []);
+
+  useEffect(() => {
+    if (!exportPanelOpen || !channel || !userId) return;
+    listConversationShareLinksRequest(channel, userId)
+      .then((result) => setShareLinks(result?.items || []))
+      .catch(() => setShareLinks([]));
+  }, [exportPanelOpen, channel, userId]);
+
+  useEffect(() => {
+    if (!createPanelOpen || !control?.id) return;
+    listQuotesRequest(control.id)
+      .then((result) => setQuotes(Array.isArray(result?.quotes) ? result.quotes : []))
+      .catch(() => setQuotes([]));
+  }, [createPanelOpen, control?.id]);
 
   const [, setClockTick] = useState(0);
 
@@ -1085,6 +1108,59 @@ export default function ConversationDetailPageV2({
     } finally {
       setQuoteSaving(false);
     }
+    loadQuotes();
+  }
+
+  function loadQuotes() {
+    if (!control?.id) return;
+    listQuotesRequest(control.id)
+      .then((result) => setQuotes(Array.isArray(result?.quotes) ? result.quotes : []))
+      .catch(() => setQuotes([]));
+  }
+
+  async function changeQuoteStatus(quoteId, status) {
+    setQuoteStatusBusyId(quoteId);
+    setActionError("");
+    try {
+      await updateQuoteStatusRequest(quoteId, status);
+      loadQuotes();
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not update the quote's status.");
+    } finally {
+      setQuoteStatusBusyId(null);
+    }
+  }
+
+  async function removeQuote(quoteId) {
+    setQuoteStatusBusyId(quoteId);
+    setActionError("");
+    try {
+      await deleteQuoteRequest(quoteId);
+      setQuotes((current) => current.filter((quote) => quote.id !== quoteId));
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not delete the quote.");
+    } finally {
+      setQuoteStatusBusyId(null);
+    }
+  }
+
+  function loadShareLinks() {
+    listConversationShareLinksRequest(channel, userId)
+      .then((result) => setShareLinks(result?.items || []))
+      .catch(() => setShareLinks([]));
+  }
+
+  async function revokeShareLink(linkId) {
+    setRevokingLinkId(linkId);
+    setActionError("");
+    try {
+      await revokeConversationShareLinkRequest(channel, userId, linkId);
+      setShareLinks((current) => current.filter((link) => link.id !== linkId));
+    } catch (requestError) {
+      setActionError(requestError.message || "Could not revoke this share link.");
+    } finally {
+      setRevokingLinkId(null);
+    }
   }
 
   async function createShareLink() {
@@ -1099,6 +1175,7 @@ export default function ConversationDetailPageV2({
         setActionSuccess(`Share link: ${result.url}`);
       }
       window.setTimeout(() => setActionSuccess(""), 15000);
+      loadShareLinks();
     } catch (requestError) {
       setActionError(requestError.message || "Could not create a share link.");
     } finally {
@@ -1989,6 +2066,38 @@ export default function ConversationDetailPageV2({
                     </button>
                   </form>
                 ) : null}
+                {quotes.length ? (
+                  <div className="tzv2-cd-quotes-list">
+                    <label>Quotes from this conversation</label>
+                    {quotes.map((quote) => (
+                      <div className="tz-row tzv2-cd-quote-row" key={quote.id}>
+                        <span>
+                          {quote.title} — {quote.currency} {Number(quote.total).toFixed(2)}
+                        </span>
+                        <select
+                          className="input"
+                          value={quote.status}
+                          disabled={quoteStatusBusyId === quote.id}
+                          onChange={(event) => changeQuoteStatus(quote.id, event.target.value)}
+                        >
+                          <option value="draft">Draft</option>
+                          <option value="sent">Sent</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="declined">Declined</option>
+                        </select>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-icon"
+                          aria-label={`Delete quote ${quote.title}`}
+                          disabled={quoteStatusBusyId === quote.id}
+                          onClick={() => removeQuote(quote.id)}
+                        >
+                          <CloseOutlined fontSize="small" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </AccordionCard>
 
               <AccordionCard
@@ -2087,6 +2196,26 @@ export default function ConversationDetailPageV2({
                         {emailSending ? "Sending…" : "Send"}
                       </button>
                     </form>
+                  ) : null}
+                  {shareLinks.length ? (
+                    <div className="tzv2-cd-share-links">
+                      <label>Active share links</label>
+                      {shareLinks.map((link) => (
+                        <div className="tz-row tzv2-cd-share-link-row" key={link.id}>
+                          <span>
+                            {link.scope === "full" ? "Full report" : "Chat only"} · expires {formatDateTime(link.expires_at)}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-ghost"
+                            disabled={revokingLinkId === link.id}
+                            onClick={() => revokeShareLink(link.id)}
+                          >
+                            {revokingLinkId === link.id ? "Revoking…" : "Revoke"}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
               </AccordionCard>

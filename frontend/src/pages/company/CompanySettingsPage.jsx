@@ -8,6 +8,8 @@ import ActivityLogPage from "../admin/ActivityLogPage";
 import ReplyFlowsListPage from "../reply-flows/ReplyFlowsListPage";
 import InstructionsPage from "../ai-teaching/InstructionsPage";
 import KnowledgePage from "../ai-teaching/KnowledgePage";
+import DeveloperCenterPage from "../admin/DeveloperCenterPage";
+import ConversationTagsPage from "../admin/ConversationTagsPage";
 
 const SECTIONS = [
   ["profile", "Company Profile", "Identity, contact information, branches, timezone, business details and branding.", ["Company name", "Workspace code", "Timezone", "Default language", "Logo"]],
@@ -22,6 +24,8 @@ const SECTIONS = [
   ["billing", "Billing", "Your plan, usage limits, billing history, and plan-change or renewal requests.", ["Current plan", "Users limit", "AI usage", "Renewal date"]],
   ["help", "Help", "Frequently asked questions about running your workspace on T-ZONE.", []],
   ["ticketing", "Ticketing", "Open a support or maintenance ticket to the T-ZONE team about platform issues.", []],
+  ["developer_center", "Developer Center", "The technical event stream behind every conversation — webhook received, AI buffer started, a send that failed. Super admin only.", [], null, true],
+  ["conversation_tags", "Conversation Tags", "Named, coloured tags your team can use to sort conversations in the inbox. Admins only.", [], "users.manage"],
 ];
 
 // Same real settings as before (mode, greeting_message, reply_access_mode,
@@ -703,13 +707,14 @@ export default function CompanySettingsPage() {
   );
   const [query, setQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     getCurrentUserRequest()
       .then((response) => {
         if (cancelled) return;
-        if (response?.user?.is_super_admin) { setIsAdmin(true); return; }
+        if (response?.user?.is_super_admin) { setIsAdmin(true); setIsSuperAdmin(true); return; }
         const activeCompanyId = response?.user?.active_company_id;
         const companies = Array.isArray(response?.companies) ? response.companies : [];
         const activeCompany = companies.find((company) => company.id === activeCompanyId) || companies[0];
@@ -722,8 +727,8 @@ export default function CompanySettingsPage() {
     return () => { cancelled = true; };
   }, []);
 
-  const allowedSections = useMemo(() => SECTIONS.filter(([, , , , requiredPermission]) => !requiredPermission || isAdmin), [isAdmin]);
+  const allowedSections = useMemo(() => SECTIONS.filter(([, , , , requiredPermission, superAdminOnly]) => (!requiredPermission || isAdmin) && (!superAdminOnly || isSuperAdmin)), [isAdmin, isSuperAdmin]);
   const visible = useMemo(() => allowedSections.filter(([, title, description]) => `${title} ${description}`.toLowerCase().includes(query.toLowerCase())), [allowedSections, query]);
   const selected = allowedSections.find(([id]) => id === active) || visible[0] || allowedSections[0];
-  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <ChannelsPage /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowsListPage /> : active === "roles" ? <RolesPermissionsPage /> : active === "activity_log" ? <ActivityLogPage /> : active === "instructions" ? <InstructionsPage /> : active === "knowledge" ? <KnowledgePage /> : active === "security" ? <SecurityStatusView /> : <p className="text-muted">This section isn't wired up yet.</p>}</div></main></section>;
+  return <section className="company-settings-shell company-settings-locked-layout"><aside className="company-settings-nav"><button className="company-settings-back" type="button" onClick={() => navigate("/dashboard")}><ArrowBackOutlined /> Back to platform</button><div className="company-settings-nav-heading"><span>COMPANY CONTROL</span><h1>Company Settings</h1></div><label className="settings-search"><SearchOutlined /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search company settings..." /></label><nav className="company-settings-nav-scroll">{visible.map(([id,title]) => <button type="button" key={id} className={active===id?"is-active":""} onClick={()=>setActive(id)}>{title}</button>)}</nav></aside><main className="company-settings-content"><div className="company-settings-content-scroll"><header><span>COMPANY CONTROL</span><h2>{selected[1]}</h2><p>{selected[2]}</p></header>{active === "ai" ? <WorkflowSettings /> : active === "channels" ? <ChannelsPage /> : active === "billing" ? <BillingView /> : active === "help" ? <HelpView /> : active === "ticketing" ? <TicketingView /> : active === "profile" ? <ProfileSettings /> : active === "flow" ? <ReplyFlowsListPage /> : active === "roles" ? <RolesPermissionsPage /> : active === "activity_log" ? <ActivityLogPage /> : active === "instructions" ? <InstructionsPage /> : active === "knowledge" ? <KnowledgePage /> : active === "security" ? <SecurityStatusView /> : active === "developer_center" ? <DeveloperCenterPage /> : active === "conversation_tags" ? <ConversationTagsPage /> : <p className="text-muted">This section isn't wired up yet.</p>}</div></main></section>;
 }

@@ -315,6 +315,60 @@ export async function updateCompanyConfigRequest(companyId, payload) {
   );
 }
 
+export async function companyLimitsRequest(companyId) {
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/limits`,
+  );
+}
+
+export async function setCompanyLimitRequest(companyId, limitKey, value, note = null) {
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/limits/${encodeURIComponent(limitKey)}`,
+    {
+      method: "PUT",
+      body: { value, note },
+    },
+  );
+}
+
+export async function clearCompanyLimitRequest(companyId, limitKey) {
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/limits/${encodeURIComponent(limitKey)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function companyUsageRequest(companyId, period = null) {
+  const query = period ? `?period=${encodeURIComponent(period)}` : "";
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/usage${query}`,
+  );
+}
+
+export async function listSettingOverridesRequest(companyId) {
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/setting-overrides`,
+  );
+}
+
+export async function setSettingOverrideRequest(companyId, payload) {
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/setting-overrides`,
+    {
+      method: "PUT",
+      body: payload,
+    },
+  );
+}
+
+export async function clearSettingOverrideRequest(companyId, section, settingKey) {
+  const query = `?section=${encodeURIComponent(section)}&setting_key=${encodeURIComponent(settingKey)}`;
+  return platformRequest(
+    `/api/platform/companies/${encodeURIComponent(companyId)}/setting-overrides${query}`,
+    { method: "DELETE" },
+  );
+}
+
 export async function listPlansRequest() {
   return platformRequest("/api/platform/plans");
 }

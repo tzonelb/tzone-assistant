@@ -165,6 +165,47 @@ class TicketService:
         task["is_overdue"] = self._is_overdue(task, now or utc_now_iso())
         return task
 
+    def with_conversation_links(
+        self, company_id: int, rows: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Resolve each task's `conversation_id` to the channel and external
+        id a "jump to the source conversation" link actually needs -- a
+        route cannot be built from the bare numeric id a task row carries.
+
+        Batched the same way the router's own `with_display_names` batches
+        employee names: one query for the whole page's ids, not one per row,
+        and both `conversations` and `tickets` live in this same tenant file
+        so this needs no second database.
+        """
+        rows = list(rows)
+        ids = {int(row["conversation_id"]) for row in rows if row.get("conversation_id")}
+
+        if not ids:
+            for row in rows:
+                row["conversation_channel"] = None
+                row["conversation_external_user_id"] = None
+            return rows
+
+        placeholders = ",".join("?" * len(ids))
+        with database_manager.tenant(int(company_id)) as conn:
+            conv_rows = conn.execute(
+                f"""
+                SELECT id, channel, external_user_id FROM conversations
+                WHERE company_id = ? AND id IN ({placeholders})
+                """,
+                (int(company_id), *ids),
+            ).fetchall()
+        by_id = {int(conv["id"]): conv for conv in conv_rows}
+
+        for row in rows:
+            conv = by_id.get(int(row["conversation_id"])) if row.get("conversation_id") else None
+            row["conversation_channel"] = conv["channel"] if conv else None
+            row["conversation_external_user_id"] = (
+                conv["external_user_id"] if conv else None
+            )
+
+        return rows
+
     # ------------------------------------------------------------------
     # Tickets
     # ------------------------------------------------------------------
@@ -331,14 +372,18 @@ class TicketService:
         """
         with database_manager.tenant(int(company_id)) as conn:
             row = conn.execute(
-                "SELECT * FROM tickets WHERE id = ? LIMIT 1", (int(task_id),)
+                "SELECT * FROM tickets WHERE id = ? AND company_id = ? LIMIT 1",
+                (int(task_id), int(company_id)),
             ).fetchone()
 
             if not row:
                 raise KeyError(f"No task with id {task_id}.")
 
             task = self._decorate(row)
-            conn.execute("DELETE FROM tickets WHERE id = ?", (int(task_id),))
+            conn.execute(
+                "DELETE FROM tickets WHERE id = ? AND company_id = ?",
+                (int(task_id), int(company_id)),
+            )
             conn.commit()
 
         return task

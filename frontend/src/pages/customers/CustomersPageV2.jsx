@@ -142,13 +142,19 @@ export default function CustomersPageV2() {
         setLifecycleStages(Array.isArray(result?.lifecycle_stages) ? result.lifecycle_stages : []);
         setEmployees(Array.isArray(result?.employees) ? result.employees : []);
       })
-      .catch(() => {});
+      .catch((requestError) => {
+        // The lifecycle-stage and owner dropdowns go empty either way; say
+        // why, rather than let it read as "this contact has none of those".
+        setError(requestError.message || "Lifecycle stages and employees could not be loaded.");
+      });
   }, []);
 
   const loadSegments = useCallback(() => {
     listCustomerSegmentsRequest()
       .then((result) => setSegments(Array.isArray(result?.items) ? result.items : []))
-      .catch(() => {});
+      .catch((requestError) => {
+        setError(requestError.message || "Segments could not be loaded.");
+      });
   }, []);
 
   useEffect(() => { loadSegments(); }, [loadSegments]);

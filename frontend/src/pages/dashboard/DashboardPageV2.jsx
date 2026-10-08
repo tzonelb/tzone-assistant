@@ -105,7 +105,7 @@ export default function DashboardPageV2() {
                 <div className="tz-row tzv2-dash-row" key={conversation.id}>
                   <div className="tzv2-dash-avatar">{(conversation.channel || "?").charAt(0).toUpperCase()}</div>
                   <div className="tzv2-dash-row-main">
-                    <strong>Customer {conversation.external_user_id}</strong>
+                    <strong>{conversation.customer_name || `Customer ${conversation.external_user_id}`}</strong>
                     <span>{conversation.department || "Unassigned"} · {conversation.topic || "No topic"}</span>
                   </div>
                   <span className="tz-kick">{conversation.channel}</span>

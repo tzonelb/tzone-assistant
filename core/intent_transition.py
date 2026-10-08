@@ -110,28 +110,5 @@ class IntentTransitionManager:
 
         return best_code
 
-    def should_switch_to_ai(
-        self,
-        channel: str,
-        message: str,
-        current_department: str | None = None,
-        company_id: int | None = None,
-    ) -> bool:
-        if channel not in self.GENERAL_CHANNELS:
-            return False
-
-        detected_department = self.detect_department(
-            message,
-            company_id=company_id,
-        )
-
-        if not detected_department:
-            return False
-
-        if not current_department:
-            return True
-
-        return detected_department != current_department
-
 
 intent_transition_manager = IntentTransitionManager()

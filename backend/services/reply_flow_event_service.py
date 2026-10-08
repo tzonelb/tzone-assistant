@@ -13,7 +13,7 @@ a call and a task are each about a *customer* (`customer_id`), not about a
 *conversation* on a specific channel the way `conversations` rows are. A
 customer can hold more than one channel identity (`customer_identities`),
 and nothing in this platform already picks one when more than one exists.
-`_resolve_channel` makes that call: the channel of the customer's own most
+`resolve_channel_for_customer` makes that call: the channel of the customer's own most
 recently active conversation, falling back to their most recently touched
 identity when they have identities but no conversation yet. Documented here
 because it is a real judgement call, not a fact read off a column.
@@ -31,7 +31,9 @@ from database.manager import database_manager
 logger = logging.getLogger(__name__)
 
 
-def _resolve_channel(company_id: int, customer_id: int) -> tuple[str, str, str] | None:
+def resolve_channel_for_customer(
+    company_id: int, customer_id: int
+) -> tuple[str, str, str] | None:
     """(channel, external_user_id, department) for a customer, or None if
     they hold no channel identity at all -- a customer entered by hand with
     only a phone number and no messaging identity, for instance."""
@@ -123,7 +125,7 @@ def fire_for_customer(
     except Exception:  # noqa: BLE001
         return
 
-    resolved = _resolve_channel(company_id, customer_id)
+    resolved = resolve_channel_for_customer(company_id, customer_id)
     if not resolved:
         return
 
