@@ -19,6 +19,7 @@ import {
   SettingsOutlined,
   TaskAltOutlined,
   TuneOutlined,
+  WarehouseOutlined,
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
@@ -90,6 +91,7 @@ const NAV_GROUPS = [
       ["publish", "/publish", "Publish", SendOutlined, ["scheduler.view", "scheduler.manage"]],
       ["comments", "/comments", "Comments", ForumOutlined, ["comments.view", "comments.reply"]],
       ["catalogue", "/catalogue", "Master Catalogue", Inventory2Outlined, ["catalogue.view"]],
+      ["inventory", "/inventory", "Inventory", WarehouseOutlined, ["inventory.view", "inventory.manage"]],
       ["analytics", "/analytics", "Analytics", QueryStatsOutlined, ["analytics.view"]],
     ],
   },

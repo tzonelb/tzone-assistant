@@ -33,6 +33,7 @@ const CompanySettingsPage = lazy(() => import("./pages/company/CompanySettingsPa
 const CustomersPageV2 = lazy(() => import("./pages/customers/CustomersPageV2"));
 const CustomerDetailPageV2 = lazy(() => import("./pages/customers/CustomerDetailPageV2"));
 const DialerPage = lazy(() => import("./pages/dialer/DialerPage"));
+const InventoryPage = lazy(() => import("./pages/inventory/InventoryPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
 const ReplyFlowBuilderPage = lazy(() => import("./pages/reply-flows/ReplyFlowBuilderPage"));
@@ -139,6 +140,7 @@ export default function App() {
           <Route path="/calls" element={<ModuleRoute module="calls"><CallsPage /></ModuleRoute>} />
           <Route path="/dialer" element={<ModuleRoute module="dialer"><RequireAccess permissions={["dialer.use"]}><DialerPage /></RequireAccess></ModuleRoute>} />
           <Route path="/catalogue" element={<ModuleRoute module="catalogue"><CataloguePage /></ModuleRoute>} />
+          <Route path="/inventory" element={<ModuleRoute module="inventory"><InventoryPage /></ModuleRoute>} />
           <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
           <Route path="/ai-teaching" element={<ModuleRoute module="ai_teaching"><AiTeachingPage /></ModuleRoute>} />
           {/* The sidebar's "Test & Train AI" entry. Gated on `ai_teaching`,
