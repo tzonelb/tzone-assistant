@@ -62,9 +62,9 @@ PERMISSION_GROUPS: tuple[dict[str, Any], ...] = (
     {
         "key": "catalogue",
         "label": "Catalogue",
-        "description": "Products and categories.",
+        "description": "Products, categories and stock.",
         "web_only": False,
-        "modules": ("catalogue",),
+        "modules": ("catalogue", "inventory"),
     },
     {
         "key": "work",

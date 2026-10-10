@@ -28,15 +28,16 @@ HR_PASSWORD = "HrAdminPass1234"
 @pytest.fixture()
 def service(platform, monkeypatch):
     import database.manager as manager_module
+    from database.manager import DatabaseManager
 
     import backend.api.routes.auth  # noqa: F401
     import backend.services.auth_service  # noqa: F401
 
-    original = manager_module.database_manager
     test_manager = platform["manager"]
     monkeypatch.setattr(manager_module, "database_manager", test_manager)
     for module in list(sys.modules.values()):
-        if getattr(module, "database_manager", None) is original:
+        held = getattr(module, "database_manager", None)
+        if isinstance(held, DatabaseManager) and held is not test_manager:
             monkeypatch.setattr(module, "database_manager", test_manager)
 
     assert (
