@@ -56,6 +56,7 @@ from backend.api.routes import (
     notifications,
     platform,
     platform_ui,
+    purchasing,
     roles,
     scheduler,
     signup,
@@ -474,6 +475,7 @@ app.include_router(conversation_share.router)
 app.include_router(broadcasts.router, dependencies=_module("broadcast"))
 app.include_router(catalogue.router, dependencies=_module("catalogue"))
 app.include_router(inventory.router, dependencies=_module("inventory"))
+app.include_router(purchasing.router, dependencies=_module("purchasing"))
 app.include_router(comments.router, dependencies=_module("comments"))
 app.include_router(scheduler.router, dependencies=_module("scheduler"))
 app.include_router(appointments.router, dependencies=_module("appointments"))

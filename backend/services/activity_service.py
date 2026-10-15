@@ -126,6 +126,14 @@ class Action:
     STOCK_MOVEMENT_RECORDED = "inventory.movement_recorded"
     REORDER_POINT_UPDATED = "inventory.reorder_point_updated"
 
+    # --- purchasing
+    SUPPLIER_CREATED = "purchasing.supplier_created"
+    SUPPLIER_UPDATED = "purchasing.supplier_updated"
+    SUPPLIER_ARCHIVED = "purchasing.supplier_archived"
+    PURCHASE_ORDER_CREATED = "purchasing.order_created"
+    PURCHASE_ORDER_STATUS_CHANGED = "purchasing.order_status_changed"
+    PURCHASE_ORDER_RECEIVED = "purchasing.order_received"
+
     # --- channels
     CHANNEL_CONNECTED = "channels.account_connected"
     CHANNEL_UPDATED = "channels.account_updated"

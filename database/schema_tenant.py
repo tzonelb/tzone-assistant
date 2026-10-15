@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 16
+TENANT_SCHEMA_VERSION = 17
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -987,6 +987,62 @@ TENANT_TABLES: tuple[str, ...] = (
         FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
     )
     """,
+    # --- Suppliers & purchasing -----------------------------------------
+    """
+    CREATE TABLE IF NOT EXISTS suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        contact_name TEXT,
+        email TEXT,
+        phone TEXT,
+        address TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    # A purchase order's own lifecycle is a subset of what receiving can do to
+    # it: `receive_items` is the only path that moves a row into
+    # partially_received/received, by summing what its own line items have had
+    # delivered -- `status` here is never set directly to either.
+    """
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        supplier_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        reference TEXT,
+        notes TEXT,
+        expected_date TEXT,
+        total REAL NOT NULL DEFAULT 0,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(supplier_id) REFERENCES suppliers(id)
+    )
+    """,
+    # `quantity_received` is this row's own running total, the same shape
+    # `stock_movements` gives a product -- every receipt against this line
+    # calls `inventory_service.record_movement`, so the two ledgers (what this
+    # order has had delivered, what the product's own stock history shows)
+    # are written by the same call and can never drift apart.
+    """
+    CREATE TABLE IF NOT EXISTS purchase_order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        purchase_order_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        quantity_ordered INTEGER NOT NULL,
+        quantity_received INTEGER NOT NULL DEFAULT 0,
+        unit_cost REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS quotes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1211,6 +1267,11 @@ TENANT_INDEXES: tuple[str, ...] = (
     # scan once a company has any real volume of movements.
     "CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_stock_movements_recent ON stock_movements(company_id, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_suppliers_status ON suppliers(status, name COLLATE NOCASE)",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_orders_supplier ON purchase_orders(supplier_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_orders_status ON purchase_orders(status, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_order_items_order ON purchase_order_items(purchase_order_id)",
+    "CREATE INDEX IF NOT EXISTS idx_purchase_order_items_product ON purchase_order_items(product_id)",
 )
 
 
