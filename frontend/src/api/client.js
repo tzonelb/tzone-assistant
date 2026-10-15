@@ -1946,6 +1946,57 @@ export async function updateReorderPointRequest(productId, reorderPoint) {
   );
 }
 
+/* ------------------------------------------------- Purchasing */
+
+export async function listSuppliersRequest({ search = "", status = "", limit = 50 } = {}) {
+  return apiRequest(`/api/purchasing/suppliers${createQueryString({ search, status, limit })}`);
+}
+
+export async function createSupplierRequest(values) {
+  return apiRequest("/api/purchasing/suppliers", { method: "POST", body: values });
+}
+
+export async function updateSupplierRequest(supplierId, values) {
+  return apiRequest(`/api/purchasing/suppliers/${encodeURIComponent(supplierId)}`, {
+    method: "PUT",
+    body: values,
+  });
+}
+
+export async function archiveSupplierRequest(supplierId) {
+  return apiRequest(`/api/purchasing/suppliers/${encodeURIComponent(supplierId)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function listPurchaseOrdersRequest({ status = "", supplierId = "", limit = 50 } = {}) {
+  return apiRequest(
+    `/api/purchasing/orders${createQueryString({ status, supplier_id: supplierId, limit })}`,
+  );
+}
+
+export async function getPurchaseOrderRequest(orderId) {
+  return apiRequest(`/api/purchasing/orders/${encodeURIComponent(orderId)}`);
+}
+
+export async function createPurchaseOrderRequest(values) {
+  return apiRequest("/api/purchasing/orders", { method: "POST", body: values });
+}
+
+export async function updatePurchaseOrderStatusRequest(orderId, newStatus) {
+  return apiRequest(`/api/purchasing/orders/${encodeURIComponent(orderId)}/status`, {
+    method: "PUT",
+    body: { status: newStatus },
+  });
+}
+
+export async function receivePurchaseOrderItemsRequest(orderId, items) {
+  return apiRequest(`/api/purchasing/orders/${encodeURIComponent(orderId)}/receive`, {
+    method: "POST",
+    body: { items },
+  });
+}
+
 /* ------------------------------------------------- AI Knowledge (v2)
  *
  * The design's Knowledge section keeps an entry as

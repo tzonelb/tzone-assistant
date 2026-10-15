@@ -41,6 +41,7 @@ export const platformDefaults = {
     platform_admin: { visible: true, label: null, order: 22 },
     theme_studio: { visible: true, label: null, order: 23 },
     inventory: { visible: true, label: null, order: 24 },
+    purchasing: { visible: true, label: null, order: 25 },
   },
   // null, not a path: nothing serves /tzone-logo.png. The shell falls back
   // to the mark bundled with the app when a company has not uploaded one.
