@@ -1898,6 +1898,54 @@ export async function deleteQuoteRequest(quoteId) {
   return apiRequest(`/api/quotes/${encodeURIComponent(quoteId)}`, { method: "DELETE" });
 }
 
+/* ------------------------------------------------- Inventory */
+
+export async function getInventorySummaryRequest() {
+  return apiRequest("/api/inventory/summary");
+}
+
+export async function listLowStockProductsRequest() {
+  return apiRequest("/api/inventory/low-stock");
+}
+
+export async function listInventoryProductsRequest({
+  search = "",
+  stock = "",
+  limit = 50,
+  offset = "",
+} = {}) {
+  return apiRequest(
+    `/api/inventory/products${createQueryString({ search, stock, limit, offset })}`,
+  );
+}
+
+export async function listStockMovementsRequest({
+  productId = "",
+  movementType = "",
+  limit = 50,
+  offset = "",
+} = {}) {
+  return apiRequest(
+    `/api/inventory/movements${createQueryString({
+      product_id: productId,
+      movement_type: movementType,
+      limit,
+      offset,
+    })}`,
+  );
+}
+
+export async function recordStockMovementRequest(values) {
+  return apiRequest("/api/inventory/movements", { method: "POST", body: values });
+}
+
+export async function updateReorderPointRequest(productId, reorderPoint) {
+  return apiRequest(
+    `/api/inventory/products/${encodeURIComponent(productId)}/reorder-point`,
+    { method: "PUT", body: { reorder_point: reorderPoint } },
+  );
+}
+
 /* ------------------------------------------------- AI Knowledge (v2)
  *
  * The design's Knowledge section keeps an entry as

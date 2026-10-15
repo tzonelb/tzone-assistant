@@ -46,6 +46,7 @@ ROUTER_FOR_ENTRY = {
     "publish": "scheduler.py",
     "comments": "comments.py",
     "catalogue": "catalogue.py",
+    "inventory": "inventory.py",
     "analytics": "analytics.py",
     "company_settings": "company_settings.py",
     # Appearance is stored in the browser: UISettingsPage.jsx calls no API at

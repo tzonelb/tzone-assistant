@@ -122,6 +122,10 @@ class Action:
     PRODUCT_PRICE_CHANGED = "catalogue.price_changed"
     PRODUCT_DELETED = "catalogue.product_deleted"
 
+    # --- inventory
+    STOCK_MOVEMENT_RECORDED = "inventory.movement_recorded"
+    REORDER_POINT_UPDATED = "inventory.reorder_point_updated"
+
     # --- channels
     CHANNEL_CONNECTED = "channels.account_connected"
     CHANNEL_UPDATED = "channels.account_updated"

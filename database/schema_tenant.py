@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 15
+TENANT_SCHEMA_VERSION = 16
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -965,6 +965,28 @@ TENANT_TABLES: tuple[str, ...] = (
     # drift if the catalogue price it was based on changes later. Status is the
     # quote's own lifecycle (draft -> sent -> accepted/declined), independent of
     # the ticket/task status vocabulary.
+    # The stock ledger. `products.stock_quantity` is the running total -- the
+    # number every other screen reads -- and this is how it got there: one row
+    # per change, signed, with the balance it produced at the time. Purchasing
+    # and Orders (once built) write here too, through the same
+    # `inventory_service.record_movement`, so the ledger is the one place that
+    # explains a quantity on hand rather than each module keeping its own
+    # history of why it touched the count.
+    """
+    CREATE TABLE IF NOT EXISTS stock_movements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        movement_type TEXT NOT NULL,
+        quantity_delta INTEGER NOT NULL,
+        quantity_after INTEGER NOT NULL,
+        reason TEXT,
+        reference TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(product_id) REFERENCES products(id) ON DELETE CASCADE
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS quotes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1094,6 +1116,12 @@ TENANT_COLUMNS: dict[str, dict[str, str]] = {
     "scheduled_posts": {
         "tags_json": "TEXT NOT NULL DEFAULT '[]'",
     },
+    # NULL means "no reorder alert for this product" -- the common case for a
+    # company that has not opened Inventory yet, and distinct from 0, which is
+    # a deliberate "tell me the moment this sells out".
+    "products": {
+        "reorder_point": "INTEGER",
+    },
 }
 
 
@@ -1178,6 +1206,11 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_telephony_provider_call"
     " ON telephony_calls(provider_call_id)",
     "CREATE INDEX IF NOT EXISTS idx_telephony_status ON telephony_calls(status, id DESC)",
+    # The Inventory screen reads one product's history in insertion order and
+    # the company-wide feed newest-first; neither is served by a primary key
+    # scan once a company has any real volume of movements.
+    "CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_stock_movements_recent ON stock_movements(company_id, created_at DESC)",
 )
 
 

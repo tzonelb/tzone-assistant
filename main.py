@@ -49,6 +49,7 @@ from backend.api.routes import (
     facebook_direct,
     health,
     instagram_direct,
+    inventory,
     knowledge,
     manual_messages,
     notification_preferences,
@@ -472,6 +473,7 @@ app.include_router(conversation_share.router)
 # the inbox without selling campaigns.
 app.include_router(broadcasts.router, dependencies=_module("broadcast"))
 app.include_router(catalogue.router, dependencies=_module("catalogue"))
+app.include_router(inventory.router, dependencies=_module("inventory"))
 app.include_router(comments.router, dependencies=_module("comments"))
 app.include_router(scheduler.router, dependencies=_module("scheduler"))
 app.include_router(appointments.router, dependencies=_module("appointments"))
