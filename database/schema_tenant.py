@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 17
+TENANT_SCHEMA_VERSION = 18
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -1043,6 +1043,47 @@ TENANT_TABLES: tuple[str, ...] = (
         FOREIGN KEY(product_id) REFERENCES products(id)
     )
     """,
+    # --- Orders & fulfilment --------------------------------------------
+    # The customer-facing mirror of a purchase order: `quantity_fulfilled` on
+    # each line is never set directly either -- `fulfil_items` is the only
+    # path, and it calls inventory_service.record_movement(movement_type=
+    # "sale") for the same product first, so an order's own fulfilment
+    # record and the product's stock history are the same write seen twice,
+    # never two counts that could disagree. `quote_id` is loose by design
+    # (no FOREIGN KEY): a quote can be deleted long after the order it led to
+    # is history, and that history must not disappear with it.
+    """
+    CREATE TABLE IF NOT EXISTS orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
+        quote_id INTEGER,
+        conversation_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'draft',
+        reference TEXT,
+        notes TEXT,
+        total REAL NOT NULL DEFAULT 0,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES customers(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        order_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        quantity INTEGER NOT NULL,
+        quantity_fulfilled INTEGER NOT NULL DEFAULT 0,
+        unit_price REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS quotes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1272,6 +1313,10 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_purchase_orders_status ON purchase_orders(status, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_purchase_order_items_order ON purchase_order_items(purchase_order_id)",
     "CREATE INDEX IF NOT EXISTS idx_purchase_order_items_product ON purchase_order_items(product_id)",
+    "CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)",
+    "CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id)",
 )
 
 

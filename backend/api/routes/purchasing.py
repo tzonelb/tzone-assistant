@@ -26,7 +26,7 @@ from backend.services.auth_service import (
     require_permission,
 )
 from backend.services.activity_service import Action, activity_service
-from backend.services.purchasing_service import PurchasingError, purchasing_service
+from backend.services.purchasing_service import purchasing_service
 
 
 router = APIRouter(prefix="/api/purchasing", tags=["Purchasing"])
@@ -67,7 +67,7 @@ def list_suppliers(
             company_id=company_id, search=search, status=status_filter,
             limit=limit, offset=offset,
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -81,7 +81,7 @@ def create_supplier(
         supplier = purchasing_service.create_supplier(
             company_id=company_id, data=payload.model_dump()
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     activity_service.record_for(
@@ -121,7 +121,7 @@ def update_supplier(
             company_id=company_id, supplier_id=supplier_id,
             values=payload.model_dump(exclude_unset=True),
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not supplier:
@@ -185,7 +185,7 @@ def list_orders(
             company_id=company_id, status=status_filter, supplier_id=supplier_id,
             limit=limit, offset=offset,
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -205,7 +205,7 @@ def create_order(
             expected_date=payload.expected_date,
             user_id=current_user.get("id"),
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     activity_service.record_for(
@@ -245,7 +245,7 @@ def update_order_status(
         order = purchasing_service.update_order_status(
             company_id=company_id, order_id=order_id, status=payload.status,
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not order:
@@ -280,7 +280,7 @@ def receive_order_items(
             items=[item.model_dump() for item in payload.items],
             user_id=current_user.get("id"),
         )
-    except PurchasingError as exc:
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not order:
