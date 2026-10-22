@@ -74,6 +74,13 @@ PERMISSION_GROUPS: tuple[dict[str, Any], ...] = (
         "modules": ("purchasing",),
     },
     {
+        "key": "orders",
+        "label": "Orders & Fulfilment",
+        "description": "Customer orders and what has shipped against them.",
+        "web_only": False,
+        "modules": ("orders",),
+    },
+    {
         "key": "work",
         "label": "Tasks & appointments",
         "description": "Follow-ups and the appointment calendar.",

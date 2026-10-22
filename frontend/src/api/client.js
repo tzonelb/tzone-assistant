@@ -1997,6 +1997,34 @@ export async function receivePurchaseOrderItemsRequest(orderId, items) {
   });
 }
 
+/* ------------------------------------------------- Orders & fulfilment */
+
+export async function listOrdersRequest({ status = "", customerId = "", limit = 50 } = {}) {
+  return apiRequest(`/api/orders${createQueryString({ status, customer_id: customerId, limit })}`);
+}
+
+export async function getOrderRequest(orderId) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderId)}`);
+}
+
+export async function createOrderRequest(values) {
+  return apiRequest("/api/orders", { method: "POST", body: values });
+}
+
+export async function updateOrderStatusRequest(orderId, newStatus) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderId)}/status`, {
+    method: "PUT",
+    body: { status: newStatus },
+  });
+}
+
+export async function fulfilOrderItemsRequest(orderId, items) {
+  return apiRequest(`/api/orders/${encodeURIComponent(orderId)}/fulfil`, {
+    method: "POST",
+    body: { items },
+  });
+}
+
 /* ------------------------------------------------- AI Knowledge (v2)
  *
  * The design's Knowledge section keeps an entry as

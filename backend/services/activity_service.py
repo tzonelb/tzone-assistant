@@ -134,6 +134,11 @@ class Action:
     PURCHASE_ORDER_STATUS_CHANGED = "purchasing.order_status_changed"
     PURCHASE_ORDER_RECEIVED = "purchasing.order_received"
 
+    # --- orders
+    ORDER_CREATED = "orders.order_created"
+    ORDER_STATUS_CHANGED = "orders.order_status_changed"
+    ORDER_FULFILLED = "orders.order_fulfilled"
+
     # --- channels
     CHANNEL_CONNECTED = "channels.account_connected"
     CHANNEL_UPDATED = "channels.account_updated"

@@ -91,6 +91,7 @@ PLATFORM_MODULES: tuple[str, ...] = (
     "catalogue",
     "inventory",
     "purchasing",
+    "orders",
     "scheduler",
     "team_chat",
     "knowledge",
