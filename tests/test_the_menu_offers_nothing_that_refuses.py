@@ -49,6 +49,7 @@ ROUTER_FOR_ENTRY = {
     "inventory": "inventory.py",
     "purchasing": "purchasing.py",
     "orders": "orders.py",
+    "invoices": "invoices.py",
     "analytics": "analytics.py",
     "company_settings": "company_settings.py",
     # Appearance is stored in the browser: UISettingsPage.jsx calls no API at
