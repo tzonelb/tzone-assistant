@@ -1,0 +1,115 @@
+.tzv2-purch-page {
+  height: 100%;
+  overflow: auto;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+}
+
+.tzv2-purch-head {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.tzv2-purch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+  flex-wrap: wrap;
+}
+
+.tzv2-purch-tablewrap {
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+.tzv2-purch-row { cursor: pointer; }
+.tzv2-purch-row:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+.tzv2-purch-muted {
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  font-size: 12.5px;
+}
+
+.tzv2-purch-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tzv2-purch-dialog { max-width: 640px; width: 100%; }
+
+.tzv2-purch-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tzv2-purch-dialog-body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.tzv2-purch-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.tzv2-purch-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tzv2-purch-line {
+  display: grid;
+  grid-template-columns: 2fr 90px 110px 36px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.tzv2-purch-form-error {
+  margin: 0;
+  color: var(--tz-danger);
+  font-size: 13px;
+}
+
+.tzv2-purch-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tzv2-purch-items { margin-top: 0; }
+
+.tzv2-purch-receive-input {
+  width: 80px;
+  text-align: right;
+}
+
+.tzv2-purch-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tzv2-purch-supplier-form {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+.tzv2-purch-form-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .tzv2-purch-field-row { grid-template-columns: 1fr; }
+  .tzv2-purch-line { grid-template-columns: 1fr; }
+}
