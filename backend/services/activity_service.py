@@ -139,6 +139,11 @@ class Action:
     ORDER_STATUS_CHANGED = "orders.order_status_changed"
     ORDER_FULFILLED = "orders.order_fulfilled"
 
+    # --- invoices
+    INVOICE_CREATED = "invoices.invoice_created"
+    INVOICE_STATUS_CHANGED = "invoices.invoice_status_changed"
+    PAYMENT_RECORDED = "invoices.payment_recorded"
+
     # --- channels
     CHANNEL_CONNECTED = "channels.account_connected"
     CHANNEL_UPDATED = "channels.account_updated"

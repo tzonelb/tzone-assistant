@@ -50,6 +50,7 @@ from backend.api.routes import (
     health,
     instagram_direct,
     inventory,
+    invoices,
     knowledge,
     manual_messages,
     notification_preferences,
@@ -478,6 +479,7 @@ app.include_router(catalogue.router, dependencies=_module("catalogue"))
 app.include_router(inventory.router, dependencies=_module("inventory"))
 app.include_router(purchasing.router, dependencies=_module("purchasing"))
 app.include_router(orders.router, dependencies=_module("orders"))
+app.include_router(invoices.router, dependencies=_module("invoices"))
 app.include_router(comments.router, dependencies=_module("comments"))
 app.include_router(scheduler.router, dependencies=_module("scheduler"))
 app.include_router(appointments.router, dependencies=_module("appointments"))

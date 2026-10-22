@@ -1,0 +1,118 @@
+.tzv2-invoices-page {
+  height: 100%;
+  overflow: auto;
+  padding: var(--space-6) var(--space-8) var(--space-8);
+}
+
+.tzv2-invoices-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+  flex-wrap: wrap;
+}
+
+.tzv2-invoices-tablewrap {
+  margin-top: var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+.tzv2-invoices-row { cursor: pointer; }
+.tzv2-invoices-row:hover { background: color-mix(in srgb, var(--color-text) 4%, transparent); }
+
+.tzv2-invoices-muted {
+  color: color-mix(in srgb, var(--color-text) 50%, transparent);
+  font-size: 12.5px;
+}
+
+.tzv2-invoices-balance-due {
+  color: var(--tz-danger);
+  font-weight: 600;
+}
+
+.tzv2-invoices-dialog { max-width: 640px; width: 100%; }
+
+.tzv2-invoices-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tzv2-invoices-dialog-body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.tzv2-invoices-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.tzv2-invoices-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tzv2-invoices-line {
+  display: grid;
+  grid-template-columns: 2fr 80px 110px 36px;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.tzv2-invoices-form-error {
+  margin: 0;
+  color: var(--tz-danger);
+  font-size: 13px;
+}
+
+.tzv2-invoices-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.tzv2-invoices-items { margin-top: 0; }
+
+.tzv2-invoices-section-label {
+  margin: 0 0 var(--space-2);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.tzv2-invoices-payments {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 13px;
+}
+
+.tzv2-invoices-detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tzv2-invoices-payment-form {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+@media (max-width: 720px) {
+  .tzv2-invoices-field-row { grid-template-columns: 1fr; }
+  .tzv2-invoices-line { grid-template-columns: 1fr; }
+}

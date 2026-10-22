@@ -34,6 +34,7 @@ const CustomersPageV2 = lazy(() => import("./pages/customers/CustomersPageV2"));
 const CustomerDetailPageV2 = lazy(() => import("./pages/customers/CustomerDetailPageV2"));
 const DialerPage = lazy(() => import("./pages/dialer/DialerPage"));
 const InventoryPage = lazy(() => import("./pages/inventory/InventoryPage"));
+const InvoicesPage = lazy(() => import("./pages/invoices/InvoicesPage"));
 const KnowledgePage = lazy(() => import("./pages/knowledge/KnowledgePage"));
 const OrdersPage = lazy(() => import("./pages/orders/OrdersPage"));
 const PublishStandalonePage = lazy(() => import("./pages/publish/PublishStandalonePage"));
@@ -145,6 +146,7 @@ export default function App() {
           <Route path="/inventory" element={<ModuleRoute module="inventory"><InventoryPage /></ModuleRoute>} />
           <Route path="/purchasing" element={<ModuleRoute module="purchasing"><PurchasingPage /></ModuleRoute>} />
           <Route path="/orders" element={<ModuleRoute module="orders"><OrdersPage /></ModuleRoute>} />
+          <Route path="/invoices" element={<ModuleRoute module="invoices"><InvoicesPage /></ModuleRoute>} />
           <Route path="/knowledge" element={<ModuleRoute module="knowledge"><KnowledgePage /></ModuleRoute>} />
           <Route path="/ai-teaching" element={<ModuleRoute module="ai_teaching"><AiTeachingPage /></ModuleRoute>} />
           {/* The sidebar's "Test & Train AI" entry. Gated on `ai_teaching`,

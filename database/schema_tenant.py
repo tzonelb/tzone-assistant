@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 
-TENANT_SCHEMA_VERSION = 18
+TENANT_SCHEMA_VERSION = 19
 
 
 TENANT_TABLES: tuple[str, ...] = (
@@ -1084,6 +1084,63 @@ TENANT_TABLES: tuple[str, ...] = (
         FOREIGN KEY(product_id) REFERENCES products(id)
     )
     """,
+    # --- Invoices & payments ---------------------------------------------
+    # `amount_paid` is this row's own running total, kept in step with
+    # `payments` the same way a purchase order's own total is kept in step
+    # with its lines -- `record_payment` is the only path that moves it, by
+    # inserting the payment row and updating this one in the same call.
+    # `order_id` carries no FOREIGN KEY, the same reasoning as orders'
+    # `quote_id`: an order can be deleted long after the invoice it was
+    # billed from is history.
+    """
+    CREATE TABLE IF NOT EXISTS invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        customer_id INTEGER NOT NULL,
+        order_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'draft',
+        reference TEXT,
+        notes TEXT,
+        total REAL NOT NULL DEFAULT 0,
+        amount_paid REAL NOT NULL DEFAULT 0,
+        due_date TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY(customer_id) REFERENCES customers(id)
+    )
+    """,
+    # `product_id` is nullable: a line can be a service fee or a labour
+    # charge with nothing in the catalogue behind it, unlike an order or
+    # purchase-order line, which always names a real stocked product.
+    """
+    CREATE TABLE IF NOT EXISTS invoice_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        invoice_id INTEGER NOT NULL,
+        product_id INTEGER,
+        description TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        unit_price REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE,
+        FOREIGN KEY(product_id) REFERENCES products(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL,
+        invoice_id INTEGER NOT NULL,
+        amount REAL NOT NULL,
+        method TEXT NOT NULL DEFAULT 'cash',
+        reference TEXT,
+        notes TEXT,
+        received_by_user_id INTEGER,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY(invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    )
+    """,
     """
     CREATE TABLE IF NOT EXISTS quotes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1317,6 +1374,10 @@ TENANT_INDEXES: tuple[str, ...] = (
     "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status, created_at DESC)",
     "CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)",
     "CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items(product_id)",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_customer ON invoices(customer_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status, created_at DESC)",
+    "CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON invoice_items(invoice_id)",
+    "CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(invoice_id, created_at)",
 )
 
 
